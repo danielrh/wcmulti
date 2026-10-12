@@ -65,7 +65,12 @@ share a room, exactly like `runwc.sh DOSPATH room CODE`.
 
 **Debugging voice.** Everyone in the room must opt in. Voice uses a separate
 WebRTC audio connection, so working game sound and multiplayer do not prove
-that voice works. The microphone indicator names the selected input and shows
+that voice works. Choose **Microphone** beside Voice to select the input;
+Chrome reveals device names after microphone permission is granted. The choice
+is saved in this browser. Changing microphones replaces the audio track while
+keeping the established voice connection. An unavailable saved microphone is
+shown explicitly; **System default** returns to Chrome's default input.
+The microphone indicator names the selected input and shows
 whether sound is detected. Open **Voice diagnostics** on both computers, speak,
 and compare two reports a few seconds apart:
 

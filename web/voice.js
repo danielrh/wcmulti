@@ -17,12 +17,14 @@
 // included), noise suppression, automatic gain, and Opus.  Push to talk is
 // the backquote key, or a controller button (web/gamepad.js).
 const VOICE_KEY = "wc:voice";
+const INPUT_KEY = "wc:voiceInput";
 const CHOICES = ["off", "listen", "ptt", "on"];
 const PTT_CODE = "Backquote";
 
 export function initVoice(host) {
   const $ = (id) => document.getElementById(id);
   const sel = $("voice"), state = $("voiceState");
+  const input = $("voiceInput");
   const resume = $("voiceResume");
   const details = $("voiceDetails"), diagnostics = $("voiceDiagnostics"), inputState = $("voiceInputState");
   const events = [];
@@ -32,8 +34,9 @@ export function initVoice(host) {
     if (events.length > 80) events.shift();
     host.log(message);
   }
-  let choice = "off";
+  let choice = "off", inputId = "";
   try { const saved = localStorage.getItem(VOICE_KEY); if (CHOICES.includes(saved)) choice = saved; } catch (e) { /* off */ }
+  try { inputId = localStorage.getItem(INPUT_KEY) || ""; } catch (e) { /* system default */ }
   sel.value = choice;
   const remote = new Map();   // player id -> that player's choice
   const links = new Map();    // player id -> { pc, audio, offerer, pending }
@@ -53,24 +56,46 @@ export function initVoice(host) {
 
   function save() { try { localStorage.setItem(VOICE_KEY, choice); } catch (e) { /* not kept */ } }
 
+  let deviceRefresh = 0;
+  async function refreshInputs() {
+    if (!input || !navigator.mediaDevices?.enumerateDevices) return;
+    const refresh = ++deviceRefresh;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      if (refresh !== deviceRefresh) return;
+      const microphones = devices.filter((d) => d.kind === "audioinput" && d.deviceId && d.deviceId !== "default");
+      input.replaceChildren(new Option("System default", ""));
+      microphones.forEach((d, i) => input.add(new Option(d.label || `Microphone ${i + 1}`, d.deviceId)));
+      // Do not silently switch to a different microphone if a saved device was
+      // unplugged. Keep it visible so the pilot can choose a replacement.
+      if (inputId && !microphones.some((d) => d.deviceId === inputId)) {
+        input.add(new Option("Saved microphone (unavailable or permission needed)", inputId));
+      }
+      input.value = inputId;
+    } catch (e) { log(`voice: cannot list microphones: ${e.name}`); }
+  }
+
   async function acquireMic() {
     if (mic) { applyMute(); return mic; }
     if (micWanted) return micWanted;
     const generation = ++micGeneration;
     micError = "";
-    micWanted = Promise.resolve().then(() => navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }))
+    micWanted = Promise.resolve().then(() => navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+      ...(inputId ? { deviceId: { exact: inputId } } : {}) } }))
       .then((stream) => {
         if (generation !== micGeneration || !talks(choice)) {
           for (const t of stream.getTracks()) t.stop();
           return null;
         }
-        mic = stream; applyMute(); render(); return stream;
+        mic = stream; applyMute(); render(); void refreshInputs(); return stream;
       })
       .catch((e) => {
         if (generation !== micGeneration) return null;
-        micError = `No microphone (${e.name}). Check Chrome and macOS microphone permissions and your input device.`;
+        micError = e.name === "OverconstrainedError" || e.name === "NotFoundError"
+          ? "Selected microphone is unavailable. Choose another microphone, then turn voice on."
+          : `No microphone (${e.name}). Check Chrome and macOS microphone permissions and your input device.`;
         host.chatLine(micError + " Voice is listen only for you.", "sys");
-        choice = "listen"; sel.value = choice; save(); host.announce();
+        choice = "listen"; sel.value = choice; save(); closeAll(); host.announce();
         return null;
       })
       .finally(() => { if (generation === micGeneration) { micWanted = null; render(); } });
@@ -238,6 +263,33 @@ export function initVoice(host) {
     host.announce();
     void update();
   });
+  input?.addEventListener("change", async () => {
+    inputId = input.value;
+    try { localStorage.setItem(INPUT_KEY, inputId); } catch (e) { /* not kept */ }
+    micError = "";
+    if (!talks(choice)) { render(); return; }
+    releaseMic();
+    const stream = await acquireMic();
+    if (!stream) { void update(); return; }
+    if (mic !== stream || !talks(choice)) return;
+    // Switching to another audio source does not need SDP negotiation or a new
+    // peer connection. Keep the established voice path and replace its sender.
+    const track = stream.getAudioTracks()[0];
+    for (const [id, link] of links) {
+      const sender = link.pc.getSenders().find((s) => s.track?.kind === "audio");
+      if (!sender || mic !== stream) continue;
+      try { await sender.replaceTrack(track); }
+      catch (e) {
+        if (links.get(id) !== link || mic !== stream) continue;
+        micError = `Could not switch microphone (${e.name}). Turn Voice off and on to retry.`;
+        log("voice: " + micError);
+      }
+    }
+    render();
+  });
+  navigator.mediaDevices?.addEventListener("devicechange", () => void refreshInputs());
+  void refreshInputs();
+
   // A report contains counters and states, never microphone recordings, SDP,
   // candidate IP addresses or TURN credentials. Sample twice to see progress.
   async function report() {

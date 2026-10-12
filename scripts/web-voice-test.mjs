@@ -15,6 +15,7 @@ const fixture = `<!doctype html><label id="voiceLabel">Voice <select id="voice">
   <option value="off">Off</option><option value="listen">Listen only</option>
   <option value="ptt">Push to talk</option><option value="on">Always on</option>
   </select></label><div id="voiceState"></div>
+  <label>Microphone <select id="voiceInput"><option value="">System default</option></select></label>
   <div id="voiceInputState" hidden></div>
   <details id="voiceDetails"><summary>Voice diagnostics</summary>
   <button id="voiceCopy">Copy voice report</button><pre id="voiceDiagnostics"></pre></details>
@@ -191,6 +192,37 @@ try {
     assert.equal(report.microphone.tracks[0].enabled, true);
     assert.equal(report.peers[0].inputEnergy, 0);
   }, {silentMic: true});
+  await test("microphone selection switches capture, persists across reload, and preserves voice", async (pages) => {
+    await choose(pages[0], "on"); await choose(pages[1], "on"); await connected(pages);
+    for (const p of pages) {
+      await p.waitForFunction(() => document.getElementById("voiceInput").options.length > 1);
+      const id = await p.evaluate(() => [...document.getElementById("voiceInput").options].find((o) => o.value).value);
+      const count = await p.evaluate(() => pcs.length);
+      await p.selectOption("#voiceInput", id);
+      await p.waitForFunction((id) => captured.at(-1)?.getAudioTracks()[0].getSettings().deviceId === id, id);
+      assert.equal(await p.evaluate(() => captured[0].getAudioTracks()[0].readyState), "ended");
+      assert.equal(await p.evaluate(() => localStorage.getItem("wc:voiceInput")), id);
+      assert.equal(await p.evaluate(() => pcs.length), count, "switching inputs keeps the same peer connection");
+      await connected(pages); await Promise.all(pages.map(hearsTone));
+    }
+    const saved = await pages[0].inputValue("#voiceInput");
+    await pages[0].reload(); await pages[0].waitForFunction(() => window.ready);
+    await pages[0].waitForFunction((id) => document.getElementById("voiceInput").value === id, saved);
+    await pages[0].evaluate(() => voice.remote(1, "on"));
+    await connected(pages); await Promise.all(pages.map(hearsTone));
+    assert.equal(await pages[0].evaluate(() => captured[0].getAudioTracks()[0].getSettings().deviceId), saved);
+  });
+  await test("missing saved microphone is visible and can be replaced", async (pages) => {
+    await pages[0].evaluate(() => localStorage.setItem("wc:voiceInput", "missing-device"));
+    await pages[0].reload(); await pages[0].waitForFunction(() => window.ready);
+    await pages[0].waitForFunction(() => document.getElementById("voiceInput").value === "missing-device");
+    await choose(pages[0], "on");
+    await pages[0].waitForFunction(() => voice.choice() === "listen");
+    assert.match(await pages[0].textContent("#voiceState"), /Selected microphone is unavailable/);
+    await pages[0].selectOption("#voiceInput", "");
+    await choose(pages[0], "on"); await choose(pages[1], "on");
+    await connected(pages); await Promise.all(pages.map(hearsTone));
+  });
   assert.deepEqual(errors, [], "no uncaught page errors");
 } finally {
   await browser?.close();

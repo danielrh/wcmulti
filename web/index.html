@@ -120,6 +120,8 @@
   #players { width: 3.5em; padding-right: 0; }
   #padSelect { width: 21ch; }
   #voice { width: 9.5ch; }
+  #voiceInput { width: 27ch; max-width: 100%; }
+  #voiceInputLabel { max-width: 100%; }
   /* (One of the two at a time: in a room there is nothing to join.) */
   #roomPanel:has(#leave:not([hidden])) #join { display: none; }
   #voiceState { margin-top: 4px; color: var(--amber); font-size: 11px; }
@@ -247,6 +249,9 @@
           <option value="listen">Listen only</option>
           <option value="ptt">Push to talk (hold `)</option>
           <option value="on">Always on</option>
+        </select></label>
+        <label id="voiceInputLabel">Microphone <select id="voiceInput" title="Choose the microphone used for voice; turn voice on to allow access and see device names">
+          <option value="">System default</option>
         </select></label>
       </form>
       <div id="voiceState" role="status"></div>
