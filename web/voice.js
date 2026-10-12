@@ -31,6 +31,7 @@ export function initVoice(host) {
   let mic = null;             // the microphone, while the choice is a talking one
   let micWanted = null;       // the acquisition in progress
   let pttDown = false;
+  let micGeneration = 0, roomGeneration = 0;
 
   const optedIn = (c) => c === "listen" || c === "ptt" || c === "on";
   const talks = (c) => c === "ptt" || c === "on";
@@ -44,18 +45,28 @@ export function initVoice(host) {
   function save() { try { localStorage.setItem(VOICE_KEY, choice); } catch (e) { /* not kept */ } }
 
   async function acquireMic() {
-    if (mic || micWanted) return micWanted;
-    micWanted = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
-      .then((stream) => { mic = stream; applyMute(); return stream; })
+    if (mic) { applyMute(); return mic; }
+    if (micWanted) return micWanted;
+    const generation = ++micGeneration;
+    micWanted = Promise.resolve().then(() => navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }))
+      .then((stream) => {
+        if (generation !== micGeneration || !talks(choice)) {
+          for (const t of stream.getTracks()) t.stop();
+          return null;
+        }
+        mic = stream; applyMute(); return stream;
+      })
       .catch((e) => {
+        if (generation !== micGeneration) return null;
         host.chatLine(`No microphone (${e.name}): voice is listen only for you`, "sys");
         choice = "listen"; sel.value = choice; save(); host.announce();
         return null;
       })
-      .finally(() => { micWanted = null; });
+      .finally(() => { if (generation === micGeneration) micWanted = null; });
     return micWanted;
   }
   function releaseMic() {
+    ++micGeneration; micWanted = null;
     if (mic) for (const t of mic.getTracks()) t.stop();
     mic = null;
   }
@@ -111,11 +122,13 @@ export function initVoice(host) {
   // Voice signaling from another player (a lobby message over the data channel).
   async function signal(from, data) {
     if (!data || typeof data !== "object" || typeof data.voice !== "string") return;
+    const generation = roomGeneration;
     try {
       if (data.voice === "offer") {
         if (!everyoneIn()) return;  // (not for us: our choice, or somebody's, is off)
         close(from);
         if (micWanted) await micWanted;
+        if (generation !== roomGeneration || !everyoneIn()) return;
         const link = open(from, false);
         await link.pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
         await flush(link);
@@ -139,10 +152,11 @@ export function initVoice(host) {
 
   // Voice is on with everybody, or with nobody: the lower id offers.
   async function update() {
-    const g = host.game();
+    const g = host.game(), generation = roomGeneration;
     if (!g || !everyoneIn()) { closeAll(); render(); return; }
     if (talks(choice) && !mic) await acquireMic();
-    if (!everyoneIn()) { closeAll(); render(); return; }  // (the choice may have changed meanwhile)
+    if (generation !== roomGeneration || g !== host.game()) return;
+    if (!everyoneIn()) { closeAll(); render(); return; }  // the choice may have changed meanwhile
     for (const id of others()) {
       if (!links.has(id) && g.selfId < id) void offer(id);
     }
@@ -178,9 +192,13 @@ export function initVoice(host) {
   }
 
   sel.addEventListener("change", async () => {
+    const previous = choice;
     choice = CHOICES.includes(sel.value) ? sel.value : "off";
-    save();
-    closeAll();  // (a new negotiation carries the new mic or its absence)
+    pttDown = false;
+    save(); applyMute();
+    // PTT and Always share the same sending track; applyMute handles the switch.
+    // Only changes to sending/receiving capability need a new negotiation.
+    if (talks(previous) !== talks(choice) || optedIn(previous) !== optedIn(choice)) closeAll();
     if (talks(choice)) await acquireMic(); else releaseMic();
     host.announce();
     void update();
@@ -195,13 +213,22 @@ export function initVoice(host) {
   render();
   return {
     choice: () => choice,
-    remote: (id, c) => { remote.set(id, CHOICES.includes(c) ? c : "off"); void update(); },
-    forget: (id) => { remote.delete(id); close(id); render(); },
+    remote: (id, c) => {
+      c = CHOICES.includes(c) ? c : "off";
+      const previous = remote.get(id);
+      remote.set(id, c);
+      // The lower id must offer again when the answerer changes Listen/Always.
+      if (talks(previous) !== talks(c) || optedIn(previous) !== optedIn(c)) close(id);
+      void update();
+    },
+    forget: (id) => { remote.delete(id); close(id); void update(); },
     signal,
     warning,
     ptt,
     update: () => void update(),
-    stopAll: () => { closeAll(); render(); },
+    stopAll: () => {
+      ++roomGeneration; closeAll(); releaseMic(); remote.clear(); pttDown = false; render();
+    },
     // For tests: the connection state of each voice link.
     links: () => Object.fromEntries(Array.from(links, ([id, l]) => [id, { state: l.pc.connectionState, hearing: !!(l.audio && l.audio.srcObject) }])),
   };
