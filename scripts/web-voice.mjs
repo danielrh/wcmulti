@@ -12,7 +12,7 @@ const [pageUrl, lobbyUrl] = process.argv.slice(2);
 const require = createRequire(path.join(process.env.PLAYWRIGHT_DIR || process.cwd(), "package.json"));
 const { chromium } = require("playwright");
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || "/usr/bin/google-chrome",
-  args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
+  args: ["--no-sandbox", "--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream"] });
 const results = [];
 const check = (what, ok, detail) => { results.push(ok); console.log(`${ok ? "ok  " : "FAIL"} ${what}: ${JSON.stringify(detail)}`); };
 const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
@@ -32,7 +32,7 @@ async function open(name, callsign) {
   await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });
   return page;
 }
-const choose = (page, v) => page.$eval("#voice", (el, v) => { el.value = v; el.dispatchEvent(new Event("change")); }, v);
+const choose = (page, v) => page.selectOption("#voice", v);
 const voiceState = (page) => page.$eval("#voiceState", (el) => el.textContent);
 const lit = (page) => page.$eval("#voiceLabel", (el) => el.classList.contains("attention"));
 const links = (page) => page.evaluate(() => window.__wcVoiceLinks());
@@ -56,10 +56,22 @@ await host.waitForFunction(() => { const l = window.__wcVoiceLinks(); return Obj
 await sleep(2);
 const lh = await links(host), lw = await links(wing);
 check("voice connects both ways once everybody has opted in", lh[1] && lh[1].state === "connected" && lw[0] && lw[0].state === "connected", [lh, lw]);
-check("each hears the other", lh[1] && lh[1].hearing && lw[0] && lw[0].hearing, null);
-check("the states say so", /voice on with WINGMAN/.test(await voiceState(host)) && /voice on with HOST/.test(await voiceState(wing)) && /hold `/.test(await voiceState(wing)), [await voiceState(host), await voiceState(wing)]);
+check("each has a remote audio track", lh[1] && lh[1].hearing && lw[0] && lw[0].hearing, null);
+check("the states say so", /voice connected with WINGMAN/.test(await voiceState(host)) && /voice connected with HOST/.test(await voiceState(wing)) && /hold `/.test(await voiceState(wing)), [await voiceState(host), await voiceState(wing)]);
 check("the lights are out", !(await lit(host)) && !(await lit(wing)), null);
 check("the choice is remembered", (await wing.evaluate(() => localStorage.getItem("wc:voice"))) === "ptt", null);
+
+// Exercise the previously silent PTT -> Always path, and check decoded audio
+// rather than accepting the existence of a remote track as proof of sound.
+await choose(wing, "on");
+let reports;
+const deadline = Date.now() + 15000;
+do {
+  reports = await Promise.all([host, wing].map((p) => p.evaluate(() => window.__wcVoiceReport())));
+  if (reports.every((r) => r.peers.some((p) => p.receivedEnergy > 0 && p.playback === "playing"))) break;
+  await sleep(0.2);
+} while (Date.now() < deadline);
+check("non-silent voice arrives and playback starts both ways", reports.every((r) => r.peers.some((p) => p.receivedEnergy > 0 && p.playback === "playing")), reports);
 
 await choose(host, "off");
 await sleep(2);

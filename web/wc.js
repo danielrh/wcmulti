@@ -1160,6 +1160,7 @@ const voice = initVoice({
   signal: (id, data) => sendLobby({ t: "voice", data }, id),
 });
 window.__wcVoiceLinks = voice.links;  // (for the page tests)
+window.__wcVoiceReport = voice.report;
 
 initControls({
   module: () => (running && window.DOSBox) || null,

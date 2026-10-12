@@ -63,8 +63,34 @@ joining twice (`Module.lobbyGame`).  Only the canvas receives the
 keyboard, so the chat box stays usable.  Native and browser players can
 share a room, exactly like `runwc.sh DOSPATH room CODE`.
 
-**Voice playback.** If Chrome blocks incoming voice, the voice status explains
-why and offers **Enable voice playback** to start it with a click.
+**Debugging voice.** Everyone in the room must opt in. Voice uses a separate
+WebRTC audio connection, so working game sound and multiplayer do not prove
+that voice works. The microphone indicator names the selected input and shows
+whether sound is detected. Open **Voice diagnostics** on both computers, speak,
+and compare two reports a few seconds apart:
+
+- The speaking computer needs a live, enabled microphone track and increasing
+  `inputEnergy`. Otherwise check the selected input and microphone permissions
+  in Chrome and macOS. A built-in MacBook microphone may be disconnected when
+  the lid is closed; open the lid or use an external microphone.
+- Increasing `sentBytes` on the speaker but no `receivedBytes` on the listener
+  points to the voice connection/network path. `directions` should negotiate
+  `sendrecv` when both choose Always. `route` identifies direct versus relay.
+- Increasing `receivedEnergy` with blocked or paused `playback` calls for
+  **Enable voice playback**. If playback is playing, check Chrome's site Sound
+  permission, tab mute, and the computer's output device and volume.
+
+Copy reports from both sides with **Copy voice report**; they omit recordings,
+SDP, candidate addresses and TURN credentials. For deeper inspection, open
+`chrome://webrtc-internals` before joining and look for audio RTP statistics.
+The current **Force TURN relay** option applies to gameplay only, not voice.
+
+`PLAYWRIGHT_DIR=build-web/playwright node scripts/web-voice-test.mjs` runs
+voice-only tests with two Chrome contexts and a generated microphone tone;
+no game files or lobby server are needed. Set `CHROME` to the browser executable
+if needed. The tests retain normal autoplay policy and disable microphone
+processing only for synthetic tones so echo cancellation cannot suppress them.
+`scripts/web-smoke.sh voice` also checks voice alongside the running game.
 
 **The public lobby.**  Pilots with nobody to fly with meet in a chat room
 on the page (the lobbylink room `WC-LOBBY`, and `WC-LOBBY0`, `WC-LOBBY1`

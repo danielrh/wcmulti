@@ -15,6 +15,9 @@ const fixture = `<!doctype html><label id="voiceLabel">Voice <select id="voice">
   <option value="off">Off</option><option value="listen">Listen only</option>
   <option value="ptt">Push to talk</option><option value="on">Always on</option>
   </select></label><div id="voiceState"></div>
+  <div id="voiceInputState" hidden></div>
+  <details id="voiceDetails"><summary>Voice diagnostics</summary>
+  <button id="voiceCopy">Copy voice report</button><pre id="voiceDiagnostics"></pre></details>
   <button id="voiceResume" hidden>Enable voice playback</button>
   <script type="module">
     import { initVoice } from '/voice.js';
@@ -126,7 +129,7 @@ try {
     try { await fn(session.pages); console.log("ok  " + name); }
     catch (e) {
       console.error("FAIL " + name + ": " + e.message);
-      for (const [i, p] of session.pages.entries()) console.error(i, await p.evaluate(async () => ({state: document.getElementById('voiceState').textContent, links: voice.links(), events})));
+      for (const [i, p] of session.pages.entries()) console.error(i, await p.evaluate(async () => ({state: document.getElementById('voiceState').textContent, report: await voice.report(), events})));
       process.exitCode = 1;
     } finally { await session.close(); }
   }
@@ -170,6 +173,24 @@ try {
     await pages[0].waitForSelector("#voiceResume", {state: "hidden", timeout: 3000});
     await hearsTone(pages[0]);
   }, {blockPlayback: true});
+  await test("remembered Always works on both sides without a new gesture", async (pages) => {
+    await connected(pages); await Promise.all(pages.map(hearsTone));
+    for (const p of pages) {
+      const report = await p.evaluate(() => voice.report());
+      assert.equal(report.microphone.tracks[0].enabled, true);
+      assert.equal(report.peers[0].playback, "playing");
+      assert(report.peers[0].receivedEnergy > 0.01);
+      assert(report.peers[0].receivedBytes > 0);
+      assert.equal(report.peers[0].route.local, "host");
+    }
+  }, {savedChoice: "on"});
+  await test("silent microphone is visible even with a connected voice link", async (pages) => {
+    await choose(pages[0], "on"); await choose(pages[1], "on"); await connected(pages);
+    await pages[0].waitForFunction(() => document.getElementById("voiceInputState").textContent.includes("no sound detected"), null, {timeout: 9000});
+    const report = await pages[0].evaluate(() => voice.report());
+    assert.equal(report.microphone.tracks[0].enabled, true);
+    assert.equal(report.peers[0].inputEnergy, 0);
+  }, {silentMic: true});
   assert.deepEqual(errors, [], "no uncaught page errors");
 } finally {
   await browser?.close();

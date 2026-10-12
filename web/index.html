@@ -250,7 +250,14 @@
         </select></label>
       </form>
       <div id="voiceState" role="status"></div>
+      <div id="voiceInputState" class="hint" hidden></div>
       <button type="button" id="voiceResume" hidden>Enable voice playback</button>
+      <details id="voiceDetails">
+        <summary>Voice diagnostics</summary>
+        <p class="hint">Speak on each computer and compare reports. Input energy checks the microphone; received energy checks incoming sound; playback shows whether the browser started the audio. Reports contain states and counters, not recordings.</p>
+        <button type="button" id="voiceCopy">Copy voice report</button>
+        <pre id="voiceDiagnostics" style="max-height: 20em; overflow: auto; white-space: pre-wrap"></pre>
+      </details>
       <details id="options">
         <summary>Options</summary>
         <div class="row">
