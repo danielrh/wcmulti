@@ -15,6 +15,7 @@ const fixture = `<!doctype html><label id="voiceLabel">Voice <select id="voice">
   <option value="off">Off</option><option value="listen">Listen only</option>
   <option value="ptt">Push to talk</option><option value="on">Always on</option>
   </select></label><div id="voiceState"></div>
+  <button id="voiceResume" hidden>Enable voice playback</button>
   <script type="module">
     import { initVoice } from '/voice.js';
     const id = Number(location.search.slice(1));
@@ -161,6 +162,14 @@ try {
     assert.deepEqual(await pages[0].evaluate(() => voice.links()), {});
     assert.equal(await pages[0].evaluate(() => captured[0].getAudioTracks()[0].readyState), "ended");
   });
+  await test("blocked playback is visible and recoverable", async (pages) => {
+    await choose(pages[0], "on"); await choose(pages[1], "on"); await connected(pages);
+    await pages[0].waitForSelector("#voiceResume", {state: "visible", timeout: 3000});
+    await pages[0].evaluate(() => { window.blockPlayback = false; });
+    await pages[0].click("#voiceResume");
+    await pages[0].waitForSelector("#voiceResume", {state: "hidden", timeout: 3000});
+    await hearsTone(pages[0]);
+  }, {blockPlayback: true});
   assert.deepEqual(errors, [], "no uncaught page errors");
 } finally {
   await browser?.close();

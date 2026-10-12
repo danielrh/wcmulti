@@ -23,6 +23,7 @@ const PTT_CODE = "Backquote";
 export function initVoice(host) {
   const $ = (id) => document.getElementById(id);
   const sel = $("voice"), state = $("voiceState");
+  const resume = $("voiceResume");
   let choice = "off";
   try { const saved = localStorage.getItem(VOICE_KEY); if (CHOICES.includes(saved)) choice = saved; } catch (e) { /* off */ }
   sel.value = choice;
@@ -83,10 +84,26 @@ export function initVoice(host) {
   }
   function closeAll() { for (const id of Array.from(links.keys())) close(id); }
 
+  function play(id, link) {
+    if (!link.audio || link.playing) return;
+    link.playing = true;
+    // Invoke play inside the button's event handler to preserve user activation.
+    link.audio.play().then(() => {
+      if (links.get(id) !== link) return;
+      link.playbackError = ""; render();
+    }).catch((err) => {
+      if (links.get(id) !== link) return;
+      link.playbackError = `${err.name}: ${err.message}`;
+      host.log(`voice: playing player ${id}: ${link.playbackError}`);
+      render();
+    }).finally(() => { link.playing = false; });
+  }
+  resume?.addEventListener("click", () => { for (const [id, link] of links) play(id, link); });
+
   function open(id, offerer) {
     const g = host.game();
     const pc = new RTCPeerConnection({ iceServers: g.iceServers });
-    const link = { pc, audio: null, offerer, pending: [] };
+    const link = { pc, audio: null, offerer, pending: [], playbackError: "" };
     links.set(id, link);
     if (mic && talks(choice)) for (const t of mic.getAudioTracks()) pc.addTrack(t, mic);
     else pc.addTransceiver("audio", { direction: "recvonly" });
@@ -95,7 +112,8 @@ export function initVoice(host) {
       const a = link.audio || (link.audio = new Audio());
       a.srcObject = e.streams[0] || new MediaStream([e.track]);
       a.autoplay = true;
-      a.play().catch((err) => host.log(`voice: playing player ${id}: ${err.message}`));
+      a.onplaying = () => { if (links.get(id) === link) { link.playbackError = ""; render(); } };
+      play(id, link);
       render();
     };
     pc.onconnectionstatechange = () => {
@@ -176,6 +194,9 @@ export function initVoice(host) {
       text = up.length === them.length ? `voice on with ${up.map(name).join(", ")}` : "voice connecting…";
       text += choice === "ptt" ? " — hold ` to talk" : choice === "on" ? " — your mic is open" : " — listening";
     }
+    const blocked = Array.from(links.values()).some((l) => l.playbackError);
+    if (blocked) text += " — audio playback blocked; click Enable voice playback";
+    if (resume) resume.hidden = !blocked;
     state.textContent = text;
     // The control lights up for a player who has not opted in while another has.
     sel.parentElement.classList.toggle("attention", !optedIn(choice) && them.some((id) => optedIn(remote.get(id))));

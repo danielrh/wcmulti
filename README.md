@@ -63,6 +63,9 @@ joining twice (`Module.lobbyGame`).  Only the canvas receives the
 keyboard, so the chat box stays usable.  Native and browser players can
 share a room, exactly like `runwc.sh DOSPATH room CODE`.
 
+**Voice playback.** If Chrome blocks incoming voice, the voice status explains
+why and offers **Enable voice playback** to start it with a click.
+
 **The public lobby.**  Pilots with nobody to fly with meet in a chat room
 on the page (the lobbylink room `WC-LOBBY`, and `WC-LOBBY0`, `WC-LOBBY1`
 and so on when it is full).  A pilot who opens the page is in it, unless a
