@@ -490,6 +490,48 @@ slot is empty here (or not a ship slot), the step is skipped (`reg_eip` to
 the block's `jmp`).  The intelligence record matters to the AI, which the
 server runs; a wingman's copy of the ship flies by the server's positions.
 
+### The mission's in-flight scenes, on both machines (2026-10-15)
+
+With the crash gone, mission 4 showed the next thing: the host played the
+Caernarvon sequence ("Stay in a parked orbit", Shadow's farewell,
+"Meanwhile..." on the Concordia, the Admiral's new orders) right after its
+autopilot, while the wingman's screen stood still; when the host came
+back, the wingman's game played the same sequence, from its first line
+("Well, Shadow, I guess it's back to life at Caernarvon Station..."),
+while the host stood still -- the user's earlier "the wingman's game
+takes the plain landing" was this scene, seen from its start.  How WC2
+runs them:
+
+* A nav point record's step of type 1 (`01 72 00` at nav 1 here: scene
+  0x72, case 0) leaves the scene pending in `dseg:7D9A` (`ds::pendingScene`)
+  and arms it (`7D9F`); the flight loop plays an armed scene forty frames
+  later (`seg001:0580`, counter `7DA3`), and the autopilot's end plays it
+  at once (`ovr107:01CA`).  `ovr114:2196` (called when the nav point's
+  fighting is over) arms a pending scene too, plays it when `7DA1` says
+  so, runs the nav point's later phases (`ovr116:17F6`: a record whose
+  `+0x1E` is the phase number: its steps, its ten ships) and the "return
+  home" scene `[4685] + 0x12C` when `9180`/`9182` are set.  The scene
+  player `ovr148:00D3(scene, 1)` sets `missionStatus` from the scene's
+  record (0x75 = landed), which is how mission 4 ends at the Concordia.
+* The host's autopilot arms and plays the scene in one go.  The wingman's
+  nav point is set up when the autopilot event reaches it (its scene
+  armed, its count at zero), it runs the one or two frames its window
+  allows after the host's last frame, and stands until the host's frames
+  return; then its count ends and its scene plays.
+
+So the host tells the wingmen: `code::playScene`, hooked at its entry when
+called from the flight loop (second argument 1), sends `InFlightScene`
+(wc.proto) out of band -- polled like chat, so a wingman waiting for a
+frame still sees it (`ServerSession::on_in_flight_scene`,
+`ClientSession::host_scene`).  A wingman with the same scene pending arms
+it and sets its count to the last step, and its wait for the host's frame
+lets one frame run without one (`scene_due`): both play the scene
+together, each waits a moment for the other at the end, and the host's
+own scene triggers stay the game's.  A comm answer is a scene as well; a
+wingman has none pending and lets it pass.  A wingman whose own count
+ends first (the host's and its own nav point setups a frame apart) plays
+first and the host waits as before.
+
 ### A crash that was seen once (2026-10-05)
 
 Reported from two browsers: the second mission of a session (series 3,
@@ -606,7 +648,9 @@ Chat on the game's own comms display, the leader's own manual turret shots on a 
 the automatic turret fire of other ships (every machine makes its own), the mission's
 outcome for the debriefing (each machine scores its own; the next "Fly
 mission" brings the client back to the server's story), cloaking, turrets,
-torpedoes, tractor beams, in-flight conversations and scenes.  In the
+torpedoes, tractor beams, in-flight conversations (the mission's own
+in-flight scenes play on every machine together since 2026-10-15, section
+7; a comm answer still holds the others while it plays).  In the
 Special Operations only the first mission of each was flown by two; their
 story scenes and the transfer of a pilot from WC2 were not looked at.
 

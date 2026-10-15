@@ -847,7 +847,7 @@ public:
             if (!c->connected()) {
                 continue;
             }
-            if (c->conn.poll(CAT_CHAT, msg).ok()) {
+            if (c->conn.poll(CAT_CHAT, msg).ok() && msg.has_chat()) {
                 handle_incoming_chat(msg.chat());
                 for (size_t j = 0; j < clients_.size(); j++) {
                     if (j != i && clients_[j]->connected()) {
@@ -916,6 +916,27 @@ public:
             }
         }
         return true;
+    }
+
+    // Our game starts an in-flight scene of the mission's script and sends
+    // no frames for its length.  Said at once, out of band, so that a
+    // wingman whose game has the same scene pending plays it now rather
+    // than after ours (ClientSession::host_scene).  Comm answers are scenes
+    // too: a wingman has none of those pending and lets them pass.
+    virtual void on_in_flight_scene(int scene) {
+        if (!within_briefed_mission) {
+            return;
+        }
+        NetworkMessage msg;
+        msg.mutable_in_flight_scene()->set_scene((Bit32u)scene);
+        int told = 0;
+        for (size_t i = 0; i < clients_.size(); i++) {
+            RemoteClient *c = clients_[i];
+            if (c->connected() && c->inMission && !c->leftThisMission && c->conn.send(msg)) {
+                told++;
+            }
+        }
+        wclog(1, "in-flight scene %d starts here: %d wingm%s told", scene, told, told == 1 ? "an" : "en");
     }
 
     virtual void send_chat(const std::string &text) {
@@ -1748,7 +1769,7 @@ public:
         : shipNet_(0), seat_(SEAT_WINGMAN), chase_(true), seatFrames_(-1), lastServerFrame_(0), lastServerFrameAt_(0),
           lastServerFrameEmu_(-1), mode_(MODE_LOW), lastWrittenMissionStatus_(Proceed), lastVictoryPlusOne_(0),
           isFresh_(true), hasRestartedMission_(false), hasSentConnect_(false),
-          ignoreNextFrameTop_(false), ownMissionOver_(false), dead_(false), epoch_(0), frameNumber_(0) {
+          ignoreNextFrameTop_(false), ownMissionOver_(false), dead_(false), sceneDue_(false), epoch_(0), frameNumber_(0) {
         callsign_ = get_callsign();
         g_entityMap = &entities_;
     }
@@ -1847,6 +1868,7 @@ public:
         health_.reset();
         hasRestartedMission_ = true;
         ownMissionOver_ = false;
+        sceneDue_ = false;
         wclog(1, "client reset its mission state");
     }
 
@@ -2074,7 +2096,9 @@ public:
         }
         NetworkMessage msg;
         RecvStatus st = conn_.poll(CAT_CHAT, msg);
-        if (st.ok()) {
+        if (st.ok() && msg.has_in_flight_scene()) {
+            host_scene((int)msg.in_flight_scene().scene());
+        } else if (st.ok()) {
             handle_incoming_chat(msg.chat());
         } else if (st.failed()) {
             drop("the server went away");
@@ -2158,6 +2182,14 @@ public:
         return within_briefed_mission && !hasRestartedMission_;
     }
 
+    // For ServerFrameJob: once, after host_scene made our pending scene
+    // due, so that the frame which plays it runs without a server frame.
+    bool scene_due() {
+        bool due = sceneDue_;
+        sceneDue_ = false;
+        return due;
+    }
+
     virtual void send_chat(const std::string &text) {
         NetworkMessage msg;
         Chat *chat = msg.mutable_chat();
@@ -2170,6 +2202,31 @@ public:
     }
 
 private:
+    // The host's game has started an in-flight scene of the mission's
+    // script.  WC2 arms such a scene on every machine by the nav point's
+    // own steps and plays it forty frames later (seg001:0580), or at the end
+    // of an autopilot at once (ovr107:01CA): the host, whose autopilot it
+    // is, is always first; we would wait out its scene with our countdown
+    // standing, then play ours while it waits out ours.  With the same
+    // scene pending here it is made due at our next frame, and the wait for
+    // the host's frame lets that frame run (scene_due).
+    void host_scene(int scene) {
+        if (!within_briefed_mission || !ds::known(ds::pendingScene) || !ds::known(ds::pendingSceneArmed) ||
+            !ds::known(ds::pendingSceneTimer)) {
+            return;
+        }
+        enum { kNoScene = 0xff, kDueCount = 0x28 };  // seg001:05A4 plays the scene at a count of 0x28
+        int ours = rd8(ds::pendingScene);
+        if (ours != scene) {
+            wclog(1, "the host's game plays scene %d; ours has %d pending", scene, ours == kNoScene ? -1 : ours);
+            return;
+        }
+        wr16(ds::pendingSceneArmed, 1);
+        wr16(ds::pendingSceneTimer, kDueCount);
+        sceneDue_ = true;
+        wclog(1, "the host's game plays scene %d: ours plays it at the next frame", scene);
+    }
+
     // Tear the session down at the next safe point; the dispatcher deletes us.
     void drop(const char *why) {
         wclog(0, "%s", why);
@@ -2403,6 +2460,7 @@ private:
     bool ignoreNextFrameTop_;
     bool ownMissionOver_;
     bool dead_;
+    bool sceneDue_;  // host_scene: our pending scene plays at the next frame, which runs without a server frame
     Bit32u epoch_;
     Bit64u frameNumber_;
     NetworkMessage pendingFrame_;
@@ -2425,7 +2483,13 @@ bool ClientLagJob::start() {
 
 bool ServerFrameJob::start() {
     // (The session can be gone: a drop tears it down at the next safe point.)
-    if (g_session != client_ || client_->take_server_frame()) {
+    if (g_session != client_) {
+        done_ = true;
+        perf_idle_wait(PIC_FullIndex() - began_);
+        return false;
+    }
+    bool due = client_->scene_due();  // (consumed whether or not a frame came)
+    if (client_->take_server_frame() || due) {
         done_ = true;
         perf_idle_wait(PIC_FullIndex() - began_);
         return false;

@@ -938,6 +938,11 @@ static void check_hooks_slow() {
     if (at_function(code::showCommMessage)) {
         on_comm_message_entry();
     }
+    if (at_function(code::playScene) && g_session && in_flight() && call_arg16(code::playScene, 1) == 1) {
+        // WC2's scene player, called from the flight loop (its second
+        // argument is 1 there): an in-flight scene starts on this machine.
+        g_session->on_in_flight_scene(call_arg16(code::playScene, 0));
+    }
     if (at_function(code::do_damage)) {
         on_do_damage_entry();
     } else if (at_function(code::fireGunFromShip)) {

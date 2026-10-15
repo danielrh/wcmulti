@@ -261,6 +261,15 @@ message ServerSendBriefingStart {
     // finds in them are the server's.
     optional bytes campaign_state = 5;
 }
+// Server -> client, out of band (polled like chat, so that a wingman waiting
+// for a frame sees it): the host's game is starting an in-flight scene of
+// the mission's script (WC2: a nav point's cutscene, armed on every machine
+// by the nav point's own steps) and sends no frames for its length.  A
+// wingman whose game has the same scene pending plays it now, instead of
+// after the host's.
+message InFlightScene {
+    optional uint32 scene = 1;
+}
 message NetworkMessage {
     optional Connect connect = 1;
     optional Game game = 2;
@@ -273,4 +282,5 @@ message NetworkMessage {
 // handshake
     optional ClientStartBriefingReq start_briefing_req = 16;
     optional ServerSendBriefingStart briefing_start = 17;
+    optional InFlightScene in_flight_scene = 18;
 }

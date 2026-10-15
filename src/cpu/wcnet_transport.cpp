@@ -23,7 +23,7 @@
 namespace wc {
 
 MessageCategory category_of(const NetworkMessage &msg) {
-    return msg.has_chat() ? CAT_CHAT : CAT_GAME;
+    return msg.has_chat() || msg.has_in_flight_scene() ? CAT_CHAT : CAT_GAME;
 }
 
 const char *message_type_name(const NetworkMessage &msg) {

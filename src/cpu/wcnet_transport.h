@@ -35,7 +35,7 @@ private:
 
 enum MessageCategory {
     CAT_GAME = 0,   // frames, handshakes, mission state
-    CAT_CHAT = 1,   // chat; never blocks
+    CAT_CHAT = 1,   // chat and the host's scene notices; never blocks
     NUM_CATEGORIES
 };
 

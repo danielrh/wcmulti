@@ -115,6 +115,9 @@ public:
     // The game's program has ended (its own exit, or an error that dumps it
     // to the DOS prompt) while the session is alive.
     virtual void on_program_ended() {}
+    // WC2's scene player starts a scene from the flight loop on this machine
+    // (a comm answer, or a cutscene of the mission's script).
+    virtual void on_in_flight_scene(int scene) { (void)scene; }
     virtual bool in_space() const = 0;
 
     virtual void send_chat(const std::string &text) = 0;

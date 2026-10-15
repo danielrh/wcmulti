@@ -134,7 +134,8 @@ static void load_wc1_code() {
 static void load_wc2_code() {
     using namespace code;
     enum { SEG001 = 0x03CA, SEG005 = 0x073C, SEG006 = 0x0BD7, SEG092 = 0x1677, STUB107 = 0x1743, STUB114 = 0x1764, STUB116 = 0x1783,
-           STUB120 = 0x17AE, STUB128 = 0x17D6, STUB133 = 0x1812, STUB136 = 0x1836, STUB129 = 0x17DB, STUB134 = 0x1826, STUB141 = 0x1850 };
+           STUB120 = 0x17AE, STUB128 = 0x17D6, STUB133 = 0x1812, STUB136 = 0x1836, STUB129 = 0x17DB, STUB134 = 0x1826, STUB141 = 0x1850,
+           STUB148 = 0x1880 };
     // overlay 114: ships, damage, weapons
     ovr(do_damage, STUB114, 0x00AC, 0x1128, 4, true);        // do_damage(src, dst, quantity, vec*)
     ovr(delayedDespawn, STUB114, 0x00B6, 0x2B10, 2, true);   // destroy(src, ship): wrapper of ovr114:2B69
@@ -158,6 +159,8 @@ static void load_wc2_code() {
     ovr(missionStarting, STUB128, 0x0039, 0x0486);           // about to load the mission and fly
     ovr(missionEnded, STUB128, 0x0039, 0x04C3);              // the flight loop returned
     // overlay 134: asteroid and mine fields
+    // overlay 148: the scene player
+    ovr(playScene, STUB148, 0x0020, 0x00D3, 2);              // playScene(scene, inFlight): comm answers, the mission's cutscenes (seg001:05BD, ovr114:21DE, ovr107:01EC), the landing
     ovr(cloak, STUB133, 0x0057, 0x0034, 1);                  // cloak(ship): the ship vanishes (sound, state 1)
     ovr(uncloak, STUB133, 0x0110, 0x0085, 1);                // uncloak(ship): it comes back over 40 frames (state 0)
     ovr(setView, STUB141, 0x0066, 0x0AC1, 2);                // setView(view, 0): what F1..F4 call (0 pilot, 2 left, 1 right, 3 rear)

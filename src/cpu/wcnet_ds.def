@@ -98,6 +98,9 @@ WC_DS(campaignState, 0x0000, 0x0000, 0xCF3A, 0xCE0A, 0xD432)           // WC2: f
 WC_DS(playerWing, 0x0000, 0x0000, 0xC1B6, 0xC0B2, 0xC348)              // WC2: eight words, the mission ships that fly in the player's wing (0xffff: none)
 WC_DS(slotMissionShip, 0x0000, 0x0000, 0x6E1E, 0x6E28, 0x70C4)         // WC2: [slotMissionShip + 2*slot] word: the mission ship in a slot
 WC_DS(slotIntelRecord, 0x0000, 0x0000, 0x6E46, 0x6E50, 0x70EC)         // WC2: [slotIntelRecord + 2*slot] word: the slot's record in the table of intelligence records (dseg:C9EE, 81 bytes each), -1 in an empty slot (seg006:1B7A)
+WC_DS(pendingScene, 0x0000, 0x0000, 0x7D9A, 0x7DC0, 0x8058)            // WC2: byte, the in-flight scene a nav point step left pending (0xff none): seg001:0580 plays it 40 frames after it is armed, an autopilot's end at once (ovr107:01CA)
+WC_DS(pendingSceneArmed, 0x0000, 0x0000, 0x7D9F, 0x7DC5, 0x805D)       // WC2: word, nonzero while the pending scene's countdown runs
+WC_DS(pendingSceneTimer, 0x0000, 0x0000, 0x7DA3, 0x7DC9, 0x8061)       // WC2: word, that countdown (the scene plays at 0x28)
 WC_DS(missionShipTable, 0x6E80, 0x71A2, 0x75CE, 0x75D8, 0x7874)  // [missionShips] 0x2a bytes per mission ship, word 0 = ship type
 WC_DS(fieldRockTally, 0x39A4, 0x39F4, 0x8FB2, 0x8E64, 0x9104)  // [fieldRockTally] word: rocks added minus rocks dropped (not an exact count)
 WC_DS(fieldCount, 0xBFF6, 0xC2DC, 0x4427, 0x4431, 0x46CD)  // [fieldCount] word: fields of the current nav point (max 7)
