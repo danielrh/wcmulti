@@ -494,6 +494,15 @@ default) goes by what the host measures of each wingman's link
 * the wingman's own frame rate, said in each of its frames (`Frame.fps`),
   and the host's, a sample a second each.
 
+A pause is no measure of the link (2026-10-15): a tick after a gap of
+more than 1.5 s of the host's own (an in-flight scene, the nav map, a
+comm answer), or with a wingman whose last frame is more than a second
+old (its loop stands still and the host waits for it), puts that
+wingman's monitor in the quiet period the autopilot's fly-by already
+used (`LinkMonitor::quiet`): no samples and no round trips for five
+seconds, the pause and the catch-up after it.  Before, the host's rate
+collapsing while it waited read as a slow link and the mode flipped.
+
 The rules, with the thresholds the simulated link gave (`mode_tick`;
 every figure is as the host measures it, processing included):
 

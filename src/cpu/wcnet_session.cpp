@@ -1456,6 +1456,22 @@ private:
             return;
         }
         int ownFps = modeTickAt_ > 0 ? (int)(ownFrames_ * 1000.0 / (now - modeTickAt_) + 0.5) : -1;
+        // A pause is no measure of the link: our own frame loop stood still
+        // (an in-flight scene, the nav screen, a comm answer: no tick for
+        // more than a second), or a wingman's did (no frame of its for more
+        // than a second: we wait for it, and our own rate falls with it).
+        // No samples then, nor for the seconds after, which catch up.
+        bool ownPause = modeTickAt_ > 0 && now - modeTickAt_ > 1500.0;
+        for (size_t i = 0; i < clients_.size(); i++) {
+            RemoteClient *c = clients_[i];
+            if (!c->connected() || !c->inMission) {
+                continue;
+            }
+            bool theirPause = c->lastFrameAt > 0 && now - c->lastFrameAt > 1000.0;
+            if (ownPause || theirPause) {
+                c->link.quiet(now, LinkMonitor::kGraceMs);
+            }
+        }
         modeTickAt_ = now;
         ownFrames_ = 0;
         double rtt = -1, worst = 0, spiky = 0;
