@@ -115,6 +115,22 @@ extra health" and "wingman explodes" behaviour.
   changes it, 0 switches it off) the jump is taken as for a ship that is
   near.  Ships that are leaving (a retreat, a jump) go by other code and
   still go.  Clients never remove ships of their own (`intercept_despawn`).
+* **Both humans are "the player" to an enemy's AI.**  The AI approaches,
+  engages and aims at slot 0, the player's ship, named by the constant 0 all
+  over it: a human wingman beside a unit did not count, and with the two
+  pilots far apart the units left the wingman for the host at afterburner
+  speed (both games, 2026-10-15).  On the server an enemy's AI tick now runs
+  with slot 0's place, speed and bearing swapped for a chosen human's and
+  put back as it returns (`AiAsJob` in wcnet_events.cpp, around the game's
+  own `aiShipThink` call): the AI steers and shoots at the chosen one, and
+  its bolts find the real ship where it is.  The choice is per ship, drawn
+  at random among the humans within 16000 km (the nearest when none is),
+  kept eight seconds, drawn again when that has run out or its human is
+  gone -- the user's rule, to spread the attacks.  Friendlies keep the real
+  player as their leader.  What the AI does inside the swapped tick (a shot,
+  a cloak, a removal) is the game's own doing and is broadcast as such
+  (`g_aiAs`, like the autopilot's `g_cinematic`).  The side of a ship is the
+  word at `commAnimInfo` (0 the player's, 1 the enemy's).
 * **Asteroid and mine fields belong to each machine.**  The game never has
   more than twenty rocks or mines: overlay 168 keeps them around slot 0 while
   it is inside a field (`ovr168:0B86` tests every 16 frames whether the

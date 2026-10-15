@@ -45,7 +45,7 @@ WC_DS(gunDamage, 0xBD0E, 0xBFF4, 0x67AC, 0x67B6, 0x6A52)  // [damageProperty+180
 WC_DS(maybeEntityType, 0xBD1A, 0xC000, 0x64AA, 0x64B4, 0x6750)  // word per slot, EntityType
 WC_DS(gunEnergy, 0xBE3A, 0xC120, 0x66F8, 0x6702, 0x699E)  // [maybeEntityType+120] word per slot, recharges to 100
 WC_DS(speedLo, 0xBE6C, 0xC152, 0x677A, 0x6784, 0x6A20)  // [maybeEntityType+152] int32 per slot (lo/hi words)
-WC_DS(commAnimInfo, 0xBE94, 0xC17A, 0x672A, 0x6734, 0x69D0)  // word per slot (1 = has a pilot that talks)
+WC_DS(commAnimInfo, 0xBE94, 0xC17A, 0x672A, 0x6734, 0x69D0)  // word per slot (1 = has a pilot that talks); the AI reads it as the ship's side: 0 the player's, 1 the enemy's, 2 others (WC2 ovr129:003D compares it with slot 0's)
 WC_DS(engineFlag, 0xBFD6, 0xC2BC, 0x67B6, 0x67C0, 0x6A5C)  // [commAnimInfo+142] byte per slot, 0xff = disabled
 WC_DS(gInstanceShipTypes, 0xBFF8, 0xC2DE, 0x641E, 0x6428, 0x66C4)  // word per slot, index into kShipStats (0x6f bytes each)
 WC_DS(frameCounter, 0xC0B8, 0xC39E, 0x43C3, 0x43CD, 0x4669)  // [gInstanceShipTypes+C0] incremented once per game frame

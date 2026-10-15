@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <strings.h>
 #include <deque>
 #include <string>
@@ -14,6 +15,7 @@
 #include "wcnet_log.h"
 #include "cpu.h"
 #include "regs.h"
+#include "pic.h"
 
 namespace wc {
 
@@ -42,9 +44,18 @@ static bool g_navSetup = false;
 static bool g_applyingReport = false;
 
 static bool g_cinematic = false;  // the autopilot's fly-by is being replayed (see AutopilotJob)
+static bool g_aiAs = false;       // an enemy's AI tick runs as AiAsJob: the game's own doing, not a replay
+
+enum { kAiPickSlots = 128 };
+static int g_aiPick[kAiPickSlots];          // per ship: the human its AI goes by as "the player" (-1: none yet)
+static double g_aiPickUntil[kAiPickSlots];  // ... and until when (emulated ms)
 
 void reset_pending_fires() {
     g_cinematic = false;  // (a mission that ended inside a fly-by)
+    g_aiAs = false;
+    for (int i = 0; i < kAiPickSlots; i++) {
+        g_aiPick[i] = -1;
+    }
     g_pendingFires.clear();
 }
 
@@ -793,7 +804,7 @@ private:
 
 void on_cloak_entry(bool on) {
     Session *s = g_session;
-    if (!s || (g_trampoline.is_running() && !g_cinematic)) {
+    if (!s || (g_trampoline.is_running() && !g_cinematic && !g_aiAs)) {
         return;
     }
     const Loc &fn = on ? code::cloak : code::uncloak;
@@ -1023,7 +1034,7 @@ void enqueue_rocks_change(int mode) {
 // server's spawns for them then found them "already there", and every shot,
 // hit and kill of theirs was ignored on that client.
 static bool replaying() {
-    return g_trampoline.is_running() && !g_cinematic;
+    return g_trampoline.is_running() && !g_cinematic && !g_aiAs;
 }
 
 // The network id of the ship behind a hit or a kill, when a ship is behind
@@ -1253,6 +1264,103 @@ static void intercept_despawn(bool explode) {
 void on_despawn_entry() { intercept_despawn(false); }
 void on_delayed_despawn_entry() { intercept_despawn(true); }
 
+// ---------------------------------------------------------------------------
+// Which human is "the player" to an enemy's AI (the server)
+//
+// The AI approaches, engages and aims at slot 0, the player's ship, named by
+// the constant 0 all over it, and a human wingman beside it does not count:
+// with the two pilots far apart the units left the wingman for the host at
+// afterburner speed (the far-apart runs of 2026-10-15).  The user's rule:
+// both humans are the player, and which one a unit goes by is drawn at
+// random each time it decides, to spread the attacks.  So on the server an
+// enemy's AI tick runs with slot 0's place, speed and bearing swapped for the
+// chosen human's, put back as it returns (AiAsJob): the AI steers and shoots
+// at the chosen one, and its bolts find the real ship where it is.  The
+// choice is per ship, drawn among the humans within engagement range (the
+// nearest when none is), kept for a few seconds, drawn again when that has
+// run out or its human is gone.  Friendlies keep the real player as their
+// leader.  What the AI does meanwhile -- shots, cloaks, a removal -- is the
+// game's own doing and goes out to everyone (g_aiAs: not a replay).
+
+class AiAsJob : public VmJob {
+public:
+    AiAsJob(int slot, int human) : slot_(slot), human_(human) {}
+    virtual bool start() {
+        const Bit16u bases[kVectors] = { ds::gPositionVector, ds::gVelocityVector, ds::gOrientationRightVector,
+                                         ds::gOrientationUpVector, ds::gOrientationFrontVector };
+        for (int i = 0; i < kVectors; i++) {
+            bases_[i] = bases[i];
+            saved_[i] = read_vec(vec_slot(bases[i], kPlayerSlot));
+            write_vec(vec_slot(bases[i], kPlayerSlot), read_vec(vec_slot(bases[i], human_)));
+        }
+        savedSpeed_ = rd32(ds::setSpeed);
+        wr32(ds::setSpeed, rd32((Bit16u)(ds::setSpeed + 4 * human_)));
+        g_aiAs = true;
+        call_of(code::aiShipThink).arg((Bit16u)slot_).invoke();
+        return true;
+    }
+    virtual void finish() {
+        g_aiAs = false;
+        for (int i = 0; i < kVectors; i++) {
+            write_vec(vec_slot(bases_[i], kPlayerSlot), saved_[i]);
+        }
+        wr32(ds::setSpeed, savedSpeed_);
+    }
+    virtual const char *describe() const { return "ai as"; }
+
+private:
+    enum { kVectors = 5 };
+    int slot_, human_;
+    Bit16u bases_[kVectors];
+    Vec3 saved_[kVectors];
+    Bit32u savedSpeed_;
+};
+
+// The human an enemy ship's AI goes by, drawn as described above.
+static int human_for_ai(int slot) {
+    enum { kEngageKm = 16000, kKeepMs = 8000 };
+    int humans[16], n = 0;
+    for (int s = kPlayerSlot; s <= kMaxShipSlot && n < 16; s++) {
+        if (s != slot && g_session->is_player_slot(s) && slot_in_use(s)) {
+            humans[n++] = s;
+        }
+    }
+    if (n <= 1 || slot < 0 || slot >= kAiPickSlots) {
+        return n ? humans[0] : kPlayerSlot;
+    }
+    double now = PIC_FullIndex();
+    int current = g_aiPick[slot];
+    bool currentStands = false;
+    for (int i = 0; i < n; i++) {
+        currentStands = currentStands || humans[i] == current;
+    }
+    if (currentStands && now < g_aiPickUntil[slot]) {
+        return current;
+    }
+    Vec3 pos = read_vec(vec_slot(ds::gPositionVector, slot));
+    int near[16], nn = 0, nearest = -1;
+    double nearestKm = 0;
+    for (int i = 0; i < n; i++) {
+        Vec3 p = read_vec(vec_slot(ds::gPositionVector, humans[i]));
+        double dx = (double)p.x - pos.x, dy = (double)p.y - pos.y, dz = (double)p.z - pos.z;
+        double km = sqrt(dx * dx + dy * dy + dz * dz) / 256.0;  // the game's km: position units / 256
+        if (km <= kEngageKm) {
+            near[nn++] = humans[i];
+        }
+        if (nearest < 0 || km < nearestKm) {
+            nearest = humans[i];
+            nearestKm = km;
+        }
+    }
+    int pick = nn ? near[rand() % nn] : nearest;
+    g_aiPick[slot] = pick;
+    g_aiPickUntil[slot] = now + kKeepMs;
+    if (pick != current) {
+        wclog(2, "slot %d goes by player slot %d as the player (%d human%s within %d km)", slot, pick, nn, nn == 1 ? "" : "s", (int)kEngageKm);
+    }
+    return pick;
+}
+
 void on_ai_think_entry() {
     Session *s = g_session;
     // WC.EXE clients let the AI run (the server's positions overwrite what
@@ -1261,9 +1369,29 @@ void on_ai_think_entry() {
     if (!s || !(s->is_server() || is_wc2())) {
         return;
     }
-    if (s->is_remote_player_slot(call_arg16(code::aiShipThink, 0))) {
+    int slot = call_arg16(code::aiShipThink, 0);
+    wclog(3, "ai think: slot %d%s server=%d side=%d/%d type=%d remote=%d", slot, g_trampoline.is_running() ? " (inside a job)" : "",
+          (int)s->is_server(), ds::known(ds::commAnimInfo) ? rd16((Bit16u)(ds::commAnimInfo + 2 * slot)) : -1,
+          ds::known(ds::commAnimInfo) ? rd16(ds::commAnimInfo) : -1, is_ship_slot(slot) ? (int)entity_type(slot) : -1,
+          (int)s->is_remote_player_slot(slot));
+    if (s->is_remote_player_slot(slot)) {
         return_from_call(code::aiShipThink, 0);
+        return;
     }
+    if (!s->is_server() || g_trampoline.is_running() || !ds::known(ds::commAnimInfo) || !is_ship_slot(slot) || !slot_in_use(slot) ||
+        slot == kPlayerSlot) {
+        return;  // (is_running: our own AiAsJob entering the function, or a replay)
+    }
+    if (rd16((Bit16u)(ds::commAnimInfo + 2 * slot)) == rd16(ds::commAnimInfo)) {
+        return;  // a friendly: the real player leads it
+    }
+    int human = human_for_ai(slot);
+    wclog(3, "ai think: slot %d goes by player slot %d", slot, human);
+    if (human == kPlayerSlot) {
+        return;
+    }
+    g_trampoline.enqueue(new AiAsJob(slot, human));
+    g_trampoline.run_instead_of_current_call(code::aiShipThink);
 }
 
 void on_ai_set_speed_entry() {
