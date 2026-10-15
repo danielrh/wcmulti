@@ -96,6 +96,8 @@ static void load_wc1_code() {
     ovr(despawn, STUB140, 0x01DD, 0x1C16, 1);              // despawn(ship)
     // overlay 163: AI
     ovr(aiShipThink, STUB163, 0x00CA, 0x160E, 1);          // per-frame ship AI (from ovr141:28D0)
+    ovr(farShipTest1, STUB163, 0x0048, 0x003D);            // the AI's `cmp ax,3E80h`: the wingman more than 16000 km from the player is removed
+    ovr(farShipTest2, STUB163, 0x00C0, 0x0317);            // the same test on a ship with no target (ovr163:0228)
     // overlay 134: VDU / comms
     ovr(showCommMessage, STUB134, 0x025F, 0x33ED, 2);      // outerSomeCommThing(ship, msg): msg 0 shows dseg:8DF8 on the VDU
     ovr(cockpitPointer, STUB134, 0x0214, 0x2823);          // the frame's last touches (ovr134:26FE): call far [7A4A] draws the mouse pointer
@@ -150,6 +152,8 @@ static void load_wc2_code() {
     // overlay 141: the per-entity AI dispatcher (fighters go on to ovr129:150E,
     // capital ships to ovr129:1F13, ...)
     ovr(aiShipThink, STUB141, 0x005C, 0x2CD3, 1);            // entity_ai(slot)
+    ovr(farShipTest1, STUB129, 0x0052, 0x004E);              // the fighter AI's `cmp ax,3E80h`: a friendly more than 16000 km from the player is removed
+    ovr(farShipTest2, STUB129, 0x00D4, 0x036A);              // the same test on a ship with no target (ovr129:0285)
     // overlay 107: autopilot
     ovr(autoAnimation, STUB107, 0x0025, 0x0000, 3);          // autoAnimation(camShipType, camMode, duration)
     ovr(autoAnimationBody, STUB107, 0x0025, 0x0003);         // after its push bp / mov bp,sp

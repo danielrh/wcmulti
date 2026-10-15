@@ -101,6 +101,20 @@ extra health" and "wingman explodes" behaviour.
   calls run locally on every machine (they reset the slot's pilot to 0xff, its
   comm flags and cull status).  Only despawns of ships that exist are
   broadcast or, on a client, left to the server.
+* **A ship far from the host but near a wingman stays.**  The game removes a
+  ship more than 16000 km from the player's own ship (km: position units /
+  256): the AI's wingman that has fallen that far behind (WC.EXE
+  `ovr163:003D`; WC2: a friendly, `ovr129:004E`) and a ship with no target
+  that has wandered off (`ovr163:0317`, `ovr129:036A`), each a
+  `cmp ax,3E80h / jng` on the distance just measured.  On the host that
+  distance is from the host's ship alone, so with the two pilots far apart
+  the host's game took units from under the wingman's nose (and said so to
+  everyone).  The hooks `farShipTest1` / `farShipTest2` sit on those
+  compares on the server: while any human's ship is within a laser blast
+  and a half of the unit (4800 km x 1.5 = 7200 km; `WCKEEPNEAR=<km>`
+  changes it, 0 switches it off) the jump is taken as for a ship that is
+  near.  Ships that are leaving (a retreat, a jump) go by other code and
+  still go.  Clients never remove ships of their own (`intercept_despawn`).
 * **Asteroid and mine fields belong to each machine.**  The game never has
   more than twenty rocks or mines: overlay 168 keeps them around slot 0 while
   it is inside a field (`ovr168:0B86` tests every 16 frames whether the
@@ -669,6 +683,7 @@ shell command still starts/stops the server or connects.  Useful environment:
 | `WCNET_LAG=<ms>`, `WCNET_JITTER=<ms>`, `WCNET_DROP=<pct>[:<ms>]`, `WCNET_BURST=<periodMs>:<lossMs>[:<spikeMs>]`, `WCNET_SEED=<n>` | test aid: a slow or a bad link made on this machine (section 3b): one-way delay, random extra delay per message, share of messages lost (and how long a lost one takes to be sent again, with everything behind it), a periodic burst of loss and queueing like a satellite handover, and the random sequence |
 | `WCNET_MODE=auto\|low\|high` | on the host: the exchange mode (section 3b; auto, the default, goes by the measured link; the page's "Connection" option and `/latency` do the same) |
 | `WCNET_BESTEFFORT=0` | no positions by the best-effort channel in the high-latency mode (section 3b), to measure what it is worth |
+| `WCKEEPNEAR=<km>` | on the host: how close a human's ship must be to a unit that the game would remove for being more than 16000 km from the host's ship, for the unit to stay (default 7200, a laser blast and a half; 0: the game's own rule) |
 | `WCROCKS=0` / `WCROCKS=soft` | on the host: fly without asteroid and mine fields, or with rocks that do a sixteenth of their damage to a player's own ship (everyone follows the host; `/rocks on`, `/rocks soft`, `/rocks off` in the comms prompt switch it in flight) |
 | `WCNET_AUTOKEYS=1` | test aid: press Enter through the briefing, then `A` (autopilot) once in space |
 | `WCNET=0` | fly alone: no server, no room, the game's own wingman (a single-player control for experiments) |

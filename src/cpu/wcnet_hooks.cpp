@@ -885,6 +885,63 @@ static void hold_cheat_hull() {
     wclog(1, "the callsign has CHEAT in it: this ship takes no damage");
 }
 
+// The game removes a ship more than 16000 km from the player's own ship: a
+// friendly that has fallen that far behind (WC.EXE ovr163:003D, WC2.EXE
+// ovr129:004E) and a ship with no target that has wandered off (ovr163:0317,
+// ovr129:036A), each a `cmp ax,3E80h / jng` on the distance the game has
+// just measured (km: position units / 256).  On the host that distance is
+// from the host's ship alone, so a unit fighting beside a wingman 20000 km
+// away vanished from under the wingman's nose (the user's report,
+// 2026-10-15).  Now, while any human's ship is within a laser blast and a
+// half of the unit (4800 km x 1.5; WCKEEPNEAR=<km> changes it), the test is
+// made to pass: the game takes the branch it takes for a ship that is near.
+// Ships that are leaving (a retreat, a jump) go by other code and still go.
+static void keep_far_ship_near_humans() {
+    enum { kFarKm = 0x3E80, kLaserRangeKm = 4800, kLogEvery = 300 };
+    static int keepKm = -1;
+    if (keepKm < 0) {
+        const char *env = getenv("WCKEEPNEAR");
+        keepKm = env && env[0] ? atoi(env) : kLaserRangeKm * 3 / 2;
+    }
+    int dist = (Bit16s)(reg_ax & 0xffff);
+    int slot = (int)(reg_si & 0xffff);
+    if (dist <= kFarKm || keepKm <= 0 || !is_ship_slot(slot) || !slot_in_use(slot)) {
+        return;  // the game keeps it anyway, or there is nothing to keep
+    }
+    PhysPt ip = SegPhys(cs) + (reg_eip & 0xffff);
+    if (mem_readb(ip) != 0x3D || mem_readb(ip + 3) != 0x7E) {
+        return;  // not `cmp ax,imm16` / `jng rel8`: not the code this was written for
+    }
+    Vec3 pos = read_vec(vec_slot(ds::gPositionVector, slot));
+    int nearest = -1;
+    double nearestKm = 0;
+    for (int s = kPlayerSlot; s <= kMaxShipSlot; s++) {
+        if (s == slot || !g_session->is_player_slot(s) || !slot_in_use(s)) {
+            continue;
+        }
+        Vec3 p = read_vec(vec_slot(ds::gPositionVector, s));
+        double dx = (double)p.x - pos.x, dy = (double)p.y - pos.y, dz = (double)p.z - pos.z;
+        double km = sqrt(dx * dx + dy * dy + dz * dz) / 256.0;
+        if (nearest < 0 || km < nearestKm) {
+            nearest = s;
+            nearestKm = km;
+        }
+    }
+    if (nearest < 0 || nearestKm > keepKm) {
+        return;
+    }
+    enum { kSlotsMax = 128 };  // (more than either game has)
+    static int lastLogged[kSlotsMax];
+    static bool loggedOnce[kSlotsMax];
+    int frame = rd16(ds::frameCounter);
+    if (slot < kSlotsMax && (!loggedOnce[slot] || frame - lastLogged[slot] > kLogEvery || frame < lastLogged[slot])) {
+        loggedOnce[slot] = true;
+        lastLogged[slot] = frame;
+        wclog(2, "slot %d is %d km from our ship but %.0f km from player slot %d: kept", slot, dist, nearestKm, nearest);
+    }
+    reg_eip += 5 + (Bit8s)mem_readb(ip + 4);  // the `jng`'s target: the ship is near
+}
+
 static void check_hooks_slow() {
     if (at_location(code::cockpitPointer) && pointer_off()) {
         reg_eip += 4;
@@ -1048,6 +1105,12 @@ static void check_hooks_slow() {
         if (slot < 0 || slot >= 10 || (Bit16s)rd16((Bit16u)(ds::slotIntelRecord + 2 * slot)) < 0) {
             wclog(2, "nav point step: slot %d is empty here, its intelligence file is not loaded", slot);
             reg_eip += 0x22;  // the block's `jmp` to the next step (ovr116:144A)
+        }
+    }
+    if (at_location(code::farShipTest1) || at_location(code::farShipTest2)) {
+        wclog(3, "far-ship test: slot %d is %d km from our ship", (int)(reg_si & 0xffff), (int)(Bit16s)(reg_ax & 0xffff));
+        if (g_session && g_session->is_server()) {
+            keep_far_ship_near_humans();
         }
     }
     if (at_location(code::replayKey)) {
