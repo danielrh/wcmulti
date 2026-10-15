@@ -128,16 +128,19 @@ const SO2_SERIES = [
   { series: 5, missions: [GUNNER, GUNNER, "with Maniac", DRONE] },
 ];
 
-// What the page says under the mission menu: with a mission picked
-// (`forced`), and for the barracks, to the host and to a wingman.
+// What the page says under the mission menu, in a line: with a mission
+// picked (`forced`), and for the barracks, to the host and to a wingman.
+// The whole story (`help`) is under the game, folded: Fly stays in view.
 const WC1_HINTS = {
   forced: "Everyone flies it from a fresh start with the callsigns entered above.",
-  host: "The barracks: your save game and your walk to the briefing decide the mission; wingmen must walk into the briefing room too, and get your mission there.",
-  wing: "The host flies from the barracks: after the host starts, walk into the briefing room on your ship and you get the host's mission." };
+  host: "The barracks: your save game and your walk to the briefing decide the mission; wingmen get it in the briefing room.",
+  wing: "The host flies from the barracks: walk into the briefing room after the host has started, and you get the host's mission.",
+  help: "From the barracks (no mission picked): the host's save game and walk to the briefing room decide the mission; a wingman walks into the briefing room on their own ship after the host has started, and gets the host's mission there. With a mission picked, everyone flies it from a fresh start with the callsigns entered above. The second player flies the mission's wingman." };
 const WC2_HINTS = {
-  forced: "Everyone starts in the barracks with the story at that mission: click the door the game calls \"Fly mission\" (point at a door and it is named), and the briefing plays first. In a mission flown alone the second player is the gunner if the ship has turrets (starting in the rear turret; F2 and F3 are the side turrets, F4 the rear one, F1 the pilot's view), and otherwise a drone riding behind the leader as its copilot: Up and Down shift the leader's shields to the rear and the front, Space puts shields into the guns, Enter guns into the weakest shield, + and - set the leader's cruising speed, and its gauges show the leader's. Nothing sees or hits it; 0, then /chase and Enter, flies free.",
-  host: "The barracks: your saved game decides the mission. Click \"Fly mission\" (point at a door and the game names it); wingmen do the same and get your place in the story, your briefing and your mission.",
-  wing: "The host flies from the barracks: click \"Fly mission\" (point at a door and the game names it), and you get the host's place in the story, the briefing and the mission." };
+  forced: "Everyone starts in the barracks at that point of the story: click \"Fly mission\" there.",
+  host: "The barracks: your saved game decides the mission; click \"Fly mission\" and wingmen get your mission.",
+  wing: "The host flies from the barracks: click \"Fly mission\" and you get the host's mission.",
+  help: "Everyone starts in the barracks, with the story at the mission picked or at the host's saved game: click the door the game calls \"Fly mission\" (point at a door and it is named), and the briefing plays first; wingmen get the host's place in the story, the briefing and the mission. In a mission flown alone the second player is the gunner if the ship has turrets (starting in the rear turret; F2 and F3 are the side turrets, F4 the rear one, F1 the pilot's view), and otherwise a drone riding behind the leader as its copilot: Up and Down shift the leader's shields to the rear and the front, Space puts shields into the guns, Enter guns into the weakest shield, + and - set the leader's cruising speed, and its gauges show the leader's. Nothing sees or hits the drone; 0, then /chase and Enter, flies it free." };
 // "Origin s<series> m<mission>" on the command line of Wing Commander II's
 // programs puts the story at that mission and starts in the barracks.
 const wc2Mission = (m) => `Origin s${m.series} m${m.mis}`;

@@ -29,7 +29,11 @@
   #top { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 4px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line2); }
   #top h1 { margin: 0; color: var(--amber); font: italic 800 22px/1 Eurostile, "Bank Gothic", "Segoe UI", system-ui, sans-serif; letter-spacing: .22em; text-transform: uppercase; }
   #top .sub { color: var(--muted); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; }
-  #top #serverTag { margin-right: 44px; color: var(--amber); letter-spacing: .04em; text-transform: none; overflow-wrap: anywhere; }
+  #top #serverTag { color: var(--amber); letter-spacing: .04em; text-transform: none; overflow-wrap: anywhere; }
+  /* (The next step, wherever the page is scrolled to: Fly, or what comes
+     before it.  Left of the lamps.) */
+  #top .acts { margin-left: auto; margin-right: 54px; }
+  #top .acts button { padding: 6px 14px; }
   /* (Three lamps: red, amber, green.) */
   #top::before, #top::after { content: ""; position: absolute; bottom: 9px; height: 7px; box-sizing: border-box; }
   #top::before { right: 26px; width: 8px; background: var(--red); }
@@ -73,13 +77,21 @@
   details { margin-top: 6px; }
   summary { cursor: pointer; color: var(--muted); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
   summary:hover { color: var(--green); }
+  /* (The rarely used panels' headings on one line; an open one takes the row.) */
+  .details-row { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; }
+  .details-row details { margin-top: 0; }
+  .details-row details[open] { flex-basis: 100%; }
 
   /* game files */
   #dropzone { padding: 7px 10px; border: 1px dashed var(--green2); background: #04100a; font: 12px/1.45 system-ui, sans-serif; }
   #dropzone.over { background: #0b2a1a; border-color: var(--green); }
   #dropzone .pick { display: inline; color: var(--amber); cursor: pointer; text-decoration: underline; }
   #dropzone input[type=file] { display: none; }
+  /* (With a game loaded the invitation is a line: the details are a tooltip.) */
+  #source.loaded #dropzone { padding: 4px 10px; }
+  #source.loaded #dropzone .fresh, #source:not(.loaded) #dropzone .loaded { display: none; }
   #sourceStatus { margin: 6px 0; color: var(--green); font-size: 12px; }
+  #sourceStatus[title] { cursor: help; text-decoration: underline dotted var(--line); }
   #sourceButtons { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
   #sourceButtons button { padding: 5px 9px; }
   #pickerLabel, #programLabel { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
@@ -187,16 +199,17 @@
     <h1>Wing Commander</h1>
     <span class="sub">cooperative multiplayer in the browser</span>
     <span class="sub" id="serverTag" title="This page uses another lobby server than the public one (its address has ?server=, or Options says so): you meet the pilots who use the same" hidden></span>
+    <div class="acts"><button type="button" id="topAction" disabled title="The next step, wherever the page is scrolled to">Fly</button></div>
   </header>
 
   <div id="deck">
     <section id="source" class="panel">
       <h2><b>1</b> Game files</h2>
       <div id="dropzone" tabindex="0">
-        <strong>Bring your own game.</strong> Drop a <b>.zip</b> of your Wing Commander or Wing Commander II folder, or the GOG installer
-        (<code>setup_wing_commander_*.exe</code>), here, or
+        <span class="fresh"><strong>Bring your own game.</strong> Drop a <b>.zip</b> of your Wing Commander or Wing Commander II folder, or the GOG installer
+        (<code>setup_wing_commander_*.exe</code>), here, or</span><span class="loaded">Another game: drop its <b>.zip</b> or GOG installer here, or</span>
         <label class="pick"><input type="file" id="gamefile" accept=".zip,.exe,application/zip,application/octet-stream"> choose a file</label>.
-        Nothing is uploaded: the files are unpacked and kept in this browser only.
+        <span class="fresh">Nothing is uploaded: the files are unpacked and kept in this browser only.</span>
       </div>
       <div id="sourceStatus">No game files yet.</div>
       <div id="sourceButtons">
@@ -257,6 +270,7 @@
       <div id="voiceState" role="status"></div>
       <div id="voiceInputState" class="hint" hidden></div>
       <button type="button" id="voiceResume" hidden>Enable voice playback</button>
+      <div class="details-row">
       <details id="voiceDetails">
         <summary>Voice diagnostics</summary>
         <p class="hint">Speak on each computer and compare reports. Input energy checks the microphone; received energy checks incoming sound; playback shows whether the browser started the audio. Reports contain states and counters, not recordings.</p>
@@ -285,12 +299,13 @@
         </div>
         <p class="hint">The controller is the game's mouse and keyboard: the sticks steer (left stick turns and pitches, right stick pitches and rolls), the buttons press the game's keys. In menus and the barracks the left stick moves the pointer and the Fire guns button clicks. Each browser window has its own controller, so two windows side by side make a split screen: one controller each, or a controller in one and the keyboard and mouse in the other.</p>
       </details>
+      </div>
       <div id="lobby" hidden>
         <div id="missionRow">
           <label>Mission <select id="mission"></select></label>
-          <label title="The host decides, also while flying; /rocks on, /rocks soft and /rocks off in the chat do the same">Asteroids and mines
+          <label title="Asteroid and mine fields. The host decides, also while flying; /rocks on, /rocks soft and /rocks off in the chat do the same">Asteroids
             <select id="rocks"><option value="on">on</option><option value="soft">soft: one rock will not kill you</option><option value="off">off</option></select></label>
-          <label title="How the host's game and the wingmen's exchange their frames. Auto: the host's game measures the connection and picks; low latency: each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes). The host decides, also while flying; /latency auto, /latency low and /latency high in the chat do the same">Connection
+          <label title="The connection: how the host's game and the wingmen's exchange their frames. Auto: the host's game measures the connection and picks; low latency: each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes). The host decides, also while flying; /latency auto, /latency low and /latency high in the chat do the same">Conn
             <select id="latency"><option value="auto">auto</option><option value="low">low latency: nearby</option><option value="high">high latency: far away</option></select></label>
           <div class="hint" id="missionHint"></div>
         </div>
@@ -323,6 +338,10 @@
       <button type="button" class="secondary" id="copyLog" title="The log on the right, for a problem report">Copy log</button>
       <p class="hint">Click the screen to give it the keyboard. <kbd>Caps Lock</kbd> is the game's <kbd>Esc</kbd> (it skips cutscenes), because the browser keeps <kbd>Esc</kbd> for leaving full screen; in Chrome and Edge a short tap of <kbd>Esc</kbd> also reaches the game in full screen, and holding it leaves. Press <kbd>0</kbd> to type a chat message to the other pilots, <kbd>Enter</kbd> sends it; in space <kbd>Enter</kbd> fires missiles. With voice on push to talk, hold <kbd>`</kbd> (or the left stick's button on a controller) to speak. <kbd>Ctrl</kbd>+<kbd>F10</kbd> releases the mouse.</p>
     </div>
+    <details id="help">
+      <summary>How a mission goes, and the second player's seat</summary>
+      <p class="hint" id="helpMission">Load the game files (step 1): the help is the game's own.</p>
+    </details>
   </section>
 
   <section id="saves" class="panel" hidden>

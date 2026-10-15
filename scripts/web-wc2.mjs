@@ -49,7 +49,7 @@ async function open(name, callsign, before) {
   await page.waitForFunction(() => /^(Ready|Could not)/.test(document.getElementById("sourceStatus").textContent), null, { timeout: 300000 });
   console.log(`[${name}] ` + (await page.$eval("#sourceStatus", (el) => el.textContent)).slice(0, 200));
   if (name === "host") check("the first-name field appears with Wing Commander II", hiddenBefore && !(await page.$eval("#firstnameLabel", (el) => el.hidden)), hiddenBefore);
-  check(`${name}: the room's code picks the program`, (await page.$eval("#program", (el) => el.value)) === game.id && (await page.$eval("#sourceStatus", (el) => el.textContent)).startsWith(`Ready: ${game.title} from`),
+  check(`${name}: the room's code picks the program`, (await page.$eval("#program", (el) => el.value)) === game.id && (await page.$eval("#sourceStatus", (el) => el.textContent)).startsWith(`Ready: ${game.title}`),
         await page.$eval("#program", (el) => el.value));
   await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });
   if (before) await before(page);
