@@ -136,6 +136,17 @@ const mb = (n) => (n / 1048576).toFixed(1) + " MB";
 
 // Prefill from the URL (?room=CODE&callsign=...) so a link can be shared.
 for (const k of ["room", "callsign", "firstname", "lastname", "players"]) if (query.get(k)) $(k).value = query.get(k);
+// The pilot's names are remembered in this browser and filled in on the next
+// visit.  A name the link brought is the pilot's own (the page's links carry
+// no names but the ones typed here) and is kept too; what the pilot types
+// over either is what is kept from then on.
+const NAME_KEY = (k) => `wc:name:${k}`;
+const keepName = (k) => { try { localStorage.setItem(NAME_KEY(k), $(k).value.trim()); } catch (e) { /* not kept */ } };
+for (const k of ["callsign", "firstname", "lastname"]) {
+  if ($(k).value) keepName(k);
+  else { try { $(k).value = localStorage.getItem(NAME_KEY(k)) || ""; } catch (e) { /* none */ } }
+  $(k).addEventListener("change", () => keepName(k));
+}
 if (query.get("relay")) $("relay").checked = true;
 if (query.get("verbose")) $("verbose").checked = true;
 // A link to a room (?room=CODE) whose room this page has not tried to join

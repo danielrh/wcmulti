@@ -255,9 +255,14 @@ await c.click("#join");
 await sleep(1);
 check("a WC2 code typed with Wing Commander loaded is refused", /WC2-1234 is a Wing Commander II room/.test(await status(c)) && (await value(c, "room")) === "WC2-1234", await status(c));
 
-// A reload keeps the pilot in the lobby; leaving does not.
+// A reload keeps the pilot in the lobby; leaving does not.  The names typed
+// are remembered by the browser (the link gives the callsign here, not the
+// last name).
+await c.fill("#lastname", "Blair");
+await c.$eval("#lastname", (el) => el.dispatchEvent(new Event("change", { bubbles: true })));
 await c.reload();
 check("a reload comes back into the lobby", await c.waitForFunction(() => !document.getElementById("hallBody").hidden, null, { timeout: 40000 }).then(() => true, () => false), null);
+check("and the names typed are back", (await value(c, "lastname")) === "Blair" && (await value(c, "callsign")) === "CHARLIE", [await value(c, "callsign"), await value(c, "lastname")]);
 check("and the others still count three", (await pilots(a, 3)) && (await pilots(c, 3)), await text(a, "hallRoster"));
 await c.click("#hallLeave");
 check("leaving is seen by the others", (await pilots(a, 2)) && (await c.$eval("#hallBody", (el) => el.hidden)), await text(a, "hallRoster"));
