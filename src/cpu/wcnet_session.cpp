@@ -238,6 +238,11 @@ static void populate_mission_end(MissionEnd *end) {
     for (int i = 0; i < kMissionTreeSize && is_wc1(); i++) {
         tree->push_back((char)rd8((Bit16u)(ds::navPointState + i)));
     }
+    if (is_wc2()) {
+        // (The record as the flight loop returned: what the campaign loop
+        // branches on.  A wingman's game takes it at its own return.)
+        end->set_campaign_state(read_campaign_state());
+    }
 }
 
 static void populate_mission_addendum(MissionEnd *end) {
@@ -685,6 +690,7 @@ public:
     // Takes ownership of the listener.
     explicit ServerSession(Listener *listener)
         : listener_(listener), epoch_(1), frameNumber_(0), sendFrameAtIdle_(false), ignoreNextFrameTop_(false),
+          hadClientInMission_(false),
           wantRocks_(rocks_mode()), modeSetting_(mode_from_name(getenv("WCNET_MODE"))), autoMode_(MODE_LOW),
           highWindow_(kHighWindowMin), modeSince_(0), modeTickAt_(0), ownFrames_(0), rtt_(-1) {
         allowedIds_.push_back(1);
@@ -781,6 +787,7 @@ public:
         health_.reset();
         epoch_ += 1;
         frameNumber_ = 0;
+        hadClientInMission_ = false;
         for (size_t i = 0; i < clients_.size(); i++) {
             clients_[i]->leftThisMission = false;
             clients_[i]->missionTreeProgress.clear();
@@ -930,7 +937,9 @@ private:
             return NULL;
         }
         RemoteClient *c = clients_[slot];
-        return c->connected() && c->seat == SEAT_WINGMAN ? c : NULL;  // a drone has no ship here
+        // (A drone has no ship here; nor, any more, has a wingman that left
+        // this mission: landed, its ship is despawned like any other.)
+        return c->connected() && c->seat == SEAT_WINGMAN && !c->leftThisMission ? c : NULL;
     }
 
     // What a client is in this mission.  WC.EXE gives every mission a
@@ -1152,6 +1161,7 @@ private:
             return false;
         }
         c->inMission = true;
+        hadClientInMission_ = true;
         // (No word of it on the screen: the game looks as it always did, and
         // the page's lobby says what each seat is.)
         // Spawns queued in the pending frame are already in the registry copy.
@@ -1272,10 +1282,25 @@ private:
             return;
         }
         if (frame.has_player_end()) {
-            // Shared fate: a wing lives and dies together.  Whatever ended
-            // the wingman's mission ends ours too; our mission-end frame then
-            // ends it for every other client.
             int status = frame.player_end().state();
+            if (is_wc2() && (status == EndLand || status == EndCarrier)) {
+                // In Wing Commander II a landing is the wingman's own
+                // (2026-10-14): it has left the mission, its ship leaves our
+                // space, and we fly on until we land too; the next briefing
+                // is where the games meet again.  (Our own landing still
+                // lands every wingman: a wingman's game cannot fly on
+                // without ours.  Wing Commander keeps the shared fate below
+                // for landings too, as it always had.)
+                wclog(1, "player %d landed; flying on until we land too", c->net);
+                c->inMission = false;
+                c->leftThisMission = true;
+                c->needsMissionStartState = false;
+                enqueue_wingman_lost(c->net, false);
+                return;
+            }
+            // Shared fate: a wing lives and dies together.  A wingman's
+            // death, ejection or exit ends our mission too; our mission-end
+            // frame then ends it for every other client.
             wclog(1, "player %d %s; ending the mission for everyone", c->net, status_name(status));
             c->inMission = false;
             c->leftThisMission = true;
@@ -1366,6 +1391,14 @@ private:
                 }
                 if (mergeUpdates || msg.frame().has_player_end()) {
                     merge_client_frame(c, msg.frame(), msg.frame_number());
+                }
+                if (msg.frame().has_flying() && !msg.frame().flying() && c->inMission) {
+                    // Its game has left the flight loop (whatever its ending,
+                    // seen or not): nothing to wait for, nothing to send.
+                    wclog(1, "player %d is out of the flight loop: not waiting for its frames", c->net);
+                    c->inMission = false;
+                    c->leftThisMission = true;
+                    c->needsMissionStartState = false;
                 }
             } else {
                 wclog(0, "unexpected %s message from player %d", message_type_name(msg), c->net);
@@ -1543,7 +1576,11 @@ private:
             }
         }
         sendFrameAtIdle_ = true;
-        accept_clients(true);
+        // A server alone cannot start the mission: until a wingman has had
+        // its start state this waits for one.  After that the mission goes
+        // on with whoever is left: a wingman whose game is gone (the link
+        // closed when its program ended) does not hold the host's.
+        accept_clients(!hadClientInMission_);
         if (!serverOnlyFlush) {
             mode_tick();
         }
@@ -1584,6 +1621,11 @@ public:
                 wclog(1, "player %d disconnected", c->net);
                 c->disconnect();
             } else if (behind(c)) {
+                // However long: a wingman in flight that is in a scene of
+                // its own comes back, and running ahead would part the
+                // games.  One out of the flight loop says so (Frame.flying)
+                // and is not waited for; one whose game is gone closes its
+                // link (on_program_ended).
                 waiting = true;
             }
         }
@@ -1655,6 +1697,7 @@ private:
     std::vector<int> allowedIds_;
     Bit32u epoch_;
     Bit64u frameNumber_;
+    bool hadClientInMission_;    // a wingman has had this mission's start state
     ServerSendBriefingStart lastBriefing_;
     NetworkMessage pendingFrame_;
     SpawnRegistry spawns_;
@@ -1818,9 +1861,34 @@ public:
     virtual void on_mission_ended() {
         liven_everyone();
         within_briefed_mission = false;
+        // Out of the flight loop: said to the server, which waits for the
+        // frames of a wingman in flight and for nobody else.  The loop can
+        // end without passing a status check the hooks watch (the game's
+        // own scenes write the status and leave): an ending told to nobody
+        // goes with it.
+        if (!dead_ && conn_.is_open()) {
+            int status = rd16(ds::missionStatus);
+            NetworkMessage msg;
+            msg.set_epoch(epoch_);
+            msg.set_frame_number(++frameNumber_);
+            msg.mutable_frame()->set_flying(false);
+            if (!ownMissionOver_ && lastWrittenMissionStatus_ == Proceed && status > Proceed && status <= EndExit) {
+                ownMissionOver_ = true;
+                wclog(1, "we %s (the flight loop ended before a status check); leaving the mission", status_name(status));
+                msg.mutable_frame()->mutable_player_end()->set_state((GameState)status);
+            }
+            wclog(2, "out of the flight loop: told the server");
+            conn_.send(msg);
+        }
         if (!missionTreeProgress_.empty()) {
             load_mission_tree_progress(missionTreeProgress_);
             missionTreeProgress_.clear();
+        }
+        if (!missionEndCampaignState_.empty()) {
+            // The host's record as its flight loop returned, ours as ours
+            // does: the campaign loop ahead branches the host's way.
+            load_campaign_state(missionEndCampaignState_);
+            missionEndCampaignState_.clear();
         }
         if (lastWrittenMissionStatus_ == EndDeath || lastWrittenMissionStatus_ == EndCarrier) {
             // No victory computation after these endings, so reset here
@@ -2010,6 +2078,16 @@ public:
             handle_incoming_chat(msg.chat());
         } else if (st.failed()) {
             drop("the server went away");
+        }
+    }
+
+    // Our game is gone (its own exit, or an error that dumped it to the DOS
+    // prompt): close the link, so that the server sees us leave at once
+    // instead of waiting for our frames.
+    virtual void on_program_ended() {
+        if (!dead_ && conn_.is_open()) {
+            wclog(1, "our game has ended: leaving the server");
+            conn_.close();
         }
     }
 
@@ -2253,6 +2331,7 @@ private:
             wr16(ds::missionStatus, (Bit16u)end.game_update());
             lastWrittenMissionStatus_ = end.game_update();
             missionTreeProgress_ = end.mission_tree_progress();
+            missionEndCampaignState_ = end.campaign_state();
             lastVictoryPlusOne_ = end.victory_points_plus_one();
             wclog(1, "server ended the mission: %s", status_name(end.game_update()));
         }
@@ -2317,6 +2396,7 @@ private:
     GameState lastWrittenMissionStatus_;
     Bit32u lastVictoryPlusOne_;
     std::string missionTreeProgress_;
+    std::string missionEndCampaignState_;  // WC2: the host's campaign record at its flight loop's return
     bool isFresh_;
     bool hasRestartedMission_;
     bool hasSentConnect_;

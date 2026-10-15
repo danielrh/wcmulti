@@ -112,6 +112,9 @@ public:
     }
     virtual void on_autopilot_finished() {}
     virtual void on_trampoline_idle() {}
+    // The game's program has ended (its own exit, or an error that dumps it
+    // to the DOS prompt) while the session is alive.
+    virtual void on_program_ended() {}
     virtual bool in_space() const = 0;
 
     virtual void send_chat(const std::string &text) = 0;

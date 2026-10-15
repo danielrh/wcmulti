@@ -164,6 +164,13 @@ message MissionEnd {
     optional GameState game_update = 1;
     optional bytes mission_tree_progress = 2;
     optional uint32 victory_points_plus_one = 3;
+    // Server -> client, Wing Commander II: the host's campaign record as its
+    // flight loop returned.  The campaign loop branches on fields of it that
+    // the flight fills (the mission's counters, the result at the loop's
+    // tail): a wingman's game, given the record, goes the host's way -- a
+    // scripted "landing" that is a cutscene and a second flight (Series 1,
+    // mission 4) instead of its own plain landing.
+    optional bytes campaign_state = 4;
 }
 
 // Client -> server: this player's own mission ended (death or ejection).  The
@@ -203,6 +210,12 @@ message Frame {
     // paces itself and takes the server's frames as they come).  Sent with
     // the start state and whenever it changes.
     optional uint32 mode = 25;
+    // Client -> server, false: this client's game has left the flight loop
+    // for this mission (its landing, the debriefing, the barracks, the DOS
+    // prompt).  The server waits for the frames of a wingman in flight,
+    // however long a scene holds it; one out of flight is not waited for,
+    // nor sent frames, whether or not its ending (player_end) was seen.
+    optional bool flying = 26;
 }
 
 // Connect -> once per mission

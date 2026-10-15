@@ -283,7 +283,27 @@ trip gave 12 frames a second with the host's emulator at 85% of real time
   `Frame.ack`, the number of the last server frame the client had applied;
   only when a client is more than `kWindow` (6) frames behind does the
   server wait for it (`ClientLagJob`), so a client that has stopped still
-  stops the game instead of being left behind.
+  stops the game instead of being left behind -- however long: a client
+  in flight that is in a scene of its own (a comm answer, a mission's
+  cutscene) comes back, and a host that ran ahead would part the games (a
+  time limit was considered and refused on 2026-10-14).  What the server
+  waits for is a client *in the flight loop*: a client whose loop has
+  returned (a landing, a death, the debriefing, the barracks, the DOS
+  prompt) says so at once on the reliable channel (`Frame.flying` =
+  false, from `on_mission_ended`, with its ending if the hooks' status
+  checks missed it) and is neither waited for nor sent frames; a client
+  whose game ends closes its link (`on_program_ended`); and once a
+  wingman has had the mission's start state `exchange` no longer waits
+  for a connection, so the host flies on alone when the last one leaves.
+  The 2026-10-14 play-test froze a host in its cockpit when the wingman's
+  game landed and went on to the debriefing while the host waited.
+* **A wingman's landing is its own** (2026-10-14).  Its ship leaves the
+  host's space (`enqueue_wingman_lost`, quietly) and the host flies on
+  until it lands too; the games meet again at the next briefing, where
+  the wingman takes the host's campaign record as always.  A wingman's
+  death, ejection or exit still ends the mission for everyone (a wing
+  lives and dies together), and the host's own landing still lands every
+  wingman: a wingman's game cannot fly on without the host's simulation.
 * **The client waits for the server's frame without blocking**
   (`ServerFrameJob`), and applies every frame that has arrived, in order.
 * **Both waits pass in emulated time.**  A waiting job makes a call that

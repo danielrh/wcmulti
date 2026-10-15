@@ -9,6 +9,7 @@
 #include "wcnet_memory.h"
 #include "wcnet_code.h"
 #include "wcnet_log.h"
+#include "wcnet_session.h"
 
 namespace wc {
 
@@ -305,6 +306,9 @@ void game_program_ended(Bit16u psp) {
                 }
             }
             wclog(1, "  load segment %04x cs:ip %04x:%04x", g_loadSeg, SegValue(cs), reg_eip);
+        }
+        if (g_session) {
+            g_session->on_program_ended();
         }
         set_game(NULL, 0, 0);
     }
