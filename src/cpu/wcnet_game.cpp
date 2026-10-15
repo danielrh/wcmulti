@@ -81,8 +81,7 @@ static void root(Loc &l, Bit16u para, Bit16u off, int nargs = 0, bool pascal = f
 static void load_wc1_code() {
     using namespace code;
     enum { SEG001 = 0x03BE, STUB133 = 0x10C4, STUB134 = 0x10C8, STUB140 = 0x110B, STUB143 = 0x1135, STUB145 = 0x1150,
-           STUB148 = 0x1176, STUB150 = 0x1185, STUB161 = 0x11BF, STUB162 = 0x11C4, STUB163 = 0x11CE, STUB168 = 0x121B,
-           STUB141 = 0x112A };
+           STUB148 = 0x1176, STUB150 = 0x1185, STUB161 = 0x11BF, STUB162 = 0x11C4, STUB163 = 0x11CE, STUB168 = 0x121B };
     // overlay 143: ships, damage, weapons
     ovr(do_damage, STUB143, 0x0084, 0x0A99, 4);            // do_damage(src, dst, quantity, vec*)
     ovr(delayedDespawn, STUB143, 0x008E, 0x1F15, 2);       // delayedDespawn(src, ship)
@@ -96,7 +95,7 @@ static void load_wc1_code() {
     // overlay 140: entities
     ovr(despawn, STUB140, 0x01DD, 0x1C16, 1);              // despawn(ship)
     // overlay 163: AI
-    ovr(aiShipThink, STUB141, 0x0057, 0x28D0, 1);          // the per-entity AI dispatcher, by entity type: fighters to ovr140:13DD (every 4th frame), capital ships to ovr163:160E (what this hook sat on until 2026-10-15: it never saw a fighter)
+    ovr(aiShipThink, STUB163, 0x00CA, 0x160E, 1);          // per-frame ship AI (from ovr141:28D0)
     ovr(farShipTest1, STUB163, 0x0048, 0x003D);            // the AI's `cmp ax,3E80h`: the wingman more than 16000 km from the player is removed
     ovr(farShipTest2, STUB163, 0x00C0, 0x0317);            // the same test on a ship with no target (ovr163:0228)
     // overlay 134: VDU / comms

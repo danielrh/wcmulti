@@ -115,22 +115,30 @@ extra health" and "wingman explodes" behaviour.
   changes it, 0 switches it off) the jump is taken as for a ship that is
   near.  Ships that are leaving (a retreat, a jump) go by other code and
   still go.  Clients never remove ships of their own (`intercept_despawn`).
-* **Both humans are "the player" to an enemy's AI.**  The AI approaches,
-  engages and aims at slot 0, the player's ship, named by the constant 0 all
-  over it: a human wingman beside a unit did not count, and with the two
-  pilots far apart the units left the wingman for the host at afterburner
-  speed (both games, 2026-10-15).  On the server an enemy's AI tick now runs
-  with slot 0's place, speed and bearing swapped for a chosen human's and
-  put back as it returns (`AiAsJob` in wcnet_events.cpp, around the game's
-  own `aiShipThink` call): the AI steers and shoots at the chosen one, and
-  its bolts find the real ship where it is.  The choice is per ship, drawn
-  at random among the humans within 16000 km (the nearest when none is),
-  kept eight seconds, drawn again when that has run out or its human is
-  gone -- the user's rule, to spread the attacks.  Friendlies keep the real
-  player as their leader.  What the AI does inside the swapped tick (a shot,
-  a cloak, a removal) is the game's own doing and is broadcast as such
-  (`g_aiAs`, like the autopilot's `g_cinematic`).  The side of a ship is the
-  word at `commAnimInfo` (0 the player's, 1 the enemy's).
+* **Tried and reverted (2026-10-15): both humans as "the player" to an
+  enemy's AI.**  The AI approaches, engages and aims at slot 0, the player's
+  ship, named by the constant 0 all over it, so with the two pilots apart the
+  units left the wingman for the host.  For half a day the server ran an
+  enemy's AI tick with slot 0's place, speed and bearing swapped for a chosen
+  human's (`AiAsJob`, a trampoline job around the game's own AI call, the
+  human drawn at random per ship every eight seconds).  The user's playtest
+  (McAuliffe 1 and 2, Enyo 2) had units ramming, units targeting each other,
+  the wingman's hits not registering, ships that exploded on the host but
+  stayed on the wingman's machine as untargetable ghosts, and missiles that
+  vanished at launch.  The mechanism: inside that job the trampoline is
+  running, so every hook that puts a job in place of a game call
+  (`run_instead_of_current_call`: an enemy's shot, its death, its removal,
+  a hit) was refused -- "Trampoline re-entered while running; ignoring", 43
+  times in the first minute of McAuliffe 1's first fight on the rig -- and
+  the game's call ran on the host alone, unbroadcast, while the job queued
+  for it ran later against a slot that was already free.  Reverted whole,
+  the WC.EXE AI hook included: it is back on `ovr163:160E`, the capital-ship
+  AI.  (The per-entity dispatcher `ovr141:28D0` sends fighters to
+  `ovr163:13CF`, missiles to `ovr140:13DD` and the guidance routines
+  `ovr163:1870` / `ovr163:19A0`; the server runs the fighter AI for a human
+  wingman's slot as it always did, its shots and speed changes blocked by
+  the fire and set-speed hooks.)  The AI engages slot 0 only; the keep-near
+  rule above is what lets a wingman fight far from the host.
 * **Asteroid and mine fields belong to each machine.**  The game never has
   more than twenty rocks or mines: overlay 168 keeps them around slot 0 while
   it is inside a field (`ovr168:0B86` tests every 16 frames whether the
