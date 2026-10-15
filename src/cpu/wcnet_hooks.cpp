@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <signal.h>
 #include <time.h>
 #include <math.h>
@@ -856,6 +857,34 @@ static bool pointer_off() {
     return g_pointerOff != 0;
 }
 
+// A callsign with CHEAT in it (any case) flies a ship that takes no damage
+// on its own machine: the game's own developer switch, the word do_damage
+// tests before touching slot 0 (WC.EXE dseg:00BA, ovr143:0ABD; WC2.EXE
+// dseg:00C0, what "Origin -k" clears), held at zero every frame in flight.
+// The user's way of flying a mission alone with an idle second player.
+// Nobody else is affected: the other machines take this ship's health from
+// its own reports, as always, and this machine's shots and the rocks it
+// meets are what they were.
+static bool cheat_hull() {
+    static int on = -1;
+    if (on < 0) {
+        std::string callsign = get_callsign();
+        for (size_t i = 0; i < callsign.size(); i++) {
+            callsign[i] = (char)toupper((unsigned char)callsign[i]);
+        }
+        on = callsign.find("CHEAT") != std::string::npos ? 1 : 0;
+    }
+    return on == 1;
+}
+
+static void hold_cheat_hull() {
+    if (!cheat_hull() || !ds::known(ds::playerCanBeDamaged) || rd16(ds::playerCanBeDamaged) == 0) {
+        return;
+    }
+    wr16(ds::playerCanBeDamaged, 0);
+    wclog(1, "the callsign has CHEAT in it: this ship takes no damage");
+}
+
 static void check_hooks_slow() {
     if (at_location(code::cockpitPointer) && pointer_off()) {
         reg_eip += 4;
@@ -1049,6 +1078,7 @@ static void check_hooks_slow() {
             g_flightCount++;
         }
         maybe_dump_data_segment();
+        hold_cheat_hull();
         // The loop comes here once per game frame, and again whenever a
         // trampoline run started here is over: only the first is a frame.
         static int lastFrame = -1;

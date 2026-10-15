@@ -680,6 +680,14 @@ shell command still starts/stops the server or connects.  Useful environment:
 
 `scripts/wcnet-smoke.sh [seconds] [mission] [series]` starts a headless
 server and client (dummy SDL drivers), lets them fly mission 1 with
+A callsign with `CHEAT` in it (any case) flies a ship that takes no damage
+on its own machine: the hooks hold the game's own developer switch at zero
+every frame in flight (the word `do_damage` tests before touching slot 0,
+WC.EXE `dseg:00BA`, WC2.EXE `dseg:00C0`, what WC2's `Origin -k` clears), so
+that a mission can be flown alone with an idle second player.  Nothing else
+changes: the other machines take that ship's health from its own reports,
+as always.  The log says so once per mission.
+
 `WCNET_AUTOKEYS`, and prints both logs.  It exercises the handshake, the
 mission start state, spawn mapping, autopilot, enemy fire/damage replay and
 the client's local damage model.  It does not exercise chat, landing, or a
