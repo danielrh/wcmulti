@@ -904,8 +904,9 @@ top-level README for the workflow).  What differs:
     lobby is a link except a room code;
   * a callsign is held to the same list (16 characters): one that fails is
     shown as "Pilot N".
-  A room code in a line (`WC1-4821`; four characters or more after the
-  prefix, with a digit or without small letters) is shown as a link.  A
+  A room code in a line (`WC1-4821`: a game's prefix, a hyphen and anything
+  after it, however short, so that a code of a pilot's own making is one too)
+  is shown as a link.  A
   click joins that room without making it (`joinRoom({ create: false })`:
   a room nobody is in is "not open any more"), after the game check above.
   Nobody has to type a code: "Advertise", beside Send (and in the room),

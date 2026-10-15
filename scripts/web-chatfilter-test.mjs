@@ -103,7 +103,8 @@ check(codes("wc2-0042!") === "WC2-0042", "a prefix in small letters is the same 
 check(codes("WC-1234, SM2-0001 or SO1-9999/SO2-0000") === "WC-1234,SM2-0001,SO1-9999,SO2-0000", "all the prefixes: " + codes("WC-1234, SM2-0001 or SO1-9999/SO2-0000"));
 check(codes("(WC1-4821).") === "WC1-4821" && codes("WC1-4821-") === "WC1-4821", "punctuation around a code");
 check(codes("WC-FALCON and WC-Falcon7") === "WC-FALCON,WC-Falcon7", "codes of a pilot's own making");
-check(codes("WC2-style, WC1-like, SO1-only, WC-era, XWC1-1234, WC3-1234") === "", "talk that is not a code: " + codes("WC2-style, WC1-like, SO1-only, WC-era, XWC1-1234, WC3-1234"));
+check(codes("WC2-style, WC1-x and SO1-only are codes") === "WC2-style,WC1-x,SO1-only", "a short code, and talk that looks like one, are codes: " + codes("WC2-style, WC1-x and SO1-only are codes"));
+check(codes("XWC1-1234, WC3-1234, WC1-, WC1--, WC1_1234 and WC1 1234 are not") === "", "not a code: " + codes("XWC1-1234, WC3-1234, WC1-, WC1--, WC1_1234 and WC1 1234 are not"));
 check(codes("meet in WC-LOBBY or WC1-0007", ["WC-LOBBY"]) === "WC1-0007", "the lobby's own code is not a room");
 check(splitCodes("a WC1-4821 b").map((p) => p.text || `<${p.code}>`).join("") === "a <WC1-4821> b", "the text around a code is kept");
 // The lobby's own codes: a row of them, none a room.

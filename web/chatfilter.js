@@ -30,7 +30,7 @@ export const MAX_NAME = 16;
 // Special Operations).  "WC" alone is a code made before any game files
 // were loaded, or an older one: it says nothing.
 export const GAME_TAGS = ["WC1", "WC2", "SM2", "SO1", "SO2"];
-const CODE_IN_TEXT = /(^|[^A-Za-z0-9_-])((WC[12]?|SM2|SO[12])-[A-Za-z0-9][A-Za-z0-9_-]{2,57})/gi;
+const CODE_IN_TEXT = /(^|[^A-Za-z0-9_-])((WC[12]?|SM2|SO[12])-[A-Za-z0-9_-]{1,60})/gi;
 
 // The public lobby's own codes are not rooms to fly in: WC-LOBBY, and
 // WC-LOBBY0, WC-LOBBY1, ... where pilots land when the ones before are full
@@ -65,9 +65,10 @@ export function retagRoomCode(code, tag) {
   const m = /^(WC[12]?|SM2|SO[12])-(\d{4})$/.exec(String(code || ""));
   return m ? `${GAME_TAGS.includes(tag) ? tag : "WC"}-${m[2]}` : code;
 }
-// [{ text }] and [{ code, tag }] in order, for a line of chat.  A code has
-// at least four characters after its prefix, and a digit among them or no
-// small letters: "WC1-4821" and "WC-FALCON" are codes, "WC2-style" is talk.
+// [{ text }] and [{ code, tag }] in order, for a line of chat.  Whatever
+// follows a game's prefix and a hyphen is a code, however short, "WC1-4821",
+// "WC-FALCON" or "WC2-x": a pilot who typed a code of their own making must
+// see it as one, and a word that only looks like a code costs a click.
 export function splitCodes(text, except = []) {
   // (except: codes that are not rooms, a list or a test.)
   const skip = typeof except === "function" ? except : (code) => except.some((e) => e.toUpperCase() === code.toUpperCase());
@@ -78,9 +79,9 @@ export function splitCodes(text, except = []) {
     const raw = m[2].replace(/[-_]+$/, "");
     const start = m.index + m[1].length;
     const code = normalizeCode(raw);
-    const rest = raw.slice(raw.indexOf("-") + 1);
-    CODE_IN_TEXT.lastIndex = start + raw.length;
-    if (rest.length < 4 || !(/\d/.test(rest) || !/[a-z]/.test(rest))) continue;
+    const hyphen = raw.indexOf("-");
+    CODE_IN_TEXT.lastIndex = start + m[2].length;
+    if (hyphen < 0 || hyphen === raw.length - 1) continue;  // the prefix alone
     if (skip(code)) continue;
     if (start > last) out.push({ text: text.slice(last, start) });
     out.push({ code, tag: roomTag(code) });
