@@ -233,6 +233,14 @@ static void load_campaign_state(const std::string &data) {
 
 static void populate_mission_end(MissionEnd *end) {
     end->set_game_update((GameState)rd16(ds::missionStatus));
+    if (rd16(ds::missionStatus) == EndLand && ds::known(ds::landedOn)) {
+        // WC.EXE: the ship we landed on (ovr141:1841 writes it), for the
+        // wingmen's landing sequences, which draw the carrier from it.
+        int slot = (Bit16s)rd16(ds::landedOn);
+        if (is_ship_slot(slot) && slot_in_use(slot)) {
+            end->set_landed_on_plus_one(1 + (Bit32u)NetworkShipId::from_local(slot).to_net());
+        }
+    }
     std::string *tree = end->mutable_mission_tree_progress();
     tree->clear();
     for (int i = 0; i < kMissionTreeSize && is_wc1(); i++) {
@@ -796,11 +804,27 @@ public:
     }
 
     virtual void on_mission_victory_calc() {
-        MissionEnd *end = pendingFrame_.mutable_frame()->mutable_mission_end();
-        populate_mission_addendum(end);
-        wclog(1, "victory points %d", (int)end->victory_points_plus_one() - 1);
-        sendFrameAtIdle_ = true;
-        exchange(true);
+        // The score, computed after the landing animation.  The mission-end
+        // frame went out when the flight loop returned and took the wingmen
+        // out of the mission, so this goes to every connected wingman on
+        // its own; a wingman reads it at its own victory computation
+        // (ClientSession::on_mission_victory_calc).
+        MissionEnd end;
+        populate_mission_addendum(&end);
+        if (!end.has_victory_points_plus_one()) {
+            return;
+        }
+        wclog(1, "victory points %d", (int)end.victory_points_plus_one() - 1);
+        NetworkMessage msg;
+        msg.set_epoch(epoch_);
+        msg.set_frame_number(0);
+        *msg.mutable_frame()->mutable_mission_end() = end;
+        for (size_t i = 0; i < clients_.size(); i++) {
+            RemoteClient *c = clients_[i];
+            if (c->connected() && !c->conn.send(msg)) {
+                wclog(0, "failed to send the score to player %d", c->net);
+            }
+        }
     }
 
     virtual void on_mission_ended() {
@@ -818,15 +842,21 @@ public:
         }
         MissionEnd *end = pendingFrame_.mutable_frame()->mutable_mission_end();
         populate_mission_end(end);
+        // Out at once, for every ending.  A landing's used to wait for the
+        // victory computation, to carry the score in the same message; the
+        // computation runs after the landing animation and the debrief, so
+        // the wingmen sat in their cockpits for those twelve seconds and
+        // landed while the host was already being debriefed (2026-10-15).
+        // The score follows on its own (on_mission_victory_calc).
+        sendFrameAtIdle_ = true;
+        exchange(true);
         if (status == EndDeath || status == EndCarrier) {
-            // These endings skip the victory computation, so flush now and
-            // do the reset that normally runs there: otherwise the epoch,
-            // the spawn registry and the clients' left-this-mission flags
-            // survive into the next mission, the next briefing request is
-            // answered with the old briefing and start state, and the
-            // client waits forever for frames it is no longer part of.
-            sendFrameAtIdle_ = true;
-            exchange(true);
+            // These endings skip the victory computation, so do the reset
+            // that normally runs there: otherwise the epoch, the spawn
+            // registry and the clients' left-this-mission flags survive
+            // into the next mission, the next briefing request is answered
+            // with the old briefing and start state, and the client waits
+            // forever for frames it is no longer part of.
             on_mission_reset();
         }
     }
@@ -1889,6 +1919,26 @@ public:
     }
 
     virtual void on_mission_victory_calc() {
+        if (!lastVictoryPlusOne_ && conn_.is_open()) {
+            // The host's score comes on its own after its landing animation,
+            // which ran beside ours: a moment's wait for it at most.
+            double until = perf_now_ms() + 1500.0;
+            while (perf_now_ms() < until) {
+                NetworkMessage msg;
+                RecvStatus st = conn_.poll(CAT_GAME, msg);
+                if (st.no_data()) {
+                    pause_ms(20);
+                    continue;
+                }
+                if (!st.ok()) {
+                    break;
+                }
+                if (msg.has_frame() && msg.frame().has_mission_end() && msg.frame().mission_end().has_victory_points_plus_one()) {
+                    lastVictoryPlusOne_ = msg.frame().mission_end().victory_points_plus_one();
+                    break;
+                }
+            }
+        }
         if (lastVictoryPlusOne_ && ds::known(ds::victoryPoints)) {
             wr16(ds::victoryPoints, (Bit16u)(lastVictoryPlusOne_ - 1));
             wclog(1, "victory points from server: %d", (int)lastVictoryPlusOne_ - 1);
@@ -2401,12 +2451,27 @@ private:
     void apply_frame(const Frame &frame, bool applyOwnLocation, bool applyLoc) {
         if (frame.has_mission_end()) {
             const MissionEnd &end = frame.mission_end();
-            wr16(ds::missionStatus, (Bit16u)end.game_update());
-            lastWrittenMissionStatus_ = end.game_update();
-            missionTreeProgress_ = end.mission_tree_progress();
-            missionEndCampaignState_ = end.campaign_state();
-            lastVictoryPlusOne_ = end.victory_points_plus_one();
-            wclog(1, "server ended the mission: %s", status_name(end.game_update()));
+            if (end.has_game_update()) {
+                wr16(ds::missionStatus, (Bit16u)end.game_update());
+                lastWrittenMissionStatus_ = end.game_update();
+                missionTreeProgress_ = end.mission_tree_progress();
+                missionEndCampaignState_ = end.campaign_state();
+                wclog(1, "server ended the mission: %s", status_name(end.game_update()));
+            }
+            if (end.has_landed_on_plus_one() && ds::known(ds::landedOn)) {
+                // The ship the host landed on: WC.EXE's landing sequence draws
+                // the carrier from this word (the game's own landing check
+                // writes it; a landing by the host's word left it -1, and the
+                // Tiger's Claw was missing from the wingman's landing).
+                int net = (int)end.landed_on_plus_one() - 1;
+                if (entities_.is_mapped(net)) {
+                    wr16(ds::landedOn, (Bit16u)entities_.net_to_local(net));
+                    wclog(1, "landing with the host on net %d (slot %d here)", net, entities_.net_to_local(net));
+                }
+            }
+            if (end.has_victory_points_plus_one()) {
+                lastVictoryPlusOne_ = end.victory_points_plus_one();  // (the score alone, after the host's landing animation)
+            }
         }
         if (frame.has_rocks() && (int)frame.rocks() != rocks_mode()) {
             // The host switched the rocks in flight: the jobs run with this

@@ -171,6 +171,12 @@ message MissionEnd {
     // scripted "landing" that is a cutscene and a second flight (Series 1,
     // mission 4) instead of its own plain landing.
     optional bytes campaign_state = 4;
+    // Server -> client, Wing Commander 1: the ship the host landed on, as a
+    // network id plus one.  The landing sequence draws the carrier from the
+    // game's "landed on" word, which only the game's own landing check
+    // writes: a wingman landed by the host's word had none, and the Tiger's
+    // Claw was missing from its landing.
+    optional uint32 landed_on_plus_one = 5;
 }
 
 // Client -> server: this player's own mission ended (death or ejection).  The

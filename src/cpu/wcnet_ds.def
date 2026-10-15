@@ -95,6 +95,7 @@ WC_DS(turretBarrels, 0x0000, 0x0000, 0xCDA8, 0xCC78, 0xCF0E)           // WC2: w
 WC_DS(turretEnergy, 0x0000, 0x0000, 0xCD5C, 0xCC2C, 0xCEC2)            // WC2: word, the turret guns' energy (100 full, 24 a shot)
 WC_DS(turretCooldown, 0x0000, 0x0000, 0x9022, 0x8ED4, 0x9174)          // WC2: word, frames until the turret fires again
 WC_DS(campaignState, 0x0000, 0x0000, 0xCF3A, 0xCE0A, 0xD432)           // WC2: far pointer to the campaign record (+4 series, +6 mission: what the briefing and the flight load)
+WC_DS(landedOn, 0x662E, 0x6950, 0x0000, 0x0000, 0x0000)                // WC1: word, the slot of the ship landed on (ovr141:1841 with missionStatus = 1; -1 none); the landing sequence draws the carrier from it
 WC_DS(playerWing, 0x0000, 0x0000, 0xC1B6, 0xC0B2, 0xC348)              // WC2: eight words, the mission ships that fly in the player's wing (0xffff: none)
 WC_DS(slotMissionShip, 0x0000, 0x0000, 0x6E1E, 0x6E28, 0x70C4)         // WC2: [slotMissionShip + 2*slot] word: the mission ship in a slot
 WC_DS(slotIntelRecord, 0x0000, 0x0000, 0x6E46, 0x6E50, 0x70EC)         // WC2: [slotIntelRecord + 2*slot] word: the slot's record in the table of intelligence records (dseg:C9EE, 81 bytes each), -1 in an empty slot (seg006:1B7A)

@@ -334,6 +334,22 @@ trip gave 12 frames a second with the host's emulator at 85% of real time
   death, ejection or exit still ends the mission for everyone (a wing
   lives and dies together), and the host's own landing still lands every
   wingman: a wingman's game cannot fly on without the host's simulation.
+* **The host's landing reaches the wingmen at once, with the ship it
+  landed on** (2026-10-15).  The mission-end frame of a landing used to
+  wait for the victory computation, to carry the score in the same
+  message; that runs after the host's landing animation and debrief, so
+  the wingmen sat in their cockpits for twelve seconds and landed while
+  the host was being debriefed.  Now the frame goes out as the flight
+  loop returns, for every ending, and the score follows on its own to
+  every connected wingman (`on_mission_victory_calc` on both sides; a
+  mission end without a status is the score alone).  WC.EXE's landing
+  sequence draws the carrier from the game's "landed on" word
+  (`dseg:662E`, which only the game's own landing check `ovr141:1841`
+  writes): a landing by the host's word left it -1 and the Tiger's Claw
+  was missing from the wingman's landing.  `MissionEnd.landed_on_plus_one`
+  carries the host's ship as a network id and the wingman writes its own
+  slot for it (`ds::landedOn`); the sequence then shows the bay from
+  wherever the wingman is.
 * **The client waits for the server's frame without blocking**
   (`ServerFrameJob`), and applies every frame that has arrived, in order.
 * **Both waits pass in emulated time.**  A waiting job makes a call that
