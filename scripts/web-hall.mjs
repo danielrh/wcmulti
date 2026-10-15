@@ -205,6 +205,20 @@ await c.click("#hallLog a.roomcode");
 check("a full room says so", await c.waitForFunction(() => /is full/.test(document.getElementById("status").textContent), null, { timeout: 15000 }).then(() => true, () => false), await status(c));
 const roomC = await value(c, "room");
 check("and the pilot's own code is back", /^WC1-\d{4}$/.test(roomC) && roomC !== codeA, roomC);
+// A click is where the pilot wants to be: a room they sit in alone is left
+// for it (and taken again when the clicked one cannot be joined); a room
+// with company is not left by a click.
+await c.click("#join");
+await c.waitForFunction(() => !document.getElementById("lobby").hidden, null, { timeout: 30000 });
+await c.click("#hallLog a.roomcode");
+check("a pilot alone in a room who clicks a full one is told so, and is back in their own", await c.waitForFunction((own) => /is full/.test(document.getElementById("hallHint").textContent) && !document.getElementById("lobby").hidden && document.getElementById("room").value === own, roomC, { timeout: 30000 }).then(() => true, () => false), [await text(c, "hallHint"), await value(c, "room")]);
+await say(c, "/room");
+check("the other's offer is a link in the host's lobby", await a.waitForFunction((c) => Array.from(document.querySelectorAll("#hallLog a.roomcode")).some((x) => x.textContent === c), roomC, { timeout: 8000 }).then(() => true, () => false), await text(a, "hallLog"));
+await a.evaluate((code) => Array.from(document.querySelectorAll("#hallLog a.roomcode")).find((x) => x.textContent === code).click(), roomC);
+await sleep(1);
+check("a host with a wingman in the room is not moved by a click", /with somebody/.test(await text(a, "hallHint")) && (await value(a, "room")) === codeA && !(await a.$eval("#lobby", (el) => el.hidden)), [await text(a, "hallHint"), await value(a, "room")]);
+await c.click("#leave");
+await sleep(1);
 
 // "/room" in a line is the room's code.
 await sleep(10);

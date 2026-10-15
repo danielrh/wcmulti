@@ -742,6 +742,9 @@ export function initHall(opts) {
     },
     // The pilot's room, as a line in the lobby (the buttons that say so).
     advertise,
+    // A word under the chat, until the pilot types: what came of a click on
+    // a code (the page's status line is far below).
+    note,
     // While the game runs there is no lobby: the pilot has a flight, and a
     // lobby full of pilots who are away would be no use to those looking
     // for one.  When the game is over (reopen) the lobby is there again,

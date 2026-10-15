@@ -828,18 +828,35 @@ async function joinRoom({ create = true } = {}) {
   }
 }
 
-// A room code clicked in the public lobby.
+// A room code clicked in the public lobby: the pilot wants to be in that
+// room.  One they sit in alone (their own, made by "Join room" or by an
+// advertisement) is left for it; one with company is not left behind by a
+// click.  What came of it is said under the lobby's chat, where the click
+// was, as well as in the status line.
 async function joinFromLobby(code) {
-  if (running) { status(`Reload the page to join ${code}: this page's game has been started.`); return; }
+  const tell = (text) => { status(text); hall.note(text); };
+  if (running) { tell(`Reload the page to join ${code}: this page's game has been started.`); return; }
+  if (lobby.game && lobby.game.code === code) { tell(`You are in room ${code} already (step 2).`); return; }
+  let left = "";
   if (lobby.game) {
-    status(lobby.game.code === code ? `You are in room ${code}.` : `You are in room ${lobby.game.code}: leave it (step 2) to join ${code}.`);
-    return;
+    const company = lobby.game.players.some((p) => p.occupied && p.id !== lobby.game.selfId);
+    if (company) { tell(`You are in room ${lobby.game.code} with somebody: leave it (step 2) to join ${code}.`); return; }
+    left = lobby.game.code;
+    chatLine(`You left room ${esc(left)} for ${esc(code)}`, "sys");
+    leaveRoom();
   }
   const typed = $("room").value;
   $("room").value = code;
   await joinRoom({ create: false });
-  if (lobby.game) $("setup").scrollIntoView({ block: "nearest", behavior: "smooth" });
-  else { $("room").value = typed; retagRoom(); }
+  if (lobby.game) {
+    tell(`You are in room ${code} (step 2): the host presses Fly when everyone is in.`);
+    $("setup").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } else {
+    const why = $("status").textContent;
+    $("room").value = typed; retagRoom();
+    if (left) { await joinRoom(); if (lobby.game) status(why); }  // (back in the room of one's own)
+    hall.note(why);  // (why not, said where the click was)
+  }
 }
 
 // A room advertised in the public lobby: its code (which names the game),
