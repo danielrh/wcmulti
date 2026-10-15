@@ -452,6 +452,44 @@ addresses up the BP chain; a few of them a second apart show what a hang is
 (the loadfix crash above showed as `0000:0000` with the interrupt table for
 code).
 
+### "Error: altships.25855, packet 1" on the wingman (2026-10-15)
+
+Series 1 mission 4 (`Origin s1 m3`, the page's mission picker) killed the
+wingman's game as the start state was applied, every time, with that line,
+`packet size: -1` and about 139 KB free; the host flew on.  `WCNET_WATCH`
+on the word the file name is made from found the writer: a DOS read
+(`WCNET_WATCH` now logs the game's `int 21h` file calls too).
+
+* `altships.%03d` is built from the game number at `dseg:C9AE` (0 for
+  WC2.EXE, 1 and 2 for the Special Operations; set at the title and by the
+  mission jump, used in every numbered file name: `module.000`,
+  `planets.v00`, `startglb.000`, ...).  25855 is 0x64FF, two bytes of a
+  file.
+* The nav point setup (`ovr116:1511`) runs the nav point's three scripted
+  steps (`ovr116:1395`, 3 bytes each from +0x37 of the record): type 0 is
+  "the ship in slot N flies with the intelligence of file M": the 81-byte
+  packet 0 of `ALTINT.00M` goes into the slot's intelligence record, 81
+  bytes each from `dseg:C9EE`, the record's number from
+  `[dseg:6E46 + 2*N]` (`ds::slotIntelRecord`; an empty slot has -1 there,
+  `seg006:1B7A`).  Mission 4's step is slot 1 (Shadow) and file 1.  The
+  game does not check the number: with -1 the packet lands at
+  `C9EE - 0x51 = C99D`, over the startup variables `C99D..C9ED`, the game
+  number among them.
+* On the host slot 1 is Shadow's by then.  On the wingman's machine every
+  slot but its own is empty when its nav point setup runs (its own spawns
+  return -1, the server's ships come with the start state afterwards), so
+  the record number is -1 and the packet trashes the data segment; the first
+  spawn that needs an alternate ship (mission ship 0, `+0x13` set) asks for
+  `altships.25855` and the loader exits.  The second caller of the steps,
+  `ovr116:17F6` (a nav point's later phases: the "Meanwhile..." scenes and
+  reinforcement waves), has the same hole for a slot that is empty when the
+  phase fires.
+
+The fix is a hook at `ovr116:1428` (`code::navStepAltIntel`): when the step's
+slot is empty here (or not a ship slot), the step is skipped (`reg_eip` to
+the block's `jmp`).  The intelligence record matters to the AI, which the
+server runs; a wingman's copy of the ship flies by the server's positions.
+
 ### A crash that was seen once (2026-10-05)
 
 Reported from two browsers: the second mission of a session (series 3,

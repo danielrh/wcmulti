@@ -997,6 +997,25 @@ static void check_hooks_slow() {
     if (at_location(code::autopilotKey) && g_session && g_session->is_client()) {
         reg_eip += 5;  // only the server may engage autopilot
     }
+    if (at_location(code::navStepAltIntel) && ds::known(ds::slotIntelRecord)) {
+        // A WC2 nav point's step "the ship in slot N flies with the
+        // intelligence of file M" (ovr116:1395, case 0) copies an 81-byte
+        // packet of ALTINT.00M into the slot's intelligence record, 81 bytes
+        // each from dseg:C9EE, taking the record's number from
+        // [slotIntelRecord + 2*N] without looking at it.  An empty slot has
+        // -1 there -- on a wingman's machine every slot but its own is empty
+        // when the nav point is set up, the server's ships come with the
+        // start state -- and the packet lands 81 bytes below the table, over
+        // the game number at C9AE among other things: the next alternate ship
+        // fails with "Error: altships.25855, packet 1" (series 1 mission 4,
+        // "Origin s1 m3", the wingman every time).  Skip the step for an
+        // empty slot.
+        int slot = (Bit16s)mem_readw(SegPhys(ss) + ((reg_ebp - 4) & 0xffff));  // [bp-4]: the step's slot
+        if (slot < 0 || slot >= 10 || (Bit16s)rd16((Bit16u)(ds::slotIntelRecord + 2 * slot)) < 0) {
+            wclog(2, "nav point step: slot %d is empty here, its intelligence file is not loaded", slot);
+            reg_eip += 0x22;  // the block's `jmp` to the next step (ovr116:144A)
+        }
+    }
     if (at_location(code::replayKey)) {
         // WC2's R shows the last in-flight scene again: the flight stands
         // still for it on this machine alone, and the key sits next to the
@@ -1197,9 +1216,37 @@ static void escape_tap() {
 }
 #endif
 
+// Debugging aid, on with WCNET_WATCH: every DOS file call of the game (int 21h
+// open, create, close, read, write, seek) with its handle, length and buffer,
+// so that a read that lands where it should not can be told from its file.
+static void dos_call_trace() {
+    PhysPt ip = SegPhys(cs) + (reg_eip & 0xffff);
+    if (mem_readb(ip) != 0xCD || mem_readb(ip + 1) != 0x21) {
+        return;
+    }
+    Bit8u ah = reg_ah;
+    if (ah != 0x3C && ah != 0x3D && ah != 0x3E && ah != 0x3F && ah != 0x40 && ah != 0x42) {
+        return;
+    }
+    char name[64] = "";
+    if (ah == 0x3C || ah == 0x3D) {
+        PhysPt p = SegPhys(::ds) + reg_dx;
+        for (int i = 0; i < 63; i++) {
+            Bit8u c = mem_readb(p + i);
+            if (!c) break;
+            name[i] = (char)c; name[i + 1] = 0;
+        }
+    }
+    PhysPt buf = SegPhys(::ds) + reg_dx;
+    ::wclog(0, "dos: int 21h ah=%02X al=%02X bx=%04X cx=%04X ds:dx=%04X:%04X phys %05X %s at %04X:%04X",
+            ah, reg_al, reg_bx, reg_cx, (unsigned)SegValue(::ds), (unsigned)reg_dx, (unsigned)buf,
+            name, (unsigned)SegValue(cs), (unsigned)(reg_eip & 0xffff));
+}
+
 // Debugging aid: WCNET_WATCH=<hex offset>:<length> logs every change of that
 // part of the data segment with the instruction that follows the write.
 static void memory_watch() {
+    dos_call_trace();
     static int len = -1;
     static Bit16u off = 0;
     static Bit8u seen[64];
