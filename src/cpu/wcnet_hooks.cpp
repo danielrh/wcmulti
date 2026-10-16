@@ -892,26 +892,16 @@ static void hold_cheat_hull() {
 // just measured (km: position units / 256).  On the host that distance is
 // from the host's ship alone, so a unit fighting beside a wingman 20000 km
 // away vanished from under the wingman's nose (the user's report,
-// 2026-10-15).  Now, while any human's ship is within a laser blast and a
-// half of the unit (4800 km x 1.5; WCKEEPNEAR=<km> changes it), the test is
-// made to pass: the game takes the branch it takes for a ship that is near.
+// 2026-10-15).  One such ship stays, by the user's rule of the same day: an
+// enemy within a laser blast and a half of a wingman's ship (4800 km x 1.5;
+// WCKEEPNEAR=<km> changes it, 0 switches this off), and of the enemies the
+// game would so remove, the one nearest to a wingman.  A wingman can chase
+// one unit down far from the host; everything else goes by the host's
+// distance as the game has it, so the ships about are the game's own
+// number.  Friendlies and the humans' own ships are the game's business
+// (a human's ship never leaves by the host's word: intercept_despawn).
 // Ships that are leaving (a retreat, a jump) go by other code and still go.
-static void keep_far_ship_near_humans() {
-    enum { kFarKm = 0x3E80, kLaserRangeKm = 4800, kLogEvery = 300 };
-    static int keepKm = -1;
-    if (keepKm < 0) {
-        const char *env = getenv("WCKEEPNEAR");
-        keepKm = env && env[0] ? atoi(env) : kLaserRangeKm * 3 / 2;
-    }
-    int dist = (Bit16s)(reg_ax & 0xffff);
-    int slot = (int)(reg_si & 0xffff);
-    if (dist <= kFarKm || keepKm <= 0 || !is_ship_slot(slot) || !slot_in_use(slot)) {
-        return;  // the game keeps it anyway, or there is nothing to keep
-    }
-    PhysPt ip = SegPhys(cs) + (reg_eip & 0xffff);
-    if (mem_readb(ip) != 0x3D || mem_readb(ip + 3) != 0x7E) {
-        return;  // not `cmp ax,imm16` / `jng rel8`: not the code this was written for
-    }
+static double nearest_human_km(int slot, int *who) {
     Vec3 pos = read_vec(vec_slot(ds::gPositionVector, slot));
     int nearest = -1;
     double nearestKm = 0;
@@ -927,17 +917,64 @@ static void keep_far_ship_near_humans() {
             nearestKm = km;
         }
     }
+    *who = nearest;
+    return nearest < 0 ? -1 : nearestKm;
+}
+
+static bool enemy_ship(int slot) {
+    return is_ship_slot(slot) && slot_in_use(slot) && !g_session->is_player_slot(slot) && ds::known(ds::commAnimInfo) &&
+           rd16((Bit16u)(ds::commAnimInfo + 2 * slot)) != rd16(ds::commAnimInfo);  // the side word: not the player's side
+}
+
+static void keep_far_ship_near_humans() {
+    enum { kFarKm = 0x3E80, kLaserRangeKm = 4800, kLogEvery = 300 };
+    static int keepKm = -1;
+    if (keepKm < 0) {
+        const char *env = getenv("WCKEEPNEAR");
+        keepKm = env && env[0] ? atoi(env) : kLaserRangeKm * 3 / 2;
+    }
+    int dist = (Bit16s)(reg_ax & 0xffff);
+    int slot = (int)(reg_si & 0xffff);
+    if (dist <= kFarKm || keepKm <= 0 || !enemy_ship(slot)) {
+        return;  // the game keeps it anyway, or it is not an enemy's ship
+    }
+    PhysPt ip = SegPhys(cs) + (reg_eip & 0xffff);
+    if (mem_readb(ip) != 0x3D || mem_readb(ip + 3) != 0x7E) {
+        return;  // not `cmp ax,imm16` / `jng rel8`: not the code this was written for
+    }
+    int nearest;
+    double nearestKm = nearest_human_km(slot, &nearest);
     if (nearest < 0 || nearestKm > keepKm) {
         return;
+    }
+    // One at a time: another far enemy nearer to a wingman is the one kept.
+    Vec3 host = read_vec(vec_slot(ds::gPositionVector, kPlayerSlot));
+    for (int other = kPlayerSlot; other <= kMaxShipSlot; other++) {
+        if (other == slot || !enemy_ship(other)) {
+            continue;
+        }
+        Vec3 p = read_vec(vec_slot(ds::gPositionVector, other));
+        double dx = (double)p.x - host.x, dy = (double)p.y - host.y, dz = (double)p.z - host.z;
+        if (sqrt(dx * dx + dy * dy + dz * dz) / 256.0 <= kFarKm) {
+            continue;  // near the host: the game keeps it on its own
+        }
+        int otherNearest;
+        double otherKm = nearest_human_km(other, &otherNearest);
+        if (otherNearest >= 0 && otherKm <= keepKm && (otherKm < nearestKm || (otherKm == nearestKm && other < slot))) {
+            wclog(2, "slot %d is %d km from our ship and %.0f km from player slot %d: goes, slot %d (%.0f km from player slot %d) is the one kept",
+                  slot, dist, nearestKm, nearest, other, otherKm, otherNearest);
+            return;
+        }
     }
     enum { kSlotsMax = 128 };  // (more than either game has)
     static int lastLogged[kSlotsMax];
     static bool loggedOnce[kSlotsMax];
     int frame = rd16(ds::frameCounter);
     if (slot < kSlotsMax && (!loggedOnce[slot] || frame - lastLogged[slot] > kLogEvery || frame < lastLogged[slot])) {
+        wclog(loggedOnce[slot] ? 2 : 1, "slot %d is %d km from our ship but %.0f km from player slot %d: kept (the one far enemy a wingman may keep)", slot,
+              dist, nearestKm, nearest);
         loggedOnce[slot] = true;
         lastLogged[slot] = frame;
-        wclog(2, "slot %d is %d km from our ship but %.0f km from player slot %d: kept", slot, dist, nearestKm, nearest);
     }
     reg_eip += 5 + (Bit8s)mem_readb(ip + 4);  // the `jng`'s target: the ship is near
 }

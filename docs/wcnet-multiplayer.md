@@ -110,10 +110,18 @@ extra health" and "wingman explodes" behaviour.
   distance is from the host's ship alone, so with the two pilots far apart
   the host's game took units from under the wingman's nose (and said so to
   everyone).  The hooks `farShipTest1` / `farShipTest2` sit on those
-  compares on the server: while any human's ship is within a laser blast
-  and a half of the unit (4800 km x 1.5 = 7200 km; `WCKEEPNEAR=<km>`
-  changes it, 0 switches it off) the jump is taken as for a ship that is
-  near.  Ships that are leaving (a retreat, a jump) go by other code and
+  compares on the server, and one such ship stays, by the user's rule
+  (2026-10-15, after the reverted attempt below): an enemy within a laser
+  blast and a half of a wingman's ship (4800 km x 1.5 = 7200 km;
+  `WCKEEPNEAR=<km>` changes it, 0 switches it off), and of the enemies the
+  game would so remove, the one nearest to a wingman -- the jump is taken
+  for it as for a ship that is near.  A wingman can chase one unit down far
+  from the host; everything else goes by the host's distance as the game
+  has it, so the number of ships about stays the game's own.  Friendlies go
+  by the game's rule (its wingman catches up by the game's own warp).
+  Missiles need no such rule: the 9000 km compares in the missile ticks
+  (`ovr163:1870`, `ovr163:19A0`) are a missile's distance to its own
+  target.  Ships that are leaving (a retreat, a jump) go by other code and
   still go.  Clients never remove ships of their own (`intercept_despawn`).
 * **Tried and reverted (2026-10-15): both humans as "the player" to an
   enemy's AI.**  The AI approaches, engages and aims at slot 0, the player's
@@ -732,7 +740,7 @@ shell command still starts/stops the server or connects.  Useful environment:
 | `WCNET_LAG=<ms>`, `WCNET_JITTER=<ms>`, `WCNET_DROP=<pct>[:<ms>]`, `WCNET_BURST=<periodMs>:<lossMs>[:<spikeMs>]`, `WCNET_SEED=<n>` | test aid: a slow or a bad link made on this machine (section 3b): one-way delay, random extra delay per message, share of messages lost (and how long a lost one takes to be sent again, with everything behind it), a periodic burst of loss and queueing like a satellite handover, and the random sequence |
 | `WCNET_MODE=auto\|low\|high` | on the host: the exchange mode (section 3b; auto, the default, goes by the measured link; the page's "Connection" option and `/latency` do the same) |
 | `WCNET_BESTEFFORT=0` | no positions by the best-effort channel in the high-latency mode (section 3b), to measure what it is worth |
-| `WCKEEPNEAR=<km>` | on the host: how close a human's ship must be to a unit that the game would remove for being more than 16000 km from the host's ship, for the unit to stay (default 7200, a laser blast and a half; 0: the game's own rule) |
+| `WCKEEPNEAR=<km>` | on the host: how close a wingman's ship must be to an enemy that the game would remove for being more than 16000 km from the host's ship, for that enemy to stay; one at a time, the nearest to a wingman (default 7200, a laser blast and a half; 0: the game's own rule) |
 | `WCROCKS=0` / `WCROCKS=soft` | on the host: fly without asteroid and mine fields, or with rocks that do a sixteenth of their damage to a player's own ship (everyone follows the host; `/rocks on`, `/rocks soft`, `/rocks off` in the comms prompt switch it in flight) |
 | `WCNET_AUTOKEYS=1` | test aid: press Enter through the briefing, then `A` (autopilot) once in space |
 | `WCNET=0` | fly alone: no server, no room, the game's own wingman (a single-player control for experiments) |
