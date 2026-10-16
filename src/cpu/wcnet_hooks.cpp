@@ -673,6 +673,17 @@ static void key_script() {
         }
         wclog(1, "key script %.1fs (t=%.1f): kill foes: %d ships, %d spared (%s); %s", t, now / 1000.0, killed, spared,
               server ? "sent" : "ignored: not the server", mission_state_line().c_str());
+    } else if (item.compare(0, 10, "!killship=") == 0) {
+        // !killship=<mission ship>: the server destroys the slot flying that mission ship (a pod, a ship that
+        // spawned late), whatever slot it took
+        int ms = atoi(item.c_str() + 10), slot = -1;
+        for (int s = kPlayerSlot + 1; s <= kMaxShipSlot && ds::known(ds::slotMissionShip); s++) {
+            if (slot_in_use(s) && (Bit16s)rd16((Bit16u)(ds::slotMissionShip + 2 * s)) == ms) slot = s;
+        }
+        bool server = g_session && g_session->is_server();
+        wclog(1, "key script %.1fs (t=%.1f): kill mission ship %d (%s); %s", t, now / 1000.0, ms,
+              slot < 0 ? "not in a slot" : !server ? "ignored: not the server" : "sent", mission_state_line().c_str());
+        if (server && slot >= 0) enqueue_test_kill(slot);
     } else if (item.compare(0, 6, "!kill=") == 0) {
         int slot = atoi(item.c_str() + 6);
         bool server = g_session && g_session->is_server();
