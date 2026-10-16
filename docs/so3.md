@@ -137,6 +137,16 @@ cockpit from a `pcship.vNN` named in the scene file's shape list
 (CAMPAIGN.S0n lists all seven flyable ones); the first mission's draws
 `pcship.v01`, the Rapier's.  In SO3's copies that name is the Hellcat's.
 
+**View sprites.**  Header four int16 x2, x1, y1, y2 (the sprite spans
+[-x1-1, x2] by [-y1-1, y2] around its origin); records of int16 key, vx,
+vy: key even = key/2 raw pixels, key odd = key/2 pixels of sub-runs (a
+byte k: even = k/2 raw pixels, odd = one colour k/2 times); key 0 ends.
+`wc2data.decode_sprite` / `encode_sprite` (lossless round trip on every
+view the game has) and `scale_fighter` (the Hellcat at 0.75: 142 KB to 81
+KB; the per-view hardpoint pixel positions in packet 2 and the eleven
+debris sprites in packet 4 scale with it).  Portrait files (PEOPLE.Vnn)
+are one table block of 39 such sprites.
+
 ## 5. The scene files (CSCP)
 
 CAMPAIGN.S0n, GAMEFLOW.S0n, SERIES.S0n, INCIDENT.S0n: IFF `FORM CSCP`
@@ -146,7 +156,11 @@ pushes string nn); `FORM SPCH` maps lines to digitised speech (optional:
 drop it and the lines are silent); `FORM SEQU` is the scene's own routines
 (`Talk1..Talk6`) and the engine calls it imports (`talking`, `printit`,
 `setupbackdrop`, ...); `FORM SCNE / Runner` dispatches a phase 0..5 to a
-Talk routine.  SERIES.S02 block 0 is Special Operations 2's new-game
+Talk routine.  `scripts/wc2scene.py SERIES.S02 [block]` prints each block's
+skeleton: per Talk routine the room, who speaks each line (the talker id
+set in field 0x15 before `closeup` / `film2`) and the branches.  Faces are
+named in CAMPAIGN.S0n's SHAP list (`people.vNN`); renaming an entry in our
+copy recasts a part.  SERIES.S02 block 0 is Special Operations 2's new-game
 introduction (Talk1, strings 0-22), the first briefing (Talk2, 23-30) and
 debriefing (Talk3, 31-38, with 39-41 a recording) and three radio lines
 (42-44).  `\x86` in a string is the callsign, `\x85` the surname.  SO3's

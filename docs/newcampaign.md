@@ -51,6 +51,15 @@ number-3 files, see `so3/build.py`) with its own `MODULE.003` (missions),
   `people.v32` -> `people.v09` puts Doomsday where Talon was; WC2's own
   `PEOPLE.V04/V05/V09` are Stingray, Downtown, Doomsday) or ship a recoloured
   copy under a new number.  Verify by screenshot: run the scene and look.
+  A portrait file is one table block of 39 sprites in the view format
+  (`wc2data.people_sprites`): the head without its centre, the body frames,
+  the mouth and eye frames.  `wc2data.recolour_people(src, dst, mapping)`
+  remaps palette indices in every frame; the scene palette (`!vga=<name>`
+  dumps screen and palette from a running scene) has 112-127 skin, 160-175
+  greys, 64-79 yellow to red, 40-46 blues, 136-142 auburn, 228-238 browns;
+  hair and skin use different ranges, so hair can change on its own
+  (Angel's hair 121-125 -> 136-140 made Bergstrom; Tolwyn's greys 160-169 ->
+  browns and his reds 71-77 -> blues made Banbridge: `so3/build.py`).
 
 ## 2. Memory: the rule that shapes every mission
 
@@ -110,9 +119,12 @@ slot, sparing the listed mission ships, e.g. a surrendering freighter),
 through scenes until the next flight), `clickskip[=x:y]` (click the pointer
 spot through scenes and the barracks' "fly" button, default 0.48:0.55, until
 the next flight; the clock restarts in the next flight).  A campaign
-play-through is `clickskip` + per mission a repeated `a` / `!killfoes` cycle;
-run it solo first (`WCNET=0`), then host + client (`w2duo.sh`).  Check each
-mission's host log for "left slot", "screen: Error" and the spawn list.
+play-through (scratch `campaignrun.sh`) is the barracks clicks, then per
+mission a segment of `a` / `!killfoes` cycles (the clock restarts in each
+flight), `!status=1` (the autopilot home does not land by itself) and
+`clickskip`; `!kill*` work on the host only, so it runs host + client
+(`w2duo.sh`).  Check the host log for "starting: mission" (the order the
+campaign script took), "left slot", "screen: Error" and the spawn list.
 
 ## 5. Order of work for a new campaign
 
