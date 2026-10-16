@@ -664,7 +664,7 @@ static void key_script() {
         bool server = g_session && g_session->is_server();
         int killed = 0, spared = 0;
         for (int s = kPlayerSlot + 1; s <= kMaxShipSlot; s++) {
-            if (!enemy_ship(s)) continue;
+            if (!enemy_ship(s) || rd16((Bit16u)(ds::commAnimInfo + 2 * s)) != 1) continue;   // the Kilrathi side only: not the scenery (fields are side 2)
             int ms = ds::known(ds::slotMissionShip) ? (Bit16s)rd16((Bit16u)(ds::slotMissionShip + 2 * s)) : -1;
             if (std::find(spare.begin(), spare.end(), ms) != spare.end()) { spared++; continue; }
             if (server) enqueue_test_kill(s);

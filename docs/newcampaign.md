@@ -123,7 +123,13 @@ play-through (scratch `campaignrun.sh`) is the barracks clicks, then per
 mission a segment of `a` / `!killfoes` cycles (the clock restarts in each
 flight), `!status=1` (the autopilot home does not land by itself) and
 `clickskip`; `!kill*` work on the host only, so it runs host + client
-(`w2duo.sh`).  Check the host log for "starting: mission" (the order the
+(`w2duo.sh`).  Two things stall it that a human just flies through: the
+autopilot refuses inside an asteroid or mine field (`!rocks=0` switches the
+fields off for the rig) and near an enemy-side ship that must stay alive (a
+surrendering freighter: `!pos=<x>:<y>:<z>`, in the game's units of km x 256,
+jumps the ship clear).  A mission whose objectives the rig left unmet sent
+SO2's campaign script back to series 1 mission 1, so a flow test must meet
+them all.  Check the host log for "starting: mission" (the order the
 campaign script took), "left slot", "screen: Error" and the spawn list.
 
 ## 5. Order of work for a new campaign
