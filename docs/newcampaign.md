@@ -140,9 +140,12 @@ on an added escort it does not know asked for a scene block that does not
 exist (packet 30 of 24) and ended the program; so a flow test must meet
 every objective, and escorts the slot's script does not know stay unmarked.
 A "land on ship n" objective (SO2's s1m3 lands on a second carrier record,
-s3m2 on the tender) is not met by `!status=1`: the rig has to fly to that
-carrier and land through the comm menu (C, the carrier, "request landing"),
-which needs the ship steered within comm range (`!face=<slot>` repeated);
+s3m2 on the tender) is not met by `!status=1`.  The autopilot to a landing
+ship that is a nav point of its own (the tender of 3-2 and 3-3) docks by
+itself on arrival; a carrier wants the landing asked for: after the
+autopilot has reached it, `c` (the comm menu: "Send message to?"), the
+carrier's number (2 when a wingman is first on the list), then `1`
+("Request landing"), and the game lands (verified in 1-3);
 A `-k sN mM` start plays that mission and the campaign script's own
 transition after it (2-0 went on to 2-1, 2-1 to 2-2).  **Never run two
 pairs on one game directory**: the save files collide and the program ends

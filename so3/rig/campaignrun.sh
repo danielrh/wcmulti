@@ -25,8 +25,9 @@ for m in $(seq 1 20); do
     # so nothing is spared and the autopilot is free.
     # (after Nav 3: a cruise to its point, then the jump to the Culloden at nav 5, where the game lands by itself:
     # "land on ship 11" is credited only by that landing, not by the forced one)
-    host="$host,2:!rocks=0,10:a,20:!killfoes,23:!killfoes,26:!killfoes,32:a,62:a,124:a,152:a,164:!killfoes,167:!killfoes,170:!killfoes,174:!killfoes,180:a,210:a,240:!status=1,244:clickskip"
-    client="$client,2:!rocks=0,10:a,32:a,62:a,124:a,152:a,180:a,210:a,240:!status=1,244:clickskip"
+    # ... and there the landing is asked for over the comm: C, 2 (the Culloden), 1 (request landing)
+    host="$host,2:!rocks=0,10:a,20:!killfoes,23:!killfoes,26:!killfoes,32:a,62:a,124:a,152:a,164:!killfoes,167:!killfoes,170:!killfoes,174:!killfoes,180:a,210:a,218:c,220:2,222:1,244:!status=1,248:clickskip"
+    client="$client,2:!rocks=0,10:a,32:a,62:a,124:a,152:a,180:a,210:a,244:!status=1,248:clickskip"
     continue
   fi
   host="$host$(seg "" "" 16)"; client="$client$(cseg 16)"
@@ -35,7 +36,7 @@ rm -rf "$OUT"
 if [ -n "${SOLO:-}" ]; then   # one program alone (WCNET=0): the kill aids work as the server's
   mkdir -p "$OUT"
   CALL=${HOSTCALL:-CHEATHOST} GAME=so3 GAMEDIR=/home/sandbox/dev/dosbox3d/build-so3/game WCNET=0 WCPORT=${WCPORT:-13600} WCNET_KEYSCRIPT_FROM=boot DIRECT=" " \
-    $(dirname "$0")/w2solo.sh "$OUT" "$DUR" "$START" "$host" WCNET_WATCH=0000:1 > /dev/null 2>&1
+    $S/w2solo.sh "$OUT" "$DUR" "$START" "$host" WCNET_WATCH=0000:1 > /dev/null 2>&1
   cp "$OUT/solo.err" "$OUT/host.err" 2>/dev/null
   echo "== campaignrun done" >> "$OUT/host.err"
   exit 0
