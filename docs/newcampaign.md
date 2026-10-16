@@ -135,9 +135,12 @@ flight), `!status=1` (the autopilot home does not land by itself) and
 autopilot refuses inside an asteroid or mine field (`!rocks=0` switches the
 fields off for the rig) and near an enemy-side ship that must stay alive (a
 surrendering freighter: `!pos=<x>:<y>:<z>`, in the game's units of km x 256,
-jumps the ship clear).  A mission whose objectives the rig left unmet sent
-SO2's campaign script back to series 1 mission 1, so a flow test must meet
-them all.  Check the host log for "starting: mission" (the order the
+jumps the ship clear).  SO2's campaign script is unforgiving: a mission whose
+objectives were left unmet went to a lost exit (1-3 unfinished -> 5-0 "The
+assault", then the retreat ending), and losing a ship it marks important
+on an added escort it does not know asked for a scene block that does not
+exist (packet 30 of 24) and ended the program; so a flow test must meet
+every objective, and escorts the slot's script does not know stay unmarked.  Check the host log for "starting: mission" (the order the
 campaign script took), "left slot", "screen: Error" and the spawn list.
 
 ## 5. Order of work for a new campaign
