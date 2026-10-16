@@ -22,9 +22,13 @@ number-3 files, see `so3/build.py`) with its own `MODULE.003` (missions),
   its launch ship kind).  At the end of Talk3 the bytecode sets the series
   and mission: block 3 ends `24 02 28 02 24 00 28 03` (series 2, mission 0)
   or `24 05 28 02 24 00 28 03` (5, 0) on a test `27 c1 00` of the mission's
-  results (SO2's s1m3 goes on when the previous missions' objectives were
-  met: the rig, which cannot tractor s1m2's pod, was sent to 5-0 every time,
-  while 1-3 started on its own went to 2-0).  `scripts/wc2scene.py` shows
+  results (the test reads, by all appearances, s1m2's objective 3, the
+  pickup of the pod: SO2's s1m3 goes on to s2m0 when it was won and to s5m0
+  when not.  The rig cannot tractor, so a run from 1-0 was sent to 5-0 every
+  time, while 1-3 started on its own went to 2-0, and destroying the pod did
+  not count.  A pilot who tractors the core in 1-2 is on the main line; the
+  rig would need a pickup aid, which means finding the per-ship state the
+  game keeps for "picked up").  `scripts/wc2scene.py` shows
   the `S02`/`S03` stores if you read its raw dump; a block's branch targets
   are the slots a new campaign must keep playable.
 * **Which outcomes the script tests.** The debriefing variants read the
