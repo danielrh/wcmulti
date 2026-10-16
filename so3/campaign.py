@@ -209,7 +209,7 @@ def m_handmedowns():
         wingman("Doomsday", EPEE, DOOMSDAY),                                      # 2
         third("Downtown", EPEE, DOWNTOWN),                                        # 3
         escortee("Barge", FREE_TRADER, pos=(1500, -300, -1500), pilot=STINGRAY),  # 4  the finder barge
-        lone("Drakhri", DRAKHRI, pos=(4000, 0, -6000), yaw=150, objective=4),     # 5  a scout at Nav 1
+        lone("Sartha", SARTHA, pos=(4000, 0, -6000), yaw=150, objective=4),       # 5  a scout at Nav 1 (not the Drakhri of 1-0's last nav: a wingman's program died on a type repeated across the mission boundary)
     ]
     ships += wing("Grikath", GRIKATH, 4, pos=(5000, 400, -8000), yaw=160, group=1, objective=4, first_index=6)   # 6-9  go for the barge
     ships += [capital("Kur'ratha", KAMEKH, 1, pos=(2500, 0, -9000), yaw=170, pilot=KILRATHI_SHIP, important=0, behave=2, objective=4, ai=3)]  # 10
@@ -220,7 +220,7 @@ def m_handmedowns():
         dict(name="Nav 2", pos=(35000, 0, 105000), types=[GRIKATH, KAMEKH], ships=[6, 7, 8, 9, 10]),
         dict(name="Nav 3", pos=(-70000, 0, 110000), types=[], ships=[]),
         dict(name="Rockline", pos=(-35000, 0, 60000), types=[ASTEROIDS, DRAKHRI], ships=[11, 12, 13, 14, 15]),
-        dict(name="Nav 1", pos=(45000, 0, 45000), types=[DRAKHRI], ships=[5]),
+        dict(name="Nav 1", pos=(45000, 0, 45000), types=[SARTHA], ships=[5]),
     ]
     objectives = [(0, 4, "Escort the barge to Nav 1"), (5, 4, ".the scout"), (0, 1, "On to Nav 2 for the bearing"), (5, 1, ".the corvette"),
                   (0, 2, "Nav 3"), (0, 3, "The rockline"), (5, 3, ".the ambush"), (1, 0, "Return to the Culloden")]
@@ -267,18 +267,18 @@ def m_prize():
         wingman("Maniac", HELLCAT, MANIAC),                                       # 2
         capital("Kirrah'ka", DORKATHI, 1, pos=(2500, 0, -2500), yaw=0, pilot=KILRATHI_SHIP, important=0, ai=0, alt=ALT_TENDER),  # 3  surrenders
     ]
-    ships += wing("Drakhri", DRAKHRI, 4, pos=(3000, 0, -8000), yaw=170, group=0, objective=1, ai=3, first_index=4)     # 4-7  her escort, back for her
+    ships += wing("Sartha", SARTHA, 4, pos=(3000, 0, -8000), yaw=170, group=0, objective=1, ai=3, first_index=4)       # 4-7  her escort, back for her
     ships += wing("Jalkehi", JALKEHI, 3, pos=(2000, 0, -7000), yaw=160, group=0, objective=1, ai=3, first_index=8)     # 8-10
     ships += [CULLODEN(ai=2)]                                                                                            # 11  the landing
     ships += [ship("Jalkehi", JALKEHI, 1, behave=4, formation=3, b33=4, ai=3, leader=8, group=0, objective=8, pilot=KILRATHI),
               ship("Jalkehi", JALKEHI, 1, behave=4, formation=4, b33=4, ai=3, leader=8, group=0, objective=8, pilot=KILRATHI)]   # 12, 13
-    ships += wing("Drakhri", DRAKHRI, 2, pos=(2500, 0, -5000), yaw=150, group=1, objective=1, first_index=14)          # 14, 15  the picket at Nav 1
-    nav2 = dict(name="Nav 2", pos=(15000, 0, 100000), types=[DORKATHI, DRAKHRI], ships=[3], steps=[(1, 211, 4)])
+    ships += wing("Sartha", SARTHA, 2, pos=(2500, 0, -5000), yaw=150, group=1, objective=1, first_index=14)            # 14, 15  the picket at Nav 1 (Sartha: 1-2 ends among Drakhri)
+    nav2 = dict(name="Nav 2", pos=(15000, 0, 100000), types=[DORKATHI, SARTHA], ships=[3], steps=[(1, 211, 4)])
     navs = [
         dict(name="Culloden", pos=(0, 0, 0), types=[WATERLOO, HELLCAT], ships=[1, 2, 0]),
-        dict(name="Nav 1", pos=(60000, 0, 40000), types=[DRAKHRI], ships=[14, 15], reveals=[(0, 0), (1, 5)]),
+        dict(name="Nav 1", pos=(60000, 0, 40000), types=[SARTHA], ships=[14, 15], reveals=[(0, 0), (1, 5)]),
         nav2,
-        wave(nav2, types=[DRAKHRI], ships=[4, 5, 6, 7]),
+        wave(nav2, types=[SARTHA], ships=[4, 5, 6, 7]),
         dict(name="Nav 3", pos=(-20000, 0, 70000), types=[JALKEHI], ships=[8, 9, 10, 12, 13]),
         dict(name="Culloden", pos=(0, 0, 0), visible=0, types=[WATERLOO], ships=[11]),
     ]
@@ -520,14 +520,14 @@ def m_ceremony():
         player(MORNINGSTAR, behave=2, objective=7),                               # 1
         wingman("Maniac", MORNINGSTAR, MANIAC),                                   # 2
     ]
-    ships += wing("Sartha", SARTHA, 4, pos=(3000, 0, -6000), yaw=150, group=1, objective=1, ai=2, pilot=MANDARIN, first_index=3)   # 3-6
+    ships += wing("Strakha", STRAKHA, 4, pos=(3000, 0, -6000), yaw=150, group=1, objective=1, ai=2, pilot=MANDARIN, first_index=3)   # 3-6 (Strakha: 4-0 ends among Sartha)
     ships += [capital("Fralthra", FRALTHRA, 1, pos=(0, 0, -9000), yaw=0, pilot=KILRATHI_SHIP, important=0, behave=2, ai=2, objective=1),
               capital("Fralthra", FRALTHRA, 1, pos=(4000, 0, -11000), yaw=0, pilot=KILRATHI_SHIP, important=0, behave=4, ai=2, leader=7, objective=7)]   # 7, 8
     ships += wing("Sabre", SABRE, 3, pos=(2000, 0, -6000), yaw=160, group=3, objective=1, ai=2, pilot=MANDARIN, alt=ALT_MANDARIN_SABRE, first_index=9)   # 9-11
     ships += [field(ASTEROIDS, pos=(0, 0, 0), radius=9000, ), field(ASTEROIDS, pos=(0, 0, 0), radius=9000), field(ASTEROIDS, pos=(5000, 0, 3000), radius=8000), field(MINES, pos=(0, 0, 0), radius=8000)]   # 12-15
     navs = [
         dict(name="Kirrah'ka", pos=(0, 0, 0), types=[DORKATHI, MORNINGSTAR], ships=[1, 2, 0]),
-        dict(name="Nav 1", pos=(-35000, 0, -60000), types=[SARTHA], ships=[3, 4, 5, 6]),
+        dict(name="Nav 1", pos=(-35000, 0, -60000), types=[STRAKHA], ships=[3, 4, 5, 6]),
         dict(name="Nav 2", pos=(10000, 0, -90000), types=[SABRE, FRALTHRA], ships=[9, 10, 11, 7, 8]),
         dict(name="mines", pos=(50000, 0, -60000), visible=0, types=[MINES], ships=[15]),
         dict(name="asteroids", pos=(-60000, 0, -10000), visible=0, types=[ASTEROIDS], ships=[12, 13, 14]),

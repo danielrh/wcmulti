@@ -683,7 +683,7 @@ SERIES_TEXT[13] = [
     "And I'm detecting ships approaching from two directions.",                                                    # 23
     "Ye'd better move fast, lads, or this is going to be a 	very short mission.  Paladin out.",                   # 24
     "\x86, this is Paladin.  Your report, lad?",                                                                  # 25 Paladin
-    "There were four Sartha at Nav 1.",                                                                            # 26 player
+    "There were four Strakha at Nav 1.",                                                                           # 26 player
     "None of them survived.",                                                                                      # 27
     "We couldn't stop all of them.",                                                                               # 28
     "Didn't touch base at Nav 1.",                                                                                 # 29

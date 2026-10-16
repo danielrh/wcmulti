@@ -450,7 +450,7 @@ public:
             return;  // nothing was there; nobody needs to hear about it
         }
         bool explode = d_.has_explode() && d_.explode();
-        if (mode_ == BROADCAST || mode_ == WINGMAN_LOST) {
+        if ((mode_ == BROADCAST || mode_ == WINGMAN_LOST) && g_session) {
             Event ev;
             *ev.mutable_despawn() = d_;
             g_session->queue_outgoing_event(ev);

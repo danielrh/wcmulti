@@ -86,6 +86,14 @@ The Hellcat is brought to WC2 size with `wc2data.scale_fighter(parts, 0.75)`
 also scales the per-view hardpoint pixel positions and the debris sprites):
 142 KB -> 81 KB.
 
+* **Across a mission boundary, do not repeat a fighter type**: the type at
+  the last nav of one mission must not be the type at the first autopilot
+  nav of the next.  In two-player the wingman's program died there every
+  time ("Error: ship.v06, packet 15": a view asked for lazily, the mark of
+  a type the loader thinks is loaded but is not) while the host flew on;
+  the same mission flown from the mission menu was fine.  The cause is in
+  the multiplayer layer's nav setup for clients, not yet found.
+
 ## 3. Mission data facts
 
 * Nav lists hold ten mission-ship **words**; up to three types per nav.
