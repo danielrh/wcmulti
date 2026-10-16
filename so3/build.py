@@ -52,12 +52,19 @@ def renumber(name, n):
 # ("series.s02" in GAMEFLOW.S02 and CAMPAIGN.S02, ...): in the copies those
 # point at our set, the same length each.
 SCENE_REFERENCES = [b"series.s02", b"gameflow.s02", b"incident.s02", b"campaign.s02"]
+# The briefing's comm scene draws the cockpit of Special Operations 2's first
+# mission, the Rapier's (pcship.v01, seen in a traced run): in our copies that
+# name is the Hellcat's cockpit file.
+SCENE_RENAMES = [(b"pcship.v01", b"pcship.v%02d" % campaign.HELLCAT)]
 
 
 def rename_references(data):
     for ref in SCENE_REFERENCES:
         for form in (ref, ref.upper(), ref[:1].upper() + ref[1:]):
             data = data.replace(form, form[:-1] + b"3")
+    for old, new in SCENE_RENAMES:
+        assert len(old) == len(new)
+        data = data.replace(old, new)
     return data
 
 
@@ -86,6 +93,25 @@ def apply_patch(data, spec):
             raise ValueError("%s: expected %d of %s, found %d" % (spec["source"], p["count"], p["what"], n))
         d = d.replace(find, repl)
     return d
+
+
+def hellcat_record(rec):
+    """The Hellcat's record with campaign.py's numbers and weapons: the weapon
+    positions stay where the conversion put them, the codes change."""
+    rec = wc2data.set_record_stats(rec, **campaign.HELLCAT_STATS)
+    old = wc2data.hardpoints(rec)
+    guns = [p for p in old if p[0] < 15]
+    others = [p for p in old if p[0] >= 15]
+    chaff = [p for p in others if p[0] == wc2data.WEAPON["chaff"]]
+    missiles = [p for p in others if p[0] != wc2data.WEAPON["chaff"]]
+    assert len(guns) >= len(campaign.HELLCAT_GUNS) and len(missiles) >= len(campaign.HELLCAT_MISSILES) and len(chaff) >= campaign.HELLCAT_DECOYS
+    new = []
+    for name, p in zip(campaign.HELLCAT_GUNS, guns):
+        new.append((wc2data.WEAPON[name],) + p[1:])
+    for name, p in zip(campaign.HELLCAT_MISSILES, missiles):
+        new.append((wc2data.WEAPON[name],) + p[1:])
+    new += chaff[:campaign.HELLCAT_DECOYS]
+    return wc2data.set_hardpoints(rec, new)
 
 
 def patch_exe(src, dst):
@@ -149,6 +175,7 @@ def main():
     # the Hellcat
     ext = wc2data.blocks_of(os.path.join(args.hellcat, "XSHIP.V50"))
     parts, flags = wc2data.academy_fighter_to_wc2(ext, campaign.HELLCAT)
+    parts[3] = hellcat_record(parts[3])
     wc2data.write_container(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT), parts, flags)
     cp = wc2data.blocks_of(os.path.join(args.hellcat, "PCSHIP.V50"))
     parts, flags = wc2data.academy_cockpit_to_wc2(cp)

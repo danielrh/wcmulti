@@ -111,6 +111,26 @@ Other numbers the code compares against: 9, 12-16, 18-21, 28, 31, 32, 37,
 blocks (fighters), 16 (one turret) or 17 (Broadsword); the Hellcat's 16 are
 kept.
 
+**The record's numbers** (SO2.EXE `ovr115:003B` copies them into a new
+ship; HCl's editor names the rest; `scripts/wc2data.py` REC): word 38 the
+shield recharge rate, 42 the top speed in tens of kps, 44 the acceleration,
+54/56/58 yaw, pitch, roll; words 223/225 the front and rear shields,
+227/229/231/233 the front, rear, left and right armour.  From 62, up to
+sixteen weapon hardpoints of ten bytes, zero-ended: a word of code << 8 |
+flags, then x, y, z and a flag word; the code is the weapon's slot in the
+type table (7 laser, 8 neutron, 9 mass driver, 10 particle, 15 Dart DF, 16
+Javelin HS, 17 Pilum FF, 18 Spiculum IR, 19 torpedo, 20 chaff pod, 21
+Porcupine).  The game's own: Rapier recharge 6, speed 45, turn 10/10/10,
+shields 115/115, armour 75/75/65/65, 2 lasers + 2 particle, 2 DF + 2 HS +
+2 FF, 2 chaff; Sabre recharge 9, speed 40, turn 8/8/8, shields 80/80,
+armour 200/200/180/180; Morningstar shields 150/150, armour 200 all round.
+The Hellcat's are `HELLCAT_STATS` in so3/campaign.py.
+
+**Scenes and the cockpit picture.**  The comm scenes of a briefing draw a
+cockpit from a `pcship.vNN` named in the scene file's shape list
+(CAMPAIGN.S0n lists all seven flyable ones); the first mission's draws
+`pcship.v01`, the Rapier's.  In SO3's copies that name is the Hellcat's.
+
 ## 5. The scene files (CSCP)
 
 CAMPAIGN.S0n, GAMEFLOW.S0n, SERIES.S0n, INCIDENT.S0n: IFF `FORM CSCP`

@@ -326,6 +326,58 @@ def ship_record_of(path):
     return name, kind, shiptype, cls
 
 
+# The 243-byte record, as the game reads it (SO2.EXE ovr115:003B copies the
+# shields and armour into a new ship, ovr115:1C2C the recharge rate, HCl's
+# editor names the rest): word offsets.
+REC = dict(kind=20, type=22, cls=24, shield_recharge=38, max_speed=42, acceleration=44, yaw=54, pitch=56, roll=58,
+           shield_front=223, shield_rear=225, armor_front=227, armor_rear=229, armor_left=231, armor_right=233)
+HARDPOINTS_AT, HARDPOINT_SIZE, HARDPOINTS_MAX = 62, 10, 16   # (code << 8 | flags, x, y, z, w) each, zero ends the list
+# Weapon codes: the slot of the weapon's own record in the game's type table.
+WEAPON = dict(laser=7, neutron=8, mass_driver=9, particle=10, dart_df=15, javelin_hs=16, pilum_ff=17, spiculum_ir=18,
+              torpedo=19, chaff=20, porcupine=21)
+
+
+def record_stats(rec):
+    """The named fields of a ship record, as a dict."""
+    return dict((k, struct.unpack_from("<h", rec, off)[0]) for k, off in REC.items())
+
+
+def set_record_stats(rec, **fields):
+    """A copy of the record with the named fields (REC) set; max_speed in kps (the record keeps kps / 10)."""
+    r = bytearray(rec)
+    for k, v in fields.items():
+        if k == "max_speed":
+            v = v // 10
+        struct.pack_into("<h", r, REC[k], v)
+    return bytes(r)
+
+
+def hardpoints(rec):
+    """[(code, flags, x, y, z, w)] of a record's weapon list."""
+    out = []
+    for i in range(HARDPOINTS_MAX):
+        off = HARDPOINTS_AT + HARDPOINT_SIZE * i
+        cf, x, y, z, w = struct.unpack_from("<Hhhhh", rec, off)
+        if cf == 0:
+            break
+        out.append((cf >> 8, cf & 0xFF, x, y, z, w))
+    return out
+
+
+def set_hardpoints(rec, points):
+    """A copy of the record with the weapon list replaced (same tuples as hardpoints gives)."""
+    assert len(points) <= HARDPOINTS_MAX
+    r = bytearray(rec)
+    for i in range(HARDPOINTS_MAX):
+        off = HARDPOINTS_AT + HARDPOINT_SIZE * i
+        if i < len(points):
+            code, flags, x, y, z, w = points[i]
+            struct.pack_into("<Hhhhh", r, off, (code << 8) | flags, x, y, z, w)
+        else:
+            struct.pack_into("<Hhhhh", r, off, 0, 0, 0, 0, 0)
+    return bytes(r)
+
+
 def _strip_nested_flags(block):
     """A table block whose child offsets carry Academy's 0xE0 flag bytes ->
     plain offsets (what WC2's own files have)."""

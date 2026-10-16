@@ -17,6 +17,25 @@ KILRATHI_ACE = 0x19      # the Imperial Guard
 NOBODY = 0
 
 
+# The Hellcat's own numbers (the record HCl's conversion carried was the
+# Rapier's).  WC2's for comparison -- Rapier / Sabre / Morningstar:
+# recharge 6 / 9 / 9, speed 450 / 400 / 400, acceleration 25 / 22 / 22,
+# turn 10 / 8 / 8, shields 115 / 80 / 150, armour 75-75-65-65 /
+# 200-200-180-180 / 200-200-200-200.
+HELLCAT_STATS = dict(
+    shield_recharge=5,            # a little slower than either
+    max_speed=420,                # kps; the afterburner is the game's 1200
+    acceleration=24,
+    yaw=9, pitch=9, roll=9,       # a tenth under the Rapier, above the heavies
+    shield_front=125, shield_rear=125,
+    armor_front=120, armor_rear=120, armor_left=90, armor_right=90,
+)
+# Guns inboard pair first, then the outboard pair; six missiles; one decoy.
+HELLCAT_GUNS = ["particle", "particle", "neutron", "neutron"]
+HELLCAT_MISSILES = ["spiculum_ir"] * 6
+HELLCAT_DECOYS = 1
+
+
 def ship(name, shiptype, side, **kw):
     """A mission ship as keyword arguments for wc2data.ship_record; the
     type's kind and class are filled in by the builder."""
