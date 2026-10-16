@@ -138,7 +138,14 @@ objectives were left unmet went to a lost exit (1-3 unfinished -> 5-0 "The
 assault", then the retreat ending), and losing a ship it marks important
 on an added escort it does not know asked for a scene block that does not
 exist (packet 30 of 24) and ended the program; so a flow test must meet
-every objective, and escorts the slot's script does not know stay unmarked.  Check the host log for "starting: mission" (the order the
+every objective, and escorts the slot's script does not know stay unmarked.
+A "land on ship n" objective (SO2's s1m3 lands on a second carrier record,
+s3m2 on the tender) is not met by `!status=1`: the rig has to fly to that
+carrier and land through the comm menu (C, the carrier, "request landing"),
+which needs the ship steered within comm range (`!face=<slot>` repeated);
+`-k sN mM` starts put the barracks at that mission but not the campaign
+script's own record, so a partial run shows one mission's scenes and
+flight, not the transition after it.  Check the host log for "starting: mission" (the order the
 campaign script took), "left slot", "screen: Error" and the spawn list.
 
 ## 5. Order of work for a new campaign
