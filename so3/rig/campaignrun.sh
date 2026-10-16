@@ -18,7 +18,8 @@ seg() {  # $1 = spared mission ships for !killfoes (may be empty); $2 = a step b
   echo "$out,$((t+2)):!mem,$((t+4)):!status=1,$((t+8)):clickskip"
 }
 cseg() { local cyc="${1:-16}" t=5 out=",2:!rocks=0"; for i in 1 2 3 4 5 6 7 8; do out="$out,$t:a"; t=$((t+cyc)); done; echo "$out,$((t+4)):!status=1,$((t+8)):clickskip"; }
-for m in $(seq 1 20); do
+m_start=$(( (${START% *} - 1) * 4 + ${START#* } + 1 ))   # the segment of the mission started at (1-0 is the first)
+for m in $(seq $m_start 20); do
   if [ $m = 4 ]; then
     # 1-3: the picket fight, a cruise back to the Nav 1 point, the jump to the tender and her hail scene
     # (most of a minute), a cruise to the Nav 2 point, then Nav 3 and home.  The tender is on our side now,
