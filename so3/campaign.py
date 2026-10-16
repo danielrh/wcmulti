@@ -7,7 +7,8 @@ is relative to the mission's origin.  Ship types are Wing Commander II's
 numbers (the Hellcat is ours, 45: the program draws types 48 and 49, its asteroid bases, by other rules)."""
 
 HELLCAT = 45
-WATERLOO, SARTHA, DRAKHRI, FREE_TRADER, MORNINGSTAR = 17, 5, 6, 12, 41
+WATERLOO, SARTHA, DRAKHRI, FREE_TRADER, MORNINGSTAR, DORKATHI = 17, 5, 6, 12, 41, 13
+HULK = 29                # ours: a Dorkathi with its flak turrets stripped (every WC2 transport has them)
 
 # Comm personalities (COMMUNIC.Tnn): who answers on the radio.
 MANIAC = 0x24            # "It's party time!"
@@ -23,11 +24,11 @@ NOBODY = 0
 # turn 10 / 8 / 8, shields 115 / 80 / 150, armour 75-75-65-65 /
 # 200-200-180-180 / 200-200-200-200.
 HELLCAT_STATS = dict(
-    shield_recharge=5,            # a little slower than either
+    shield_recharge=4,            # slower than either
     max_speed=420,                # kps; the afterburner is the game's 1200
     acceleration=24,
     yaw=9, pitch=9, roll=9,       # a tenth under the Rapier, above the heavies
-    shield_front=125, shield_rear=125,
+    shield_front=100, shield_rear=100,   # under the Rapier's: the armour is what it has
     armor_front=120, armor_rear=120, armor_left=90, armor_right=90,
 )
 # Guns inboard pair first, then the outboard pair; six missiles; one decoy.
@@ -70,7 +71,7 @@ def wing(name, shiptype, count, pos, yaw, group, objective, pilot=KILRATHI, ai=4
     return out
 
 
-TYPE_NAMES = {HELLCAT: "Hellcat", WATERLOO: "Waterloo", SARTHA: "Sartha", DRAKHRI: "Drakhri", FREE_TRADER: "Free Trader", MORNINGSTAR: "Morningstar"}
+TYPE_NAMES = {HELLCAT: "Hellcat", WATERLOO: "Waterloo", SARTHA: "Sartha", DRAKHRI: "Drakhri", FREE_TRADER: "Free Trader", MORNINGSTAR: "Morningstar", DORKATHI: "Dorkathi", HULK: "Hulk"}
 
 
 def mission_1():
@@ -81,9 +82,12 @@ def mission_1():
         capital("Culloden", WATERLOO, 0, pos=(0, 0, 0), yaw=45),          # 0
         player(HELLCAT, pos=(2200, 0, 0), yaw=35),                         # 1
         wingman("Maniac", HELLCAT, leader=1, pilot=MANIAC),                # 2
-        hulk("Target hulk", SARTHA, pos=(0, 0, -2500), yaw=20),            # 3
-        hulk("Target hulk", SARTHA, pos=(1800, 300, -4000), yaw=-70),      # 4
-        hulk("Target hulk", SARTHA, pos=(-1700, -200, -4200), yaw=140),    # 5
+        # captured Kilrathi transports with their turrets stripped, towed out
+        # as targets (a fighter hull with no orders still flies; a transport
+        # with its guns still shoots)
+        hulk("Target hulk", HULK, pos=(0, 0, -2500), yaw=20),              # 3
+        hulk("Target hulk", HULK, pos=(1800, 300, -4000), yaw=-70),        # 4
+        hulk("Target hulk", HULK, pos=(-1700, -200, -4200), yaw=140),      # 5
     ]
     ships += wing("Sartha", SARTHA, 2, pos=(7000, 0, -9000), yaw=95, group=1, objective=1, first_index=6)      # 6, 7
     ships += wing("Drakhri", DRAKHRI, 2, pos=(8000, 0, 7000), yaw=-130, group=2, objective=1, pilot=KILRATHI_ACE, first_index=8)  # 8, 9
@@ -91,7 +95,7 @@ def mission_1():
         # (the player first, the wing next, the carrier last: slots are given in
         # this order and the multiplayer layer seats the second player in slot 1)
         dict(name="Culloden", pos=(0, 0, 0), types=[WATERLOO, HELLCAT], ships=[1, 2, 0]),
-        dict(name="Range", pos=(35000, 0, 25000), types=[SARTHA], ships=[3, 4, 5, 6, 7]),
+        dict(name="Range", pos=(35000, 0, 25000), types=[HULK, SARTHA], ships=[3, 4, 5, 6, 7]),
         dict(name="Nav 2", pos=(-30000, 0, 60000), types=[DRAKHRI], ships=[8, 9]),
     ]
     objectives = [

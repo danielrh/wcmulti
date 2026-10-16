@@ -1,157 +1,242 @@
 # Special Operations 3: *Culloden*
 
 A fan campaign for Wing Commander II's engine, flown in the Hellcat V.  This
-is the story the missions in `campaign.py` serve, with the reasons for its
-shape.  Mission numbers are the campaign's (the engine counts series of
-four).
+is the story, the cast and the mission plan that `campaign.py` builds from;
+the dialogue comes next, mission by mission.  Series and mission numbers
+are the engine's (series of four); the twenty slots are Special Operations
+2's, which is what the campaign script we inherit can play.  Branches are
+marked; until the campaign script is ours (see "What the engine needs"),
+the missions play in slot order.
 
-## The brief we started from
+## The premise
 
-A Waterloo-class cruiser on a deep infiltration to sabotage a key capital
-ship construction facility.  The Hellcat introduced as the next generation
-fighter and flown on the first mission; a saboteur hacks the new flight
-control systems and the Hellcats are grounded for several missions; a secret
-asteroid base holds the clues to the hack and brings them back online.  Near
-the Kilrathi base, two stranded free traders who smuggled to Kilrathi
-colonies trade maps for clemency and safe passage; defend them and the
-campaign jumps ahead to a bombing run, a Morningstar escorted by two
-Hellcats; lose them and the long, dangerous map is flown instead.
+*2668, a few months after the Mandarin affair.*  Confederation intelligence
+has found a hidden Kilrathi construction yard eleven jumps behind the lines,
+laying down the first hull of a new carrier class.  A fleet action is out of
+the question; one ship might slip through.  TCS Culloden, Waterloo-class,
+takes aboard the Hellcat V evaluation flight (six pre-production fighters
+and the programme's liaison), two Morningstars, a handful of pilots nobody
+else wanted, and goes dark.  Objective: find the yard, kill it, come home.
 
-## What was changed, and why
+What the brief did not say: the Hellcats' flight computers answer to
+someone else.
 
-**The sabotage happens in the player's hands, not in a briefing.**  Being
-told "you are grounded" after one flight takes the new fighter away as a
-plot device.  Here the Hellcats' computers misbehave while the player is
-flying them, and the debriefing plays back what the fighter's own computer
-logged.  The grounding is something the player saw.
+## The cast
 
-**Nobody is grounded.  The Hellcats fly without their computers.**  Three
-missions in a worse ship right after the showcase is a tease.  Instead the
-same airframe flies with the fly-by-wire pulled: a second ship type with the
-same art and crippled numbers (slower afterburner, lazier turn, no missile
-lock).  The engine does this for free, and the player feels exactly what the
-computer was doing for them.  When the computers come back, so does the
-fighter they remember.
+Faces are WC2's portrait files (`people.vNN`); a name in brackets is the
+character the face belonged to.  "Recoloured" means a palette change in a
+copy of the file, under a new name in our scene files.
 
-**The clue is a thing to fetch, not a thing to be told.**  The hack is an
-uplink: the Hellcats' computers answer a transmitter hidden in an asteroid
-field, an abandoned Mandarin relay, since the Mandarins are the traitors
-this engine already knows (Ayer's Rock, their asteroid base, is a ship type
-in Special Operations 2).  The mission is to find the relay, kill its guard
-and tractor its core out before the guard finishes it, which Wing Commander
-II scores as a pick-up objective.  Core captured: the computers are cleaned
-properly and the Hellcats come back whole.  Core lost in the fight: they come
-back on a partial fix, with the targeting link still gone.  That is a branch
-the player earns in a dogfight, not in a cutscene.
+**TCS Culloden**
 
-**The saboteur is someone the player has met.**  The Hellcat programme's
-liaison officer, who gives the briefing on the first mission and tells the
-player to trust the computers.  The campaign never names them as a suspect
-before the core's logs do.
+* **The player.** Colonel, callsign from the save.  The Hellcat flight lead.
+* **Captain Wayne Banbridge**, commanding.  `people.v22` [Tolwyn],
+  recoloured: hair and brows darkened, the uniform's braid changed.  A
+  destroyer captain given a cruiser and a secret.  Dry, careful, protective
+  of his ship, and privately sure the raid is a career officer's gamble with
+  his crew.  His arc: from counting the risks to taking the one that matters.
+* **Lt. Colonel Rhea "Valkyrie" Bergstrom**, the Culloden's wing commander.
+  `people.v15` [Minx], recoloured: dark hair, so she is not Minx.  Not a
+  traitor, not anyone's love interest.  She flew Sabres off the Gettysburg,
+  lost her squadron to a bad order and has opinions about admirals.  She
+  assigns the seats, flies the reserve ships herself when the Hellcats are
+  down, and is the one who takes the found Sabre.
+* **Major Todd "Maniac" Marshall.**  `people.v08`, `v39` in dress uniform.
+  Transferred off the Concordia after Special Operations 2 and still sore
+  about it: he spent "a long ride" strapped in the Mandarins' chair at
+  Ayer's Rock and, by his account, nobody hurried.  The second player's seat
+  in the Hellcat missions.  Comm voice 0x24, the game's own.
+* **Major Etienne "Doomsday" Montclair.**  `people.v05`.  Gets the bad
+  missions, says so, flies them anyway.  Leads the reserve squadron's Epee
+  patrols; the second player's seat in those.
+* **Captain Dirk "Stingray" Wright.**  `people.v06` (or `v21`/`v38` in
+  uniform).  Alive, loud, convinced the Hellcats should be his.  The
+  wingman in the Morningstar missions' escorts and the long route.
+* **Lt. Cmdr. Janet "Sparks" McCullough**, chief of the deck.  `people.v07`.
+  Pulls the Hellcats' computers after mission 1 and finds the uplink.  The
+  campaign's honest technician: everything she says about the ships is true.
+* **Dr. Lyle Prescott**, the Hellcat programme's liaison.  `people.v10`,
+  renamed.  Gives the first briefing and tells the player to trust the
+  hand-off computers.  The Mandarins' man aboard; the relay's logs name him
+  in series 1.  Not a monster: his family is on a Mandarin world, and the
+  campaign lets him say so before he is taken off the story.
+* **Lieutenant "Downtown".**  `people.v04` or `people.v09` (to be
+  confirmed on the portrait sheet).  The Concordia's youngest, alive in this
+  telling, transferred with Maniac and Doomsday.  Flies the reserve
+  squadron's third ship, the one the bad missions are hardest on.
+* **Lt. Ines "Toro" Dalmau**, the Culloden's own pilot.  `people.v33`,
+  renamed.  Named so that a death in the reserve missions means something;
+  the engine keeps the count.
 
-**The traders are a choice with two failure modes, not one.**  Both survive
-and send the full charts: the short route, straight to the yard.  One lost:
-partial charts, the long route through a defended jump chain.  Both lost: the
-long route, and the Culloden takes the hits meant for them, so the last
-missions launch from a damaged ship.  The engine's campaign script branches
-on exactly these: which mission ships were alive at the end.
+**Elsewhere**
 
-**The finale uses two seats.**  The strike is one Morningstar with the
-torpedoes and the escort Hellcats.  In two-player games the host flies the
-bomber and the wingman the escort, which is the division of labour the
-multiplayer layer already has (the Morningstar has no turret, so there is
-no gunner seat to argue about).
+* **Dez Morrow**, master of the Free Trader *Lucky Mandy*, and **Pilar
+  Oyelaran** of the *Tsiolkovsky*.  `people.v31` and `people.v30`, renamed.
+  Smugglers to the Kilrathi colonies, stranded with the yard's approach
+  charts in their holds.  Clemency and an escort home for the charts.
+* **Kalralahr Ghraffid nar Ragitagha**, master of the yard.  `people.v17`
+  (a Kilrathi face the games used little).  Proud of what he is building;
+  the campaign's voice of the enemy in two comm scenes and the finale.
+* **The Mandarin relay's keeper.**  Voice only, no face: the recorded
+  "Have a nice day" and two taunts in the asteroid field.
 
-**The target has a name worth a cruiser.**  The yard builds the first hull
-of a new Kilrathi carrier class, which is why one cruiser is risked eleven
-jumps behind the lines, and why Admiral Tolwyn is aboard a ship that small.
-Players who know the novels will recognise what is being built; the campaign
-does not need them to.
+**Available but not used:** Paladin (`v02`) as the handler who sold the
+raid, in a prologue; Hobbes (`v03`) to read the Kilrathi charts.  Spirit
+and Jazz are dead; Angel (`v14`, `v01`) and Tolwyn do not sail with us.
 
-**The ship is small on purpose.**  A Waterloo carries a handful of fighters.
-Six Hellcats and two Morningstars, no reserves, no second chances: a pilot
-lost stays lost (the engine already keeps that count), and the Culloden's
-own survival is an objective more than once.
+## The ships
+
+| | type | who | when |
+|---|---|---|---|
+| Hellcat V | 45 | the player, Maniac | series 1; later if restored |
+| Hellcat, manual law | 46 (same art, crippled numbers) | the same | series 1 missions 3 and 4 |
+| Epee, Rapier | 3, 1 | the reserve squadron: Doomsday, Bergstrom, Downtown, Dalmau | series 3 and the long route |
+| Sabre | 4 | Bergstrom, from mission 3-1 on | the one found at the depot |
+| Morningstar | 41 | the player, with escorts | 2-1 and the finale |
+| TCS Culloden | 17 (Waterloo) | home | every launch and landing |
+| Lucky Mandy, Tsiolkovsky | 12 (Free Trader) | the traders | series 2 and 3, and an ending |
+| Target hulk | 29 (a Dorkathi with its turrets stripped) | the range | mission 1-0 |
+| The relay | 48 (Ayer's Rock) | the Mandarins' | mission 1-3 |
+| The yard | 25 (K supply depot), with a Fralthra hull | the Kilrathi | the finale |
+
+The "manual law" Hellcat is a second type number with the Hellcat's files
+and a worse record: top speed 380, recharge 2, turn 7, no missiles.  The
+engine swaps a ship's type between missions for free; the story says why.
 
 ## The campaign
 
-*2668, after the Mandarin affair.*  TCS Culloden, Waterloo-class, Captain
-Isolde Marr commanding, carries the Hellcat V evaluation flight (six
-pre-production fighters, their programme liaison Lt. Cmdr. Deel Halloran),
-two Morningstars, and Admiral Tolwyn, who wants this done quietly.  The
-player leads the flight.  Maniac, transferred after the Concordia business,
-is the second ship, and the second player.
+### Series 1: Shakedown (Hellcats)
 
-### Act 1: Shakedown (Hellcats)
+**1-0 Shakedown** *(built)*.  Live fire on three condemned hulks at the
+range, a Sartha pair that was watching the range, a Drakhri recon pair at
+Nav 2 that must not get home.  Prescott's briefing: trust the computers.
+Debrief: Sparks found an uplink burst in every Hellcat's log, and the
+recording ends with the player's own callsign.  *Flag:* a Drakhri escaped.
 
-**1. Shakedown.**  Live fire on three captured hulks at the range, a pair of
-Sartha that was watching the range, and a Drakhri recon pair at Nav 2 that
-must not get home.  The briefing introduces the Hellcat and tells the player
-to trust the hand-off computer.  Debriefing: every Hellcat logged an uplink
-burst during the fight, and the recording ends with the player's own
-callsign.  *Consequence:* a Drakhri that got away means Act 2 opens with
-the Culloden found.
+**1-1 First blood.**  A Kilrathi picket at the jump point the Culloden
+needs.  Two nav points; at the second the computers drop the hand-off (the
+radio says so; the game cannot change a ship mid-flight, so this is the
+last mission the Hellcats fly whole).  If a Drakhri escaped in 1-0, the
+picket is awake: a Kamekh corvette and two more Jalkehi.
 
-**2. First blood.**  A Kilrathi picket in the way of the raid.  Mid-fight the
-computers drop the target hand-off and the missiles will not lock (the
-mission's second nav point is flown in the crippled type; the radio says
-why).  The flight limps home.
+**1-2 Dark** *(manual-law Hellcats)*.  The Culloden runs for an asteroid
+field to hide and to follow the uplink's bearing.  Escort her in, fight in
+the rocks with a fighter that will not lock a missile.  Objective: the
+Culloden alive at the field.
 
-### Act 2: Blind (Hellcats without computers)
+**1-3 The relay** *(manual-law Hellcats)*.  The abandoned Mandarin relay
+deep in the field, its guard of Strakha and Drakhri, and its data core.
+Kill the guard, tractor the core before the last defender rams it.
+*Branch:* **core recovered** goes to series 2, the Hellcats restored in
+full; **core destroyed** goes to series 3, the reserve squadron, and the
+Hellcats stay down until 3-2 is won.  Either way the logs name Prescott.
 
-**3. Dark.**  The Culloden runs for an asteroid field to hide and to follow
-the uplink's bearing.  Escort her in; fight in the rocks.  If mission 1 lost
-a Drakhri, this is a defence of the cruiser instead, and she is hit.
+### Series 2: The Hellcat road
 
-**4. The relay.**  The abandoned Mandarin relay (Ayer's Rock) in the field,
-its guard, and its core.  Tractor the core before the guard destroys it.
-*Branch:* core recovered, the Hellcats return whole; core destroyed, they
-return without the targeting link.  Either way the core's logs name
-Halloran, who is taken off flight status and the story.
+**2-0 Clearing the field.**  Out of the rocks, the Hellcats back, against
+the search the relay's silence called down: three waves at one nav point,
+the last with a Fralthra.  Maniac's seat.
 
-**5. Clearing the field.**  Out of the rocks, the Hellcats back (in whichever
-shape), against the search that the relay's silence has called down.
+**2-1 Torpedo run** *(Morningstar)*.  The Fralthra that got away is
+sitting at a jump point the Culloden must use.  The player in a
+Morningstar with Stingray's Hellcat as escort (the second player flies the
+Hellcat).  Objective: the cruiser dead; failure means the long route later
+whatever the traders do.
 
-### Act 3: The traders
+**2-2 The Lucky Mandy.**  Two Free Traders adrift near a Kilrathi colony,
+drives dead, holds full.  Morrow and Oyelaran have the yard's charts.
+Defend both through two waves while they relight.  *Branch:* both alive,
+the short route (series 5 directly); one, the long route (series 4); none,
+the long route and the Culloden launches the next mission damaged.
 
-**6. The Lucky Mandy and the Tsiolkovsky.**  Two Free Traders adrift near a
-Kilrathi colony, engines dead, holds full of what they were not supposed to
-carry.  They have the yard's approach charts.  Clemency and an escort home
-for the charts, says the player; they take it.  Defend both through two
-waves while they relight their drives.  *Branch:* both alive, the short
-route; one, the long route; none, the long route and a damaged Culloden.
+**2-3 Transit.**  The short route's one surprise: a picket that was not on
+the charts.  Hellcats.
 
-**7a. The short route** (both traders): straight to the yard's system; one
-transit mission against a surprised picket.
+### Series 3: Hand-me-downs (the reserve squadron)
 
-**7b. The long route** (one or none): two missions through a defended jump
-chain, flown in Hellcats, the second a defence of the Culloden at a jump
-point with no charts to tell her where the mines are.
+**3-0 Hand-me-downs.**  Doomsday leads the player, in Epees, on the patrol
+nobody wanted: a mining colony's distress call that is a Kilrathi trap.
+Downtown or Dalmau flies the third ship and may not come back.
 
-### Act 4: The yard
+**3-1 Salvage.**  An abandoned Confederation supply depot in a dead system,
+with one flyable Sabre on its deck and a Kilrathi salvage team arriving at
+the same time.  Rapiers.  Hold the depot until the Sabre is flown off:
+Bergstrom takes it, and flies it from here on; the player stays in the
+Rapier.  (Two-player: the second player has the Sabre.)
 
-**8. Picket.**  Both players in Hellcats: kill the yard's early-warning post
-and its fighter screen before the strike launches.  What is left of the
-screen is what the strike meets.
+**3-2 The hard one.**  The Kilrathi listening post that holds a copy of the
+relay's core, behind a minefield and a Ralatha.  Rapiers, Bergstrom's
+Sabre, no second chances.  *Branch:* **won**, the Hellcats come back
+(series 5 in Hellcats, with the partial fix: the missile link is gone,
+four missiles not six); **lost**, the campaign stays in Rapiers and
+Epees, with a Morningstar for the strike.
 
-**9. The yard.**  The host in a Morningstar with the torpedoes, the wingman
-and one AI Hellcat as escort.  The yard, its construction frame and the
-half-built hull in it.  Endings: the yard destroyed and the Culloden alive;
-the yard destroyed and the Culloden lost, the survivors landing on the Lucky
+**3-3 The Lucky Mandy** *(reserve ships)*.  The traders' rescue flown in
+Epees and the Sabre, harder for it: the same two waves and a third.
+*Branch* as 2-2.
+
+### Series 4: The long route
+
+**4-0 Jump chain.**  Without charts the Culloden takes the defended
+approach.  A picket at each end of a jump, flown back to back.
+
+**4-1 Minefield.**  Defend the Culloden at a jump point whose mines are
+not on any chart she has; the enemy knows where they are.  Objective: the
+Culloden alive.  If both traders were lost, she arrives already damaged.
+
+**4-2 Jump chain, second leg.**  Stingray's seat.  A Kamekh and its
+escort; a Dorkathi convoy to pass up or take.
+
+**4-3 Picket, the long way.**  The yard's outer early-warning post, taken
+from the wrong side.
+
+### Series 5: The yard
+
+**5-0 Picket.**  The yard's inner early-warning post and its fighter
+screen, before the strike launches.  Hellcats if restored, else Rapiers.
+What is left of the screen is what the strike meets.
+
+**5-1 The yard.**  The player in a Morningstar with the torpedoes, Maniac
+(the second player) and one AI Hellcat as escort, or Rapiers if the
+Hellcats never came back.  The yard, its frame, the half-built hull.
+Ghraffid on the comm.
+
+**5-2 Home.**  The Culloden jumping out under attack; the flight covers
+her until the jump engines are up.  *Endings:* yard destroyed and Culloden
+alive; yard destroyed and Culloden lost, the survivors landing on the Lucky
 Mandy; the yard still standing.
 
-## Mission 1 as built
+**5-3 Reserved** for the ending that needs its own flight (the Lucky Mandy
+landing), or a fourth leg of the long route.
 
-What `campaign.py` puts in MODULE.003 for series 1, mission 0:
+### Where the two-player seats fall
 
-* Nav 0, the Culloden: the cruiser, the player's Hellcat and Maniac's.
-* Nav 1, the range: three Sartha hulks that do not shoot back, and a Sartha
-  pair that does, placed beyond the hulks so that the first passes are a
-  shooting gallery and the fight comes to the player.
-* Nav 2: a Drakhri pair with the Imperial Guard's voice, the recon patrol.
-* Objectives: reach the range, clear it, sweep Nav 2, destroy the recon
-  leader, clear Nav 2, land on the Culloden.
-* Scene text: the briefing and debriefing lines above, in the slots of
-  Special Operations 2's first block.  The pictures behind them are still
-  the old game's, and the opening cutscene's lines are blank, until the scene
-  scripts are ours (see `docs/so3.md`).
+| missions | the second player flies |
+|---|---|
+| 1-0, 1-1, 2-0, 2-2, 2-3, 5-0 | Maniac's Hellcat |
+| 1-2, 1-3 | Maniac's manual-law Hellcat |
+| 2-1, 5-1 | the escort Hellcat (host in the Morningstar) |
+| 3-0, 3-3 | Doomsday's Epee |
+| 3-1, 3-2 | Bergstrom's Rapier, then her Sabre |
+| 4-x | Stingray's ship of the day |
+| 5-2 | whatever the flight has left |
+
+## What the engine needs for this, in order
+
+1. **Missions in MODULE.003** -- the tools exist; each mission is a dozen
+   lines in `campaign.py`.
+2. **The campaign script** (CAMPAIGN.S03, CSCP bytecode): the branches on
+   the core, the traders and 3-2, the restored-Hellcat types, the endings.
+   Until it is decoded and written, the missions play in slot order with
+   Special Operations 2's own branch rules.  This is the big one.
+3. **Scene text** per mission (SERIES.S03 string tables; the tools exist),
+   and **scene scripts** for scenes whose pictures we choose: the engine's
+   rooms exist (bridge, briefing room, barracks, flight deck, repair deck,
+   observation deck) and need only their names changed.
+4. **Faces:** copies of `people.v22` and `people.v15` recoloured
+   (hair and uniform palette entries) under new file names.
+5. **The Hellcat in the launch art:** the boarding side view (LAUNCH.V00
+   block 4, 314x129) from the Hellcat's side view scaled, and the fly-out
+   (LAUNGAME.V06, 37 frames) from its rear views; both referenced by name in
+   the scene files, so copies can be ours.
+6. **The manual-law Hellcat**, type 46: one more record.

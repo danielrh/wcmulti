@@ -106,8 +106,13 @@ def hellcat_record(rec):
     missiles = [p for p in others if p[0] != wc2data.WEAPON["chaff"]]
     assert len(guns) >= len(campaign.HELLCAT_GUNS) and len(missiles) >= len(campaign.HELLCAT_MISSILES) and len(chaff) >= campaign.HELLCAT_DECOYS
     new = []
-    for name, p in zip(campaign.HELLCAT_GUNS, guns):
-        new.append((wc2data.WEAPON[name],) + p[1:])
+    # the mounts mirrored exactly: the conversion's left and right differed by a unit
+    for k, (name, p) in enumerate(zip(campaign.HELLCAT_GUNS, guns)):
+        code, flags, x, y, z, w = (wc2data.WEAPON[name],) + p[1:]
+        mate = guns[k ^ 1]
+        if k & 1:
+            x, y, z = -mate[2], mate[3], mate[4]
+        new.append((code, flags, x, y, z, w))
     for name, p in zip(campaign.HELLCAT_MISSILES, missiles):
         new.append((wc2data.WEAPON[name],) + p[1:])
     new += chaff[:campaign.HELLCAT_DECOYS]
@@ -182,6 +187,16 @@ def main():
     wc2data.write_container(os.path.join(pgd, "PCSHIP.V%02d" % campaign.HELLCAT), parts, flags)
     shutil.copyfile(os.path.join(gamedat, "INTELSHP.041"), os.path.join(pgd, "INTELSHP.%03d" % campaign.HELLCAT))
     print("Hellcat: %s" % (wc2data.ship_record_of(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT)),))
+
+    # the range's hulks: the Dorkathi's files as a type of our own, with no weapons
+    hulk = wc2data.read_container(os.path.join(gamedat, "SHIP.V13"))
+    parts, flags = [b for _, b in hulk], [f for _, f in [(0, f) for f, _ in hulk]]
+    rec = bytearray(parts[38])
+    struct.pack_into("<H", rec, wc2data.REC["type"], campaign.HULK)
+    rec[:20] = b"Hulk".ljust(20, b"\0")
+    parts[38] = wc2data.set_hardpoints(bytes(rec), [])
+    wc2data.write_container(os.path.join(pgd, "SHIP.V%02d" % campaign.HULK), parts, flags)
+    print("Hulk: %s" % (wc2data.ship_record_of(os.path.join(pgd, "SHIP.V%02d" % campaign.HULK)),))
 
     # the missions
     mod = wc2data.Module(os.path.join(gamedat, "MODULE.002"))
