@@ -616,11 +616,16 @@ static const char *mode_name(int mode) {
     return mode == MODE_HIGH ? "high latency" : mode == MODE_LOW ? "low latency" : "auto";
 }
 
+// The setting by name: low latency unless told otherwise.  The automatic
+// mode, which goes by the link the server measures, was the default until
+// 2026-10-15; its flips to the high-latency mode in the middle of a fight
+// were a disturbance of their own in play, so it is only had by asking.
 static int mode_from_name(const char *name) {
-    if (!name || !name[0] || !strcasecmp(name, "auto") || name[0] == '0') return MODE_AUTO;
+    if (!name || !name[0]) return MODE_LOW;
+    if (!strcasecmp(name, "auto") || name[0] == '0') return MODE_AUTO;
     if (!strcasecmp(name, "low") || name[0] == '1') return MODE_LOW;
     if (!strcasecmp(name, "high") || name[0] == '2') return MODE_HIGH;
-    return MODE_AUTO;
+    return MODE_LOW;
 }
 
 // ---------------------------------------------------------------------------
@@ -704,9 +709,8 @@ public:
         allowedIds_.push_back(1);
         allowedIds_.push_back(3);
         reset_pending_frame();
-        if (modeSetting_ != MODE_AUTO) {
-            wclog(1, "exchange mode: %s (WCNET_MODE)", mode_name(modeSetting_));
-        }
+        const char *env = getenv("WCNET_MODE");
+        wclog(1, "exchange mode setting: %s (%s)", mode_name(modeSetting_), env && env[0] ? "WCNET_MODE" : "the default");
     }
     ~ServerSession() {
         for (size_t i = 0; i < clients_.size(); i++) {

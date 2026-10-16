@@ -511,9 +511,12 @@ The host decides which is in force and its frames carry it (`Frame.mode`,
 also in the start state).  `WCNET_MODE=auto|low|high` on the host, the
 page's "Connection" option and `/latency auto`, `/latency low`,
 `/latency high` in the comms prompt or the page's chat set it; a wingman's
-`/latency` says which is in force and the round trip.  `auto` (the
-default) goes by what the host measures of each wingman's link
-(`LinkMonitor`, `ServerSession::mode_tick`, once a second in flight):
+`/latency` says which is in force and the round trip.  `low` is the default
+(until 2026-10-15 it was `auto`, whose flips to the high-latency mode in
+the middle of a fight were a disturbance of their own in play, the user
+found; it is now only had by asking).  `auto` goes by what the host
+measures of each wingman's link (`LinkMonitor`,
+`ServerSession::mode_tick`, once a second in flight):
 
 * the round trip, from a frame's going out to the wingman's ack of it
   coming back, less the time the wingman held it (`Frame.ack_delay`; the
@@ -738,7 +741,7 @@ shell command still starts/stops the server or connects.  Useful environment:
 | `WCHOSTCALLSIGN` | on a client: the host's callsign, the name his ship goes by in the targeting computer (the page sets it from the room's roster; without it the host's first typed line brings it) |
 | `WCHELMETNAME=1` | on a client: leave the stand-in pilot's name on the helmet of the comm picture while the host's line is shown |
 | `WCNET_LAG=<ms>`, `WCNET_JITTER=<ms>`, `WCNET_DROP=<pct>[:<ms>]`, `WCNET_BURST=<periodMs>:<lossMs>[:<spikeMs>]`, `WCNET_SEED=<n>` | test aid: a slow or a bad link made on this machine (section 3b): one-way delay, random extra delay per message, share of messages lost (and how long a lost one takes to be sent again, with everything behind it), a periodic burst of loss and queueing like a satellite handover, and the random sequence |
-| `WCNET_MODE=auto\|low\|high` | on the host: the exchange mode (section 3b; auto, the default, goes by the measured link; the page's "Connection" option and `/latency` do the same) |
+| `WCNET_MODE=auto\|low\|high` | on the host: the exchange mode (section 3b; low is the default since 2026-10-15; auto goes by the measured link; the page's "Connection" option and `/latency` do the same) |
 | `WCNET_BESTEFFORT=0` | no positions by the best-effort channel in the high-latency mode (section 3b), to measure what it is worth |
 | `WCKEEPNEAR=<km>` | on the host: how close a wingman's ship must be to an enemy that the game would remove for being more than 16000 km from the host's ship, for that enemy to stay; one at a time, the nearest to a wingman (default 7200, a laser blast and a half; 0: the game's own rule) |
 | `WCROCKS=0` / `WCROCKS=soft` | on the host: fly without asteroid and mine fields, or with rocks that do a sixteenth of their damage to a player's own ship (everyone follows the host; `/rocks on`, `/rocks soft`, `/rocks off` in the comms prompt switch it in flight) |

@@ -45,11 +45,12 @@ namespace wc {
 enum Role { ROLE_SERVER, ROLE_CLIENT };
 
 // How the frames are exchanged with a wingman (docs section 3b).  The
-// server decides, from what it measures of the link unless told (WCNET_MODE,
-// the page's option, "/latency" in the comms prompt), and its frames carry
-// the mode in force to the clients.
+// server's setting (WCNET_MODE, the page's option, "/latency" in the comms
+// prompt) is low latency unless told otherwise; in the automatic mode the
+// server goes by what it measures of the link.  Its frames carry the mode
+// in force to the clients.
 enum ExchangeMode {
-    MODE_AUTO = 0,  // a setting only: the server goes by the link it measures
+    MODE_AUTO = 0,  // a setting only, had by asking: the server goes by the link it measures
     MODE_LOW = 1,   // low latency: the client waits for every server frame; the server runs at most six frames ahead
     MODE_HIGH = 2,  // high latency: the client paces itself and takes the server's frames as they come,
                     // the server runs as far ahead as the round trip needs; everybody sees the others later

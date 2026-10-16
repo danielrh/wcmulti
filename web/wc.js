@@ -574,9 +574,10 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 // asteroid and mine fields, "on", "soft" (a rock does a
                 // fraction of its damage) or "off": the host's choice, for everybody
                 rocks: "on",
-                // the exchange mode, "auto" (the host's game measures the
-                // connection and picks), "low" or "high" latency: the host's choice
-                latency: "auto",
+                // the exchange mode, "low" (the default) or "high" latency, or
+                // "auto" (the host's game measures the connection and picks,
+                // which proved disruptive in play): the host's choice
+                latency: "low",
                 // game-protocol messages that arrive before DOSBox has adopted this
                 // connection (a wingman faster to the launch than the host), handed
                 // to the transport at adoption so nothing is lost
@@ -628,7 +629,7 @@ function setRocks(v) {
 // lobby) and its own running game, whose frames carry the mode in force to
 // every wingman's game.
 const LATENCY = { auto: 0, low: 1, high: 2 };  // the game's numbers
-const latencyMode = (v) => (Object.prototype.hasOwnProperty.call(LATENCY, v) ? v : "auto");
+const latencyMode = (v) => (Object.prototype.hasOwnProperty.call(LATENCY, v) ? v : "low");
 const latencyLabel = (v) => (v === "auto" ? "the connection mode to auto (the host's game picks)" : `the connection to ${v} latency`);
 function setLatency(v) {
   if (!isHost()) { chatLine("Only the host can set the connection mode.", "sys"); renderMission(); return; }
@@ -856,7 +857,7 @@ async function joinRoom({ create = true } = {}) {
     $("leave").hidden = false;
     if (game.selfId === 0) lobby.mission = parseMission(query.get("mission")) || { series: 1, mis: 0 };
     lobby.rocks = game.selfId === 0 ? rocksMode({ 0: "off", 2: "soft" }[query.get("rocks")] || query.get("rocks")) : "on";
-    lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "auto";
+    lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "low";
     renderMission();
     for (const id of ["room", "players", "server", "relay"]) $(id).disabled = true;
     chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. Share this page's link.`, "sys");
@@ -1052,7 +1053,7 @@ async function start(fromGesture) {
     }
     // The host's game decides and tells the wingmen's; theirs start the same.
     if (source.game.multiplayer) env.WCROCKS = String(ROCKS[lobby.rocks]);
-    if (source.game.multiplayer && isHost() && lobby.latency !== "auto") env.WCNET_MODE = lobby.latency;
+    if (source.game.multiplayer && isHost()) env.WCNET_MODE = lobby.latency;
     if (cfg.callsign) env.WCCALLSIGN = cfg.callsign;
     if (cfg.lastname) env.WCLASTNAME = cfg.lastname;
     if (cfg.firstname) env.WCFIRSTNAME = cfg.firstname;

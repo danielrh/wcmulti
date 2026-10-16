@@ -305,8 +305,8 @@
           <label>Mission <select id="mission"></select></label>
           <label title="Asteroid and mine fields. The host decides, also while flying; /rocks on, /rocks soft and /rocks off in the chat do the same">Asteroids
             <select id="rocks"><option value="on">on</option><option value="soft">soft: one rock will not kill you</option><option value="off">off</option></select></label>
-          <label title="The connection: how the host's game and the wingmen's exchange their frames. Auto: the host's game measures the connection and picks; low latency: each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes). The host decides, also while flying; /latency auto, /latency low and /latency high in the chat do the same">Conn
-            <select id="latency"><option value="auto">auto</option><option value="low">low latency: nearby</option><option value="high">high latency: far away</option></select></label>
+          <label title="The connection: how the host's game and the wingmen's exchange their frames. Low latency (the default): each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes); auto: the host's game measures the connection and switches by itself, which has proved disruptive. The host decides, also while flying; /latency low, /latency high and /latency auto in the chat do the same">Conn
+            <select id="latency"><option value="low">low latency: nearby</option><option value="high">high latency: far away</option><option value="auto">auto: the host's game picks (not recommended)</option></select></label>
           <div class="hint" id="missionHint"></div>
         </div>
         <div id="rosterBox">
