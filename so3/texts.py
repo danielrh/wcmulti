@@ -879,7 +879,8 @@ SERIES_TEXT[16] = [
     "",                                                                                                            # 48
 ]
 
-# Block 17, mission 5-1 Picket line (a lost exit).  0-6 a Mandarin reports
+# Block 17, mission 5-1 Picket line (a second chance: SO2's script goes on to
+# 3-0 from here when the patrol is cleared, to the retreat ending when not).  0-6 a Mandarin reports
 # to Ghraffid (58 / 200), 7-17 the briefing room, 18-38 the wing commander's
 # office (23-24 Nav 1, 27-31 Nav 2, 33 Nav 3), 39-48 the epilogue.
 SERIES_TEXT[17] = [
@@ -893,8 +894,8 @@ SERIES_TEXT[17] = [
     "Briefing Room, TCS Culloden.",                                                                                # 7 title
     "I have new patrol assignments for everyone...",                                                               # 8 Valkyrie
     "These will be standard patrols, but today they will have added 		significance.",                           # 9
-    "The Captain has decided.  Without the charts and without the Hellcats' secret, this raid is over.",           # 10
-    "We hold this system until the jump drive is charged, and then we go home the way we came.",                   # 11
+    "The Captain has given us one more day in this system before he decides whether this raid goes on.",          # 10
+    "We hold here while the jump drive charges and Paladin works on the traders.  One more day.",                   # 11
     "Until the drive is up---",                                                                                    # 12
     "We are all that stands between the Kilrathi and a cruiser that cannot run.",                                  # 13
     "Keeping a clear track of our enemy is vital.",                                                                 # 14
@@ -934,7 +935,8 @@ SERIES_TEXT[17] = [
     "",                                                                                                            # 48
 ]
 
-# Block 18, mission 5-2 Blown (a lost exit).  0-13 Ghraffid's Rock: Prescott
+# Block 18, mission 5-2 Blown (a second chance: on to 4-0 when the way is
+# cleared, the retreat ending when not).  0-13 Ghraffid's Rock: Prescott
 # (12) and the Mandarin courier who flew him out (10); 14-23 the Kirrah'ka
 # and the launch; 24-38 Paladin's debriefing (27-30 Nav 1, 31-34 Nav 2);
 # 39-48 the epilogue; 49-55 Paladin if the way is clear.

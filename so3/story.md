@@ -157,8 +157,10 @@ with us; Bear (`v10`) is spoken for by the novels.
    fires her main gun at sixty percent.
 9. **5-3 The last patrol:** the long way home, every picket awake.  The
    epilogue is the Kilrathi court's: a new keel, somewhere no Terran has
-   looked.  Slots 5-0, 5-1 and 5-2 are the endings the inherited campaign
-   script turns to when a mission is lost: the raid called off.
+   looked.  Slot 5-0 is the ending the inherited campaign script turns to
+   when a mission is lost: the raid called off.  5-1 and 5-2 are second
+   chances: the script goes on to 3-0 and 4-0 from them when they are won
+   (seen in the play-through), to the retreat ending when not.
 
 ## The campaign, slot by slot
 
@@ -185,9 +187,9 @@ data; `texts.py` every line of the 24 scene blocks.
 | 4-1 | Ceremony | Morningstars; Sartha, Mandarin Sabres, two Fralthra | Maniac |
 | 4-2 | The yard | Morningstars; the yard, Mandarin Sabres, two Kamekhs | Maniac |
 | 4-3 | Duel | Morningstars; Mandarin Sabres, Prescott's Hellcat; land on the Culloden | Maniac |
-| 5-0 | The assault (lost) | Sabres; Grikath, four Kamekhs and Gothri, Sartha | Stingray |
-| 5-1 | Picket line (lost) | Rapiers; Jalkehi, a Fralthra and Sartha, a Gothri ace | Downtown |
-| 5-2 | Blown (lost) | Morningstars from the Kirrah'ka; Mandarin Sabres and Broadswords | Maniac |
+| 5-0 | The assault (the raid called off) | Sabres; Grikath, four Kamekhs and Gothri, Sartha | Stingray |
+| 5-1 | Picket line (a second chance, then 3-0) | Rapiers; Jalkehi, a Fralthra and Sartha, a Gothri ace | Downtown |
+| 5-2 | Blown (a second chance, then 4-0) | Morningstars from the Kirrah'ka; Mandarin Sabres and Broadswords | Maniac |
 | 5-3 | The last patrol | Morningstars; Jalkehi, Drakhri, Mandarin Broadswords | Maniac |
 
 ## Where the two-player seats fall
