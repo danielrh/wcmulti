@@ -212,9 +212,16 @@ static const KnownGame kGames[] = {
     { GAME_WC2, BUILD_WC2, "WC2.EXE", 0x1976, 0x8D65, "Origin", "Wing Commander II", load_wc2_code },
     { GAME_WC2, BUILD_SO1, "SO1.EXE", 0x1989, 0x0258, "Loading WC2 - SPECIAL OPERATIONS 1", "Wing Commander II: Special Operations 1", load_so1_code },
     { GAME_WC2, BUILD_SO2, "SO2.EXE", 0x1924, 0x025A, "Loading WC2 - SPECIAL OPERATIONS 2", "Wing Commander II: Special Operations 2", load_so2_code },
+    // SO3.EXE is SO2.EXE with its data-file number set to 3 (so3/build.py):
+    // the same code, the same tables, the Culloden campaign's files.
+    { GAME_WC2, BUILD_SO2, "SO3.EXE", 0x1924, 0x025A, "Loading WC2 - SPECIAL OPERATIONS 2", "Wing Commander II: Special Operations 3 (Culloden)", load_so2_code },
 };
+static const KnownGame *g_program = NULL;   // the entry of the program that is running
 
 const char *game_name() {
+    if (g_program) {
+        return g_program->title;
+    }
     for (size_t i = 0; i < sizeof(kGames) / sizeof(kGames[0]); i++) {
         if (kGames[i].build == g_build) {
             return kGames[i].title;
@@ -224,6 +231,7 @@ const char *game_name() {
 }
 
 static void set_game(const KnownGame *game, Bit16u loadSeg, Bit16u psp) {
+    g_program = game;
     g_game = game ? game->id : GAME_NONE;
     g_build = game ? game->build : BUILD_NONE;
     g_loadSeg = game ? loadSeg : 0;

@@ -1,0 +1,81 @@
+{
+ "version": 1,
+ "anchor": "GAMEDAT/SERIES.S02",
+ "exe": {
+  "source": "SO2.EXE",
+  "target": "SO3.EXE",
+  "sha256": "f9b53260a85340416febc68dd10dc0efb5570a5f97c872f3425e6f87e65207ae",
+  "patches": [
+   {
+    "what": "the data-file number, mov word [cb16], 2",
+    "find": "c70616cb0200",
+    "replace": "c70616cb0300",
+    "count": 5
+   },
+   {
+    "what": "the saved game's name",
+    "find": "7361766567616d652e736f32",
+    "replace": "7361766567616d652e736f33",
+    "count": 1
+   }
+  ]
+ },
+ "anchorSize": 147124,
+ "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
+ "iv": "9691dea595d457ef2c76e9e5",
+ "files": [
+  {
+   "path": "GAMEDAT/ALTSHIPS.003",
+   "size": 4701
+  },
+  {
+   "path": "GAMEDAT/CAMPAIGN.S03",
+   "size": 19832
+  },
+  {
+   "path": "GAMEDAT/GAMEFLOW.S03",
+   "size": 4580
+  },
+  {
+   "path": "GAMEDAT/INCIDENT.S03",
+   "size": 54672
+  },
+  {
+   "path": "GAMEDAT/INTELSHP.049",
+   "size": 89
+  },
+  {
+   "path": "GAMEDAT/MODULE.003",
+   "size": 177824
+  },
+  {
+   "path": "GAMEDAT/PCSHIP.V49",
+   "size": 135795
+  },
+  {
+   "path": "GAMEDAT/PLANETS.V03",
+   "size": 20493
+  },
+  {
+   "path": "GAMEDAT/SECTOR.003",
+   "size": 5
+  },
+  {
+   "path": "GAMEDAT/SERIES.S03",
+   "size": 146428
+  },
+  {
+   "path": "GAMEDAT/SHIP.V49",
+   "size": 142016
+  },
+  {
+   "path": "GAMEDAT/STARTGLB.003",
+   "size": 1538
+  },
+  {
+   "path": "GAMEDAT/TEMPGLOB.003",
+   "size": 1538
+  }
+ ],
+ "bytes": 709878
+}

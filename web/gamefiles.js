@@ -127,6 +127,12 @@ const SO2_SERIES = [
   { series: 4, missions: [DRONE, DRONE, DRONE, DRONE] },
   { series: 5, missions: [GUNNER, GUNNER, "with Maniac", DRONE] },
 ];
+// Special Operations 3, the Culloden campaign (so3/story.md): our own
+// missions on Special Operations 2's program.  Only the missions written so
+// far are listed; the slots after them still hold Special Operations 2's.
+const SO3_SERIES = [
+  { series: 1, missions: ["Shakedown, with Maniac"] },
+];
 
 // What the page says under the mission menu, in a line: with a mission
 // picked (`forced`), and for the barracks, to the host and to a wingman.
@@ -193,6 +199,19 @@ export const GAMES = [
     pointer: { fromGame: true },
     dosbox: "[sblaster]\nirq=5\n",
     campaign: { series: SO2_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
+  // Special Operations 3 is not in anyone's game directory: the page makes
+  // it from Special Operations 2 (its program with the data-file number
+  // changed) and the sealed package web/so3/ (so3/README.md), which opens
+  // with a key derived from the player's own SERIES.S02.  The program is
+  // SO2.EXE's build, so the hooks' test is SO2.EXE's.
+  { id: "wc2so3", tag: "SO3", partOf: "wc2", title: "Wing Commander II: Special Operations 3 (Culloden)", detect: ["SO2.EXE"], run: "loadfix -34 so3", multiplayer: true,
+    addon: "so3",
+    build: { para: 0x1924, off: 0x025A, text: "Loading WC2 - SPECIAL OPERATIONS 2" },
+    saves: ["GAMEDAT/SAVEGAME.SO3"], cycles: 8000,
+    firstName: true,
+    pointer: { fromGame: true },
+    dosbox: "[sblaster]\nirq=5\n",
+    campaign: { series: SO3_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
 ];
 
 // The registry entry of a game id, or null (a game picked by its executable).

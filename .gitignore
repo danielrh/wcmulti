@@ -56,3 +56,4 @@ __pycache__/
 /build-web/
 /build-native/
 /web/dist/
+build-so3/

@@ -177,7 +177,9 @@ say "assembling $OUT"
 mkdir -p "$OUT"
 cp "$BUILD/src/dosbox.js" "$BUILD/src/dosbox.wasm" "$OUT/"
 cp "$TS/dist/index.js" "$OUT/p2p-client.js"
-cp "$ROOT/web/index.html" "$ROOT/web/wc.js" "$ROOT/web/gamefiles.js" "$ROOT/web/gamepad.js" "$ROOT/web/voice.js" "$ROOT/web/hall.js" "$ROOT/web/chatfilter.js" "$ROOT/web/inno-worker.js" "$OUT/"
+cp "$ROOT/web/index.html" "$ROOT/web/wc.js" "$ROOT/web/gamefiles.js" "$ROOT/web/gamepad.js" "$ROOT/web/voice.js" "$ROOT/web/hall.js" "$ROOT/web/chatfilter.js" "$ROOT/web/inno-worker.js" "$ROOT/web/so3.js" "$OUT/"
+# Special Operations 3's sealed package (so3/README.md), as the page fetches it
+mkdir -p "$OUT/so3" && cp "$ROOT/web/so3/so3.json" "$ROOT/web/so3/so3.enc" "$OUT/so3/"
 if [ -f "$DEPS/inno-build/innoextract.js" ]; then
     cp "$DEPS/inno-build/innoextract.js" "$DEPS/inno-build/innoextract.wasm" "$OUT/"
 else

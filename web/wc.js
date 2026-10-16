@@ -13,6 +13,7 @@
 import { P2PGame } from "./p2p-client.js";
 import { initControls } from "./gamepad.js";
 import { initVoice } from "./voice.js";
+import { loadSo3 } from "./so3.js";
 import { readZip, extractInstaller, looksLikeInstaller, identifyGame, installFiles,
          saveGame, loadGames, forgetGame, totalSize, gameById, gameByTag, programsIn, knownBuild } from "./gamefiles.js";
 import { newRoomCode, retagRoomCode, normalizeCode, roomTag, GAME_TAGS, MAX_CHARS } from "./chatfilter.js";
@@ -1099,6 +1100,13 @@ async function start(fromGesture) {
     status(`Installing ${source.game.title} (${source.files.length} files)…`);
     installFiles(Module.FS, GAME_ROOT, source.files);
     log(`installed ${source.files.length} files of ${source.game.title} under ${GAME_ROOT}`);
+    // A program the page makes from the game (Special Operations 3): its
+    // files come sealed from the site and open with the player's own copy.
+    if (gameInfo() && gameInfo().addon === "so3") {
+      const extra = await loadSo3(source.files, status);
+      installFiles(Module.FS, GAME_ROOT, extra);
+      log(`installed ${extra.length} files of the Culloden campaign`);
+    }
     window.DOSBox = Module;
     restoreSaves(Module.FS);
 
