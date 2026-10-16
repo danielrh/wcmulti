@@ -267,7 +267,10 @@ def m_prize():
         CULLODEN(),                                                               # 0
         player(HELLCAT),                                                          # 1  (not SO2's escort behaviour 1: with no escortee the autopilot never engages again)
         wingman("Maniac", HELLCAT, MANIAC),                                       # 2
-        capital("Kirrah'ka", DORKATHI, 1, pos=(2500, 0, -2500), yaw=0, pilot=KILRATHI_SHIP, important=0, ai=0, alt=ALT_TENDER),  # 3  surrenders
+        # side 0: she has struck her colours.  A Kilrathi-side ship that must stay alive keeps the autopilot
+        # locked until the player has flown far from her; a Confederation-side one does not, and shooting
+        # her still counts (ship 3 gone: the court-martial debriefing)
+        capital("Kirrah'ka", DORKATHI, 0, pos=(2500, 0, -2500), yaw=0, pilot=KILRATHI_SHIP, important=0, ai=0, alt=ALT_TENDER),  # 3  surrenders
     ]
     ships += wing("Sartha", SARTHA, 4, pos=(3000, 0, -8000), yaw=170, group=0, objective=1, ai=3, first_index=4)       # 4-7  her escort, back for her
     ships += wing("Jalkehi", JALKEHI, 3, pos=(2000, 0, -7000), yaw=160, group=0, objective=1, ai=3, first_index=8)     # 8-10
