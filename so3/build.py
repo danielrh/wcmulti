@@ -68,6 +68,20 @@ def rename_references(data):
     return data
 
 
+# Faces.  Special Operations 2's scenes draw Tolwyn where our Captain speaks
+# and Angel where our wing commander does: CAMPAIGN.S03's shape list names
+# recoloured copies of their portraits instead (Banbridge: brown hair, a
+# blue collar; Bergstrom: red hair, a grey uniform), and Doomsday's own
+# portrait (WC2's people.v09) where SO2 drew Talon.  Palette indices from
+# the briefing palette: 112-127 skin, 160-175 greys, 64-79 yellow to red,
+# 40-46 blues, 136-142 auburn, 228-238 browns.
+BANBRIDGE = {160 + i: 232 + min(6, i) for i in range(10)}
+BANBRIDGE.update({71 + i: 40 + i for i in range(7)})
+BERGSTROM = {121 + i: 136 + i for i in range(5)}
+BERGSTROM.update({52 + i: 164 + i for i in range(7)})
+RECOLOURED_FACES = [("PEOPLE.V02", "PEOPLE.V46", BANBRIDGE), ("PEOPLE.V01", "PEOPLE.V47", BERGSTROM)]
+FACE_FILES = [(b"people.v02", b"people.v46"), (b"people.v01", b"people.v47"), (b"people.v32", b"people.v09")]
+
 # SO3.EXE is SO2.EXE with these byte sequences replaced, each found the given
 # number of times.  The page applies the same list to the player's own copy
 # (web/so3.js); the program itself is never shipped.
@@ -165,6 +179,8 @@ def main():
     ap.add_argument("--hellcat", required=True, help="directory with HCl's XSHIP.V50 and PCSHIP.V50")
     ap.add_argument("--out", default=os.path.join(ROOT, "build-so3"))
     ap.add_argument("--test-game", action="store_true", help="also OUT/game: the whole game directory with SO3 in it")
+    ap.add_argument("--hellcat-scale", type=float, default=0.75,
+                    help="the Hellcat's sprites at this size (the conversion's 142 KB file is near twice a WC2 fighter's and starves the heap; 0.75 makes it 81 KB)")
     args = ap.parse_args()
     gamedat = os.path.join(args.game, "GAMEDAT")
     plain = os.path.join(args.out, "plain")
@@ -179,12 +195,25 @@ def main():
         data = open(os.path.join(gamedat, n), "rb").read()
         if n.endswith(".S02"):
             data = rename_references(data)
+        if n == "CAMPAIGN.S02":
+            for old, new in FACE_FILES:
+                assert len(old) == len(new) and data.count(old) == 1, old
+                data = data.replace(old, new)
         open(os.path.join(pgd, renumber(n, 3)), "wb").write(data)
+
+    # the faces: the scenes draw a person from the portrait file CAMPAIGN's
+    # shape list names at that person's place (docs/newcampaign.md), so our
+    # copy of the list names our recoloured copies and WC2's own Doomsday
+    for src, dst, mapping in RECOLOURED_FACES:
+        wc2data.recolour_people(os.path.join(gamedat, src), os.path.join(pgd, dst), mapping)
+        print("%s: %s recoloured" % (dst, src))
 
     # the Hellcat
     ext = wc2data.blocks_of(os.path.join(args.hellcat, "XSHIP.V50"))
     parts, flags = wc2data.academy_fighter_to_wc2(ext, campaign.HELLCAT)
     parts[3] = hellcat_record(parts[3])
+    if args.hellcat_scale != 1.0:
+        parts = wc2data.scale_fighter(parts, args.hellcat_scale)
     wc2data.write_container(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT), parts, flags)
     cp = wc2data.blocks_of(os.path.join(args.hellcat, "PCSHIP.V50"))
     parts, flags = wc2data.academy_cockpit_to_wc2(cp)
@@ -194,7 +223,7 @@ def main():
     # INTELSHP; the game has none for the Rapier (never AI-flown in SO2).
     if not os.path.exists(os.path.join(gamedat, "INTELSHP.001")):
         shutil.copyfile(os.path.join(gamedat, "INTELSHP.003"), os.path.join(pgd, "INTELSHP.001"))
-    print("Hellcat: %s" % (wc2data.ship_record_of(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT)),))
+    print("Hellcat: %s, %d bytes" % (wc2data.ship_record_of(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT)), os.path.getsize(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT))))
 
     # the range's hulks: the Dorkathi's files as a type of our own, with no weapons
     hulk = wc2data.read_container(os.path.join(gamedat, "SHIP.V13"))

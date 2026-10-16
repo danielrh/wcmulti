@@ -558,3 +558,30 @@ def scale_fighter(parts, s):
     doffs = [struct.unpack_from("<I", deb, 4 + 4 * i)[0] & 0xFFFFFF for i in range(m)] + [len(deb)]
     parts[4] = _tree([scale_sprite(deb[doffs[i]:doffs[i + 1]], s) for i in range(m)])
     return parts
+
+
+# ---- portraits (PEOPLE.Vnn): one block, a table of sprites (the face and its
+# talking frames), all in the view sprite format above ----
+
+def people_sprites(path):
+    """[(flag, sprite bytes)] of a portrait file's single table block."""
+    (flag, b), = read_container(path)
+    size, first = struct.unpack("<II", b[:8])
+    n = (first & 0xFFFFFF) // 4 - 1
+    offs = [struct.unpack_from("<I", b, 4 + 4 * i)[0] & 0xFFFFFF for i in range(n)] + [len(b)]
+    return flag, [b[offs[i]:offs[i + 1]] for i in range(n)]
+
+
+def recolour_sprite(data, mapping):
+    """The sprite with its colour indices changed as `mapping` says."""
+    x2, x1, y1, y2, rows = decode_sprite(data)
+    for row in rows.values():
+        for x in row:
+            row[x] = mapping.get(row[x], row[x])
+    return encode_sprite(x2, x1, y1, y2, rows)
+
+
+def recolour_people(src, dst, mapping):
+    """A portrait file with every frame recoloured: a new face under a new number."""
+    flag, sprites = people_sprites(src)
+    write_container(dst, [_tree([recolour_sprite(s, mapping) for s in sprites])], [flag])

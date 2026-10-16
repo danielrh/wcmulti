@@ -1,10 +1,13 @@
 # SO3: Special Operations 3, *Culloden*
 
 A fan campaign for Wing Commander II, flown in the Hellcat V, running on
-Special Operations 2's program.  `story.md` is the story, `campaign.py` the
-missions and scene texts, `build.py` makes the game files, `pack.mjs` seals
-them for the page.  `docs/so3.md` has what was learned of the game's data
-files to make this possible.
+Special Operations 2's program: twenty missions in SO2's twenty slots, every
+scene between them rewritten, two-player throughout (the second player
+flies the named wingman).  `story.md` is the story, `campaign.py` the
+missions, `texts.py` the scene texts, `build.py` makes the game files,
+`pack.mjs` seals them for the page.  `docs/so3.md` has what was learned of
+the game's data files to make this possible; `docs/newcampaign.md` how to
+make the next campaign.
 
 ## How it works
 

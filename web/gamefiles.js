@@ -128,10 +128,15 @@ const SO2_SERIES = [
   { series: 5, missions: [GUNNER, GUNNER, "with Maniac", DRONE] },
 ];
 // Special Operations 3, the Culloden campaign (so3/story.md): our own
-// missions on Special Operations 2's program.  Only the missions written so
-// far are listed; the slots after them still hold Special Operations 2's.
+// missions on Special Operations 2's program, in its twenty slots.  The
+// second player flies the named wingman.  Series 5's first three are the
+// endings the campaign script turns to when a mission is lost.
 const SO3_SERIES = [
-  { series: 1, missions: ["Shakedown, with Maniac"] },
+  { series: 1, missions: ["Shakedown, with Maniac", "Hand-me-downs, with Doomsday", "The relay, with Stingray", "Prize, with Maniac"] },
+  { series: 2, missions: ["First patrol, with Maniac", "Scramble, with Stingray", "Beacon, with Toro", "Valkyrie, with Maniac"] },
+  { series: 3, missions: ["The traders, with Maniac", "Theft, with Maniac", "Rendezvous, with Maniac", "Jump point, with Maniac"] },
+  { series: 4, missions: ["Countersign, with Maniac", "Ceremony, with Maniac", "The yard, with Maniac", "Duel, with Maniac"] },
+  { series: 5, missions: ["The assault (lost), with Stingray", "Picket line (lost), with Downtown", "Blown (lost), with Maniac", "The last patrol, with Maniac"] },
 ];
 
 // What the page says under the mission menu, in a line: with a mission

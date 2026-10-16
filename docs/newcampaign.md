@@ -64,9 +64,14 @@ screen ("Error: ship.vNN, packet ...") for others.  A reinforcement wave
 (nav record with visible=2 after its nav) loads its type when it spawns,
 into a heap already fragmented by the fight ("largest block" smaller than
 the file): list the wave's type on the parent nav too, or reuse the nav's
-type.  Hence: **one new fighter type per nav point beside the player's, never
-two; at the launch nav the carrier plus the player's type plus at most one
-other light type**; SO2's own missions obey this and are the safe templates.
+type.  An asteroid or mine field costs about as much as a fighter type (its rocks).
+Hence: **one new fighter type per nav point beside the player's, never
+two; a field counts as one; at the launch nav the carrier plus the player's
+type plus at most one other light type**; SO2's own missions obey this and
+are the safe templates.  Measured with `!mem` in flight (so3, 2026-10-16):
+Hellcat (81 KB) + hulks + Gothri at a nav 81 KB free; Sabre + Grikath +
+field + a friendly Sabre 49 KB (works, but nothing more fits there);
+Morningstar + Jalkehi 151 KB.
 The Hellcat is brought to WC2 size with `wc2data.scale_fighter(parts, 0.75)`
 (sprite codec `decode_sprite` / `encode_sprite`, lossless round trip; it
 also scales the per-view hardpoint pixel positions and the debris sprites):
@@ -79,7 +84,15 @@ also scales the per-view hardpoint pixel positions and the debris sprites):
   formation 1; third 1000,0,1000 formation 2; fourth 2000,0,2000 formation 3):
   a ship left at 0,0,0 sits inside the carrier and explodes at launch.
 * The two-player seat is the first Confederation ship with orders 5 in nav
-  0's list after the player; SO2 slots without a wingman need one added.
+  0's list after the player, and **slots are given in list order: the player
+  first, the wingman second, the carrier last** (a carrier listed first takes
+  slot 1 and the second player sits in it); SO2's lists put the carrier
+  first, so reorder them.  SO2 slots without a wingman need one added.
+* **A wingman (orders 5) needs an AI file for its pilot id: `INTEL.0nn`, nn
+  the id in decimal** (the game has 001 003 004 006 009 011 012 014 022-025
+  028 029 036; 0x24 Maniac, 0x04 Stingray, 0x09 Doomsday, 0x0B Shadow's);
+  an id without one ("Error: intel.021, packet 0") kills the loader at
+  launch.  Pilots with orders 4 fly by the ship type's `INTELSHP.0nn`.
 * `alt` (byte 0x13) picks an ALTSHIPS record: SO2 uses 13/14 Mandarin
   Sabres, 15 Jazz's Morningstar, 16 Mandarin Broadswords, 17/18 the friendly
   Dorkathi you can land on.  Keep them where the slot had them.
