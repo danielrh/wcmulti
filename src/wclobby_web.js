@@ -288,10 +288,20 @@ addToLibrary({
     };
     // The page may already be in the room (its lobby with roster and chat):
     // use that connection rather than joining twice, which would supersede
-    // the page's session.
-    var live = Module['lobbyGame'];
-    if (live && live.code === code) {
+    // the page's session.  A page that manages rooms (Module.lobbyGame: the
+    // connection, or a function giving the one the page is in now) is the
+    // only way into a room: with no live connection to this one the game
+    // does not join behind the page's back.  (2026-10-15: a wingman whose
+    // host's link had failed adopted the page's closed connection again
+    // every few seconds, each time to lose it at once.)
+    var pageHasRooms = Module['lobbyGame'] !== undefined;
+    var live = typeof Module['lobbyGame'] === 'function' ? Module['lobbyGame']() : Module['lobbyGame'];
+    if (live && live.code === code && !live.closedFlag) {
       adopt(live, 'adopted');
+      return;
+    }
+    if (pageHasRooms) {
+      fail(live && live.code === code ? 'closed: the page has left room ' + code : 'no-room: the page is not in room ' + code);
       return;
     }
     WCLOBBY.log(1, 'joining room ' + code + ' at ' + server);

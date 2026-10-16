@@ -671,6 +671,9 @@ void hooks_game_changed() {
 }
 
 bool g_pendingUninit = false;
+// The server was lost in the middle of a flight (a client's drop()): the
+// game flies on alone and no connection is sought until the flight is over.
+static bool g_aloneThisFlight = false;
 
 enum { kMinAttemptSpacingSeconds = 5, kRetryDelaySeconds = 10 };
 
@@ -717,12 +720,23 @@ static void maybe_dump_data_segment() {
 }
 
 // (Re)connect when there is no session: at most every few seconds, and not
-// for a while after a failed attempt.  A missing TCP server or a lobby join
-// costs real time, and this runs at the top of every frame in space.
+// for a while after a failed attempt, longer after each in a row (up to
+// five minutes: in the browser a page that has left its room fails every
+// attempt).  A missing TCP server or a lobby join costs real time, and this
+// runs at the top of every frame in space.  Not in a flight whose server
+// was lost half-way: there is no mission to join half-way through, and the
+// game flies on alone (its own AI has the other ships).
 static void ensure_session() {
     static time_t nextAttempt = 0;
+    static int failures = 0;
     if (g_session) {
         return;
+    }
+    if (g_aloneThisFlight) {
+        if (in_flight()) {
+            return;
+        }
+        g_aloneThisFlight = false;
     }
     time_t now = time(NULL);
     if (now < nextAttempt) {
@@ -730,7 +744,12 @@ static void ensure_session() {
     }
     nextAttempt = now + kMinAttemptSpacingSeconds;
     if (!init_network()) {
-        nextAttempt = now + kRetryDelaySeconds;
+        nextAttempt = now + (kRetryDelaySeconds << failures);
+        if (failures < 5) {
+            failures++;
+        }
+    } else {
+        failures = 0;
     }
 }
 
@@ -1542,6 +1561,10 @@ void wc_net_check_cpu_hooks() {
     if (g_pendingUninit) {
         g_pendingUninit = false;
         uninit_network();
+        if (in_flight()) {
+            g_aloneThisFlight = true;
+            wclog(0, "flying on alone for the rest of this mission");
+        }
     }
     Bit32u ip = reg_eip;
     if (ip >= 0x10000 || !g_watch[ip]) {

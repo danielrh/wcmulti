@@ -343,6 +343,23 @@ trip gave 12 frames a second with the host's emulator at 85% of real time
   for a connection, so the host flies on alone when the last one leaves.
   The 2026-10-14 play-test froze a host in its cockpit when the wingman's
   game landed and went on to the debriefing while the host waited.
+* **A wingman whose host is lost in flight flies on alone** (2026-10-15).
+  A wingman's game that loses the server in the middle of a mission (the
+  link failed, the host's game went away) closes the session (`drop`) and
+  flies the rest of the mission by itself: its own copy of the game has the
+  other ships and their AI.  No connection is sought until that flight is
+  over (`g_aloneThisFlight` in wcnet_hooks.cpp, cleared when the flight
+  loop has returned), and a failed attempt after that waits twice as long
+  as the one before, up to five minutes.  In the browser the page owns the
+  room: `wclobby_connect` adopts the page's live connection to the room
+  (`Module.lobbyGame`, the connection or a function giving the one the
+  page is in now) and never joins a room behind the page's back; a page
+  that has left the room, or whose connection is closed, is a failed
+  attempt.  The user's log of 2026-10-15 (Firefox, Enyo 2) showed the
+  previous behaviour: after "lobby: player 0: link lost (failed)" the game
+  adopted the page's closed connection again every few seconds, failed to
+  send at once ("game is closed"), left the room and adopted it again, for
+  the rest of the flight.
 * **A wingman's landing is its own** (2026-10-14).  Its ship leaves the
   host's space (`enqueue_wingman_lost`, quietly) and the host flies on
   until it lands too; the games meet again at the next briefing, where

@@ -1085,7 +1085,7 @@ async function start(fromGesture) {
     const config = {
       canvas,
       P2PGame,
-      lobbyGame: lobby.game,          // the transport adopts this connection
+      lobbyGame: () => lobby.game,    // the transport adopts the connection the page is in when the game asks
       takeLobbyBacklog: () => { lobby.adopted = true; return lobby.backlog.splice(0); },
       onLobbyClosed: () => { chatLine("The game left the room", "sys"); leaveRoom(); },
       print: log,
