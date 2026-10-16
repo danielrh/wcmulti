@@ -89,17 +89,20 @@ def capital(name, shiptype, side, pos, yaw=0, pilot=FLIGHT_OPS, important=1, ai=
     return ship(name, shiptype, side, pos=pos, yaw=yaw, behave=behave, important=important, b33=4, ai=ai, pilot=pilot, alt=alt, leader=leader, objective=objective)
 
 
-def escortee(name, shiptype, pos, pilot, leader=1, alt=0):
-    """A ship of ours that follows the player (behaviour 6, as SO2's Bastille)."""
-    return ship(name, shiptype, 0, pos=pos, yaw=35, behave=6, important=1, formation=1, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot, alt=alt)
+def escortee(name, shiptype, pos, pilot, leader=1, alt=0, important=0):
+    """A ship of ours that follows the player (behaviour 6, as SO2's Bastille).
+    Not "important": the loss of a ship the slot's campaign script does not
+    know sends it down a path with no scene (SERIES packet 30), and the
+    program ends; SO2's own escorted freighters are not marked either."""
+    return ship(name, shiptype, 0, pos=pos, yaw=35, behave=6, important=important, formation=1, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot, alt=alt)
 
 
-def joiner(name, shiptype, pos, pilot, leader=1, important=1):
+def joiner(name, shiptype, pos, pilot, leader=1, important=0):
     """A ship of ours waiting at a nav point that forms up on the player (SO2's Iguana)."""
     return ship(name, shiptype, 0, pos=pos, behave=4, important=important, formation=2, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot)
 
 
-def friend(name, shiptype, pos, yaw, pilot, important=1, ai=4):
+def friend(name, shiptype, pos, yaw, pilot, important=0, ai=4):
     """A fighter of ours already in a fight at a nav point."""
     return ship(name, shiptype, 0, pos=pos, yaw=yaw, behave=2, important=important, radius=20, b33=4, ai=ai, group=0, pilot=pilot)
 
@@ -368,7 +371,7 @@ def m_valkyrie():
     ships += wing("Gothri", GOTHRI, 5, pos=(4000, 0, -7000), yaw=160, group=1, objective=11, first_index=3)   # 3-7
     ships += [field(ASTEROIDS, pos=(0, 0, 0), radius=9000), field(ASTEROIDS, pos=(5000, 0, 4000), radius=8000)]   # 8, 9
     ships += [capital("Kamekh", KAMEKH, 1, pos=(6000, 0, -9000), yaw=170, pilot=KILRATHI_SHIP, important=0, behave=2, objective=11, ai=4)]  # 10
-    ships += [friend("Valkyrie", SABRE, pos=(1000, 0, -3000), yaw=20, pilot=BERGSTROM)]                                                       # 11
+    ships += [friend("Valkyrie", SABRE, pos=(1000, 0, -3000), yaw=20, pilot=BERGSTROM, important=1)]                                          # 11 (marked, as SO2's Angel)
     navs = [
         dict(name="Culloden", pos=(0, 0, 0), types=[WATERLOO, SABRE], ships=[1, 2, 0]),
         dict(name="Nav 1", pos=(30000, 0, 100000), types=[SABRE, GOTHRI, KAMEKH], ships=[11, 3, 4, 5, 6, 7, 10]),
