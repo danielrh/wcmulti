@@ -17,6 +17,16 @@ number-3 files, see `so3/build.py`) with its own `MODULE.003` (missions),
   s1m0..s1m3, s2m0..s2m3, s3m0..s3m3, s4m0..s4m3, s5m3 (the last patrol)
   with s5m0, s5m1, s5m2 as "lost" exits: one mission each, then the ending.
   Blocks 15-19 of SERIES all end with the same Kilrathi epilogue scene.
+* **Where the next mission is chosen: in each block's debriefing routine
+  (Talk3), not in CAMPAIGN's MajorScript** (that one only maps each slot to
+  its launch ship kind).  At the end of Talk3 the bytecode sets the series
+  and mission: block 3 ends `24 02 28 02 24 00 28 03` (series 2, mission 0)
+  or `24 05 28 02 24 00 28 03` (5, 0) on a test `27 c1 00` of the mission's
+  results (SO2's s1m3 goes on when the previous missions' objectives were
+  met: the rig, which cannot tractor s1m2's pod, was sent to 5-0 every time,
+  while 1-3 started on its own went to 2-0).  `scripts/wc2scene.py` shows
+  the `S02`/`S03` stores if you read its raw dump; a block's branch targets
+  are the slots a new campaign must keep playable.
 * **Which outcomes the script tests.** The debriefing variants read the
   mission state: `24 nn 27 26 00` = "mission ship nn gone", kill counts, and
   objective results (GAMEFLOW's variables ACCOMPLISH(0-3), SHIP_GONE(0-15),
