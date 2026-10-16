@@ -86,13 +86,11 @@ The Hellcat is brought to WC2 size with `wc2data.scale_fighter(parts, 0.75)`
 also scales the per-view hardpoint pixel positions and the debris sprites):
 142 KB -> 81 KB.
 
-* **Across a mission boundary, do not repeat a fighter type**: the type at
-  the last nav of one mission must not be the type at the first autopilot
-  nav of the next.  In two-player the wingman's program died there every
-  time ("Error: ship.v06, packet 15": a view asked for lazily, the mark of
-  a type the loader thinks is loaded but is not) while the host flew on;
-  the same mission flown from the mission menu was fine.  The cause is in
-  the multiplayer layer's nav setup for clients, not yet found.
+* (Fixed in the layer, 2026-10-16: a WC2 client swallowed the game's own
+  despawns, including the mission-setup pass that clears the last
+  mission's slots, so through a campaign the wingman's program kept ghosts
+  of old ships and died at a nav setup with "Error: ship.vNN, packet 15".
+  Before the first flight frame a client now lets those despawns run.)
 
 ## 3. Mission data facts
 
