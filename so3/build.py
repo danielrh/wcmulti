@@ -179,6 +179,7 @@ def main():
     ap.add_argument("--hellcat", required=True, help="directory with HCl's XSHIP.V50 and PCSHIP.V50")
     ap.add_argument("--out", default=os.path.join(ROOT, "build-so3"))
     ap.add_argument("--test-game", action="store_true", help="also OUT/game: the whole game directory with SO3 in it")
+    ap.add_argument("--so2-slots", default="", help="comma-separated s-m slots to fill with SO2's own mission records instead of ours (bisecting the campaign script's behaviour)")
     ap.add_argument("--hellcat-scale", type=float, default=0.75,
                     help="the Hellcat's sprites at this size (the conversion's 142 KB file is near twice a WC2 fighter's and starves the heap; 0.75 makes it 81 KB)")
     args = ap.parse_args()
@@ -237,7 +238,11 @@ def main():
 
     # the missions
     mod = wc2data.Module(os.path.join(gamedat, "MODULE.002"))
+    so2_slots = {tuple(int(x) for x in slot.split("-")) for slot in args.so2_slots.split(",") if slot}
     for mis in campaign.MISSIONS:
+        if (mis["series"], mis["mission"]) in so2_slots:
+            print("mission s%d m%d: SO2's own records kept (--so2-slots)" % (mis["series"], mis["mission"]))
+            continue
         build_mission(mod, mis, gamedat, pgd)
         print("mission s%d m%d %s: %d ships, %d nav points" % (mis["series"], mis["mission"], mis["name"], len(mis["ships"]), len(mis["navs"])))
     mod.save(os.path.join(pgd, "MODULE.003"))
