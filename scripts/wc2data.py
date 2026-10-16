@@ -29,6 +29,7 @@ What is here was found by reading the game (SO2.EXE, see docs/so3.md):
   `ship_record_of`, `academy_fighter_to_wc2`, `academy_cockpit_to_wc2`.
 """
 import os
+import math
 import struct
 
 # ---------------------------------------------------------------------------
@@ -441,3 +442,119 @@ if __name__ == "__main__":
         else:
             for i, (fl, b) in enumerate(read_container(p)):
                 print("%s block %d flag %02x %d bytes" % (p, i, fl, len(b)))
+
+
+# ---- view sprites (WC2's row-run format, as HCl's WC2VIEW reads it) ----
+#
+# Header: four int16 x2, x1, y1, y2: the sprite spans x in [-x1-1, x2] and y in
+# [-y1-1, y2] around its origin, so it is x1+x2+2 wide and y1+y2+2 tall.  Then
+# records of int16 key, vx, vy: key even = key/2 raw pixels from (vx, vy); key
+# odd = key/2 pixels made of sub-runs, a byte k each: k even = k/2 raw pixels,
+# k odd = one colour k/2 times; key 0 ends.  Pixels not covered are clear.
+
+def decode_sprite(data):
+    """(x2, x1, y1, y2, rows) with rows a dict y -> {x: colour} in origin coordinates."""
+    x2, x1, y1, y2 = struct.unpack_from("<hhhh", data, 0)
+    rows = {}
+    off = 8
+    while off + 6 <= len(data):
+        key, vx, vy = struct.unpack_from("<hhh", data, off)
+        off += 6
+        if key == 0:
+            break
+        row = rows.setdefault(vy, {})
+        x = vx
+        if key % 2 == 0:
+            for _ in range(key // 2):
+                row[x] = data[off]; off += 1; x += 1
+        else:
+            n = 0
+            while n < key // 2 and off < len(data):
+                k = data[off]; off += 1
+                if k % 2 == 0:
+                    for _ in range(k // 2):
+                        row[x] = data[off]; off += 1; x += 1; n += 1
+                else:
+                    c = data[off]; off += 1
+                    for _ in range(k // 2):
+                        row[x] = c; x += 1; n += 1
+    return x2, x1, y1, y2, rows
+
+
+def encode_sprite(x2, x1, y1, y2, rows):
+    """The inverse of decode_sprite: one packed record per run of set pixels."""
+    out = bytearray(struct.pack("<hhhh", x2, x1, y1, y2))
+    for y in sorted(rows):
+        row = rows[y]
+        xs = sorted(x for x in row if row[x] != 0)
+        i = 0
+        while i < len(xs):
+            j = i
+            while j + 1 < len(xs) and xs[j + 1] == xs[j] + 1:
+                j += 1
+            span = [row[x] for x in xs[i:j + 1]]
+            out += struct.pack("<hhh", 2 * len(span) + 1, xs[i], y)
+            k = 0
+            while k < len(span):
+                run = 1
+                while k + run < len(span) and span[k + run] == span[k] and run < 127:
+                    run += 1
+                if run >= 3:
+                    out += bytes((2 * run + 1, span[k])); k += run
+                else:
+                    lit = k
+                    while lit < len(span) and lit - k < 127 and not (lit + 2 < len(span) and span[lit] == span[lit + 1] == span[lit + 2]):
+                        lit += 1
+                    out += bytes((2 * (lit - k),)) + bytes(span[k:lit]); k = lit
+            i = j + 1
+    out += struct.pack("<hhh", 0, 0, 0)
+    return bytes(out)
+
+
+def scale_sprite(data, s):
+    """The sprite at s times its size (nearest pixel), its origin kept."""
+    x2, x1, y1, y2, rows = decode_sprite(data)
+    nx1 = int(round((x1 + 1) * s)) - 1; nx2 = int(round((x2 + 1) * s)) - 1
+    ny1 = int(round((y1 + 1) * s)) - 1; ny2 = int(round((y2 + 1) * s)) - 1
+    new = {}
+    for y in range(-ny1 - 1, ny2 + 1):
+        sy = int(math.floor((y + 0.5) / s))
+        src = rows.get(sy)
+        if not src:
+            continue
+        row = {}
+        for x in range(-nx1 - 1, nx2 + 1):
+            sx = int(math.floor((x + 0.5) / s))
+            c = src.get(sx, 0)
+            if c:
+                row[x] = c
+        if row:
+            new[y] = row
+    return encode_sprite(nx2, nx1, ny1, ny2, new)
+
+
+def scale_fighter(parts, s):
+    """A five-packet fighter with its 37 views and its 11 debris sprites at s
+    times their size, and the per-view hardpoint pixel positions to match."""
+    tree = parts[0]
+    size, first = struct.unpack("<II", tree[:8])
+    n = (first - 4) // 4
+    offs = [struct.unpack_from("<I", tree, 4 + 4 * i)[0] & 0xFFFFFF for i in range(n)] + [len(tree)]
+    views = [scale_sprite(tree[offs[i]:offs[i + 1]], s) for i in range(n)]
+    parts[0] = _tree(views)
+    hp = bytearray(parts[2])
+    voffs = struct.unpack_from("<%dH" % n, hp, 0)
+    for v in range(n):
+        end = voffs[v + 1] if v + 1 < n else len(hp)
+        o = voffs[v]
+        while o + 12 <= end and struct.unpack_from("<h", hp, o)[0] != -1:
+            x, y = struct.unpack_from("<hh", hp, o + 8)
+            struct.pack_into("<hh", hp, o + 8, int(round(x * s)), int(round(y * s)))
+            o += 12
+    parts[2] = bytes(hp)
+    deb = parts[4]
+    size, first = struct.unpack("<II", deb[:8])
+    m = (first - 4) // 4
+    doffs = [struct.unpack_from("<I", deb, 4 + 4 * i)[0] & 0xFFFFFF for i in range(m)] + [len(deb)]
+    parts[4] = _tree([scale_sprite(deb[doffs[i]:doffs[i + 1]], s) for i in range(m)])
+    return parts

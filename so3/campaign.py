@@ -9,7 +9,7 @@ numbers (the Hellcat is ours, 45: the program draws types 48 and 49, its asteroi
 HELLCAT = 45
 WATERLOO, SARTHA, DRAKHRI, FREE_TRADER, MORNINGSTAR, DORKATHI = 17, 5, 6, 12, 41, 13
 HULK = 29                # ours: a Dorkathi with its flak turrets stripped (every WC2 transport has them)
-EPEE, RAPIER, SABRE, GOTHRI, JALKEHI, GRIKATH, STRAKHA, KAMEKH, AYERS_ROCK = 3, 1, 4, 36, 7, 8, 9, 16, 48
+EPEE, RAPIER, SABRE, GOTHRI, JALKEHI, GRIKATH, STRAKHA, KAMEKH, AYERS_ROCK = 3, 1, 4, 50, 7, 8, 9, 16, 48   # Gothri: SO2 flies its own as type 50
 ASTEROIDS, MINES, POD = 51, 52, 53       # not ships: a field, a field, a thing to tractor in (class 5, 6, 61)
 # What the nav lists say of the non-ships (no SHIP file to read it from).
 SPECIAL_TYPES = {ASTEROIDS: (0, 5), MINES: (0, 6), POD: (0, 61)}

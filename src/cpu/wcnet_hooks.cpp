@@ -399,6 +399,8 @@ static std::string ds_text(Bit16u off, int max) {
     return s;
 }
 
+static bool enemy_ship(int slot);
+
 static void key_script() {
     static int parsed = 0;
     static std::vector<ScriptStep> steps;
@@ -439,7 +441,15 @@ static void key_script() {
     }
     static int waitingSince = -1;  // flight count when a "wait" item ran
     static bool skipping = false;  // ... a "skip" item: Esc is tapped meanwhile
+    static bool clicking = false;  // ... a "clickskip" item: the pointer is put on a spot and clicked meanwhile
+    static double clickX = 0.48, clickY = 0.55;
     static double nextSkip = 0;
+    static bool buttonDown = false;
+    static double buttonUpAt = 0;
+    if (buttonDown && now >= buttonUpAt) {
+        Mouse_ButtonReleased(0);
+        buttonDown = false;
+    }
     if (waitingSince >= 0) {
         if (g_flightCount == waitingSince || !in_flight()) {
             if (skipping && now >= nextSkip) {
@@ -447,6 +457,15 @@ static void key_script() {
                 KEYBOARD_AddKey(KBD_esc, true);
                 held = KBD_esc;
                 releaseAt = now + 150;
+            }
+            if (clicking && now >= nextSkip && !buttonDown) {
+                // (a click advances a scene's line, and in the barracks the
+                // spot is the "fly mission" button: the campaign plays on)
+                nextSkip = now + 2500;
+                set_pointer(clickX, clickY);
+                Mouse_ButtonPressed(0);
+                buttonDown = true;
+                buttonUpAt = now + 150;
             }
             return;
         }
@@ -484,9 +503,16 @@ static void key_script() {
         wclog(1, "key script %.1fs (t=%.1f): dump %s; comm \"%s\"; vdu \"%s\"; %s; %s", t, now / 1000.0, path.c_str(),
               ds_text(ds::commGlobalTxt, 80).c_str(), ds::known(ds::vduText) ? ds_text(ds::vduText, 160).c_str() : "", mission_state_line().c_str(),
               field_state_line().c_str());
-    } else if (item == "wait" || item == "skip") {
+    } else if (item == "wait" || item == "skip" || item.compare(0, 9, "clickskip") == 0) {
         skipping = item == "skip";
-        wclog(1, "key script %.1fs (t=%.1f): waiting for the next mission%s", t, now / 1000.0, skipping ? ", tapping Esc through the scenes" : "");
+        clicking = item.compare(0, 9, "clickskip") == 0;
+        if (clicking && item.size() > 10) {  // clickskip=<x>:<y>
+            clickX = atof(item.c_str() + 10);
+            size_t colon = item.find(':');
+            if (colon != std::string::npos) clickY = atof(item.c_str() + colon + 1);
+        }
+        wclog(1, "key script %.1fs (t=%.1f): waiting for the next mission%s", t, now / 1000.0,
+              skipping ? ", tapping Esc through the scenes" : clicking ? ", clicking through the scenes and the barracks" : "");
         waitingSince = g_flightCount;
     } else if (item.compare(0, 7, "!mouse=") == 0) {
         // !mouse=<x>:<y>, fractions of the mouse range (0.5:0.5 is the centre)
@@ -626,6 +652,26 @@ static void key_script() {
         int mode = atoi(item.c_str() + 7);
         wclog(1, "key script %.1fs (t=%.1f): rocks mode %d; %s", t, now / 1000.0, mode, field_state_line().c_str());
         wc_net_set_rocks(mode);
+    } else if (item.compare(0, 9, "!killfoes") == 0) {
+        // !killfoes[=<mission ship>,...]: the server destroys every ship on
+        // the other side (a test aid for playing a campaign through), sparing
+        // the mission ships listed (a surrendering freighter, a thing to pick up)
+        std::vector<int> spare;
+        if (item.size() > 10) {
+            const char *p = item.c_str() + 10;
+            while (*p) { spare.push_back(atoi(p)); const char *c = strchr(p, ','); if (!c) break; p = c + 1; }
+        }
+        bool server = g_session && g_session->is_server();
+        int killed = 0, spared = 0;
+        for (int s = kPlayerSlot + 1; s <= kMaxShipSlot; s++) {
+            if (!enemy_ship(s)) continue;
+            int ms = ds::known(ds::slotMissionShip) ? (Bit16s)rd16((Bit16u)(ds::slotMissionShip + 2 * s)) : -1;
+            if (std::find(spare.begin(), spare.end(), ms) != spare.end()) { spared++; continue; }
+            if (server) enqueue_test_kill(s);
+            killed++;
+        }
+        wclog(1, "key script %.1fs (t=%.1f): kill foes: %d ships, %d spared (%s); %s", t, now / 1000.0, killed, spared,
+              server ? "sent" : "ignored: not the server", mission_state_line().c_str());
     } else if (item.compare(0, 6, "!kill=") == 0) {
         int slot = atoi(item.c_str() + 6);
         bool server = g_session && g_session->is_server();
