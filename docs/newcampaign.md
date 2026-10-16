@@ -143,9 +143,13 @@ A "land on ship n" objective (SO2's s1m3 lands on a second carrier record,
 s3m2 on the tender) is not met by `!status=1`: the rig has to fly to that
 carrier and land through the comm menu (C, the carrier, "request landing"),
 which needs the ship steered within comm range (`!face=<slot>` repeated);
-`-k sN mM` starts put the barracks at that mission but not the campaign
-script's own record, so a partial run shows one mission's scenes and
-flight, not the transition after it.  Check the host log for "starting: mission" (the order the
+A `-k sN mM` start plays that mission and the campaign script's own
+transition after it (2-0 went on to 2-1, 2-1 to 2-2).  **Never run two
+pairs on one game directory**: the save files collide and the program ends
+at "Series 0, Mission 0" with "Unsuccessful load of series.s03 packet 30";
+the wingman gets a directory of its own (`build-so3/game-client`).  SO2's
+s2m2 bomb (scene 213, armed on arrival at the mined nav) kills the player
+who lingers, invulnerable or not: a rig that fights there dies there.  Check the host log for "starting: mission" (the order the
 campaign script took), "left slot", "screen: Error" and the spawn list.
 
 ## 5. Order of work for a new campaign
