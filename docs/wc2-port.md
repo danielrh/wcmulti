@@ -643,7 +643,7 @@ with `ROOM=SM2-7001 scripts/web-smoke.sh 100 0 1` (the server's copy of
 Wing Commander's directory; the code picks SM2.EXE).
 
 **Special Operations 3.**  A fan campaign on SO2.EXE's program with its
-data-file number changed (SO3.EXE), the Hellcat V as ship type 49 and our
+data-file number changed (SO3.EXE), the Hellcat V as ship type 45 and our
 own missions: `so3/README.md`, `so3/story.md`, and `docs/so3.md` for what
 was learned of the data files (MODULE, SHIP, the scene scripts) to do it.
 The hooks list SO3.EXE in `kGames` with SO2.EXE's tables.

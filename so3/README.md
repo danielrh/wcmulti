@@ -13,8 +13,8 @@ numbered 2 (`MODULE.002`, `SERIES.S02`, ...).  The number is set at five
 places in the code; `SO3.EXE` is `SO2.EXE` with a 3 there and
 `savegame.so3` as its saved game, so it reads a third set of files, which
 are copies of the second with our missions (`MODULE.003`), our texts
-(`SERIES.S03`) and the Hellcat (ship type 49: `SHIP.V49`, `PCSHIP.V49`,
-`INTELSHP.049`) added.  The program is never shipped: the patch is a list
+(`SERIES.S03`) and the Hellcat (ship type 45: `SHIP.V45`, `PCSHIP.V45`,
+`INTELSHP.045`) added.  The program is never shipped: the patch is a list
 of byte sequences in the manifest (`so3.json`, `exe`), and the page makes
 `SO3.EXE` from the player's own `SO2.EXE` when the game starts
 (`web/so3.js`); `build.py` applies the same list for a native test.

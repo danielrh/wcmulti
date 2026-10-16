@@ -22,7 +22,7 @@
  },
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "9691dea595d457ef2c76e9e5",
+ "iv": "404fa3d1c44521cb64ac84b8",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -41,7 +41,7 @@
    "size": 54672
   },
   {
-   "path": "GAMEDAT/INTELSHP.049",
+   "path": "GAMEDAT/INTELSHP.045",
    "size": 89
   },
   {
@@ -49,7 +49,7 @@
    "size": 177824
   },
   {
-   "path": "GAMEDAT/PCSHIP.V49",
+   "path": "GAMEDAT/PCSHIP.V45",
    "size": 135795
   },
   {
@@ -65,7 +65,7 @@
    "size": 146428
   },
   {
-   "path": "GAMEDAT/SHIP.V49",
+   "path": "GAMEDAT/SHIP.V45",
    "size": 142016
   },
   {

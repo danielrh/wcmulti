@@ -4,9 +4,9 @@ says what the fields are.
 
 Positions are kilometres relative to the nav point; a nav point's position
 is relative to the mission's origin.  Ship types are Wing Commander II's
-numbers (the Hellcat is ours, 49)."""
+numbers (the Hellcat is ours, 45: the program draws types 48 and 49, its asteroid bases, by other rules)."""
 
-HELLCAT = 49
+HELLCAT = 45
 WATERLOO, SARTHA, DRAKHRI, FREE_TRADER, MORNINGSTAR = 17, 5, 6, 12, 41
 
 # Comm personalities (COMMUNIC.Tnn): who answers on the radio.

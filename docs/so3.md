@@ -100,7 +100,14 @@ the record, the 11-child table, the words.  Academy stores fighters the
 to WC2 in that layout reads a sprite as its record and asks for
 `pcship.v-9`.  The record: name[20], word 20 kind (0xC/0xD/0xE), word 22
 the type number (the cockpit file is `pcship.v%02d` of it), word 24 the
-class.  An AI-flown type needs `intelshp.%03d`.  Cockpit files have 14
+class.  An AI-flown type needs `intelshp.%03d`.  **Type numbers are not all free:** the
+renderer's view choice (`seg006:25B1`: pitch band and yaw step from the
+ship's orientation, then tables at `dseg:10C4` / `11BC` for the sprite and
+its mirror flag) treats the record's type 0x30 and 0x31 (48 and 49, the
+asteroid bases) by other rules, skipping the 90-degree roll correction of
+the top and bottom views; a fighter numbered 49 flew with its top forward.
+Other numbers the code compares against: 9, 12-16, 18-21, 28, 31, 32, 37,
+44, 47, 51, 57-65.  The Hellcat is 45.  Cockpit files have 14
 blocks (fighters), 16 (one turret) or 17 (Broadsword); the Hellcat's 16 are
 kept.
 

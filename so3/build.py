@@ -9,7 +9,7 @@ Writes OUT/plain/: GAMEDAT/ with every file the program names by its number
 OUT/plain.json which the page applies to the player's own SO2.EXE; the
 program is never shipped) (copies of Special Operations 2's,
 MODULE.003 and SERIES.S03 with our missions and texts in them), the Hellcat
-as ship type 49 (HCl's and Howard Day's conversion for Academy, repacked
+as ship type 45 (HCl's and Howard Day's conversion for Academy, repacked
 as a WC2 fighter) and its AI file.  --test-game makes OUT/game, a whole
 game directory to fly it from natively.
 
