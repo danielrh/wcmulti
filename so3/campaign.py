@@ -94,12 +94,14 @@ def escortee(name, shiptype, pos, pilot, leader=1, alt=0, important=0):
     Not "important": the loss of a ship the slot's campaign script does not
     know sends it down a path with no scene (SERIES packet 30), and the
     program ends; SO2's own escorted freighters are not marked either."""
-    return ship(name, shiptype, 0, pos=pos, yaw=35, behave=6, important=important, formation=1, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot, alt=alt)
+    # formation 4: slots 1-3 are the wing's, and a ship given the wingman's
+    # slot rams the second player's ship all the way to the first nav point
+    return ship(name, shiptype, 0, pos=pos, yaw=35, behave=6, important=important, formation=4, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot, alt=alt)
 
 
 def joiner(name, shiptype, pos, pilot, leader=1, important=0):
     """A ship of ours waiting at a nav point that forms up on the player (SO2's Iguana)."""
-    return ship(name, shiptype, 0, pos=pos, behave=4, important=important, formation=2, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot)
+    return ship(name, shiptype, 0, pos=pos, behave=4, important=important, formation=5, radius=15, b33=4, ai=4, leader=leader, group=0, objective=leader, pilot=pilot)
 
 
 def friend(name, shiptype, pos, yaw, pilot, important=0, ai=4):
