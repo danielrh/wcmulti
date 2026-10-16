@@ -22,7 +22,7 @@
  },
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "eaa6458de4088404155b14e4",
+ "iv": "759470f0b4f58fbf9d3a4eda",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -39,6 +39,10 @@
   {
    "path": "GAMEDAT/INCIDENT.S03",
    "size": 54672
+  },
+  {
+   "path": "GAMEDAT/INTELSHP.001",
+   "size": 89
   },
   {
    "path": "GAMEDAT/INTELSHP.045",
@@ -62,7 +66,7 @@
   },
   {
    "path": "GAMEDAT/SERIES.S03",
-   "size": 146428
+   "size": 147782
   },
   {
    "path": "GAMEDAT/SHIP.V29",
@@ -81,5 +85,5 @@
    "size": 1538
   }
  ],
- "bytes": 854596
+ "bytes": 856067
 }

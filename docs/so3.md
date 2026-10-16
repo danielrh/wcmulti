@@ -62,7 +62,13 @@ ALTINT.p2", type 1 "scene p1, how p2" (0 pending and armed, 4 play now), FF
 none; the third step's last byte is the first type word, so two steps);
 +0x3F three ship type words to load here, +0x45 their kinds, +0x4B their
 classes (copied from the SHIP record); +0x51 ten mission ship indices.
-Up to three new types per nav point; the player's stays loaded.
+Up to three new types per nav point; the player's stays loaded.  **Memory:**
+a fighter type (five-packet file) keeps all 37 views in memory, 70-120 KB
+each; capital ships and bases (41-block files) load views on demand.  Two
+new fighter types beside the player's Hellcat at one nav point ran the game
+out of memory ("Error: ship.v07, packet 1 ... FREE: 9276"), so a mission
+puts one new fighter type at a nav point and spends the other slots on
+capital ships, fields and pods.
 
 **Mission ship** (`ovr116:1CED` spawns, `19C3` sets up): name[19], +0x13
 alternate ship (ALTSHIPS); +0x14 type byte, +0x15 class word (5 asteroid

@@ -129,6 +129,8 @@ def patch_exe(src, dst):
 
 def type_info(gamedat, shiptype, extra_dir):
     """(kind, class) of a ship type from its SHIP file (ours in extra_dir first)."""
+    if shiptype in campaign.SPECIAL_TYPES:
+        return campaign.SPECIAL_TYPES[shiptype]
     for d in (extra_dir, gamedat):
         p = os.path.join(d, "SHIP.V%02d" % shiptype)
         if os.path.exists(p):
@@ -149,7 +151,9 @@ def build_mission(mod, mis, gamedat, extra_dir):
         types = [(t,) + type_info(gamedat, t, extra_dir) for t in n["types"]]
         navs.append(wc2data.nav_record(n["name"], n["pos"], visible=n.get("visible", 1), radius=n.get("radius", 15000),
                                        reveals=n.get("reveals", ()), steps=n.get("steps", ()), types=types, ships=n["ships"]))
-    objectives = [wc2data.objective_record(k, p, label) for k, p, label in mis["objectives"]] + [wc2data.objective_record(-1, -1, "")]
+    objectives = [wc2data.objective_record(k, p, label) for k, p, label in mis["objectives"]]
+    if len(objectives) < 8:
+        objectives.append(wc2data.objective_record(-1, -1, ""))
     h = mis["header"]
     header = wc2data.header_record(h["launch"], h["carrier"], h["player"], h["wing"])
     mod.set_mission(mis["series"], mis["mission"], header, navs, objectives, ships, mis["name"], mis.get("series_name"))
@@ -186,6 +190,10 @@ def main():
     parts, flags = wc2data.academy_cockpit_to_wc2(cp)
     wc2data.write_container(os.path.join(pgd, "PCSHIP.V%02d" % campaign.HELLCAT), parts, flags)
     shutil.copyfile(os.path.join(gamedat, "INTELSHP.041"), os.path.join(pgd, "INTELSHP.%03d" % campaign.HELLCAT))
+    # A type flown by a pilot without an INTEL file of his own needs the type's
+    # INTELSHP; the game has none for the Rapier (never AI-flown in SO2).
+    if not os.path.exists(os.path.join(gamedat, "INTELSHP.001")):
+        shutil.copyfile(os.path.join(gamedat, "INTELSHP.003"), os.path.join(pgd, "INTELSHP.001"))
     print("Hellcat: %s" % (wc2data.ship_record_of(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT)),))
 
     # the range's hulks: the Dorkathi's files as a type of our own, with no weapons
