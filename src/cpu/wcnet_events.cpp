@@ -1234,6 +1234,14 @@ static void intercept_despawn(bool explode) {
         return;  // our own death/landing: the game handles it, mission status tells the others
     }
     if (s->is_client()) {
+        if (before_first_frame()) {
+            // WC2's mission setup despawns every slot the last mission left
+            // in use; a client that swallowed that kept ghosts through a
+            // campaign (its lists filled up with old wingmen, the new
+            // carrier found no slot, and a ghost's freed views ended the
+            // program with "ship.vNN, packet 15")
+            return;
+        }
         return_from_call(fn, 0);
         return;
     }

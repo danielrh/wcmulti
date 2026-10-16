@@ -56,6 +56,7 @@ static int g_rockOnto = -1;      // test aid: the slot a rock is to be put onto 
 static bool g_frameSeen = false;
 static int g_flightCount = 0;  // missions that reached their first frame
 static bool in_flight() { return g_inMission && g_frameSeen; }
+bool before_first_frame() { return g_inMission && !g_frameSeen; }
 
 // The mission most recently started on this machine: after a death the game
 // falls back to its title loop, and a forced-mission game flies it again.

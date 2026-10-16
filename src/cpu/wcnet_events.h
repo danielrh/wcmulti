@@ -57,6 +57,7 @@ void enqueue_reported_damage(const Damage &reported);
 // when it died, quietly when it landed).
 void enqueue_wingman_lost(int slot, bool explode);
 void enqueue_test_kill(int slot);
+bool before_first_frame();   // a mission has started but its first flight frame has not run: the game is setting it up
 // Test aid (the key script's "!hit=<qty>"): our own ship takes that much
 // damage from dead ahead (or from behind), through the game's do_damage.
 void enqueue_test_hit(int quantity, bool fromBehind);
