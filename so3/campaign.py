@@ -265,7 +265,7 @@ def m_prize():
     The Culloden moves during the flight: the landing is ship 11."""
     ships = [
         CULLODEN(),                                                               # 0
-        player(HELLCAT, behave=1),                                                # 1
+        player(HELLCAT),                                                          # 1  (not SO2's escort behaviour 1: with no escortee the autopilot never engages again)
         wingman("Maniac", HELLCAT, MANIAC),                                       # 2
         capital("Kirrah'ka", DORKATHI, 1, pos=(2500, 0, -2500), yaw=0, pilot=KILRATHI_SHIP, important=0, ai=0, alt=ALT_TENDER),  # 3  surrenders
     ]
