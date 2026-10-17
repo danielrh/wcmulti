@@ -28,7 +28,7 @@
  },
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "c21f031e3cb51b1178be21fa",
+ "iv": "2ca8c366565b3ad92bcf1de1",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -60,7 +60,7 @@
   },
   {
    "path": "GAMEDAT/PCSHIP.V45",
-   "size": 135795
+   "size": 137229
   },
   {
    "path": "GAMEDAT/PEOPLE.V46",
@@ -99,5 +99,5 @@
    "size": 1538
   }
  ],
- "bytes": 881103
+ "bytes": 882537
 }

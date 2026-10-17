@@ -158,6 +158,12 @@ shields 115/115, armour 75/75/65/65, 2 lasers + 2 particle, 2 DF + 2 HS +
 armour 200/200/180/180; Morningstar shields 150/150, armour 200 all round.
 The Hellcat's are `HELLCAT_STATS` in so3/campaign.py.
 
+**The Hellcat's cockpit file** is Academy's, whose side and rear views are
+the Sabre's blocks; the Sabre's rear view is its turret, so block 3 is the
+Rapier's rear view in ours.  The record's words nobody has named (32-41,
+46-53) are the Sabre's (the user's pick of a sturdier template); the rest
+of the unknowns stay HCl's.
+
 **Scenes and the cockpit picture.**  The comm scenes of a briefing draw a
 cockpit from a `pcship.vNN` named in the scene file's shape list
 (CAMPAIGN.S0n lists all seven flyable ones); the first mission's draws

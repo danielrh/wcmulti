@@ -114,11 +114,17 @@ def apply_patch(data, spec):
     return d
 
 
-def hellcat_record(rec):
+def hellcat_record(rec, sabre):
     """The Hellcat's record with campaign.py's numbers and weapons: the guns
     where HELLCAT_GUNS puts them, the missile and decoy mounts where the
-    conversion left them (the Rapier's), with the codes changed."""
-    rec = wc2data.set_record_stats(rec, **campaign.HELLCAT_STATS)
+    conversion left them (the Rapier's), with the codes changed; the words
+    nobody has named (32-41, 46-53) the Sabre's rather than the Rapier's
+    that HCl's record carried (the user's pick, 2026-10-17: a sturdier
+    template for a medium fighter)."""
+    rec = bytearray(rec)
+    rec[32:42] = sabre[32:42]
+    rec[46:54] = sabre[46:54]
+    rec = wc2data.set_record_stats(bytes(rec), **campaign.HELLCAT_STATS)
     old = wc2data.hardpoints(rec)
     others = [p for p in old if p[0] >= 15]
     chaff = [p for p in others if p[0] == wc2data.WEAPON["chaff"]]
@@ -210,12 +216,16 @@ def main():
     # the Hellcat
     ext = wc2data.blocks_of(os.path.join(args.hellcat, "XSHIP.V50"))
     parts, flags = wc2data.academy_fighter_to_wc2(ext, campaign.HELLCAT)
-    parts[3] = hellcat_record(parts[3])
+    parts[3] = hellcat_record(parts[3], wc2data.blocks_of(os.path.join(gamedat, "SHIP.V04"))[3])
     if args.hellcat_scale != 1.0:
         parts = wc2data.scale_fighter(parts, args.hellcat_scale)
     wc2data.write_container(os.path.join(pgd, "SHIP.V%02d" % campaign.HELLCAT), parts, flags)
     cp = wc2data.blocks_of(os.path.join(args.hellcat, "PCSHIP.V50"))
     parts, flags = wc2data.academy_cockpit_to_wc2(cp)
+    # The rear view: Academy's cockpit carries the Sabre's blocks for the
+    # side and rear views, and the Sabre's rear view is its turret.  The
+    # Hellcat has none: the Rapier's rear view (the user, 2026-10-17).
+    parts[3] = wc2data.blocks_of(os.path.join(gamedat, "PCSHIP.V01"))[3]
     wc2data.write_container(os.path.join(pgd, "PCSHIP.V%02d" % campaign.HELLCAT), parts, flags)
     shutil.copyfile(os.path.join(gamedat, "INTELSHP.041"), os.path.join(pgd, "INTELSHP.%03d" % campaign.HELLCAT))
     # A type flown by a pilot without an INTEL file of his own needs the type's
