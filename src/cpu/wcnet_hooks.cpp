@@ -152,6 +152,11 @@ static int first_rock() {
 }
 
 static int script_slot(const char *arg) {
+    if (strcmp(arg, "target") == 0) {
+        // the ship our own targeting has picked (the missile lock's target byte; 0xff = none)
+        Bit8u t = ds::known(ds::missileTarget) ? rd8((Bit16u)(ds::missileTarget + kPlayerSlot)) : 0xff;
+        return t == 0xff ? -1 : (int)t;
+    }
     return strcmp(arg, "npc") == 0 ? first_npc_ship() : strcmp(arg, "rock") == 0 ? first_rock() : atoi(arg);
 }
 
@@ -541,7 +546,7 @@ static void key_script() {
         wclog(2, "key script %.1fs (t=%.1f): dseg:%04X = %02x (was %02x)", t, now / 1000.0, off, val, rd8(off));
         wr8(off, val);
     } else if (item.compare(0, 6, "!face=") == 0 || item.compare(0, 6, "!rock=") == 0) {
-        // !face=<slot|npc|rock> turns our ship towards that slot;
+        // !face=<slot|npc|rock|target> turns our ship towards that slot (target: what our targeting has picked);
         // !rock=<slot|npc> puts one of our field's rocks or mines on that
         // ship, !rock=0 dead ahead of our own
         int slot = script_slot(item.c_str() + 6);

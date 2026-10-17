@@ -30,6 +30,15 @@ enum { kSoftRockDivisor = 16, kSoftRockMost = 80 };
 static std::deque<PendingFire> g_pendingFires;
 static Bit32u g_nextFireSeq = 1;
 
+// Missiles this machine launched by prediction (FireJob::PREDICT), by local
+// slot: the game flies them here and ends them here (intercept_despawn).
+static Bit32u g_predictedMissiles = 0;
+static void forget_predicted_missile(int slot) {
+    if (slot >= 0 && slot < 32) {
+        g_predictedMissiles &= ~(1u << slot);
+    }
+}
+
 // True while a client runs the game's nav point setup for a spawn the server
 // sent (NavSetupJob): the spawns and despawns nested in it are the client's
 // own and are answered as outside a replay (the server decides).
@@ -46,6 +55,7 @@ static bool g_cinematic = false;  // the autopilot's fly-by is being replayed (s
 void reset_pending_fires() {
     g_cinematic = false;  // (a mission that ended inside a fly-by)
     g_pendingFires.clear();
+    g_predictedMissiles = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,8 +226,9 @@ public:
             return;
         }
         int spawned = before_.newly_used();
-        if (spawned != -1 && entity_type(spawned) != ET_MISSILE) {
-            wclog(2, "fire spawned permanent slot %d of type %d", spawned, entity_type(spawned));
+        if (spawned != -1) {
+            wclog(2, "fire spawned permanent slot %d of type %d (%s)", spawned, entity_type(spawned),
+                  entity_type(spawned) == ET_MISSILE ? "a missile" : "not a missile");
         }
         switch (mode_) {
         case BROADCAST: {
@@ -234,6 +245,9 @@ public:
             pf.seq = fire_.client_seq();
             pf.gun = gun_;
             pf.spawnedSlot = spawned;
+            if (spawned != -1 && entity_type(spawned) == ET_MISSILE && spawned < 32) {
+                g_predictedMissiles |= 1u << spawned;
+            }
             g_pendingFires.push_back(pf);
             Event ev;
             *ev.mutable_fire() = fire_;
@@ -241,8 +255,11 @@ public:
             break;
         }
         case REPLAY:
-            if (fire_.has_ship_id() && spawned != -1 && g_entityMap) {
-                g_entityMap->record_spawn(fire_.ship_id(), spawned);
+            if (spawned != -1) {
+                forget_predicted_missile(spawned);
+                if (fire_.has_ship_id() && g_entityMap) {
+                    g_entityMap->record_spawn(fire_.ship_id(), spawned);
+                }
             }
             break;
         }
@@ -385,6 +402,7 @@ public:
             g_session->on_spawned(spawn_);
         } else if (spawn_.has_ship_id() && g_entityMap && slot != kInvalidSlot) {
             g_entityMap->record_spawn(spawn_.ship_id(), slot);
+            forget_predicted_missile(slot);
             // The mission setup gives a ship its pilot (dseg:D1A2) after the
             // spawn returns; on a client that setup never runs, this replayed
             // spawn only builds the ship, so the server sends the byte along.
@@ -442,6 +460,7 @@ public:
         } else {
             call_of(code::despawn).arg((Bit16u)localShip_).invoke();
         }
+        forget_predicted_missile(localShip_);
         started_ = true;
         return true;
     }
@@ -1242,6 +1261,23 @@ static void intercept_despawn(bool explode) {
             // program with "ship.vNN, packet 15")
             return;
         }
+        if (ship < 32 && (g_predictedMissiles & (1u << ship))) {
+            // A missile this machine launched itself (FireJob::PREDICT).  The
+            // server's copy decides the damage, but this copy is the game's
+            // own flight here and it ends here, explosion and all: left to the
+            // server, a copy whose end the server's despawn never reached (a
+            // net id taken again, a replay that spawned nothing) chased its
+            // target for ever and held the slot the next launch wanted.
+            wclog(2, "client's own missile in slot %d goes off here (explode %d)", ship, (int)explode);
+            if (g_entityMap) {
+                g_entityMap->unmap_local(ship);  // the server's word on its copy no longer lands here
+            }
+            if (!explode) {
+                forget_predicted_missile(ship);  // the slot is free again
+            }
+            return;
+        }
+        wclog(3, "client leaves the despawn of slot %d (type %d, explode %d) to the server", ship, entity_type(ship), (int)explode);
         return_from_call(fn, 0);
         return;
     }

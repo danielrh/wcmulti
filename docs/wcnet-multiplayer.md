@@ -78,6 +78,18 @@ extra health" and "wingman explodes" behaviour.
   for that slot (no lock), and the server's copy drives the missile.
   `WeaponFire.target` now carries the lock and the replaying side sets the
   byte before calling `fireGunFromShip`.
+* **A wingman's own missile chased its target for ever (SO3 play, 2026-10-16).**
+  A client fires by prediction (its own copy flies at once, the server
+  replays the shot and its copy decides the damage), and the client swallowed
+  every despawn the game asked for, its own missile's explosion included: the
+  copy was meant to go when the server's despawn of the server's copy
+  arrived.  When that word never landed (the net id taken again by then, a
+  replay that spawned nothing), the missile flew on behind its target with
+  nothing to end it, and the next launch found no slot ("I can't launch a
+  second one").  Now a slot the client's own predicted fire filled with a
+  missile (`g_predictedMissiles`) runs the game's despawns natively, explosion
+  and removal, and drops the net id mapped onto it so the server's later
+  despawn is ignored rather than landing on whatever took the slot.
 * The per-instruction hook read ~15 words of guest memory for every emulated
   instruction (`isExecutingOverlay` per hook).
 

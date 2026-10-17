@@ -63,6 +63,7 @@ public:
     // Called after replaying a spawn/fire that produced `slot` for network
     // id `net`.  Applies the player-slot swap described in the file comment.
     void record_spawn(int net, int slot);
+    void unmap_local(int slot);        // forget every net id that maps to this local slot (not the players')
     // net is in slot, whatever it is (a drone's copy of the server's player).
     void map(int net, int slot);
     void record_despawn(int net);
