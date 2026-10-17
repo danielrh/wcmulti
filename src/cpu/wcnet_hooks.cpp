@@ -324,6 +324,7 @@ struct ScriptStep {
 static KBD_KEYS script_key(const std::string &name) {
     static const struct { const char *name; KBD_KEYS key; } kNamed[] = {
         { "enter", KBD_enter }, { "esc", KBD_esc }, { "space", KBD_space }, { "tab", KBD_tab },
+        { "f1", KBD_f1 }, { "f2", KBD_f2 }, { "f3", KBD_f3 }, { "f4", KBD_f4 },
         { "backspace", KBD_backspace }, { "up", KBD_up }, { "down", KBD_down }, { "left", KBD_left },
         { "right", KBD_right }, { "comma", KBD_comma }, { "period", KBD_period }, { "equals", KBD_equals },
         { "minus", KBD_minus },
@@ -1159,7 +1160,9 @@ static void check_hooks_slow() {
     } else if (at_function(code::despawn)) {
         on_despawn_entry();
     } else if (at_function(code::aiShipThink)) {
-        on_ai_think_entry();
+        on_ai_think_entry(code::aiShipThink);
+    } else if (code::aiFighterThink.known() && at_function(code::aiFighterThink)) {
+        on_ai_think_entry(code::aiFighterThink);
     } else if (at_function(code::aiSetSpeed)) {
         on_ai_set_speed_entry();
     }
@@ -1368,6 +1371,12 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_set_rocks(int mode) {
 extern "C" EMSCRIPTEN_KEEPALIVE int wc_web_rocks() {
     return wc_net_rocks();
 }
+// The host's page switches collisions between the humans' ships (the same
+// lobby menu; WingBumps: 1 harmless, 0 the game's).
+static int g_webWingBumpsWanted = -1;
+extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_set_wing_bumps(int mode) {
+    g_webWingBumpsWanted = mode < 0 ? 0 : mode;
+}
 // The host's page sets the exchange mode (its lobby option; ExchangeMode:
 // 0 auto, 1 low latency, 2 high latency).
 static int g_webLatencyWanted = -1;
@@ -1402,6 +1411,10 @@ static void web_input_tick() {
     if (g_webRocksWanted >= 0) {
         wc_net_set_rocks(g_webRocksWanted);
         g_webRocksWanted = -1;
+    }
+    if (g_webWingBumpsWanted >= 0) {
+        wc_net_set_wing_bumps(g_webWingBumpsWanted);
+        g_webWingBumpsWanted = -1;
     }
     if (g_webLatencyWanted >= 0) {
         wc_net_set_mode(g_webLatencyWanted);

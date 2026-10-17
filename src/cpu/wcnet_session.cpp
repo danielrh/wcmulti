@@ -4,6 +4,7 @@
 #include <strings.h>
 #include <unistd.h>
 #include <algorithm>
+#include <cmath>
 #include <deque>
 #include <map>
 #include <vector>
@@ -440,6 +441,10 @@ static void show_notice(const std::string &text) {
     handle_incoming_chat(chat);
 }
 
+static const char *wing_bumps_notice(int mode) {
+    return mode == WING_BUMPS_GAME ? "Bumps between wingmen do damage, as the game has it" : "Bumps between wingmen are harmless";
+}
+
 static const char *rocks_notice(int mode) {
     return mode == ROCKS_OFF ? "Asteroids and mines are off"
          : mode == ROCKS_SOFT ? "Asteroids are soft: one will not kill you" : "Asteroids and mines are on";
@@ -651,6 +656,12 @@ struct RemoteClient {
     // The last frame of its whose position we took (by either channel), and when (emulated ms).
     Bit64u lastPosition = 0;
     double lastPositionEmu = 0;
+    // Debugging: how far our copy of its ship turns away from the heading it
+    // last reported, between its updates (the AI must not fly a human's ship).
+    bool hasLastLoc = false;
+    Location lastLoc;
+    double driftWorst = 0, driftWindowAt = 0;
+    int driftUpdates = 0;
 
     explicit RemoteClient(int n)
         : net(n), seat(SEAT_WINGMAN), mannedTurret(-1), acked(0), lastFrame(0), lastFrameAt(0), fps(-1),
@@ -704,7 +715,7 @@ public:
     explicit ServerSession(Listener *listener)
         : listener_(listener), epoch_(1), frameNumber_(0), sendFrameAtIdle_(false), ignoreNextFrameTop_(false),
           hadClientInMission_(false),
-          wantRocks_(rocks_mode()), modeSetting_(mode_from_name(getenv("WCNET_MODE"))), autoMode_(MODE_LOW),
+          wantRocks_(rocks_mode()), wantWingBumps_(wing_bumps_mode()), modeSetting_(mode_from_name(getenv("WCNET_MODE"))), autoMode_(MODE_LOW),
           highWindow_(kHighWindowMin), modeSince_(0), modeTickAt_(0), ownFrames_(0), rtt_(-1) {
         allowedIds_.push_back(1);
         allowedIds_.push_back(3);
@@ -760,6 +771,19 @@ public:
         }
     }
 
+    virtual void request_wing_bumps(int mode) {
+        mode = mode == WING_BUMPS_GAME ? WING_BUMPS_GAME : WING_BUMPS_HARMLESS;
+        if (mode == wantWingBumps_) {
+            return;
+        }
+        wantWingBumps_ = mode;
+        if (!within_briefed_mission) {
+            set_wing_bumps_mode(mode);
+            show_notice(wing_bumps_notice(mode));
+        }
+        // In a mission: exchange() applies it at the top of the next frame.
+    }
+
     virtual void request_rocks(int mode) {
         mode = mode == ROCKS_OFF ? ROCKS_OFF : mode == ROCKS_SOFT ? ROCKS_SOFT : ROCKS_ON;
         if (mode == wantRocks_) {
@@ -776,6 +800,7 @@ public:
     virtual void on_mission_starting(int mission, int series) {
         liven_everyone();
         set_rocks_mode(wantRocks_);
+        set_wing_bumps_mode(wantWingBumps_);
         within_briefed_mission = true;
         MissionEnd end;
         populate_mission_end(&end);
@@ -787,6 +812,13 @@ public:
         wclog(1, "mission %d/%d starting with %d client slot(s)", mission, series, (int)clients_.size());
         for (size_t i = 0; i < clients_.size(); i++) {
             RemoteClient *c = clients_[i];
+            // A new mission: nobody has left it yet.  The flag was cleared
+            // only with the score after a landing or a death (WC.EXE's
+            // compute_victory), so a wingman that had ejected or quit the
+            // mission before stayed "gone" through the next one: its seat
+            // not counted (client_for_slot), the AI flying the host's copy of
+            // its ship and its shots leaving at the AI's heading.
+            c->leftThisMission = false;
             if (c->connected() && c->requestedBriefingStart) {
                 send_briefing_state(c);
             }
@@ -1162,6 +1194,7 @@ private:
         NetworkMessage msg;
         *msg.mutable_briefing_start() = lastBriefing_;
         msg.mutable_briefing_start()->set_rocks(rocks_mode());
+        msg.mutable_briefing_start()->set_wing_bumps(wing_bumps_mode());
         msg.set_epoch(epoch_);
         msg.set_frame_number(frameNumber_);
         if (!c->conn.send(msg)) {
@@ -1189,6 +1222,7 @@ private:
         game->set_fps(pace_fps());
         Frame *frame = game->mutable_starting_state();
         frame->set_rocks(rocks_mode());
+        frame->set_wing_bumps(wing_bumps_mode());
         frame->set_mode(mode());
         c->link.reset();
         c->fps = -1;
@@ -1216,6 +1250,19 @@ private:
             return false;
         }
         c->inMission = true;
+        c->leftThisMission = false;  // it has the mission's start state: it is in it
+        // Its frame numbers start again at 1 with this mission (its epoch),
+        // so what we remember of its last mission's frames is forgotten too.
+        // Left as they were (029ec859, 2026-10-09, to 17), every position it sent in
+        // the next mission was "behind the times" until its count passed
+        // the last mission's, and the host's copy of its ship was the AI's:
+        // a wingman whose shots did no damage all through Gimle 3.
+        c->lastFrame = 0;
+        c->lastFrameAt = 0;
+        c->lastPosition = 0;
+        c->lastPositionEmu = 0;
+        c->hasLastLoc = false;
+        c->link.reset();
         hadClientInMission_ = true;
         // (No word of it on the screen: the game looks as it always did, and
         // the page's lobby says what each seat is.)
@@ -1267,6 +1314,25 @@ private:
             }
             ShipUpdate *su = update_for(frame, slot);
             populate_location(su->mutable_loc(), slot);
+            RemoteClient *rc = client_for_slot(slot);
+            if (rc && rc->hasLastLoc) {
+                // (debugging) the angle between the heading it reported last and our copy's now
+                Vec3 f = read_vec(vec_slot(ds::gOrientationFrontVector, slot));
+                Vec3 r = to_vec(rc->lastLoc.fore());
+                double dot = (double)f.x * r.x + (double)f.y * r.y + (double)f.z * r.z;
+                double n = sqrt((double)f.x * f.x + (double)f.y * f.y + (double)f.z * f.z) * sqrt((double)r.x * r.x + (double)r.y * r.y + (double)r.z * r.z);
+                double deg = n > 0 ? acos(std::max(-1.0, std::min(1.0, dot / n))) * 180.0 / 3.14159265 : 0;
+                if (deg > rc->driftWorst) rc->driftWorst = deg;
+                double now = PIC_FullIndex();
+                if (now - rc->driftWindowAt > 5000.0) {
+                    if (rc->driftWindowAt > 0 && (rc->driftWorst > 5.0 || rc->driftUpdates == 0)) {
+                        wclog(1, "player %d's copy turned up to %.0f deg from its reported heading (%d updates in %.0f s; in mission %d, ai %s)",
+                              slot, rc->driftWorst, rc->driftUpdates, (now - rc->driftWindowAt) / 1000.0, (int)rc->inMission,
+                              is_remote_player_slot(slot) ? "held off" : "RUNNING");
+                    }
+                    rc->driftWindowAt = now; rc->driftWorst = 0; rc->driftUpdates = 0;
+                }
+            }
             if (!is_remote_player_slot(slot)) {
                 ShipHealthState h;
                 if (health_.should_send(slot, &h)) {
@@ -1279,6 +1345,11 @@ private:
 
     void merge_client_location(RemoteClient *c, Bit64u frameNo, const Location &loc) {
         apply_location(loc, c->net);
+        if (loc.has_fore()) {
+            c->lastLoc = loc;
+            c->hasLastLoc = true;
+            c->driftUpdates++;
+        }
         *update_for(pendingFrame_.mutable_frame(), c->net)->mutable_loc() = loc;
         c->lastPosition = frameNo;
         c->lastPositionEmu = PIC_FullIndex();
@@ -1655,6 +1726,11 @@ private:
         if (!serverOnlyFlush) {
             mode_tick();
         }
+        if (!serverOnlyFlush && wantWingBumps_ != wing_bumps_mode()) {
+            set_wing_bumps_mode(wantWingBumps_);
+            pendingFrame_.mutable_frame()->set_wing_bumps(wantWingBumps_);
+            show_notice(wing_bumps_notice(wantWingBumps_));
+        }
         if (!serverOnlyFlush && wantRocks_ != rocks_mode()) {
             // The host switched the rocks: ours go or come back with this
             // frame's jobs, and every client does the same with its own.
@@ -1776,6 +1852,7 @@ private:
     bool sendFrameAtIdle_;
     bool ignoreNextFrameTop_;
     int wantRocks_;  // the host's choice (RocksMode); rocks_mode() follows it at a frame top
+    int wantWingBumps_;  // the host's choice (WingBumps), likewise
     int modeSetting_;   // ExchangeMode: what was asked for
     int autoMode_;      // what the link calls for (MODE_LOW or MODE_HIGH)
     int highWindow_;    // frames the server may run ahead in the high-latency mode
@@ -1862,6 +1939,11 @@ public:
     virtual void request_rocks(int mode) {
         (void)mode;
         show_notice("Only the host can switch asteroids and mines");
+    }
+
+    virtual void request_wing_bumps(int mode) {
+        (void)mode;
+        show_notice("Only the host can switch collisions between wingmen");
     }
 
     virtual bool paces() const { return mode_ == MODE_HIGH; }
@@ -2340,6 +2422,9 @@ private:
         if (b.has_rocks()) {
             set_rocks_mode((int)b.rocks());  // before our own nav point setup runs
         }
+        if (b.has_wing_bumps()) {
+            set_wing_bumps_mode((int)b.wing_bumps());
+        }
         load_mission_tree_progress(b.mission_tree_progress());
         load_campaign_state(b.campaign_state());
         wr8(ds::currentMission, (Bit8u)b.mission_id());
@@ -2476,6 +2561,10 @@ private:
             if (end.has_victory_points_plus_one()) {
                 lastVictoryPlusOne_ = end.victory_points_plus_one();  // (the score alone, after the host's landing animation)
             }
+        }
+        if (frame.has_wing_bumps() && (int)frame.wing_bumps() != wing_bumps_mode()) {
+            set_wing_bumps_mode((int)frame.wing_bumps());
+            show_notice(wing_bumps_notice(wing_bumps_mode()));
         }
         if (frame.has_rocks() && (int)frame.rocks() != rocks_mode()) {
             // The host switched the rocks in flight: the jobs run with this
@@ -2725,6 +2814,18 @@ int wc_net_rocks() {
     return rocks_mode();
 }
 
+void wc_net_set_wing_bumps(int mode) {
+    if (g_session) {
+        g_session->request_wing_bumps(mode);
+    } else {
+        set_wing_bumps_mode(mode);
+    }
+}
+
+int wc_net_wing_bumps() {
+    return wing_bumps_mode();
+}
+
 void wc_net_set_mode(int setting) {
     if (g_session) {
         g_session->request_mode(setting);
@@ -2759,6 +2860,21 @@ void wcnetSendChatMessage(const std::string &msg) {
             wc_net_set_rocks(ROCKS_SOFT);
         } else {
             show_notice(std::string(rocks_notice(rocks_mode())) + " (/rocks on, soft, off)");
+        }
+        return;
+    }
+    // "/bumps harmless" and "/bumps game": collisions between the humans'
+    // ships (the host's to set); "/bumps" alone says which is in force.
+    if (strncasecmp(msg.c_str(), "/bumps", 6) == 0) {
+        std::string arg = msg.substr(6);
+        size_t first = arg.find_first_not_of(' ');
+        arg = first == std::string::npos ? "" : arg.substr(first);
+        if (!strcasecmp(arg.c_str(), "harmless") || !strcasecmp(arg.c_str(), "off")) {
+            wc_net_set_wing_bumps(WING_BUMPS_HARMLESS);
+        } else if (!strcasecmp(arg.c_str(), "game") || !strcasecmp(arg.c_str(), "on")) {
+            wc_net_set_wing_bumps(WING_BUMPS_GAME);
+        } else {
+            show_notice(std::string(wing_bumps_notice(wing_bumps_mode())) + " (/bumps harmless, game)");
         }
         return;
     }

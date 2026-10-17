@@ -90,6 +90,46 @@ extra health" and "wingman explodes" behaviour.
   missile (`g_predictedMissiles`) runs the game's despawns natively, explosion
   and removal, and drops the net id mapped onto it so the server's later
   despawn is ignored rather than landing on whatever took the slot.
+* **A wingman's guns did no damage in a big fight (Gimle 3, 2026-10-17).**
+  Two causes, both in the rule that the server decides every hit on an NPC
+  with its own copies of things.  The server's copy of a wingman's shot
+  leaves the server's copy of the wingman's ship when the shot's event
+  arrives, up to a round trip after the wingman saw it leave, at a target
+  the server has moved on by then: with a simulated 180 ms round trip the
+  rig's wingman landed a third of the hits the host did from the same
+  aim.  And a target far from the host (the one far enemy the keep-near
+  rule leaves to a wingman) is one the host's game does not collide bolts
+  with at all: the wingman hit it again and again and it would not blow
+  up.  Now a wingman's own machine reports the hits of its own bolts, as it
+  already reported its own rocks and mines (`report_local_hit` with the
+  shooter named; `DamageJob::REPORTED` applies them with the shooter's bolt
+  or ship as the source, so the kill is the wingman's), and the server's
+  own copy of a wingman's bolt no longer does damage (it is for the eye).
+  A wingman hits what the wingman sees it hit, as the host always did.
+* **From the second mission on, the host ignored the wingman's movements
+  (Gimle 2 flown and won, then Gimle 3; 2026-10-17, the user's logs).**  A
+  regression of 029ec859 (2026-10-09): a wingman's position is applied only when its
+  frame number is newer than the last one taken (`RemoteClient::lastPosition`,
+  for the best-effort channel), and the host never cleared that number
+  between missions while a wingman's frames start again at 1 with each
+  mission (its epoch).  All through the next mission, until its count passed
+  the last mission's, every position the wingman sent was "behind the
+  times": the host's copy of its ship was the AI's (the item below), its
+  shots left from wherever that copy pointed and did no damage, and a fresh
+  browser, whose counters start at zero, had no such trouble.  The start
+  state now clears `lastFrame`, `lastPosition`, their times and the link
+  monitor for that client.  Related: `leftThisMission` was cleared only with
+  the score after a landing or a death, so a wingman that had ejected or
+  quit stayed uncounted through the next mission; a mission's start and its
+  start state clear it now.
+* **The host saw the AI flying the wingman's ship (same play-test).**  The
+  WC.EXE AI hook (`ovr163:160E`) is the capital ships' routine; the
+  fighters' (`ovr163:13CF`, from the same dispatcher) still ran for a
+  wingman's slot on the server, turning the host's copy up to 40 degrees
+  off the heading the wingman had just reported, every frame, between the
+  wingman's updates (`player N's copy turned up to ...` in the host's log
+  with `WCNET_LOG=2`).  Both routines are held off a human's slot now
+  (`aiFighterThink`; SM2 at the same offsets).
 * The per-instruction hook read ~15 words of guest memory for every emulated
   instruction (`isExecutingOverlay` per hook).
 
@@ -205,6 +245,14 @@ extra health" and "wingman explodes" behaviour.
   kill a fresh ship from any side; later hits get through a point at a time
   (a collision's damage points are `quantity >> 7`).  Mines and everything a
   rock does to other ships are unchanged.
+* **Bumps between wingmen are harmless** (`WCWINGBUMPS=game` for the game's
+  damage; the lobby's "Collisions" menu, which pairs it with the rocks;
+  `/bumps harmless`, `/bumps game`; 2026-10-17, the user's wish: a brush
+  with the wingman lost missions).  In `do_damage` every machine answers
+  for its own ship: when the source is a ship (not a bolt, a missile or a
+  rock) and both are humans' ships, the damage is not taken.  Guns,
+  missiles, rocks and ramming anything else count as before.  The host's
+  choice travels with the briefing start and the frames like the rocks.
 * **The host can switch the fields off** (`WCROCKS=0`, the lobby's
   "Asteroids and mines" menu, `/rocks off` in the lobby chat or in the comms
   prompt; `Session::request_rocks`).  Off, the spawn hook answers a field
@@ -728,7 +776,7 @@ way, and has a "Copy log" button for a report.
 | `fireGunFromShip` | `ovr143:2978` | fire policy, prediction, broadcast |
 | `delayedDespawn` / `despawn` | `ovr143:1F15` / `ovr140:1C16` | despawn policy + broadcast |
 | `outerSpawnShipEntity` | `ovr145:115D` | spawn broadcast, slot registry; asteroid and mine fields run locally |
-| AI think / set speed | `ovr163:160E` / `ovr143:0874` | suppress for human-flown slots |
+| AI think / set speed | `ovr163:160E` (capital ships), `ovr163:13CF` (fighters) / `ovr143:0874` | suppress for human-flown slots |
 | mission starting / ended / score | `ovr161:0470` / `04DD` / `0251` | briefing handshake, mission end sync |
 | main loop top, status checks | `seg001:20E3`, `20F4`, `2108`, `20F2` | frame exchange, client mission-status policy |
 | autopilot | `ovr133:0003`, `ovr133:05C9`, `seg001:1695` | camera replication, client key lockout |
@@ -773,6 +821,7 @@ shell command still starts/stops the server or connects.  Useful environment:
 | `WCNET_MODE=auto\|low\|high` | on the host: the exchange mode (section 3b; low is the default since 2026-10-15; auto goes by the measured link; the page's "Connection" option and `/latency` do the same) |
 | `WCNET_BESTEFFORT=0` | no positions by the best-effort channel in the high-latency mode (section 3b), to measure what it is worth |
 | `WCKEEPNEAR=<km>` | on the host: how close a wingman's ship must be to an enemy that the game would remove for being more than 16000 km from the host's ship, for that enemy to stay; one at a time, the nearest to a wingman (default 7200, a laser blast and a half; 0: the game's own rule) |
+| `WCWINGBUMPS=game` | on the host: two wingmen's ships touching do the game's collision damage (the default is none; the lobby's "Collisions" menu, `/bumps harmless`, `/bumps game`) |
 | `WCROCKS=0` / `WCROCKS=soft` | on the host: fly without asteroid and mine fields, or with rocks that do a sixteenth of their damage to a player's own ship (everyone follows the host; `/rocks on`, `/rocks soft`, `/rocks off` in the comms prompt switch it in flight) |
 | `WCNET_AUTOKEYS=1` | test aid: press Enter through the briefing, then `A` (autopilot) once in space |
 | `WCNET=0` | fly alone: no server, no room, the game's own wingman (a single-player control for experiments) |

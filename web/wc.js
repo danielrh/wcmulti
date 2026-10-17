@@ -550,8 +550,8 @@ function renderMission() {
   if (lobby.mission && isHost() && !Array.from(sel.options).some((o) => o.value === missionKey(lobby.mission))) lobby.mission = null;
   sel.value = missionKey(lobby.mission);
   sel.disabled = !isHost() || running;
-  $("rocks").value = lobby.rocks;
-  $("rocks").disabled = !isHost();  // the host may switch them while flying too
+  $("collisions").value = `${lobby.rocks}-${lobby.wingBumps}`;
+  $("collisions").disabled = !isHost();  // the host may switch them while flying too
   $("latency").value = lobby.latency;
   $("latency").disabled = !isHost();
   const hints = (c && c.hints) || {};
@@ -575,6 +575,9 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 // asteroid and mine fields, "on", "soft" (a rock does a
                 // fraction of its damage) or "off": the host's choice, for everybody
                 rocks: "on",
+                // two wingmen's ships touching: "harmless" (the default) or
+                // "game" (the game's collision damage): the host's choice
+                wingBumps: "harmless",
                 // the exchange mode, "low" (the default) or "high" latency, or
                 // "auto" (the host's game measures the connection and picks,
                 // which proved disruptive in play): the host's choice
@@ -607,11 +610,25 @@ function sendLobby(obj, to) {
 const sayHello = (to, reply) => sendLobby({ t: "hello", name: myName(), flying: running, reply: !!reply,
   game: source ? source.game.id : "", voice: voice.choice(),
   mission: isHost() ? missionKey(lobby.mission) : undefined, rocks: isHost() ? lobby.rocks : undefined,
+  wingBumps: isHost() ? lobby.wingBumps : undefined,
   latency: isHost() ? lobby.latency : undefined }, to);
 
 // Asteroid and mine fields on, soft or off.  The host's page tells the others
 // (for their lobby) and its own running game, which tells every wingman's game.
 const ROCKS = { off: 0, on: 1, soft: 2 };  // the game's numbers (RocksMode)
+const WING_BUMPS = { game: 0, harmless: 1 };  // the game's numbers (WingBumps)
+const wingBumpsMode = (v) => (Object.prototype.hasOwnProperty.call(WING_BUMPS, v) ? v : "harmless");
+const wingBumpsLabel = (v) => (v === "game" ? "wing bumps to hurt, as the game has it" : "wing bumps to harmless");
+function setWingBumps(v) {
+  if (!isHost()) return;
+  v = wingBumpsMode(v);
+  if (lobby.wingBumps === v) return;
+  lobby.wingBumps = v;
+  renderMission();
+  chatLine(`You switched ${wingBumpsLabel(v)}`, "sys");
+  sayHello();
+  if (running && window.DOSBox && window.DOSBox._wc_web_set_wing_bumps) window.DOSBox._wc_web_set_wing_bumps(WING_BUMPS[v]);
+}
 const rocksMode = (v) => (Object.prototype.hasOwnProperty.call(ROCKS, v) ? v : "on");
 const rocksLabel = (v) => (v === "soft" ? "asteroids soft (one will not kill you)" : `asteroids and mines ${v}`);
 function setRocks(v) {
@@ -751,6 +768,11 @@ function onLobbyEvent(ev) {
           chatLine(`${esc(m.name)} switched ${rocksLabel(lobby.rocks)}`, "sys");
           renderMission();
         }
+        if (ev.from === 0 && !isHost() && typeof m.wingBumps === "string" && wingBumpsMode(m.wingBumps) !== lobby.wingBumps) {
+          lobby.wingBumps = wingBumpsMode(m.wingBumps);
+          chatLine(`${esc(m.name)} switched ${wingBumpsLabel(lobby.wingBumps)}`, "sys");
+          renderMission();
+        }
         if (ev.from === 0 && !isHost() && typeof m.latency === "string" && latencyMode(m.latency) !== lobby.latency) {
           lobby.latency = latencyMode(m.latency);
           chatLine(`${esc(m.name)} set ${latencyLabel(lobby.latency)}`, "sys");
@@ -767,6 +789,7 @@ function onLobbyEvent(ev) {
         if (typeof m.game === "string" && m.game) lobby.games.set(0, m.game);
         lobby.mission = parseMission(m.mission);
         if (typeof m.rocks === "string") lobby.rocks = rocksMode(m.rocks);
+        if (typeof m.wingBumps === "string") lobby.wingBumps = wingBumpsMode(m.wingBumps);
         if (typeof m.latency === "string") lobby.latency = latencyMode(m.latency);
         renderMission();
         chatLine(`${esc(lobby.names.get(0) || "The host")} started ${esc(missionLabel(lobby.mission))}`, "sys");
@@ -858,6 +881,7 @@ async function joinRoom({ create = true } = {}) {
     $("leave").hidden = false;
     if (game.selfId === 0) lobby.mission = parseMission(query.get("mission")) || { series: 1, mis: 0 };
     lobby.rocks = game.selfId === 0 ? rocksMode({ 0: "off", 2: "soft" }[query.get("rocks")] || query.get("rocks")) : "on";
+    lobby.wingBumps = game.selfId === 0 ? wingBumpsMode({ 0: "game", 1: "harmless" }[query.get("bumps")] || query.get("bumps")) : "harmless";
     lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "low";
     renderMission();
     for (const id of ["room", "players", "server", "relay"]) $(id).disabled = true;
@@ -951,6 +975,12 @@ $("chatForm").addEventListener("submit", (ev) => {
     else chatLine(`${rocksLabel(lobby.rocks)[0].toUpperCase()}${rocksLabel(lobby.rocks).slice(1)}; the host switches them with /rocks on, /rocks soft or /rocks off.`, "sys");
     return;
   }
+  const bumps = /^\/bumps(?:\s+(harmless|game|on|off))?$/i.exec(text);
+  if (bumps) {
+    if (bumps[1]) setWingBumps({ on: "game", off: "harmless" }[bumps[1].toLowerCase()] || bumps[1].toLowerCase());
+    else chatLine(`${wingBumpsLabel(lobby.wingBumps)[0].toUpperCase()}${wingBumpsLabel(lobby.wingBumps).slice(1)}; the host switches it with /bumps harmless or /bumps game.`, "sys");
+    return;
+  }
   const lat = /^\/latency(?:\s+(auto|low|high))?$/i.exec(text);
   if (lat) {
     if (lat[1]) setLatency(lat[1].toLowerCase());
@@ -961,7 +991,11 @@ $("chatForm").addEventListener("submit", (ev) => {
   sendLobby({ t: "chat", name: myName(), text });
 });
 $("callsign").addEventListener("change", () => { if (lobby.game) { sayHello(); renderRoster(); } hall.announce(); });
-$("rocks").addEventListener("change", () => setRocks($("rocks").value));
+$("collisions").addEventListener("change", () => {
+  const [rocks, bumps] = $("collisions").value.split("-");
+  setRocks(rocks);
+  setWingBumps(bumps);
+});
 $("latency").addEventListener("change", () => setLatency($("latency").value));
 $("mission").addEventListener("change", () => {
   if (!isHost()) return;
@@ -976,7 +1010,7 @@ buildMissionMenu();
 
 $("fly").addEventListener("click", () => {
   if (!source || !lobby.game || running) return;
-  if (isHost()) sendLobby({ t: "start", game: source.game.id, mission: missionKey(lobby.mission), rocks: lobby.rocks, latency: lobby.latency });
+  if (isHost()) sendLobby({ t: "start", game: source.game.id, mission: missionKey(lobby.mission), rocks: lobby.rocks, wingBumps: lobby.wingBumps, latency: lobby.latency });
   void start(true);
 });
 $("fullscreen").addEventListener("click", () => goFullscreen());
@@ -1054,6 +1088,7 @@ async function start(fromGesture) {
     }
     // The host's game decides and tells the wingmen's; theirs start the same.
     if (source.game.multiplayer) env.WCROCKS = String(ROCKS[lobby.rocks]);
+    if (source.game.multiplayer) env.WCWINGBUMPS = String(WING_BUMPS[lobby.wingBumps]);
     if (source.game.multiplayer && isHost()) env.WCNET_MODE = lobby.latency;
     if (cfg.callsign) env.WCCALLSIGN = cfg.callsign;
     if (cfg.lastname) env.WCLASTNAME = cfg.lastname;

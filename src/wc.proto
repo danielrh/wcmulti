@@ -196,6 +196,8 @@ message Frame {
     // player's own ship (2).  Sent with the mission start state and when the
     // host changes it in flight; each machine then removes or restores its own.
     optional uint32 rocks = 20;
+    // Server -> client: WingBumps (wcnet_events.h): 1 = two humans' ships touch for no damage, 0 = the game's.
+    optional uint32 wing_bumps = 27;
     // From a gunner: the turret it mans plus one (0: none), so that the
     // server's automatic fire leaves that turret to it.
     optional uint32 manned_turret = 21;
@@ -261,6 +263,7 @@ message ServerSendBriefingStart {
     optional uint32 series_id = 3;
     // As Frame.rocks: known before the client sets up its first nav point.
     optional uint32 rocks = 4;
+    optional uint32 wing_bumps = 6;  // WingBumps, as Frame.wing_bumps
     // WC2: the server's campaign record (what a saved game holds: where the
     // story is, who is alive), as it was when "Fly mission" was chosen.  The
     // client takes it over, so that its briefing, its mission and what it

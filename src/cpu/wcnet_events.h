@@ -23,7 +23,7 @@ void on_fire_entry();             // fireGunFromShip(ship, gun)
 void on_spawn_entry();            // outerSpawnShipEntity(missionShip, situation)
 void on_despawn_entry();          // despawn(ship)
 void on_delayed_despawn_entry();  // delayedDespawn(src, ship)
-void on_ai_think_entry();         // per-frame ship AI (ovr163:160E)
+void on_ai_think_entry(const Loc &fn);  // per-frame ship AI (WC.EXE: ovr163:160E the capital ships', 13CF the fighters')
 void on_ai_set_speed_entry();     // ovr143:0874
 
 // --- replay ---------------------------------------------------------------
@@ -72,6 +72,11 @@ void tap_key(int kbdKey);
 // that remove this machine's rocks now, or register the current nav point's
 // fields again, and must be followed by a run of the trampoline.
 enum RocksMode { ROCKS_OFF = 0, ROCKS_ON = 1, ROCKS_SOFT = 2 };
+// Two humans' ships touching: the game's damage (0) or none (1, the
+// default; the lobby's "Collisions" menu, WCWINGBUMPS=game, /bumps game).
+enum WingBumps { WING_BUMPS_GAME = 0, WING_BUMPS_HARMLESS = 1 };
+int wing_bumps_mode();
+void set_wing_bumps_mode(int mode);
 int rocks_mode();
 inline bool rocks_enabled() { return rocks_mode() != ROCKS_OFF; }
 void set_rocks_mode(int mode);

@@ -73,6 +73,9 @@ bool wc_net_cockpit_dim(int *dashboardTop);
 bool wc_net_helmet_name(int *vduOrigin);
 void wc_net_set_rocks(int mode);
 int wc_net_rocks();
+// Collisions between the humans' ships (WingBumps in wcnet_events.h: 1 harmless, 0 the game's).
+void wc_net_set_wing_bumps(int mode);
+int wc_net_wing_bumps();
 // The exchange mode (ExchangeMode in wcnet_session.h): the setting, 0 auto
 // (the default: the host's game decides from the link it measures), 1 low
 // latency, 2 high latency (WCNET_MODE=auto|low|high; the host's lobby option;

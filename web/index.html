@@ -155,7 +155,7 @@
   #missionRow label { display: flex; gap: 6px; align-items: center; min-width: 0; color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
   #missionRow select { min-width: 0; max-width: 100%; }
   #mission { width: 34ch; }
-  #rocks { width: 9ch; }
+  #collisions { width: 12ch; }
   #latency { width: 9ch; }
   #missionHint { flex-basis: 100%; margin: 0; }
   #rosterBox { grid-area: roster; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -303,8 +303,15 @@
       <div id="lobby" hidden>
         <div id="missionRow">
           <label>Mission <select id="mission"></select></label>
-          <label title="Asteroid and mine fields. The host decides, also while flying; /rocks on, /rocks soft and /rocks off in the chat do the same">Asteroids
-            <select id="rocks"><option value="on">on</option><option value="soft">soft: one rock will not kill you</option><option value="off">off</option></select></label>
+          <label title="Asteroid and mine fields, and whether two wingmen's ships touching costs them anything (their guns, missiles and ramming anything else always count). The host decides, also while flying; /rocks on, /rocks soft, /rocks off and /bumps harmless, /bumps game in the chat do the same">Collisions
+            <select id="collisions">
+              <option value="on-harmless">asteroids on, wing bumps harmless</option>
+              <option value="soft-harmless">asteroids soft, wing bumps harmless</option>
+              <option value="off-harmless">asteroids off, wing bumps harmless</option>
+              <option value="on-game">asteroids on, wing bumps hurt</option>
+              <option value="soft-game">asteroids soft, wing bumps hurt</option>
+              <option value="off-game">asteroids off, wing bumps hurt</option>
+            </select></label>
           <label title="The connection: how the host's game and the wingmen's exchange their frames. Low latency (the default): each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes); auto: the host's game measures the connection and switches by itself, which has proved disruptive. The host decides, also while flying; /latency low, /latency high and /latency auto in the chat do the same">Conn
             <select id="latency"><option value="low">low latency: nearby</option><option value="high">high latency: far away</option><option value="auto">auto: the host's game picks (not recommended)</option></select></label>
           <div class="hint" id="missionHint"></div>

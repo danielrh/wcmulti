@@ -127,6 +127,7 @@ public:
     // everybody.  Only the server decides; a client's request just says so.
     // In flight it takes effect at the top of the next frame.
     virtual void request_rocks(int mode) = 0;
+    virtual void request_wing_bumps(int mode) = 0;   // WingBumps: the host's choice
 
     // --- the exchange mode (ExchangeMode) ------------------------------------
     // Whether this machine paces its own flight frames (wcnet_perf.h): a

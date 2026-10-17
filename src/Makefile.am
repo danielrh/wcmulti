@@ -51,7 +51,7 @@ if EMSCRIPTEN_BUILD
 dosbox_LDFLAGS = -sINITIAL_MEMORY=134217728 -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=4194304 \
                  -sFORCE_FILESYSTEM=1 -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createDOSBox -sENVIRONMENT=web \
                  -sINVOKE_RUN=0 -sEXIT_RUNTIME=0 \
-                 -sEXPORTED_FUNCTIONS=_main,_malloc,_free,_wc_web_emulated_ms,_wc_web_perf,_wc_web_ds_byte,_wc_web_tap_escape,_wc_web_key,_wc_web_pointer,_wc_web_mouse_button,_wc_web_in_flight,_wc_web_set_rocks,_wc_web_rocks --profiling-funcs \
+                 -sEXPORTED_FUNCTIONS=_main,_malloc,_free,_wc_web_emulated_ms,_wc_web_perf,_wc_web_ds_byte,_wc_web_tap_escape,_wc_web_key,_wc_web_pointer,_wc_web_mouse_button,_wc_web_in_flight,_wc_web_set_rocks,_wc_web_rocks,_wc_web_set_wing_bumps --profiling-funcs \
                  -sEXPORTED_RUNTIME_METHODS=FS,ENV,callMain,UTF8ToString \
                  --pre-js $(srcdir)/pre.js --js-library $(srcdir)/web_runtime.js
 EXTRA_dosbox_DEPENDENCIES += $(srcdir)/pre.js $(srcdir)/web_runtime.js

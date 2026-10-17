@@ -95,7 +95,8 @@ static void load_wc1_code() {
     // overlay 140: entities
     ovr(despawn, STUB140, 0x01DD, 0x1C16, 1);              // despawn(ship)
     // overlay 163: AI
-    ovr(aiShipThink, STUB163, 0x00CA, 0x160E, 1);          // per-frame ship AI (from ovr141:28D0)
+    ovr(aiShipThink, STUB163, 0x00CA, 0x160E, 1);          // per-frame ship AI (from ovr141:28D0): the capital ships'
+    ovr(aiFighterThink, STUB163, 0x0101, 0x13CF, 1);       // the fighters' (ovr141:28D0 sends fighters here): held off a human's slot too
     ovr(farShipTest1, STUB163, 0x0048, 0x003D);            // the AI's `cmp ax,3E80h`: the wingman more than 16000 km from the player is removed
     ovr(farShipTest2, STUB163, 0x00C0, 0x0317);            // the same test on a ship with no target (ovr163:0228)
     // overlay 134: VDU / comms

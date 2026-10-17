@@ -304,7 +304,8 @@ public:
             return false;  // only ships take collision or blast damage
         }
         int srcLocal = kInvalidSlot;
-        if (mode_ == REPLAY && dam_.has_shooter()) {
+        if (dam_.has_shooter()) {
+            // (a replayed hit, or a wingman's own gun hit it reported)
             int shooterLocal = NetworkShipId::from_net(dam_.shooter()).to_local();
             if (shooterLocal != kInvalidSlot) {
                 // The game plays hit sounds/effects only when the source is a
@@ -994,6 +995,19 @@ private:
 
 static int g_rocksMode = -1;  // -1: not yet read from WCROCKS
 
+static int g_wingBumps = -1;
+int wing_bumps_mode() {
+    if (g_wingBumps < 0) {
+        const char *env = getenv("WCWINGBUMPS");
+        g_wingBumps = env && env[0] && (env[0] == '0' || !strcasecmp(env, "game")) ? WING_BUMPS_GAME : WING_BUMPS_HARMLESS;
+    }
+    return g_wingBumps;
+}
+
+void set_wing_bumps_mode(int mode) {
+    g_wingBumps = mode == WING_BUMPS_GAME ? WING_BUMPS_GAME : WING_BUMPS_HARMLESS;
+}
+
 int rocks_mode() {
     if (g_rocksMode < 0) {
         const char *env = getenv("WCROCKS");
@@ -1060,7 +1074,7 @@ static bool ship_behind(int src, int *net) {
 // Client: one of this machine's own rocks or mines hit a ship the server
 // owns.  The server cannot see that rock, so tell it; the damage comes back
 // with the server's next frame like any other.
-static void report_local_hit(Session *s, int dst, Bit16u quantity, Bit16u vecOff) {
+static void report_local_hit(Session *s, int dst, Bit16u quantity, Bit16u vecOff, bool ourGuns) {
     if (g_entityMap && !g_entityMap->is_local_mapped(dst)) {
         return;
     }
@@ -1068,12 +1082,20 @@ static void report_local_hit(Session *s, int dst, Bit16u quantity, Bit16u vecOff
     Damage *dam = ev.mutable_damage();
     dam->set_ship_id(NetworkShipId::from_local(dst).to_net());
     dam->set_quantity(quantity);
+    if (ourGuns) {
+        dam->set_shooter(NetworkShipId::from_local(kPlayerSlot).to_net());
+    }
     Vec3 v = read_vec(vecOff);
     dam->mutable_pos()->set_x(v.x);
     dam->mutable_pos()->set_y(v.y);
     dam->mutable_pos()->set_z(v.z);
-    wclog(2, "reporting a hit by our own rock or mine on slot %d (net %d) qty %d", dst, dam->ship_id(), quantity);
+    wclog(2, "reporting a hit by our own %s on slot %d (net %d) qty %d", ourGuns ? "guns" : "rock or mine", dst, dam->ship_id(), quantity);
     s->queue_outgoing_event(ev);
+}
+
+// A bolt of this machine's own ship (its top-level parent is slot 0).
+static bool our_own_bolt(int src) {
+    return src >= 0 && src < kNumSlots && entity_type(src) == ET_BOLT && top_level_parent(src) == kPlayerSlot;
 }
 
 void on_do_damage_entry() {
@@ -1102,6 +1124,17 @@ void on_do_damage_entry() {
     if (!s) {
         return;
     }
+    if (wing_bumps_mode() == WING_BUMPS_HARMLESS && src >= 0 && src < kNumSlots && entity_type(src) >= ET_SHIP &&
+        s->is_player_slot(src) && s->is_player_slot(dst)) {
+        // Two humans' ships touching (the lobby's "Collisions" menu, harmless
+        // by default, the user's wish of 2026-10-17: a brush with the wingman
+        // lost missions).  Every machine answers for its own ship here; their
+        // guns, missiles and rocks still count, and so does ramming anything
+        // else.
+        wclog(2, "wing bump: slot %d into slot %d, %d damage not taken", src, dst, quantity);
+        return_from_call(code::do_damage, 0);
+        return;
+    }
 
     if (s->is_remote_player_slot(dst) || (dst == kPlayerSlot && s->is_drone())) {
         // Only the owner's machine may damage a human's ship (see session.h),
@@ -1119,8 +1152,20 @@ void on_do_damage_entry() {
         if (!is_ship_slot(dst)) {
             return;  // rocks, mines, bolts: every machine has its own
         }
-        if (quantity != 0 && s->seat() == SEAT_WINGMAN && is_local_hazard(src) && slot_in_use(dst) && entity_type(dst) >= ET_SHIP) {
-            report_local_hit(s, dst, quantity, vecOff);
+        if (quantity != 0 && s->seat() == SEAT_WINGMAN && slot_in_use(dst) && entity_type(dst) >= ET_SHIP) {
+            // One of our own rocks or mines, which the server cannot see, or
+            // one of our own bolts: a wingman's guns hit what the wingman
+            // sees them hit (2026-10-17).  The server's copy of that shot
+            // leaves a copy of our ship, up to a round trip later, at a
+            // target the server has elsewhere by then: against a swarm of
+            // Dralthi (Gimle 3) a wingman hit again and again for no damage
+            // at all.  The server applies the report and tells everyone, and
+            // its own copy of our bolt no longer does damage of its own.
+            if (is_local_hazard(src)) {
+                report_local_hit(s, dst, quantity, vecOff, false);
+            } else if (our_own_bolt(src)) {
+                report_local_hit(s, dst, quantity, vecOff, true);
+            }
         }
         return_from_call(code::do_damage, 0);  // NPC damage is decided by the server
         return;
@@ -1130,6 +1175,12 @@ void on_do_damage_entry() {
     }
     if (!is_ship_slot(dst)) {
         return;  // rocks, mines, bolts: not replicated
+    }
+    if (!g_applyingReport && src >= 0 && src < kNumSlots && entity_type(src) == ET_BOLT && s->is_remote_player_slot(top_level_parent(src))) {
+        // Our copy of a wingman's shot: the wingman's own machine reports
+        // its hits (above), so this copy is for the eye only.
+        return_from_call(code::do_damage, 0);
+        return;
     }
     Event ev;
     Damage *dam = ev.mutable_damage();
@@ -1297,16 +1348,21 @@ static void intercept_despawn(bool explode) {
 void on_despawn_entry() { intercept_despawn(false); }
 void on_delayed_despawn_entry() { intercept_despawn(true); }
 
-void on_ai_think_entry() {
+void on_ai_think_entry(const Loc &fn) {
     Session *s = g_session;
     // WC.EXE clients let the AI run (the server's positions overwrite what
     // it does); in WC2 the wingman AI would pull the host's ship into
     // formation on our own every frame, so there it is off for that ship.
+    // On the server a human's ship is flown by its human alone: WC.EXE's
+    // hook sat on the capital ships' routine only, and the fighters' turned
+    // the host's copy of the wingman up to 40 degrees off the heading the
+    // wingman had just reported, every frame (Gimle 3, 2026-10-17): the
+    // host saw the AI flying the wingman's ship.
     if (!s || !(s->is_server() || is_wc2())) {
         return;
     }
-    if (s->is_remote_player_slot(call_arg16(code::aiShipThink, 0))) {
-        return_from_call(code::aiShipThink, 0);
+    if (s->is_remote_player_slot(call_arg16(fn, 0))) {
+        return_from_call(fn, 0);
     }
 }
 
@@ -1400,10 +1456,14 @@ void enqueue_remote_event(const Event &ev) {
 }
 
 void enqueue_reported_damage(const Damage &reported) {
-    // Only what a collision report needs: no source, no seed of the client's.
+    // Only what a report needs: the shooter when it is the client's guns (the
+    // kill is theirs), no seed of the client's.
     Damage dam;
     dam.set_ship_id(reported.ship_id());
     dam.set_quantity(reported.quantity() & 0xffff);
+    if (reported.has_shooter()) {
+        dam.set_shooter(reported.shooter());
+    }
     if (reported.has_pos()) {
         *dam.mutable_pos() = reported.pos();
     }

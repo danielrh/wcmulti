@@ -47,7 +47,7 @@ typedef Loc RootLoc;
     /* ships, damage, weapons */ \
     X(do_damage) X(delayedDespawn) X(fireGunFromShip) X(maybe_fire_all_guns) X(aiSetSpeed) X(aiSetSpeedReturn) \
     /* mission spawning, entities, AI, comms */ \
-    X(outerSpawnShipEntity) X(enterNavPoint) X(navStepAltIntel) X(playScene) X(farShipTest1) X(farShipTest2) X(despawn) X(aiShipThink) X(showCommMessage) \
+    X(outerSpawnShipEntity) X(enterNavPoint) X(navStepAltIntel) X(playScene) X(farShipTest1) X(farShipTest2) X(despawn) X(aiShipThink) X(aiFighterThink) X(showCommMessage) \
     /* autopilot */ \
     X(autoAnimation) X(autoAnimationBody) X(autopilotFinished) X(autopilotKey) \
     /* briefing, barracks, mission lifecycle, simulator */ \

@@ -18,6 +18,7 @@ static void load_sm2_code() {
     ovr(enterNavPoint, 0x1107, 0x0075, 0x09B5, 1);                 // ovr142:09B5 (ovr145:098F)
     ovr(despawn, 0x10C2, 0x01DD, 0x1C29, 1);                       // ovr137:1C29 (ovr140:1C16)
     ovr(aiShipThink, 0x1185, 0x00CA, 0x160E, 1);                   // ovr160:160E (ovr163:160E)
+    ovr(aiFighterThink, 0x1185, 0x0101, 0x13CF, 1);                // ovr160:13CF (ovr163:13CF)
     ovr(farShipTest1, 0x1185, 0x0048, 0x003D);                     // ovr160:003D (ovr163:003D)
     ovr(farShipTest2, 0x1185, 0x00C0, 0x0317);                     // ovr160:0317 (ovr163:0317)
     ovr(showCommMessage, 0x107F, 0x025F, 0x33EB, 2);               // ovr131:33EB (ovr134:33ED)
