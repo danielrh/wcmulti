@@ -59,14 +59,14 @@ async function open(name, callsign) {
   u.searchParams.set("env.WCNET_LOG", "2");
   await page.goto(u.toString());
   if (gameSource === "server") {
-    await page.waitForFunction(() => document.getElementById("sourceStatus").textContent.startsWith("Ready"), null, { timeout: 60000 });
+    await page.waitForFunction(() => document.getElementById("sourceStatus").dataset.state === "ready", null, { timeout: 60000 });
   } else {
     await page.setInputFiles("#gamefile", gameFile);
-    await page.waitForFunction(() => /^(Ready|Could not)/.test(document.getElementById("sourceStatus").textContent), null, { timeout: 300000 });
+    await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   }
-  const src = await page.$eval("#sourceStatus", (el) => el.textContent);
+  const src = await page.$eval("#sourceStatus", (el) => `${el.dataset.state || "?"}: ${el.textContent || "plays " + document.getElementById("program").value}`);
   console.log(`[${name}] ${src.slice(0, 160)}`);
-  if (!src.startsWith("Ready")) throw new Error("game files not ready: " + src);
+  if (!src.startsWith("ready")) throw new Error("game files not ready: " + src);
   // The page joins the room on its own (?room= in the URL); wait for the
   // roster, say hello in the lobby chat, then fly.
   await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });

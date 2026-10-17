@@ -37,7 +37,7 @@ async function open(name, { hall = "HALL-" + run, game = true, query = {}, busy 
   const u = new URL(pageUrl);
   for (const [k, v] of Object.entries({ server: lobbyUrl, callsign: name, hall, ...(wait ? {} : { lobby: "off" }), ...query })) u.searchParams.set(k, v);
   await page.goto(u.toString());
-  if (game) await page.waitForFunction(() => /^Ready/.test(document.getElementById("sourceStatus").textContent), null, { timeout: 60000 });
+  if (game) await page.waitForFunction(() => document.getElementById("sourceStatus").dataset.state === "ready", null, { timeout: 60000 });
   if (busy) await page.evaluate((n) => window.__wcHall.test.configure({ busyFrom: n }), busy);
   return page;
 }
@@ -77,7 +77,7 @@ check("and the page has not connected to the lobby server", sockets.NOGAME.lengt
 const fake = Buffer.alloc(200000, 0x20);
 fake.write("MZ", 0, "latin1"); fake.writeUInt16LE(288, 8);
 await none.setInputFiles("#gamefile", { name: "fake.zip", mimeType: "application/zip", buffer: zipOf("WC.EXE", fake) });
-await none.waitForFunction(() => /^(Ready|Could not)/.test(document.getElementById("sourceStatus").textContent), null, { timeout: 30000 }).catch(() => {});
+await none.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 30000 }).catch(() => {});
 await sleep(2);
 check("a WC.EXE that is not the build the hooks know keeps it closed", /not the build the multiplayer hooks know/.test(await text(none, "sourceStatus")) && (await closed(none)) && sockets.NOGAME.length === 0, [await text(none, "sourceStatus"), sockets.NOGAME]);
 // With the game the pilot is in, and nothing had to be pressed.
@@ -283,6 +283,8 @@ check("nobody is in the lobby while flying", (await a.$eval("#hallBody", (el) =>
 await a.evaluate(() => window.DOSBox.print("wcnet: Wing Commander ended"));
 check("a pilot whose game is over is back in the lobby", await a.waitForFunction(() => !document.getElementById("hallBody").hidden && /^1 in the lobby/.test(document.getElementById("hallRoster").textContent), null, { timeout: 30000 }).then(() => true, () => false), [await text(a, "hallState"), await text(a, "hallRoster")]);
 check("and the one who still flies is not", await b.$eval("#hallBody", (el) => el.hidden), null);
+// (The page's "stopped by itself" status lands 300 ms after the ended line: let it, or it overwrites the click's answer.)
+await sleep(1);
 await click(a, codeA);
 await sleep(0.5);
 check("a code clicked there says the page has to be loaded again", /Reload the page to join/.test(await status(a)), await status(a));

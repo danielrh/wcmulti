@@ -43,7 +43,8 @@ directories, The Secret Missions 2 and the two Special Operations, in a
 "Play" menu; anything else offers a picker of the DOS executables found and
 runs single-player), only the game directory is kept,
 and the files are saved in the browser's IndexedDB so the next visit starts
-right away ("Forget the saved copy" removes them).  If unpacking an
+right away (the saved copies are listed under the drop zone, each with a
+"forget"; the "Play" menu offers every program of every saved game).  If unpacking an
 installer fails, the page says so and suggests `innoextract` + zip.
 
 **The room.**  Enter a room code and a callsign and press Join: the page

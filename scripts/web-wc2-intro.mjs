@@ -28,7 +28,7 @@ for (const [k, v] of Object.entries({ room: "INTRO-" + Math.random().toString(36
                                       "env.WCNET_LOG": "2", "env.WCROOM": "" })) u.searchParams.set(k, v);
 await page.goto(u.toString());
 await page.setInputFiles("#gamefile", process.env.GAME_FILE);
-await page.waitForFunction(() => /^(Ready|Could not)/.test(document.getElementById("sourceStatus").textContent), null, { timeout: 300000 });
+await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
 await page.waitForFunction(() => !document.getElementById("lobby").hidden && !document.getElementById("fly").disabled, null, { timeout: 60000 });
 await page.$eval("#mission", (el) => { el.value = ""; el.dispatchEvent(new Event("change")); });
 await page.click("#fly");

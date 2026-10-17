@@ -461,9 +461,10 @@ export function initHall(opts) {
       const url = new URL(location.href);
       url.search = ""; url.searchParams.set("room", p.code);
       a.href = opts.link ? opts.link(p.code) : url.toString();
-      const fits = !GAME_TAGS.includes(p.tag) || !myTag() || p.tag === myTag();
+      // (Dimmed when the pilot cannot fly in it: fits(tag) says, else the loaded game's tag must be the code's.)
+      const fits = !GAME_TAGS.includes(p.tag) || (opts.fits ? opts.fits(p.tag) : !myTag() || p.tag === myTag());
       if (!fits) a.classList.add("other");
-      a.title = (GAME_TAGS.includes(p.tag) ? `A room for ${opts.title ? opts.title(p.tag) : p.tag}. ` : "") + "Click to join it.";
+      a.title = (GAME_TAGS.includes(p.tag) ? `A room for ${opts.title ? opts.title(p.tag) : p.tag}${fits ? "" : " (no files for it in this browser)"}. ` : "") + "Click to join it.";
       a.addEventListener("click", (ev) => { ev.preventDefault(); opts.onCode(p.code); });
       parts.push(a);
     }

@@ -132,7 +132,10 @@ $("copyLog").addEventListener("click", async () => {
   catch (e) { const r = document.createRange(); r.selectNodeContents(logEl); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); $("copyLog").textContent = "Selected: press Ctrl+C"; }
   setTimeout(() => { $("copyLog").textContent = "Copy log"; }, 2500);
 });
-function sourceStatus(text) { $("sourceStatus").textContent = text; $("sourceStatus").removeAttribute("title"); }
+// The line under the drop zone: progress and trouble.  A game that is simply
+// ready says nothing there (the "Play" menu shows it); data-state tells the
+// page tests what the text no longer does: "busy", "ready" or "error".
+function sourceStatus(text, state) { const el = $("sourceStatus"); el.textContent = text; el.removeAttribute("title"); if (state) el.dataset.state = state; }
 const mb = (n) => (n / 1048576).toFixed(1) + " MB";
 
 // Prefill from the URL (?room=CODE&callsign=...) so a link can be shared.
@@ -191,7 +194,10 @@ function setSource(s, want) {
     const roomCode = lobby.game ? lobby.game.code : ($("room").value !== autoCode ? $("room").value.trim() : "");
     let kept = null;
     try { kept = localStorage.getItem(PROGRAM_KEY(base.id)); } catch (e) { /* none */ }
-    const g = programs.find((p) => p.id === want) || programs.find((p) => p === codeGame(roomCode)) || programs.find((p) => p.id === kept) || base;
+    // (In a room the host's program is everyone's: the code only says what
+    // the room was made for.)
+    const hostsProgram = lobby.game && !isHost() ? lobby.games.get(0) || "" : "";
+    const g = programs.find((p) => p.id === want) || programs.find((p) => p.id === hostsProgram) || programs.find((p) => p === codeGame(roomCode)) || programs.find((p) => p.id === kept) || base;
     s.base = base.id; s.programs = programs;
     s.game = { id: g.id, title: g.title, run: g.run, multiplayer: g.multiplayer };
     // (A file of the game's name is not yet the game: the hooks fly one
@@ -201,18 +207,14 @@ function setSource(s, want) {
     s.base = s.game.id; s.programs = []; s.known = false;
   }
   source = s;
-  const sel = $("program");
-  sel.innerHTML = "";
-  for (const g of (s ? s.programs : [])) { const o = document.createElement("option"); o.value = g.id; o.textContent = g.title; sel.appendChild(o); }
-  if (s) sel.value = s.game.id;
-  $("programLabel").hidden = !s || s.programs.length < 2;
+  renderPrograms();
   if (s) {
-    // (Where the files came from and how many is a tooltip: the panel
-    // stays a few lines, and Fly stays in view.)
-    sourceStatus(`Ready: ${s.game.title}.` +
-                 (!s.game.multiplayer ? " The multiplayer hooks do not know this program, so it runs single-player."
-                  : !s.known ? ` Its ${gameById(s.game.id).detect[0]} is not the build the multiplayer hooks know: it runs single-player, and the public lobby stays closed.` : ""));
-    $("sourceStatus").title = `From ${s.label}: ${s.files.length} files, ${mb(totalSize(s.files))}.`;
+    // Ready: the "Play" menu says which, and the line under it speaks only
+    // of what runs single-player.  (Where the files came from and how many
+    // is the menu's tooltip: the panel stays a few lines, and Fly in view.)
+    sourceStatus(!s.game.multiplayer ? `${s.game.title}: the multiplayer hooks do not know this program, so it runs single-player.`
+                 : !s.known ? `${s.game.title}: its ${gameById(s.game.id).detect[0]} is not the build the multiplayer hooks know: it runs single-player, and the public lobby stays closed.` : "", "ready");
+    $("programLabel").title = `From ${s.label}: ${s.files.length} files, ${mb(totalSize(s.files))}. The menu has every program of the games this browser holds; in a room everyone plays the host's.`;
   }
   $("source").classList.toggle("loaded", !!s);
   // The help under the game is the loaded game's own.
@@ -227,13 +229,51 @@ function setSource(s, want) {
   updateActions();
   joinLinked();
 }
+// Which files run a program: the loaded ones ("loaded"), else the newest
+// copy this browser saved that has it (its record), else nothing.
+function holderOf(id) {
+  if (!id) return null;
+  if (source && (source.game.id === id || (source.programs || []).some((p) => p.id === id))) return "loaded";
+  return saved.find((g) => g.id === id || programsIn(g.files).some((p) => p.id === id)) || null;
+}
+// The "Play" menu: every program of every game this browser holds (the
+// loaded files and the saved copies), by game, the loaded one selected.
+// Picking a program of another saved copy switches to that copy.
+function renderPrograms() {
+  const sel = $("program");
+  sel.innerHTML = "";
+  const groups = new Map();  // base game id -> its optgroup
+  const seen = new Set();
+  const add = (g) => {
+    if (seen.has(g.id)) return;
+    seen.add(g.id);
+    const base = gameById(g.partOf || g.id) || g;
+    let grp = groups.get(base.id);
+    if (!grp) { grp = document.createElement("optgroup"); grp.label = base.title; groups.set(base.id, grp); sel.appendChild(grp); }
+    const o = document.createElement("option"); o.value = g.id; o.textContent = g.title; grp.appendChild(o);
+  };
+  if (source) {
+    for (const g of source.programs || []) add(g);
+    if (!gameById(source.game.id)) add({ id: source.game.id, title: source.game.title });
+  }
+  for (const copy of saved) for (const g of (gameById(copy.id) ? programsIn(copy.files) : [{ id: copy.id, title: copy.title }])) add(g);
+  // (One game with one program needs no heading over it.)
+  if (groups.size === 1) { const grp = groups.values().next().value; if (grp.children.length === 1) { sel.appendChild(grp.firstChild); grp.remove(); } }
+  if (source) sel.value = source.game.id;
+  $("programLabel").hidden = !sel.options.length;
+}
 // The public lobby is for a pilot with a game to fly: the page connects to
 // it only while one is loaded that the hooks know.
 const lobbyReady = () => !!(source && source.known);
 $("program").addEventListener("change", () => {
-  if (!source || running) return;
-  try { localStorage.setItem(PROGRAM_KEY(source.base), $("program").value); } catch (e) { /* not kept */ }
-  setSource(source, $("program").value);
+  if (running) return;
+  const id = $("program").value;
+  const holder = holderOf(id);
+  if (!holder) return;
+  const g = gameById(id);
+  if (g) { try { localStorage.setItem(PROGRAM_KEY(g.partOf || g.id), id); } catch (e) { /* not kept */ } }
+  if (holder === "loaded") setSource(source, id);
+  else useSavedCopy(holder, id);  // a program of another game this browser saved
 });
 // The loaded game's tag for a room code ("WC1"), or "" (none, or a program
 // the registry does not know).
@@ -248,7 +288,7 @@ async function useFiles(files, label, { persist = true } = {}) {
     for (const c of id.candidates) { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); }
     sourceStatus(id.candidates.length
       ? `${label}: no game I recognise (${files.length} files). Pick the executable to run.`
-      : `${label}: no DOS executable found among ${files.length} files.`);
+      : `${label}: no DOS executable found among ${files.length} files.`, "error");
     sel.onchange = () => {
       const exe = sel.value;
       const root = exe.includes("/") ? exe.slice(0, exe.lastIndexOf("/")) : "";
@@ -273,7 +313,7 @@ async function useFiles(files, label, { persist = true } = {}) {
 async function handleFile(file) {
   try {
     sourceButtons(false);
-    sourceStatus(`Reading ${file.name} (${mb(file.size)})…`);
+    sourceStatus(`Reading ${file.name} (${mb(file.size)})…`, "busy");
     const bytes = new Uint8Array(await file.arrayBuffer());
     let files;
     if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
@@ -289,7 +329,7 @@ async function handleFile(file) {
   } catch (e) {
     log("game files: " + (e && e.message ? e.message : e));
     sourceStatus(`Could not use ${file.name}: ${e && e.message ? e.message : e}. ` +
-                 `A .zip of the installed game folder always works; for a GOG installer you can also unpack it with innoextract and zip the result.`);
+                 `A .zip of the installed game folder always works; for a GOG installer you can also unpack it with innoextract and zip the result.`, "error");
   } finally {
     sourceButtons(true);
   }
@@ -319,27 +359,42 @@ async function readTarGz(url) {
 // The buttons that change the game files: off while a file is being read
 // and once the game runs.
 function sourceButtons(on) {
-  for (const el of [$("useServer"), $("forget"), $("program"), ...$("savedList").querySelectorAll("button")]) el.disabled = !on;
+  for (const el of [$("useServer"), $("program"), ...$("savedList").querySelectorAll("button")]) el.disabled = !on;
 }
 // (Said with its date and its file: a game that is simply there on the
 // next visit is the copy this browser kept, not one the site has.)
-const useSavedCopy = (g) => setSource({ label: `the copy this browser saved${g.when ? " on " + new Date(g.when).toLocaleDateString() : ""} (${g.label})`, saved: true,
-  game: { id: g.id, title: g.title, run: g.run, multiplayer: g.multiplayer }, root: "", files: g.files });
+const useSavedCopy = (g, want) => setSource({ label: `the copy this browser saved${g.when ? " on " + new Date(g.when).toLocaleDateString() : ""} (${g.label})`, saved: true, savedId: g.id,
+  game: { id: g.id, title: g.title, run: g.run, multiplayer: g.multiplayer }, root: "", files: g.files }, want);
 
-// One button per game this browser kept, the latest first.
+// The copies this browser kept, side by side on one line: each with its
+// size and a "forget" for one that is wrong or damaged.  (Playing one is
+// the "Play" menu's business: it lists their programs.)
 async function refreshSaved() {
   saved = (await loadGames()).sort((a, b) => (b.when || 0) - (a.when || 0));
-  $("forget").hidden = saved.length === 0;
-  $("forget").textContent = saved.length > 1 ? "Forget the saved copies" : "Forget the saved copy";
   const list = $("savedList");
   list.innerHTML = "";
-  for (const g of saved) {
+  if (saved.length) list.appendChild(document.createTextNode("Saved here: "));
+  saved.forEach((g, i) => {
+    const chip = document.createElement("span");
+    chip.className = "saved";
+    chip.title = `${g.title}: ${g.files.length} files from ${g.label}${g.when ? ", saved " + new Date(g.when).toLocaleDateString() : ""}. Kept in this browser only.`;
+    chip.append(`${g.title} (${mb(totalSize(g.files))}, `);
     const b = document.createElement("button");
-    b.type = "button"; b.className = "secondary";
-    b.textContent = `Use the saved copy (${g.title}, ${mb(totalSize(g.files))})`;
-    b.addEventListener("click", () => useSavedCopy(g));
-    list.appendChild(b); list.appendChild(document.createTextNode(" "));
-  }
+    b.type = "button"; b.className = "link"; b.textContent = "forget";
+    b.title = `Remove this copy of ${g.title} from the browser; the files on your disk are untouched`;
+    b.addEventListener("click", () => void forgetSaved(g));
+    chip.append(b, ")");
+    list.appendChild(chip);
+    if (i < saved.length - 1) list.appendChild(document.createTextNode(" · "));
+  });
+  renderPrograms();
+}
+async function forgetSaved(g) {
+  if (!confirm(`Forget the saved copy of ${g.title}? Load its files again to play it.`)) return;
+  await forgetGame(g.id);
+  await refreshSaved();
+  if (source && source.savedId === g.id) setSource(null);
+  sourceStatus(`Forgot the saved copy of ${g.title}.`);
 }
 
 async function initSources() {
@@ -349,12 +404,6 @@ async function initSources() {
   drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) void handleFile(f); });
   $("gamefile").addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) void handleFile(f); });
 
-  $("forget").addEventListener("click", async () => {
-    for (const g of saved) await forgetGame(g.id);
-    await refreshSaved();
-    if (source && source.saved) setSource(null);
-    sourceStatus("Forgot the saved game files.");
-  });
   $("useServer").addEventListener("click", async () => {
     try {
       sourceStatus("Fetching this server's copy…");
@@ -519,9 +568,9 @@ function missionLabel(m) {
   if (!m) return "the campaign from the barracks";
   const c = lobbyCampaign();
   const s = c && c.series.find((e) => e.series === m.series);
-  if (!s) return `series ${m.series}, mission ${m.mis + 1}`;
+  if (!s) return `ch ${m.series}, mission ${m.mis + 1}`;
   const note = Array.isArray(s.missions) ? s.missions[m.mis] : "";
-  return (s.name ? `${s.name} ${m.mis + 1}` : `series ${s.series}, mission ${m.mis + 1}`) + (note ? ` (${note})` : "");
+  return (s.name ? `${s.name} ${m.mis + 1}` : `ch ${s.series}, mission ${m.mis + 1}`) + (note ? ` (${note})` : "");
 }
 function buildMissionMenu() {
   const sel = $("mission");
@@ -531,14 +580,15 @@ function buildMissionMenu() {
   sel.dataset.game = key;
   sel.innerHTML = "";
   const add = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; sel.appendChild(o); };
-  add("", "Campaign: start in the barracks (the host's save game decides)");
+  add("", "Campaign from the barracks (the host's save game decides)");
   if (!c) return;
   for (const s of c.series) {
     const n = Array.isArray(s.missions) ? s.missions.length : s.missions;
     for (let i = 0; i < n; i++) {
       const note = Array.isArray(s.missions) ? s.missions[i] : "";
-      add(`${s.series}/${i}`, s.name ? `${s.name} ${i + 1}  (series ${s.series}, mission ${i + 1})`
-                                     : `Series ${s.series}, mission ${i + 1}` + (note ? `  (${note})` : ""));
+      // ("Ch" for the game's series, to keep the row short: the user's word.)
+      add(`${s.series}/${i}`, s.name ? `${s.name} ${i + 1}  (ch ${s.series}, mission ${i + 1})`
+                                     : `Ch ${s.series}, mission ${i + 1}` + (note ? `  (${note})` : ""));
     }
   }
 }
@@ -555,16 +605,31 @@ function renderMission() {
   $("latency").value = lobby.latency;
   $("latency").disabled = !isHost();
   const hints = (c && c.hints) || {};
-  $("missionHint").textContent = !c ? (lobbyGameId() ? "" : "Load the game files to pick a mission.")
+  // (One line, cut with an ellipsis; the whole of it is the tooltip.)
+  const hint = !c ? (lobbyGameId() ? "" : "Load the game files to pick a mission.")
     : lobby.mission ? `${missionLabel(lobby.mission)[0].toUpperCase()}${missionLabel(lobby.mission).slice(1)}. ${hints.forced || ""}`
     : (isHost() ? hints.host : hints.wing) || "";
+  $("missionHint").textContent = hint;
+  $("missionHint").title = hint;
 }
-// Everyone in a room has to run the same game.
-function checkSameGame(from) {
-  const theirs = lobby.games.get(from);
-  if (!source || !theirs || theirs === source.game.id) return;
+// Everyone in a room runs the host's program.  A wingman's page switches
+// to it when the loaded files have it (Wing Commander's directory holds
+// The Secret Missions 2, Wing Commander II's the Special Operations) or a
+// copy this browser saved does; otherwise the status line asks for the
+// files (wrongGame).  The room's code only says what the room was made for,
+// so the host may switch programs and the room stays together (the
+// user's wish of 2026-10-17: pilots found it hard to change games).
+function followHost() {
+  if (isHost() || !source) return;
+  const theirs = lobby.games.get(0);
+  if (!theirs || theirs === source.game.id) return;
   const g = gameById(theirs);
-  chatLine(`${esc(lobby.names.get(from) || "Player " + (from + 1))} has ${esc(g ? g.title : theirs)} loaded and you have ${esc(source.game.title)}: everyone in a room needs the same game.`, "sys");
+  const holder = holderOf(theirs);
+  if (holder === "loaded") setSource(source, theirs);
+  else if (holder) useSavedCopy(holder, theirs);
+  const who = esc(lobby.names.get(0) || "The host");
+  if (source && source.game.id === theirs) chatLine(`${who} plays ${esc(g ? g.title : theirs)}: switched to it.`, "sys");
+  else chatLine(`${who} plays ${esc(g ? g.title : theirs)}, which this browser has no files for: load them (step 1) to fly along.`, "sys");
 }
 
 // -- the room ------------------------------------------------------------------
@@ -690,12 +755,14 @@ function renderRoster() {
   }
 }
 
-// A room's code names its game (WC2-4821), and the game loaded here is
-// another: said instead of flying, because the code is what the others go by.
+// The host's program is the room's.  A wingman's page follows it when its
+// files can (followHost); when they cannot, this is said instead of flying.
+// (The room's code is advisory: the game the room was made for.)
 function wrongGame() {
-  const theirs = lobby.game && codeGame(lobby.game.code);
-  if (!theirs || !source || source.game.id === theirs.id) return "";
-  return `Room ${lobby.game.code} is a ${theirs.title} room, and you have ${source.game.title} loaded: load ${theirs.title} above, or leave the room.`;
+  if (!lobby.game || isHost() || !source) return "";
+  const theirs = gameById(lobby.games.get(0) || "");
+  if (!theirs || theirs.id === source.game.id) return "";
+  return `The host plays ${theirs.title}, and you have ${source.game.title} loaded: load ${theirs.title} above (step 1), or leave the room.`;
 }
 function updateActions() {
   const wrong = wrongGame();
@@ -752,8 +819,7 @@ function onLobbyEvent(ev) {
         if (fresh) chatLine(`${esc(m.name)} is in the room${m.flying ? " (flying)" : ""}`, "sys");
         if (typeof m.game === "string" && m.game !== (lobby.games.get(ev.from) || "")) {
           lobby.games.set(ev.from, m.game);
-          checkSameGame(ev.from);
-          if (ev.from === 0) renderMission();
+          if (ev.from === 0) { followHost(); renderMission(); }
         }
         if (ev.from === 0 && !isHost() && m.mission !== undefined) {
           const chosen = parseMission(m.mission);
@@ -794,6 +860,7 @@ function onLobbyEvent(ev) {
         renderMission();
         chatLine(`${esc(lobby.names.get(0) || "The host")} started ${esc(missionLabel(lobby.mission))}`, "sys");
         lobby.flying.add(0); renderRoster();
+        followHost();
         const theirs = gameById(lobby.games.get(0) || "");
         if (source && theirs && theirs.id !== source.game.id) status(`The host started ${theirs.title}, and you have ${source.game.title} loaded. Load ${theirs.title} above, then press Fly to join.`);
         else if (source) void start(false);
@@ -824,15 +891,25 @@ function onLobbyEvent(ev) {
   }
 }
 
-// The game loaded here against the one a room's code names.  The other
-// programs of the same directory count: a click on SO1-4821 with Wing
-// Commander II loaded switches to Special Operations 1 when it is there.
+// The game a room's code names against what this browser holds.  The code
+// is advisory (the host may switch programs in the room, and the pages
+// follow the host's hello: followHost), but a browser with no files that
+// run the code's game is not let in.  A click on SO1-4821 with Wing
+// Commander II loaded switches to Special Operations 1 when it is there,
+// or to a saved copy that has it; WC2-4821 with Wing Commander alone is
+// refused.
 function fitsRoom(code) {
   const theirs = codeGame(code);
   if (!theirs || !source || source.game.id === theirs.id) return true;
-  if (source.programs.includes(theirs)) {
+  const holder = holderOf(theirs.id);
+  if (holder === "loaded") {
     setSource(source, theirs.id);
     chatLine(`Room ${esc(code)} is a ${esc(theirs.title)} room: switched to ${esc(theirs.title)}.`, "sys");
+    return true;
+  }
+  if (holder) {
+    useSavedCopy(holder, theirs.id);
+    chatLine(`Room ${esc(code)} is a ${esc(theirs.title)} room: switched to the saved copy that has it.`, "sys");
     return true;
   }
   status(`${code} is a ${theirs.title} room, and you have ${source.game.title} loaded. Load ${theirs.title} above (step 1) to join it.`);
@@ -936,9 +1013,11 @@ function offerText() {
   const free = g.players.filter((p) => !p.occupied).length;
   const c = lobbyCampaign();
   const s = lobby.mission && c && c.series.find((e) => e.series === lobby.mission.series);
-  const what = !lobby.mission ? "campaign" : s && s.name ? `${s.name} ${lobby.mission.mis + 1}` : `series ${lobby.mission.series} mission ${lobby.mission.mis + 1}`;
+  const what = !lobby.mission ? "campaign" : s && s.name ? `${s.name} ${lobby.mission.mis + 1}` : `ch ${lobby.mission.series} mission ${lobby.mission.mis + 1}`;
   const seats = free ? `${free} seat${free === 1 ? "" : "s"} free` : "full";
-  const full = `${g.code} ${what}, ${seats}`;
+  // (The program, when the room's code was made for another: the code is advisory.)
+  const prog = gameTag() && roomTag(g.code) !== gameTag() ? ` ${gameTag()}` : "";
+  const full = `${g.code}${prog} ${what}, ${seats}`;
   return Array.from(full).length <= MAX_CHARS ? full : `${g.code} ${seats}`;
 }
 // The pilot's own room for the lobby (its "Advertise" and "/room"): the room
@@ -1250,6 +1329,8 @@ const hall = initHall({
   ready: lobbyReady,
   tag: () => gameTag(),
   title: (tag) => (gameByTag(tag) ? gameByTag(tag).title : tag),
+  // (A room code is dimmed when nothing here runs its game: the loaded files or a saved copy.)
+  fits: (tag) => !source || !gameByTag(tag) || !!holderOf(gameByTag(tag).id),
   onCode: (code) => void joinFromLobby(code),
   room: myRoom,
   log,

@@ -1051,10 +1051,19 @@ top-level README for the workflow).  What differs:
   (Wing Commander's has SM2.EXE, Wing Commander II's the two Special
   Operations): the "Play" menu picks one (`programsIn`, `setSource`), and so
   does a room's code, when the page is asked to join `SO1-4821` with Wing
-  Commander II loaded.  A code for a game that is not loaded is not joined
-  (`fitsRoom`), and Fly is off while the room's code and the loaded game
-  disagree (`wrongGame`); the hellos' game ids are still compared as before
-  (`checkSameGame`), for codes that name nothing.
+  Commander II loaded.  The code is advisory, though (2026-10-17: pilots
+  found it hard to change games once a room had a WC1 code): a browser
+  with no files that run the code's game is not let in (`fitsRoom`: the
+  loaded files or a copy the browser saved must have the program), and
+  once in, everyone plays the host's program, whatever the code says.  A
+  wingman's page switches to the host's program on the host's hello
+  (`followHost`): to the same directory's other program, or to a saved copy
+  that has it; only when nothing here runs it is Fly off (`wrongGame`).
+  The "Play" menu lists every program of every game the browser holds
+  (`renderPrograms`: the loaded files and the saved copies, by game), so a
+  host switches from Wing Commander II to Special Operations 3 or Wing
+  Commander there and the room follows.  An advertised room whose program
+  is not its code's names the program after the code ("WC2-4821 SO3 ...").
 * **The public lobby** (`web/hall.js`, `web/chatfilter.js`) is a chat room
   where pilots without a wingman say which room they fly in.  It is a
   lobbylink room, `WC-LOBBY`, of 32 seats (the user's figure, after 256

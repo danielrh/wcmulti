@@ -27,7 +27,7 @@ async function open(name, callsign) {
   for (const [k, v] of Object.entries({ room, server: lobbyUrl, callsign, "env.MIS": "0", "env.SERIES": "1" })) u.searchParams.set(k, v);
   await page.goto(u.toString());
   if (process.env.GAME_FILE) await page.setInputFiles("#gamefile", process.env.GAME_FILE);
-  await page.waitForFunction(() => /^(Ready|Could not)/.test(document.getElementById("sourceStatus").textContent), null, { timeout: 300000 });
+  await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   // (The page joins the room on its own, ?room= being in the URL.)
   await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });
   return page;
