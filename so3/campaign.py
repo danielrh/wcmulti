@@ -49,7 +49,12 @@ HELLCAT_STATS = dict(
     acceleration=24,
     yaw=9, pitch=9, roll=9,       # a tenth under the Rapier, above the heavies
     shield_front=100, shield_rear=100,   # under the Rapier's: the armour is what it has
-    armor_front=120, armor_rear=120, armor_left=90, armor_right=90,
+    # The user's second ruling (2026-10-17): tankier than anything of its
+    # size despite the weak shields -- the first numbers (120/120/90/90, the
+    # Rapier's core of 135) were outmatched by the Gothri.  Armour above the
+    # Sabre's 200/200/180/180 and a core above the Broadsword's 300.
+    armor_front=250, armor_rear=250, armor_left=220, armor_right=220,
+    core=400,
 )
 # Guns as (weapon, x, y, z, armed): mirrored pairs close to the nose (the
 # Rapier's nose lasers sit at x = +-24, y = 36, z = 30; its wing cannons out

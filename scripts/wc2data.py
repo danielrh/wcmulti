@@ -330,8 +330,14 @@ def ship_record_of(path):
 # The 243-byte record, as the game reads it (SO2.EXE ovr115:003B copies the
 # shields and armour into a new ship, ovr115:1C2C the recharge rate, HCl's
 # editor names the rest): word offsets.
-REC = dict(kind=20, type=22, cls=24, shield_recharge=38, max_speed=42, acceleration=44, yaw=54, pitch=56, roll=58,
+REC = dict(kind=20, type=22, cls=24, radius=26, core=28, scale=30, shield_recharge=38, max_speed=42, acceleration=44,
+           yaw=54, pitch=56, roll=58, blast=60,
            shield_front=223, shield_rear=225, armor_front=227, armor_rear=229, armor_left=231, armor_right=233)
+# radius: the hit sphere (the loader copies word 26 into the per-ship table dseg:6520 that the bolt, collision and
+# blast tests subtract: Ferret 120, Rapier 160, Sabre and Dorkathi 200, Waterloo 600); core: the hull behind the
+# armour (Rapier 135, Broadsword 300, Kamekh 500, Fralthra 7500); scale: word 30, a renderer factor (768 for most
+# fighters, the Dorkathi 336); blast: what the ship's death explosion does to ships about, divided by distance
+# squared (fighters 900-3000, the Dorkathi 5000, carriers 20000+).  Ramming damage goes by closing speed alone.
 HARDPOINTS_AT, HARDPOINT_SIZE, HARDPOINTS_MAX = 63, 10, 16   # a count byte at 62, then (code, x, y, z, armed, type) each
 # Weapon codes: the slot of the weapon's own record in the game's type table.
 WEAPON = dict(laser=7, neutron=8, mass_driver=9, particle=10, dart_df=15, javelin_hs=16, pilum_ff=17, spiculum_ir=18,

@@ -122,10 +122,22 @@ blocks (fighters), 16 (one turret) or 17 (Broadsword); the Hellcat's 16 are
 kept.
 
 **The record's numbers** (SO2.EXE `ovr115:003B` copies them into a new
-ship; HCl's editor names the rest; `scripts/wc2data.py` REC): word 38 the
-shield recharge rate, 42 the top speed in tens of kps, 44 the acceleration,
-54/56/58 yaw, pitch, roll; words 223/225 the front and rear shields,
-227/229/231/233 the front, rear, left and right armour.  At 62 a count byte, then up to
+ship; HCl's editor names the rest; `scripts/wc2data.py` REC): word 26 the
+hit sphere (the loader, `ovr115:0203`, copies it into the per-ship table
+`dseg:6520` that the bolt, collision and death-blast tests subtract from a
+distance: Ferret 120, Rapier 160, Sabre and Dorkathi 200, Waterloo 600),
+28 the core behind the armour (Rapier 135, Broadsword 300, Kamekh 500,
+Fralthra 7500), 30 a renderer scale (768 for most fighters, the Dorkathi
+336), word 38 the shield recharge rate, 42 the top speed in tens of kps,
+44 the acceleration, 54/56/58 yaw, pitch, roll, 60 the death blast (what
+the explosion does to ships within 1000 of it, over distance squared,
+`ovr113:268D`: fighters 900-3000, the Dorkathi 5000, carriers 20000+);
+words 223/225 the front and rear shields, 227/229/231/233 the front, rear,
+left and right armour.  Ramming damage (`ovr140:2A80..`) goes by closing
+speed alone, no record word.  The range's hulks (the Dorkathi's file) have
+the sphere at 110, the core at 1200 and the blast at 800: the Dorkathi's
+sphere is a Sabre's around a sprite drawn at less than half a fighter's
+scale, and its blast took the Hellcat shooting it at close range with it.  At 62 a count byte, then up to
 sixteen weapon mounts of ten bytes from 63 (the game copies the list as it
 is into its per-ship gun table, `dseg:6A7A + 0xA1 * slot`): a word with the
 weapon's code, then x (right), y (up) and z (forward) as signed words in the

@@ -230,7 +230,13 @@ def main():
     rec = bytearray(parts[38])
     struct.pack_into("<H", rec, wc2data.REC["type"], campaign.HULK)
     rec[:20] = b"Hulk".ljust(20, b"\0")
-    parts[38] = wc2data.set_hardpoints(bytes(rec), [])
+    # A target, not a transport: a hit sphere nearer its drawn size (the
+    # Dorkathi's 200 is a Sabre's, around a sprite the renderer draws at
+    # less than half a fighter's scale, so bolts burst and hulls bumped well
+    # clear of it), a core a few passes of guns take, and a death blast that
+    # does not take the Hellcat shooting it at close range with it (the
+    # Dorkathi's 5000 is a corvette's; the user's report, 2026-10-17).
+    parts[38] = wc2data.set_record_stats(wc2data.set_hardpoints(bytes(rec), []), radius=110, core=1200, blast=800)
     wc2data.write_container(os.path.join(pgd, "SHIP.V%02d" % campaign.HULK), parts, flags)
     print("Hulk: %s" % (wc2data.ship_record_of(os.path.join(pgd, "SHIP.V%02d" % campaign.HULK)),))
 
