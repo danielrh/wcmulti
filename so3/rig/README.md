@@ -2,7 +2,7 @@
 
 Shell scripts that drive the native emulator (`build-native/src/dosbox`)
 with its key script (`WCNET_KEYSCRIPT`, see `src/cpu/wcnet_hooks.cpp` for the
-`!kill`, `!killfoes`, `!status`, `!rocks`, `!pos`, `!face`, `!shot`, `@dump`,
+`!kill`, `!killfoes`, `!status`, `!rocks`, `!pos`, `!face` (a slot, `npc` or `target`), `!mouse`, `!button`, `!shot`, `@dump`,
 `skip` and `clickskip` items).  Output goes under `$S` (default `out/` beside
 the scripts); nothing here touches the game's own files.
 

@@ -332,7 +332,7 @@ def ship_record_of(path):
 # editor names the rest): word offsets.
 REC = dict(kind=20, type=22, cls=24, shield_recharge=38, max_speed=42, acceleration=44, yaw=54, pitch=56, roll=58,
            shield_front=223, shield_rear=225, armor_front=227, armor_rear=229, armor_left=231, armor_right=233)
-HARDPOINTS_AT, HARDPOINT_SIZE, HARDPOINTS_MAX = 62, 10, 16   # (code << 8 | flags, x, y, z, w) each, zero ends the list
+HARDPOINTS_AT, HARDPOINT_SIZE, HARDPOINTS_MAX = 63, 10, 16   # a count byte at 62, then (code, x, y, z, armed, type) each
 # Weapon codes: the slot of the weapon's own record in the game's type table.
 WEAPON = dict(laser=7, neutron=8, mass_driver=9, particle=10, dart_df=15, javelin_hs=16, pilum_ff=17, spiculum_ir=18,
               torpedo=19, chaff=20, porcupine=21)
@@ -354,14 +354,17 @@ def set_record_stats(rec, **fields):
 
 
 def hardpoints(rec):
-    """[(code, flags, x, y, z, w)] of a record's weapon list."""
+    """[(code, x, y, z, armed, type)] of a record's weapon list: the count byte
+    at 62, then ten bytes each (the game copies the list as it is into its
+    per-ship table, dseg:6A7A + 0xA1 * slot): a word with the weapon code, x
+    (right), y (up) and z (forward) as words in the ship's own units (the
+    Rapier's nose lasers sit at x = +-24, y = 36, z = 30), a byte that is 0
+    for a weapon armed at launch (the guns with 0 make the selected gun
+    group, the first missile with 0 the selected missile) and a byte the
+    loader fills with the weapon's type index."""
     out = []
-    for i in range(HARDPOINTS_MAX):
-        off = HARDPOINTS_AT + HARDPOINT_SIZE * i
-        cf, x, y, z, w = struct.unpack_from("<Hhhhh", rec, off)
-        if cf == 0:
-            break
-        out.append((cf >> 8, cf & 0xFF, x, y, z, w))
+    for i in range(min(rec[HARDPOINTS_AT - 1], HARDPOINTS_MAX)):
+        out.append(struct.unpack_from("<HhhhBB", rec, HARDPOINTS_AT + HARDPOINT_SIZE * i))
     return out
 
 
@@ -369,13 +372,13 @@ def set_hardpoints(rec, points):
     """A copy of the record with the weapon list replaced (same tuples as hardpoints gives)."""
     assert len(points) <= HARDPOINTS_MAX
     r = bytearray(rec)
+    r[HARDPOINTS_AT - 1] = len(points)
     for i in range(HARDPOINTS_MAX):
         off = HARDPOINTS_AT + HARDPOINT_SIZE * i
         if i < len(points):
-            code, flags, x, y, z, w = points[i]
-            struct.pack_into("<Hhhhh", r, off, (code << 8) | flags, x, y, z, w)
+            struct.pack_into("<HhhhBB", r, off, *points[i])
         else:
-            struct.pack_into("<Hhhhh", r, off, 0, 0, 0, 0, 0)
+            struct.pack_into("<HhhhBB", r, off, 0, 0, 0, 0, 0, 0)
     return bytes(r)
 
 

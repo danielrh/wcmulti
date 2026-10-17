@@ -92,6 +92,11 @@ EXE_PATCH = {
     "patches": [
         {"what": "the data-file number, mov word [cb16], 2", "find": "c70616cb0200", "replace": "c70616cb0300", "count": 5},
         {"what": "the saved game's name", "find": b"savegame.so2".hex(), "replace": b"savegame.so3".hex(), "count": 1},
+        # The start screen's second button resumes the story from the saved
+        # game's current record and then names the game whose files to play
+        # with a constant of its own (ovr118:0427, mov word [bp-6], 2): left
+        # at 2 it resumed SO3's record in SO2's missions.
+        {"what": "the game number of a resumed story", "find": "c746fa02009a2f0088048b46fa5ec9cb", "replace": "c746fa03009a2f0088048b46fa5ec9cb", "count": 1},
     ],
 }
 
@@ -110,25 +115,18 @@ def apply_patch(data, spec):
 
 
 def hellcat_record(rec):
-    """The Hellcat's record with campaign.py's numbers and weapons: the weapon
-    positions stay where the conversion put them, the codes change."""
+    """The Hellcat's record with campaign.py's numbers and weapons: the guns
+    where HELLCAT_GUNS puts them, the missile and decoy mounts where the
+    conversion left them (the Rapier's), with the codes changed."""
     rec = wc2data.set_record_stats(rec, **campaign.HELLCAT_STATS)
     old = wc2data.hardpoints(rec)
-    guns = [p for p in old if p[0] < 15]
     others = [p for p in old if p[0] >= 15]
     chaff = [p for p in others if p[0] == wc2data.WEAPON["chaff"]]
     missiles = [p for p in others if p[0] != wc2data.WEAPON["chaff"]]
-    assert len(guns) >= len(campaign.HELLCAT_GUNS) and len(missiles) >= len(campaign.HELLCAT_MISSILES) and len(chaff) >= campaign.HELLCAT_DECOYS
-    new = []
-    # the mounts mirrored exactly: the conversion's left and right differed by a unit
-    for k, (name, p) in enumerate(zip(campaign.HELLCAT_GUNS, guns)):
-        code, flags, x, y, z, w = (wc2data.WEAPON[name],) + p[1:]
-        mate = guns[k ^ 1]
-        if k & 1:
-            x, y, z = -mate[2], mate[3], mate[4]
-        new.append((code, flags, x, y, z, w))
+    assert len(missiles) >= len(campaign.HELLCAT_MISSILES) and len(chaff) >= campaign.HELLCAT_DECOYS
+    new = [(wc2data.WEAPON[name], x, y, z, armed, 0) for name, x, y, z, armed in campaign.HELLCAT_GUNS]
     for name, p in zip(campaign.HELLCAT_MISSILES, missiles):
-        new.append((wc2data.WEAPON[name],) + p[1:])
+        new.append((wc2data.WEAPON[name],) + tuple(p[1:]))
     new += chaff[:campaign.HELLCAT_DECOYS]
     return wc2data.set_hardpoints(rec, new)
 

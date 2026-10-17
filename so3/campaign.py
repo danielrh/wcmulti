@@ -51,8 +51,13 @@ HELLCAT_STATS = dict(
     shield_front=100, shield_rear=100,   # under the Rapier's: the armour is what it has
     armor_front=120, armor_rear=120, armor_left=90, armor_right=90,
 )
-# Guns inboard pair first, then the outboard pair; six missiles; one decoy.
-HELLCAT_GUNS = ["particle", "particle", "neutron", "neutron"]
+# Guns as (weapon, x, y, z, armed): mirrored pairs close to the nose (the
+# Rapier's nose lasers sit at x = +-24, y = 36, z = 30; its wing cannons out
+# at |x| 104-152).  armed 0 = part of the gun group selected at launch: the
+# particle cannons, as the Rapier launches with its lasers; six missiles;
+# one decoy.
+HELLCAT_GUNS = [("particle", 16, 36, 30, 0), ("particle", -16, 36, 30, 0),
+                ("neutron", 40, 32, 30, 1), ("neutron", -40, 32, 30, 1)]
 HELLCAT_MISSILES = ["spiculum_ir"] * 6
 HELLCAT_DECOYS = 1
 

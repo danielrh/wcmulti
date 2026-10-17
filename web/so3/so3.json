@@ -17,12 +17,18 @@
     "find": "7361766567616d652e736f32",
     "replace": "7361766567616d652e736f33",
     "count": 1
+   },
+   {
+    "what": "the game number of a resumed story",
+    "find": "c746fa02009a2f0088048b46fa5ec9cb",
+    "replace": "c746fa03009a2f0088048b46fa5ec9cb",
+    "count": 1
    }
   ]
  },
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "f3cf5dde82301e2fbbeb4ee7",
+ "iv": "3728588d06db1347184958cb",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",

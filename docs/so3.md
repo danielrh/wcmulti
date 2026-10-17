@@ -8,15 +8,19 @@ SO2.EXE's unless marked WC2.EXE (its overlays are numbered one higher);
 
 Special Operations 1 and 2 are WC2.EXE's program with a data-file number:
 `mov word [dseg:CB16], 2` at five places (`seg001:02AB`, `02F6`, `0339`,
-`ovr118:1462`, `ovr127:0003`; a sixth, `ovr118:0357`, takes it from a saved
-game).  Names built from it: `module.00%d`, `campaign.s0%d`,
+`ovr118:1462`, `ovr127:0003`), and a sixth place that sets it by another
+road: the start screen's second button (shown once a saved game exists)
+resumes the story from the saved game's current record in `ovr118:0357`,
+which ends with `mov word [bp-6], 2` (`ovr118:0427`) and whose caller
+stores that in CB16 (`seg001:0315`).  Left at 2, SO3's resumed record ran
+in SO2's missions ("a weird SO2").  Names built from the number: `module.00%d`, `campaign.s0%d`,
 `gameflow.s0%d`, `series.s0%d`, `planets.v0%d` (beside `planets.v00`),
 `startglb.00%d`, `altships.00%d`, and `savegame.so2` as a literal.  A traced
 run (`WCNET_WATCH` logs the game's `int 21h`) through the barracks, a
 briefing, a flight and a landing opened exactly those with a 2; `incident`,
 `vdu`, `medium`, `screens`, `tempglob` and the rest were opened with other
 numbers.  `so3/build.py` describes SO3.EXE as byte patches of SO2.EXE (a 3 at the
-five places, `savegame.so3`), which the page applies to the player's copy
+five places and in the resume constant, `savegame.so3`), which the page applies to the player's copy
 (the user's rule: the program is patched by the system, never shipped),
 and copies the numbered files to their 3 names.  The scene files name each
 other by literal names inside their scripts (`series.s02` in GAMEFLOW and
@@ -121,9 +125,19 @@ kept.
 ship; HCl's editor names the rest; `scripts/wc2data.py` REC): word 38 the
 shield recharge rate, 42 the top speed in tens of kps, 44 the acceleration,
 54/56/58 yaw, pitch, roll; words 223/225 the front and rear shields,
-227/229/231/233 the front, rear, left and right armour.  From 62, up to
-sixteen weapon hardpoints of ten bytes, zero-ended: a word of code << 8 |
-flags, then x, y, z and a flag word; the code is the weapon's slot in the
+227/229/231/233 the front, rear, left and right armour.  At 62 a count byte, then up to
+sixteen weapon mounts of ten bytes from 63 (the game copies the list as it
+is into its per-ship gun table, `dseg:6A7A + 0xA1 * slot`): a word with the
+weapon's code, then x (right), y (up) and z (forward) as signed words in the
+ship's own units, a byte that is 0 for a weapon armed at launch (the guns
+with 0 form the selected gun group, the first missile with 0 is the selected
+missile) and a byte the loader fills with the weapon's type index.  The
+bolt leaves from ship position + x * right + y * up + z * forward
+(`seg006:188F`), so a pair wants x and -x: the Rapier's nose lasers sit at
+(+-24, 36, 30), its wing cannons at |x| 104 and 152, the Sabre's at 192.
+(An earlier reading of this list, a word of code << 8 | flags followed by
+x, y, z, was off by a byte and put the Hellcat's guns on one side each.)
+The code is the weapon's slot in the
 type table (7 laser, 8 neutron, 9 mass driver, 10 particle, 15 Dart DF, 16
 Javelin HS, 17 Pilum FF, 18 Spiculum IR, 19 torpedo, 20 chaff pod, 21
 Porcupine).  The game's own: Rapier recharge 6, speed 45, turn 10/10/10,

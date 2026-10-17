@@ -127,6 +127,18 @@ also scales the per-view hardpoint pixel positions and the debris sprites):
   Dorkathi you can land on.  Keep them where the slot had them.
 * Reveals `(value, nav)` set another nav's visible byte on arrival (SO2
   s1m3 hides nav 0 and shows the landing carrier at nav 5).
+* **A ship record's weapon list** (SHIP.Vnn packet 3, offset 62): a count
+  byte, then ten bytes a mount: a word with the weapon code, x (right), y
+  (up), z (forward) as signed words, a byte that is 0 for "armed at launch",
+  a byte the loader fills.  Mirror a pair as x and -x (the Rapier's nose
+  lasers: +-24, 36, 30).  `wc2data.hardpoints` reads it; an earlier reading
+  was off by one byte and put both of a kind on one side.  The particle
+  bolt's sprite draws a dozen pixels right of its mount in the cockpit (so
+  does SO2's Sabre): that is the game, not the record.
+* **The program's data-file number has a sixth home**: the start screen's
+  resume button (`ovr118:0427`, a constant 2 in SO2.EXE) -- patch it with
+  the five `mov word [CB16], 2` or a resumed story plays the old game's
+  missions.
 * Fleeing capital ship: behaviour 6 toward a far ship.  Pickups: type 53
   class 61 (pod) or 54/44 (pilot), objective kind 6; only Sabres and
   Broadswords have the tractor beam.
@@ -135,7 +147,14 @@ also scales the per-view hardpoint pixel positions and the debris sprites):
 
 `!kill=<slot>` (server only), `!killfoes[=<mission ship>,...]` (every enemy
 slot, sparing the listed mission ships, e.g. a surrendering freighter),
-`!status=1` (land now), `!mem` (free heap), `!shot=<name>`, `skip` (Esc
+`!status=1` (land now), `!mem` (free heap), `!shot=<name>`, `!face=<slot|npc|target>`
+(turn the nose onto a ship; `target` is what `t` picked, which with a few
+seconds of it earns the missile lock a scripted `enter` needs: a key-script
+list runs in the order written, not by time, so sort it), `!mouse=x:y` /
+`!button=0:1` (one click: the start screen and the barracks computer),
+`WCNET_KEYSCRIPT_FROM=boot` (the clock from the program's start instead of
+the first flight), `WCNET_WATCH=1` (every file the game opens, to tell a
+`.s02` from a `.s03`), `skip` (Esc
 through scenes until the next flight), `clickskip[=x:y]` (click the pointer
 spot through scenes and the barracks' "fly" button, default 0.48:0.55, until
 the next flight; the clock restarts in the next flight).  A campaign
