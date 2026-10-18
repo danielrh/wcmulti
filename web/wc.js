@@ -940,12 +940,12 @@ async function joinRoom({ create = true } = {}) {
       // dies, and the host makes a new room.  Tokenless "claims" would let
       // anyone with the code replace a player after 40 s of lobby silence,
       // which is every player in flight.
-      // A room has three seats: a third pilot gets a ship of the mission's
-      // wing, or one the host's game makes (a second wingman, a second
-      // gunner), when they come.  "2 players only" keeps a room to two; it
-      // is off by default and not remembered.
+      // A room has two seats; "3 players" (beta) gives it a third, never
+      // more: a third pilot gets a ship of the mission's wing, or one the
+      // host's game makes (a second wingman, a second gunner), when they
+      // come.  The box is off by default and not remembered.
       create: !create ? undefined
-        : { maxPlayers: $("twoSeats").checked ? 2 : 3, waitUntilFull: false, allowLateJoin: true,
+        : { maxPlayers: $("threeSeats").checked ? 3 : 2, waitUntilFull: false, allowLateJoin: true,
             allowReconnect: true, allowReplacement: false, reconnectPolicy: "token-only" },
       storage: "session",
       storageKey: "wclobby-" + code,
@@ -966,7 +966,7 @@ async function joinRoom({ create = true } = {}) {
     lobby.wingBumps = game.selfId === 0 ? wingBumpsMode({ 0: "game", 1: "harmless" }[query.get("bumps")] || query.get("bumps")) : "harmless";
     lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "low";
     renderMission();
-    for (const id of ["room", "twoSeats", "server", "relay"]) $(id).disabled = true;
+    for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = true;
     chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
     log(`lobby: joined room ${code} as player ${game.selfId} of ${game.maxPlayers}`);
     renderRoster(); updateActions();
@@ -1048,7 +1048,7 @@ function leaveRoom() {
   lobby.game = null; lobby.unsubscribe = null; lobby.adopted = false; lobby.backlog = [];
   lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
   $("lobby").hidden = true; $("leave").hidden = true; $("share").hidden = true; $("join").disabled = false;
-  for (const id of ["room", "twoSeats", "server", "relay"]) $(id).disabled = false;
+  for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = false;
   $("roster").innerHTML = "";
   updateActions();
 }

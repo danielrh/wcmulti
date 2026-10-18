@@ -1214,8 +1214,8 @@ top-level README for the workflow).  What differs:
 * A client that died cannot rejoin the mission in progress; it gets the next
   briefing.
 * Two client slots (network ids 1 and 3 when they connect; the slot each
-  flies is decided with the mission's start state): rooms have three
-  seats (two when the host ticks "2 players only" on making one), and a
+  flies is decided with the mission's start state): rooms have two
+  seats (three when the host ticks "3 players", marked beta, on making one), and a
   third pilot's ship is made by the host's game when the wing has none
   free (docs/wc2-port.md section 4).
 * Rocks and mines are per machine (section 2): two pilots in the same field

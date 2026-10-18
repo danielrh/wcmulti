@@ -166,9 +166,10 @@ transport to escort, or empty, and a client that took it for its ship would
   holds the AI off and computes no damage to any of them, the host's body
   and the other wingmen's alike (`ClientSession::is_remote_player_slot`).
   A wingman that spawns inside the leader or another human is put on the
-  left wing, the next on the right (`take_station`).  Rooms have three
-  seats unless the host ticks "2 players only" when making one (the box is
-  off by default and not remembered); the page's `#players` field is gone.
+  left wing, the next on the right (`take_station`).  Rooms have two
+  seats unless the host ticks "3 players" (marked beta) when making one,
+  which gives three and never more (the box is off by default and not
+  remembered); the page's `#players` field is gone.
 * **Gunner** when there is no such wingman and the leader's ship has turrets
   (the Broadsword's three, the Sabre's one); see below.
 * **Drone** otherwise (`WCSEAT=drone` or `WCSEAT=gunner` on the server

@@ -74,6 +74,7 @@
   kbd { padding: 0 4px; background: #0b2417; border: 1px solid var(--line); color: var(--green); font: 11px var(--mono); }
   .hint { margin: 4px 0 0; color: var(--muted); font: 11.5px/1.45 system-ui, sans-serif; }
   label.check { display: inline-flex; flex-direction: row; gap: 5px; align-items: center; color: var(--muted); font-size: 11px; letter-spacing: 0; text-transform: none; }
+  label.check .beta { color: var(--amber2); font-size: 8px; letter-spacing: .1em; text-transform: uppercase; }
   details { margin-top: 6px; }
   summary { cursor: pointer; color: var(--muted); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
   summary:hover { color: var(--green); }
@@ -260,7 +261,7 @@
       </div>
       <form id="setup">
         <label title="A code of the page's own making starts with the game it is for (WC1, WC2, SM2, SO1, SO2, SO3)">Room code <input type="text" id="room" placeholder="WC1-4821" pattern="[A-Za-z0-9_\-]{4,64}" required></label>
-        <label class="check" title="A room has three seats; tick this when making one to keep it to two (not remembered)"><input type="checkbox" id="twoSeats"> 2 players only</label>
+        <label class="check" title="A room has two seats; tick this when making one to give it a third (in beta; not remembered)"><input type="checkbox" id="threeSeats"> <span>3 players <small class="beta">beta</small></span></label>
         <label>Callsign <input type="text" id="callsign" placeholder="Maverick"></label>
         <label id="firstnameLabel" hidden>First name <input type="text" id="firstname" placeholder="Christopher" maxlength="12"></label>
         <label>Last name <input type="text" id="lastname" placeholder="Blair"></label>

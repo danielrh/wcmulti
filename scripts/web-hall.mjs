@@ -117,13 +117,13 @@ const l = await open("LIMA", { game: false, query: { room: "WAIT-" + run } });
 await sleep(3);
 check("a room's link opened without a game connects to nothing", (await l.$eval("#lobby", (el) => el.hidden)) && sockets.LIMA.length === 0 && /Load your game files .* room WAIT-/.test(await status(l)), [await status(l), sockets.LIMA]);
 await l.click("#join");
-check("\"Join room\" takes the seat without a game", await l.waitForFunction(() => !document.getElementById("lobby").hidden && /player 1 of 3 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 30000 }).then(() => true, () => false), await status(l));
+check("\"Join room\" takes the seat without a game", await l.waitForFunction(() => !document.getElementById("lobby").hidden && /player 1 of 2 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 30000 }).then(() => true, () => false), await status(l));
 const m = await open("MIKE", { game: false, query: { room: "WAIT-" + run } });
 await sleep(3);
 check("a second visitor without a game waits as well", (await m.$eval("#lobby", (el) => el.hidden)) && sockets.MIKE.length === 0, sockets.MIKE);
 await m.unroute("**/wc.tar.gz");
 await m.evaluate(() => { const b = document.getElementById("useServer"); b.hidden = false; b.click(); });
-check("and is in the room once the game is loaded", await m.waitForFunction(() => !document.getElementById("lobby").hidden && /player 2 of 3 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 60000 }).then(() => true, () => false), await status(m));
+check("and is in the room once the game is loaded", await m.waitForFunction(() => !document.getElementById("lobby").hidden && /player 2 of 2 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 60000 }).then(() => true, () => false), await status(m));
 check("and not in the lobby: one socket, the room's", (await m.$eval("#hallBody", (el) => el.hidden)) && sockets.MIKE.length === 1, sockets.MIKE);
 await l.context().close();
 await m.context().close();
@@ -175,9 +175,10 @@ check("and all but the lines a pilot may send (two, one was the markup)", flood 
 // -- a room said in the lobby -------------------------------------------------------
 // "Advertise" says it without a code being typed, and makes the room first
 // when the pilot is in none.
-const offer = `${codeA} Enyo 1, 2 seats free`;   // (every room has three seats)
+const offer = `${codeA} Enyo 1, 2 seats free`;   // (a room of three: "3 players" is ticked)
 await sleep(10);
 await refill(a);
+await a.check("#threeSeats");
 check("the pilot is in no room yet", await a.$eval("#lobby", (el) => el.hidden), null);
 await a.click("#hallAdvertise");
 check("Advertise joins the pilot's room and sends its code, mission and free seats", (await sees(b, offer)) && !(await a.$eval("#lobby", (el) => el.hidden)) && (await value(a, "hallInput")) === "", [await text(a, "hallHint"), await status(a)]);
@@ -217,11 +218,10 @@ check("and the address keeps no room", !new URL(d.url()).searchParams.get("room"
 // A click is where the pilot wants to be: a room they sit in alone is left
 // for it (and taken again when the clicked one cannot be joined); a room
 // with company is not left by a click.
-check("the two-player box starts off", !(await d.$eval("#twoSeats", (el) => el.checked)), null);
-await d.check("#twoSeats");
+check("the three-player box starts off", !(await d.$eval("#threeSeats", (el) => el.checked)), null);
 await d.click("#join");
 await d.waitForFunction(() => !document.getElementById("lobby").hidden, null, { timeout: 30000 });
-check("a room made with it has two seats", /player 1 of 2 in room/.test(await text(d, "chatLog")) && (await d.$eval("#twoSeats", (el) => el.disabled)), await text(d, "chatLog"));
+check("a room made without it has two seats", /player 1 of 2 in room/.test(await text(d, "chatLog")) && (await d.$eval("#threeSeats", (el) => el.disabled)), await text(d, "chatLog"));
 await d.click("#hallLog a.roomcode");
 check("a pilot alone in a room who clicks a full one is told so, and is back in their own", await d.waitForFunction((own) => /is full/.test(document.getElementById("hallHint").textContent) && !document.getElementById("lobby").hidden && document.getElementById("room").value === own, roomD, { timeout: 30000 }).then(() => true, () => false), [await text(d, "hallHint"), await value(d, "room")]);
 await say(d, "/room");

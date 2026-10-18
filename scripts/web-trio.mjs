@@ -41,6 +41,7 @@ async function open(name, callsign, before) {
   const u = new URL(pageUrl);
   for (const [k, v] of Object.entries({ room, server: lobbyUrl, callsign, firstname: "Chris", "env.WCNET_LOG": "2" })) u.searchParams.set(k, v);
   await page.goto(u.toString());
+  await page.check("#threeSeats");      // (whoever makes the room makes it for three)
   await page.setInputFiles("#gamefile", process.env.GAME_FILE);
   await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   console.log(`[${name}] ` + (await page.$eval("#sourceStatus", (el) => `${el.dataset.state}: ${el.textContent || "plays " + document.getElementById("program").value}`)).slice(0, 200));
@@ -72,7 +73,7 @@ async function fly(page, name) {
 }
 
 const host = await open("host", "HOST", async (page) => {
-  // (every room has three seats; the address lost the room code on joining)
+  // (the address lost the room code on joining)
   check("the address keeps no room code", !new URL(page.url()).searchParams.get("room"), page.url());
   const options = await page.$eval("#mission", (el) => Array.from(el.options).map((o) => o.textContent));
   check(`the host's mission menu is ${game.title}'s`, (!game.options || options.length === game.options) && game.menu.test(options.join("|")), [options.length, options[1]]);
