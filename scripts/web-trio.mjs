@@ -38,8 +38,9 @@ async function open(name, callsign, before) {
   await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   console.log(`[${name}] ` + (await page.$eval("#sourceStatus", (el) => `${el.dataset.state}: ${el.textContent || "plays " + document.getElementById("program").value}`)).slice(0, 200));
   check(`${name}: the room's code picks the program`, (await page.$eval("#program", (el) => el.value)) === game.id, await page.$eval("#program", (el) => el.value));
-  if (before) await before(page);
+  // (the mission menu is built on joining the room: wait for the roster first)
   await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });
+  if (before) await before(page);
   return page;
 }
 const flying = (page) => page.evaluate(() => (window.DOSBox ? window.DOSBox._wc_web_in_flight() : -1));
@@ -93,7 +94,9 @@ check("each wingman flies a ship of its own", has("wing", "is us (slot 0)") && h
 // the third fires: the host hears it as net 3's (or whichever slot it took), the wingman replays it
 await third.evaluate(() => document.fullscreenElement ? document.exitFullscreen() : null);
 await third.click("#canvas");
-for (let i = 0; i < 4; i++) { await third.keyboard.press("Space"); await sleep(0.4); }
+// (a held key: a tap between two frames of a game that waits for the host's
+// frames is missed, as the gunner test found)
+await third.keyboard.down("Space"); await sleep(3); await third.keyboard.up("Space");
 await sleep(4);
 const thirdNet = (() => { const m = /we are player (\d+)/.exec(logs.third.find((l) => l.includes("we are player")) || ""); return m ? m[1] : "?"; })();
 check("the third's shots reach the host", logs.host.some((l) => l.includes(`local fire: ship ${thirdNet} (net ${thirdNet})`)),
