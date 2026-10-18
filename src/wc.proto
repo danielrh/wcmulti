@@ -224,6 +224,11 @@ message Frame {
     // however long a scene holds it; one out of flight is not waited for,
     // nor sent frames, whether or not its ending (player_end) was seen.
     optional bool flying = 26;
+    // Server -> client: the network ids of the ships humans fly, the host's 0
+    // among them, in every frame and in the start state.  A client holds the
+    // AI off these and computes no damage to them (session.h: a human's ship
+    // is its owner's), the host's body and the other wingmen's alike.
+    repeated uint32 humans = 28;
 }
 
 // Connect -> once per mission

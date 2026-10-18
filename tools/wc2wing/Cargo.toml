@@ -1,0 +1,11 @@
+[package]
+name = "wc2wing"
+version = "0.1.0"
+edition = "2021"
+description = "A third seat for Wing Commander II missions: a second fighter of the player's wing in a MODULE.00n file"
+license = "GPL-2.0-or-later"
+
+[dependencies]
+
+[profile.release]
+opt-level = 2

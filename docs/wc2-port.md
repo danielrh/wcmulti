@@ -137,6 +137,21 @@ transport to escort, or empty, and a client that took it for its ship would
   after the player's own mission ship at `dseg:C1B4` (`ovr116:1C5C` tests
   both; `dseg:6E1E` has the mission ship of every slot).  "Recon", the Sabre
   that leads the last mission's escort, counts: the second player flies it.
+  The client's slot is its network id (1 for the first client, 3 for the
+  second), and since 2026-10-17 a client whose slot holds no such fighter
+  takes the first slot that holds one no human flies
+  (`ServerSession::reseat`, with the mission start state: the id goes to
+  the client in it, and the other machines know the ship by the server's
+  slot number as before).  Most of Special Operations' missions list the
+  carrier first at the launch nav point, so their wingman is slot 2 and the
+  second player used to be a drone or the gunner there; now it flies the
+  wingman's ship.  A mission with two wing fighters (SO3P, `tools/wc2wing`,
+  docs/so3.md section 6) seats two clients; every frame says which network
+  ids humans fly (`Frame.humans`), and a client holds the AI off and
+  computes no damage to any of them, the host's body and the other
+  wingmen's alike (`ClientSession::is_remote_player_slot`).  The first
+  wingman that spawns inside the leader is put on the left wing, the second
+  on the right (`take_station`).
 * **Gunner** when there is no such wingman and the leader's ship has turrets
   (the Broadsword's three, the Sabre's one); see below.
 * **Drone** otherwise (`WCSEAT=drone` or `WCSEAT=gunner` on the server
@@ -646,7 +661,10 @@ Wing Commander's directory; the code picks SM2.EXE).
 data-file number changed (SO3.EXE), the Hellcat V as ship type 45 and our
 own missions: `so3/README.md`, `so3/story.md`, and `docs/so3.md` for what
 was learned of the data files (MODULE, SHIP, the scene scripts) to do it.
-The hooks list SO3.EXE in `kGames` with SO2.EXE's tables.
+The hooks list SO3.EXE in `kGames` with SO2.EXE's tables, and SO3P.EXE, the
+same campaign as data set 4 with a seat for a third player in every mission
+(`tools/wc2wing`; three native instances: `so3/rig/w2trio.sh`; three
+browser pages: `scripts/web-wc2.sh trio`).
 
 ## 9. Not done yet
 

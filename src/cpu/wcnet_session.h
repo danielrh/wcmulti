@@ -88,8 +88,8 @@ public:
     // to the server as Copilot actions (wcnet_hooks.cpp, wc_net_key_filter).
     virtual bool is_copilot() const { return false; }
     virtual void copilot(Copilot::Action action) { (void)action; }
-    // Network ids flown by humans: the host and the two client slots.
-    static bool is_player_net(int net) { return net == 0 || net == 1 || net == 3; }
+    // (Which network ids humans fly is the server's word, Frame.humans: the
+    // slot a client flies is decided with each mission's start state.)
 
     // --- events -------------------------------------------------------------
     // Add an event to the frame that will be sent at the end of this frame's

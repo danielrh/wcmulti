@@ -200,6 +200,8 @@ function setSource(s, want) {
     const g = programs.find((p) => p.id === want) || programs.find((p) => p.id === hostsProgram) || programs.find((p) => p === codeGame(roomCode)) || programs.find((p) => p.id === kept) || base;
     s.base = base.id; s.programs = programs;
     s.game = { id: g.id, title: g.title, run: g.run, multiplayer: g.multiplayer };
+    // A program made for more seats (SO3P: three) sizes the room to be made.
+    if (!lobby.game && g.players) $("players").value = String(g.players);
     // (A file of the game's name is not yet the game: the hooks fly one
     // build of each program, and the public lobby is for pilots who have it.)
     s.known = knownBuild(g, s.files);

@@ -53,6 +53,7 @@ if (cmd === "pack") {
     version: 1,
     anchor: "GAMEDAT/SERIES.S02",
     exe: plainInfo.exe,
+    exes: plainInfo.exes || [plainInfo.exe],   // SO3.EXE and SO3P.EXE (the third seat), each from the player's SO2.EXE
     anchorSize: statSync(anchor).size,
     keyCheck: createHash("sha256").update(key).digest("hex"),
     iv: iv.toString("hex"),

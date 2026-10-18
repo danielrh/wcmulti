@@ -6,7 +6,8 @@
 // of a file every owner of Special Operations 2 has, GAMEDAT/SERIES.S02.
 // Given the player's game files, this derives the key from their copy,
 // opens the blob and returns the files to install beside the game's, plus
-// SO3.EXE, which is the player's SO2.EXE with the manifest's byte patches.
+// SO3.EXE and SO3P.EXE (the campaign with a seat for a third player), each
+// the player's SO2.EXE with the manifest's byte patches.
 // so3/pack.mjs made the blob; the container inside is, per file, a u32 path
 // length, the path (UTF-8), a u32 size and the bytes, little-endian.
 
@@ -51,13 +52,14 @@ export async function loadSo3(gameFiles, onStatus) {
     off += 8 + nameLen + size;
   }
   if (files.length !== manifest.files.length) throw new Error(`The Culloden campaign's package holds ${files.length} files, its manifest says ${manifest.files.length}.`);
-  // The program: the player's own SO2.EXE with the manifest's byte patches
+  // The programs: the player's own SO2.EXE with the manifest's byte patches
   // (its data-file number and the saved game's name), made here, shipped by
-  // nobody.
-  const exe = manifest.exe;
-  const source = gameFiles.find((f) => f.path.toUpperCase() === exe.source.toUpperCase());
-  if (!source) throw new Error(`The Culloden campaign needs ${exe.source}, which is not among the game files.`);
-  files.push({ path: exe.target, data: patchExe(source.data, exe) });
+  // nobody: SO3.EXE, and SO3P.EXE for the three-seat campaign.
+  for (const exe of manifest.exes || [manifest.exe]) {
+    const source = gameFiles.find((f) => f.path.toUpperCase() === exe.source.toUpperCase());
+    if (!source) throw new Error(`The Culloden campaign needs ${exe.source}, which is not among the game files.`);
+    files.push({ path: exe.target, data: patchExe(source.data, exe) });
+  }
   return files;
 }
 

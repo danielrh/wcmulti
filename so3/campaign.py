@@ -33,6 +33,14 @@ TRADER, TRADER2 = 0x12, 0x13   # freighter masters
 CARRIER, BRIDGE = 0x0F, 0x10   # a carrier's bridge voices
 NOBODY = 0
 
+# SO3P (so3/build.py): the same campaign with a seat for a third player.
+# tools/wc2wing gives every mission a second wing fighter, a copy of the
+# wingman's record flown by this pilot (name, comm personality: one with an
+# INTEL file) when no human takes it; THIRD_SEAT names another by (series,
+# mission).  Missions that fly two wing fighters already (1-1, 2-0) get none.
+THIRD_SEAT_DEFAULT = ("Doomsday", DOOMSDAY)
+THIRD_SEAT = {}
+
 # ALTSHIPS.003 records (copies of SO2's): alternative records some mission ships wear.
 ALT_MANDARIN_SABRE, ALT_MANDARIN_SABRE2, ALT_MANDARIN_BROADSWORD = 13, 14, 16
 ALT_TENDER, ALT_FRIENDLY_TENDER = 17, 18   # a disabled transport; a transport of our side you can land on

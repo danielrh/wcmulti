@@ -139,6 +139,16 @@ const SO3_SERIES = [
   { series: 4, missions: ["Countersign, with Maniac", "Ceremony, with Maniac", "The yard, with Maniac", "Duel, with Maniac"] },
   { series: 5, missions: ["The assault (the raid called off), with Stingray", "Picket line (a second chance), with Downtown", "Blown (a second chance), with Maniac", "The last patrol, with Maniac"] },
 ];
+// SO3P: the same missions with a seat for a third player (so3/build.py:
+// tools/wc2wing puts a second wing fighter in every mission, Doomsday's
+// where the wing had one fighter; 1-1 and 2-0 flew two already).
+const SO3P_SERIES = [
+  { series: 1, missions: ["Shakedown, with Maniac and Doomsday", "Hand-me-downs, with Doomsday and Downtown", "The relay, with Stingray and Doomsday", "Prize, with Maniac and Doomsday"] },
+  { series: 2, missions: ["First patrol, with Maniac and Downtown", "Scramble, with Stingray and Doomsday", "Beacon, with Toro and Doomsday", "Valkyrie, with Maniac and Doomsday"] },
+  { series: 3, missions: ["The traders, with Maniac and Doomsday", "Theft, with Maniac and Doomsday", "Rendezvous, with Maniac and Doomsday", "Jump point, with Maniac and Doomsday"] },
+  { series: 4, missions: ["Countersign, with Maniac and Doomsday", "Ceremony, with Maniac and Doomsday", "The yard, with Maniac and Doomsday", "Duel, with Maniac and Doomsday"] },
+  { series: 5, missions: ["The assault (the raid called off), with Stingray and Doomsday", "Picket line (a second chance), with Downtown and Doomsday", "Blown (a second chance), with Maniac and Doomsday", "The last patrol, with Maniac and Doomsday"] },
+];
 
 // What the page says under the mission menu, in a line: with a mission
 // picked (`forced`), and for the barracks, to the host and to a wingman.
@@ -218,6 +228,18 @@ export const GAMES = [
     pointer: { fromGame: true },
     dosbox: "[sblaster]\nirq=5\n",
     campaign: { series: SO3_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
+  // SO3P: the Culloden campaign with a seat for a third player, the same
+  // program with the data-file number 4 (both come out of the sealed
+  // package).  Its rooms want three seats: `players` sets the room's size
+  // when the program is picked.
+  { id: "wc2so3p", tag: "SO3P", partOf: "wc2", title: "Wing Commander II: Special Operations 3 (Culloden), three seats", detect: ["SO2.EXE"], run: "loadfix -34 so3p", multiplayer: true,
+    addon: "so3", players: 3,
+    build: { para: 0x1924, off: 0x025A, text: "Loading WC2 - SPECIAL OPERATIONS 2" },
+    saves: ["GAMEDAT/SAVEGAME.SO4"], cycles: 8000,
+    firstName: true,
+    pointer: { fromGame: true },
+    dosbox: "[sblaster]\nirq=5\n",
+    campaign: { series: SO3P_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
 ];
 
 // The registry entry of a game id, or null (a game picked by its executable).

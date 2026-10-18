@@ -7,6 +7,7 @@
 #include <cmath>
 #include <deque>
 #include <map>
+#include <set>
 #include <vector>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -1059,6 +1060,71 @@ private:
         return turrets ? SEAT_GUNNER : SEAT_DRONE;
     }
 
+    // Is the ship in a slot one a human can fly: a fighter of the player's
+    // wing (seat_for's test)?
+    bool wing_fighter_slot(int slot) const {
+        if (!is_wc2() || !ds::known(ds::playerWing) || !slot_in_use(slot) || entity_type(slot) != ET_SHIP) {
+            return false;
+        }
+        Bit16u missionShip = rd16((Bit16u)(ds::slotMissionShip + 2 * slot));
+        for (int i = 0; i < 8; i++) {
+            if (rd16((Bit16u)(ds::playerWing + 2 * i)) == missionShip) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // The slot a client flies is its network id, given when it connected (1,
+    // then 3).  In Wing Commander II the mission decides what is in a slot:
+    // the carrier is slot 1 in most of Special Operations' missions and the
+    // wingman slot 2, and a mission with a second wing fighter (SO3P,
+    // tools/wc2wing) may have it in any slot.  So, with each mission's start
+    // state: a client whose own slot holds no fighter of the wing takes the
+    // first one no human flies, and keeps its seat as a gunner or a drone
+    // only when there is none.  The id goes to the client with the start
+    // state; the other machines know the ship by the server's slot number,
+    // which is what it always was.
+    void reseat(RemoteClient *c) {
+        const char *env = getenv("WCSEAT");
+        if (!is_wc2() || !ds::known(ds::playerWing) || (env && env[0]) || wing_fighter_slot(c->net)) {
+            return;
+        }
+        for (int slot = kPlayerSlot + 1; slot <= kMaxShipSlot; slot++) {
+            if (!wing_fighter_slot(slot) || (slot < (int)clients_.size() && clients_[slot]->connected())) {
+                continue;
+            }
+            wclog(1, "player %d takes slot %d, the wing's fighter there (its slot %d holds %s)", c->net, slot, c->net,
+                  !slot_in_use(c->net) ? "nothing" : entity_type(c->net) == ET_SHIP ? "a fighter not of the wing" : "a ship that is not a fighter");
+            move_client(c, slot);
+            return;
+        }
+    }
+
+    void move_client(RemoteClient *c, int slot) {
+        int from = c->net;
+        while ((int)clients_.size() <= slot) {
+            clients_.push_back(new RemoteClient((int)clients_.size()));
+        }
+        std::swap(clients_[from], clients_[slot]);
+        clients_[from]->net = from;  // the unconnected one takes the old index
+        c->net = slot;
+    }
+
+    // Frame.humans: the ships humans fly, by network id (the host's 0 first),
+    // for the clients' own rules; `also` is a client about to be in the
+    // mission (its start state).
+    void list_humans(Frame *frame, const RemoteClient *also) const {
+        frame->clear_humans();
+        frame->add_humans(0);
+        for (size_t i = 0; i < clients_.size(); i++) {
+            const RemoteClient *c = clients_[i];
+            if (c->connected() && c->seat == SEAT_WINGMAN && (c->inMission || c == also)) {
+                frame->add_humans((Bit32u)c->net);
+            }
+        }
+    }
+
     RemoteClient *allocate_client() {
         for (size_t i = 0; i < allowedIds_.size(); i++) {
             int net = allowedIds_[i];
@@ -1211,6 +1277,7 @@ private:
         msg.set_epoch(epoch_);
         msg.set_frame_number(frameNumber_);
         Game *game = msg.mutable_game();
+        reseat(c);
         game->set_assigned_player_id(c->net);
         c->seat = seat_for(c);
         c->mannedTurret = -1;
@@ -1221,6 +1288,7 @@ private:
         }
         game->set_fps(pace_fps());
         Frame *frame = game->mutable_starting_state();
+        list_humans(frame, c);
         frame->set_rocks(rocks_mode());
         frame->set_wing_bumps(wing_bumps_mode());
         frame->set_mode(mode());
@@ -1251,6 +1319,7 @@ private:
         }
         c->inMission = true;
         c->leftThisMission = false;  // it has the mission's start state: it is in it
+        list_humans(pendingFrame_.mutable_frame(), NULL);  // (this frame's list was made before it joined)
         // Its frame numbers start again at 1 with this mission (its epoch),
         // so what we remember of its last mission's frames is forgotten too.
         // Left as they were (029ec859, 2026-10-09, to 17), every position it sent in
@@ -1287,16 +1356,26 @@ private:
             return;
         }
         enum { kAbeam = 752 };
+        // the first wingman on our left wing, the second on our right, a
+        // third further out on the left
+        int others = 0;
+        for (size_t i = 0; i < clients_.size(); i++) {
+            const RemoteClient *o = clients_[i];
+            if ((int)i != slot && o->connected() && o->inMission && o->seat == SEAT_WINGMAN) {
+                others++;
+            }
+        }
+        double abeam = (others % 2 == 0 ? -1.0 : 1.0) * kAbeam * (1 + others / 2);
         Vec3 right = read_vec(vec_slot(ds::gOrientationRightVector, kPlayerSlot));
-        pos.x = own.x - right.x * kAbeam;
-        pos.y = own.y - right.y * kAbeam;
-        pos.z = own.z - right.z * kAbeam;
+        pos.x = own.x + right.x * abeam;
+        pos.y = own.y + right.y * abeam;
+        pos.z = own.z + right.z * abeam;
         write_vec(vec_slot(ds::gPositionVector, slot), pos);
         write_vec(vec_slot(ds::gVelocityVector, slot), read_vec(vec_slot(ds::gVelocityVector, kPlayerSlot)));
         write_vec(vec_slot(ds::gOrientationRightVector, slot), right);
         write_vec(vec_slot(ds::gOrientationUpVector, slot), read_vec(vec_slot(ds::gOrientationUpVector, kPlayerSlot)));
         write_vec(vec_slot(ds::gOrientationFrontVector, slot), read_vec(vec_slot(ds::gOrientationFrontVector, kPlayerSlot)));
-        wclog(1, "player %d starts on our left wing", slot);
+        wclog(1, "player %d starts on our %s wing", slot, abeam < 0 ? "left" : "right");
     }
 
     void reset_pending_frame() {
@@ -1307,6 +1386,7 @@ private:
 
     void populate_server_frame() {
         Frame *frame = pendingFrame_.mutable_frame();
+        list_humans(frame, NULL);
         health_.next_frame();
         for (int slot = kPlayerSlot; slot <= kMaxShipSlot; slot++) {
             if (!slot_in_use(slot)) {
@@ -1929,8 +2009,18 @@ public:
     virtual Role role() const { return ROLE_CLIENT; }
 
     virtual bool is_remote_player_slot(int slot) const {
-        return entities_.is_mapped(0) && entities_.net_to_local(0) == slot;
+        if (entities_.is_mapped(0) && entities_.net_to_local(0) == slot) {
+            return true;  // the host's body
+        }
+        for (std::set<int>::const_iterator it = humans_.begin(); it != humans_.end(); ++it) {
+            if (*it != 0 && *it != shipNet_ && entities_.is_mapped(*it) && entities_.net_to_local(*it) == slot) {
+                return true;  // another wingman's ship
+            }
+        }
+        return false;
     }
+    // A network id a human flies (the server's word, Frame.humans).
+    bool is_human_net(int net) const { return net == 0 || humans_.count(net) > 0; }
 
     virtual void queue_outgoing_event(const Event &ev) {
         *pendingFrame_.mutable_frame()->add_event() = ev;
@@ -1995,6 +2085,7 @@ public:
     virtual void on_mission_reset() {
         despawn_all_ships();
         entities_.reset();
+        humans_.clear();
         reset_pending_fires();
         pendingHealth_.clear();
         health_.reset();
@@ -2323,7 +2414,7 @@ public:
             }
             ShipHealthState h;
             if (parse_health(su.health(), &h)) {
-                write_health(slot, h, is_player_net(su.ship_id()));
+                write_health(slot, h, is_human_net(su.ship_id()));
                 wclog(3, "mirrored net %d health into slot %d: %s", su.ship_id(), slot, describe_health(slot).c_str());
             }
         }
@@ -2566,6 +2657,22 @@ private:
             set_wing_bumps_mode((int)frame.wing_bumps());
             show_notice(wing_bumps_notice(wing_bumps_mode()));
         }
+        if (frame.humans_size() > 0) {
+            std::set<int> humans;
+            for (int i = 0; i < frame.humans_size(); i++) {
+                humans.insert((int)frame.humans(i));
+            }
+            if (humans != humans_) {
+                std::string list;
+                for (std::set<int>::const_iterator it = humans.begin(); it != humans.end(); ++it) {
+                    char buf[16];
+                    snprintf(buf, sizeof(buf), "%s%d", list.empty() ? "" : " ", *it);
+                    list += buf;
+                }
+                wclog(1, "humans fly net %s (we are %d)", list.c_str(), shipNet_);
+                humans_ = humans;
+            }
+        }
         if (frame.has_rocks() && (int)frame.rocks() != rocks_mode()) {
             // The host switched the rocks in flight: the jobs run with this
             // frame's events.
@@ -2613,6 +2720,7 @@ private:
 
     Connection conn_;
     int shipNet_;
+    std::set<int> humans_;  // network ids humans fly (Frame.humans)
     Seat seat_;
     bool chase_;  // a drone rides behind the leader
     int seatFrames_;  // a gunner: frames flown before it is put in its turret (-1: done)

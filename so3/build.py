@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """so3/build.py -- Special Operations 3 from an installed Wing Commander II.
 
-  so3/build.py --hellcat DIR [--game wc2] [--out build-so3] [--test-game]
+  so3/build.py --hellcat DIR [--game wc2] [--out build-so3] [--test-game] [--wc2wing BIN]
 
 Writes OUT/plain/: GAMEDAT/ with every file the program names by its number
 3 (SO3.EXE is SO2.EXE with its program number set to 3, so that it reads the
@@ -10,8 +10,11 @@ OUT/plain.json which the page applies to the player's own SO2.EXE; the
 program is never shipped) (copies of Special Operations 2's,
 MODULE.003 and SERIES.S03 with our missions and texts in them), the Hellcat
 as ship type 45 (HCl's and Howard Day's conversion for Academy, repacked
-as a WC2 fighter) and its AI file.  --test-game makes OUT/game, a whole
-game directory to fly it from natively.
+as a WC2 fighter) and its AI file; and the same again as the number 4 set
+for SO3P, the campaign with a seat for a third player: its MODULE.004 is
+MODULE.003 with a second wing fighter in every mission (tools/wc2wing, built
+with cargo if BIN is not there).  --test-game makes OUT/game, a whole
+game directory to fly both from natively.
 
 Everything in OUT comes from the game's own files and must not be
 committed or published in the clear: so3/pack.mjs encrypts it for the page
@@ -24,6 +27,7 @@ import os
 import re
 import shutil
 import struct
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -58,13 +62,16 @@ SCENE_REFERENCES = [b"series.s02", b"gameflow.s02", b"incident.s02", b"campaign.
 SCENE_RENAMES = [(b"pcship.v01", b"pcship.v%02d" % campaign.HELLCAT)]
 
 
-def rename_references(data):
+def rename_references(data, frm=2, to=3):
+    """The scene files' references to data set `frm` made references to `to`
+    (and, from the game's own set, the Rapier's cockpit made the Hellcat's)."""
     for ref in SCENE_REFERENCES:
         for form in (ref, ref.upper(), ref[:1].upper() + ref[1:]):
-            data = data.replace(form, form[:-1] + b"3")
-    for old, new in SCENE_RENAMES:
-        assert len(old) == len(new)
-        data = data.replace(old, new)
+            data = data.replace(form[:-1] + str(frm).encode(), form[:-1] + str(to).encode())
+    if frm == 2:
+        for old, new in SCENE_RENAMES:
+            assert len(old) == len(new)
+            data = data.replace(old, new)
     return data
 
 
@@ -83,22 +90,28 @@ RECOLOURED_FACES = [("PEOPLE.V02", "PEOPLE.V46", BANBRIDGE), ("PEOPLE.V01", "PEO
 FACE_FILES = [(b"people.v02", b"people.v46"), (b"people.v01", b"people.v47"), (b"people.v32", b"people.v09")]
 
 # SO3.EXE is SO2.EXE with these byte sequences replaced, each found the given
-# number of times.  The page applies the same list to the player's own copy
-# (web/so3.js); the program itself is never shipped.
-EXE_PATCH = {
-    "source": "SO2.EXE",
-    "target": "SO3.EXE",
-    "sha256": SO2_SHA256,
-    "patches": [
-        {"what": "the data-file number, mov word [cb16], 2", "find": "c70616cb0200", "replace": "c70616cb0300", "count": 5},
-        {"what": "the saved game's name", "find": b"savegame.so2".hex(), "replace": b"savegame.so3".hex(), "count": 1},
-        # The start screen's second button resumes the story from the saved
-        # game's current record and then names the game whose files to play
-        # with a constant of its own (ovr118:0427, mov word [bp-6], 2): left
-        # at 2 it resumed SO3's record in SO2's missions.
-        {"what": "the game number of a resumed story", "find": "c746fa02009a2f0088048b46fa5ec9cb", "replace": "c746fa03009a2f0088048b46fa5ec9cb", "count": 1},
-    ],
-}
+# number of times (SO3P.EXE the same with a 4).  The page applies the same
+# list to the player's own copy (web/so3.js); the program itself is never
+# shipped.
+def exe_patch(n, target):
+    return {
+        "source": "SO2.EXE",
+        "target": target,
+        "sha256": SO2_SHA256,
+        "patches": [
+            {"what": "the data-file number, mov word [cb16], 2", "find": "c70616cb0200", "replace": "c70616cb0%d00" % n, "count": 5},
+            {"what": "the saved game's name", "find": b"savegame.so2".hex(), "replace": (b"savegame.so%d" % n).hex(), "count": 1},
+            # The start screen's second button resumes the story from the saved
+            # game's current record and then names the game whose files to play
+            # with a constant of its own (ovr118:0427, mov word [bp-6], 2): left
+            # at 2 it resumed SO3's record in SO2's missions.
+            {"what": "the game number of a resumed story", "find": "c746fa02009a2f0088048b46fa5ec9cb", "replace": "c746fa0%d009a2f0088048b46fa5ec9cb" % n, "count": 1},
+        ],
+    }
+
+
+EXE_PATCH = exe_patch(3, "SO3.EXE")
+EXE_PATCH_P = exe_patch(4, "SO3P.EXE")
 
 
 def apply_patch(data, spec):
@@ -137,12 +150,42 @@ def hellcat_record(rec, sabre):
     return wc2data.set_hardpoints(rec, new)
 
 
-def patch_exe(src, dst):
+def patch_exe(src, dst, spec=EXE_PATCH):
     d = open(src, "rb").read()
     digest = hashlib.sha256(d).hexdigest()
     if digest != SO2_SHA256:
         print("warning: SO2.EXE is not the build this was made with (sha256 %s)" % digest)
-    open(dst, "wb").write(apply_patch(d, EXE_PATCH))
+    open(dst, "wb").write(apply_patch(d, spec))
+
+
+def wc2wing_binary(path):
+    """tools/wc2wing's binary, built with cargo when it is not there."""
+    if not os.path.exists(path):
+        print("building tools/wc2wing")
+        subprocess.check_call(["cargo", "build", "--release", "--quiet", "--manifest-path", os.path.join(ROOT, "tools", "wc2wing", "Cargo.toml")])
+    return path
+
+
+def build_so3p(pgd, gamedat, tool):
+    """The number 4 set: SO3's files again, the scene files' references to
+    the set renumbered, and MODULE.004 with the third seat in every mission."""
+    for n in NUMBERED:
+        data = open(os.path.join(pgd, renumber(n, 3)), "rb").read()
+        if n.endswith(".S02"):
+            data = rename_references(data, 3, 4)
+        open(os.path.join(pgd, renumber(n, 4)), "wb").write(data)
+    cur, tmp = os.path.join(pgd, "MODULE.003"), os.path.join(pgd, "MODULE.004.tmp")
+    for mis in campaign.MISSIONS:
+        name, pilot = campaign.THIRD_SEAT.get((mis["series"], mis["mission"]), campaign.THIRD_SEAT_DEFAULT)
+        out = subprocess.run([tool, "add", cur, "-o", tmp, "-m", "s%dm%d" % (mis["series"], mis["mission"]), "--name", name, "--pilot", str(pilot),
+                              "--gamedat", gamedat, "--make-room"], capture_output=True, text=True)
+        for line in out.stdout.splitlines():
+            if not line.startswith("written:"):
+                print("SO3P " + line)
+        if out.returncode != 0:
+            sys.exit("SO3P: wc2wing failed on s%dm%d: %s" % (mis["series"], mis["mission"], out.stderr.strip()))
+        cur = tmp
+    os.replace(tmp, os.path.join(pgd, "MODULE.004"))
 
 
 def type_info(gamedat, shiptype, extra_dir):
@@ -186,6 +229,7 @@ def main():
     ap.add_argument("--so2-slots", default="", help="comma-separated s-m slots to fill with SO2's own mission records instead of ours (bisecting the campaign script's behaviour)")
     ap.add_argument("--hellcat-scale", type=float, default=0.75,
                     help="the Hellcat's sprites at this size (the conversion's 142 KB file is near twice a WC2 fighter's and starves the heap; 0.75 makes it 81 KB)")
+    ap.add_argument("--wc2wing", default=os.path.join(ROOT, "tools", "wc2wing", "target", "release", "wc2wing"), help="the tool that adds the third seat (built if missing)")
     args = ap.parse_args()
     gamedat = os.path.join(args.game, "GAMEDAT")
     plain = os.path.join(args.out, "plain")
@@ -271,8 +315,12 @@ def main():
         blocks[i] = wc2data.series_set_strings(blocks[i], [s.encode("latin1") for s in strings])
     wc2data.write_container(os.path.join(pgd, "SERIES.S03"), blocks, [f for f, _ in series])
 
+    # SO3P: the campaign with a third seat, as the number 4 set
+    build_so3p(pgd, gamedat, wc2wing_binary(args.wc2wing))
+
     files = sorted(os.path.relpath(os.path.join(dp, f), plain) for dp, _, fs in os.walk(plain) for f in fs)
-    json.dump({"files": files, "anchor": "GAMEDAT/SERIES.S02", "exe": EXE_PATCH}, open(os.path.join(args.out, "plain.json"), "w"), indent=1)
+    json.dump({"files": files, "anchor": "GAMEDAT/SERIES.S02", "exe": EXE_PATCH, "exes": [EXE_PATCH, EXE_PATCH_P]},
+              open(os.path.join(args.out, "plain.json"), "w"), indent=1)
     print("%d files in %s" % (len(files), plain))
 
     if args.test_game:
@@ -282,7 +330,8 @@ def main():
         for f in files:
             shutil.copyfile(os.path.join(plain, f), os.path.join(game, f))
         patch_exe(os.path.join(args.game, "SO2.EXE"), os.path.join(game, "SO3.EXE"))
-        print("test game in %s (SO3.EXE patched there)" % game)
+        patch_exe(os.path.join(args.game, "SO2.EXE"), os.path.join(game, "SO3P.EXE"), EXE_PATCH_P)
+        print("test game in %s (SO3.EXE and SO3P.EXE patched there)" % game)
 
 
 if __name__ == "__main__":

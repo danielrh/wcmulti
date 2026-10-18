@@ -11,6 +11,10 @@ the scripts); nothing here touches the game's own files.
 * `w2duo.sh OUT SECONDS "s m" HOSTKEYS CLIENTKEYS` -- host + wingman on one
   machine (`CLIENTGAMEDIR` gives the wingman its own game directory: two
   programs on one directory corrupt each other's save files).
+* `w2trio.sh OUT SECONDS "s m" HOSTKEYS CLIENTKEYS CLIENT2KEYS` -- host +
+  two wingmen, for SO3P (`GAME=so3p`, the default; `CLIENTGAMEDIR` and
+  `CLIENT2GAMEDIR` default to `build-so3/game-client` and `-client2`, copies
+  of `build-so3/game`).
 * `spawntest.sh` -- every mission once with two programs: launch, autopilot
   to the first nav, free memory, a screenshot; `out/spawntest.log`.
 * `campaignrun.sh OUT [SECONDS] ["s m"]` -- the campaign from the barracks,

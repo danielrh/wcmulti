@@ -103,8 +103,9 @@ on the page (the lobbylink room `WC-LOBBY`, and `WC-LOBBY0`, `WC-LOBBY1`
 and so on when it is full).  A pilot who opens the page is in it, unless a
 link to a room brought the page or the pilot left the lobby before.  A
 room's code starts with its game, `WC1-4821`, `WC2-`, `SM2-`, `SO1-`,
-`SO2-`, and a code said in the lobby is a link: a click joins that room, if
-the game loaded on the page is that game.  "Advertise" sends the pilot's
+`SO2-`, `SO3-`, `SO3P-` (the Culloden campaign and its three-seat version,
+`so3/README.md`), and a code said in the lobby is a link: a click joins that
+room, if the game loaded on the page is that game.  "Advertise" sends the pilot's
 room (code, mission, free seats), and `/room` in a line is its code.
 Nobody runs the lobby, so each page keeps its
 rules for its own player and for what the others send: lines of 60
