@@ -55,7 +55,7 @@
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "917f82c580e15f05324b6ac1",
+ "iv": "3e7db3c97534a5d8825adf5f",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -71,7 +71,7 @@
   },
   {
    "path": "GAMEDAT/INCIDENT.S03",
-   "size": 54672
+   "size": 64072
   },
   {
    "path": "GAMEDAT/INTELSHP.001",
@@ -86,8 +86,48 @@
    "size": 6610
   },
   {
+   "path": "GAMEDAT/LAND.V46",
+   "size": 6251
+  },
+  {
+   "path": "GAMEDAT/LAND.V47",
+   "size": 5212
+  },
+  {
+   "path": "GAMEDAT/LAND.V48",
+   "size": 6445
+  },
+  {
+   "path": "GAMEDAT/LAND.V49",
+   "size": 7465
+  },
+  {
+   "path": "GAMEDAT/LAND.V50",
+   "size": 5902
+  },
+  {
+   "path": "GAMEDAT/LAND.V51",
+   "size": 5185
+  },
+  {
    "path": "GAMEDAT/LAUNCH.V45",
    "size": 2641
+  },
+  {
+   "path": "GAMEDAT/LAUNCH.V46",
+   "size": 2036
+  },
+  {
+   "path": "GAMEDAT/LAUNCH.V47",
+   "size": 2386
+  },
+  {
+   "path": "GAMEDAT/LAUNCH.V48",
+   "size": 2135
+  },
+  {
+   "path": "GAMEDAT/LAUNCH.V49",
+   "size": 2896
   },
   {
    "path": "GAMEDAT/MODULE.003",
@@ -134,5 +174,5 @@
    "size": 1538
   }
  ],
- "bytes": 862761
+ "bytes": 918322
 }

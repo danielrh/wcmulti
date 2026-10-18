@@ -95,7 +95,7 @@ BERGSTROM.update({52 + i: 164 + i for i in range(7)})
 # still for the missions it flies from a cruiser are INCIDENT.S02 blocks 5,
 # 4 and 1 (the .V39 films, our INCIDENT.S03): the still is a Waterloo, the
 # launch and landing draw the Concordia again, which our copies replace
-# (CARRIER_STILLS below).  Every film table entry naming one of WC2's
+# (carrier_stills below).  Every film table entry naming one of WC2's
 # Concordia films names those instead (the user, 2026-10-18:
 # "the so3 campaign talks about the Waterloo cruiser but the scenes don't
 # take from that"); the scripts play films by number, so they are untouched.
@@ -103,26 +103,71 @@ CONCORDIA_LAUNCHES = [2, 10, 11, 12, 13, 17, 23, 98, 99, 100, 101, 102]
 CONCORDIA_LANDINGS = [3, 5, 6, 7, 8, 9, 24]
 CONCORDIA_STILLS = [0, 4]
 WATERLOO_LAUNCH, WATERLOO_LANDING, WATERLOO_STILL = 5, 4, 1
-WATERLOO_FILMS = dict([(("incident.s00", b), ("incident.s03", WATERLOO_LAUNCH)) for b in CONCORDIA_LAUNCHES] +
-                      [(("incident.s00", b), ("incident.s03", WATERLOO_LANDING)) for b in CONCORDIA_LANDINGS] +
-                      [(("incident.s00", b), ("incident.s03", WATERLOO_STILL)) for b in CONCORDIA_STILLS])
 
 
 # ... but those "Waterloo" launch and landing films draw the Concordia (the
 # user, 2026-10-18: only the red alert's still, laungame.v39, is a
 # Waterloo): each is one still of the carrier (launch.v39, land.v39), drawn
 # where it stands while the fighters (launch.v30, land.v30) move.  Our
-# INCIDENT.S03 names stills of our own instead, the Waterloo's in-flight
-# sprite (SHIP.V17's view 10: the bow down and to the left, the deck
-# showing, as the Concordia stands in them) fitted into the box the
-# Concordia filled, in the game's palette (WC2PAL; the films' palette is
-# the same for every colour the sprite uses, dumped from a running film).
-WATERLOO_VIEW = 10
-CARRIER_STILLS = [("LAND.V39", "LAND.V45"), ("LAUNCH.V39", "LAUNCH.V45")]
+# INCIDENT.S03 names stills of our own instead: the Waterloo's in-flight
+# sprite (SHIP.V17) fitted into the box the Concordia filled, in the game's
+# palette (WC2PAL; the films' palette is the same for every colour the
+# sprite uses, dumped from a running film).  And the user asked for her
+# from different angles (2026-10-18): the launch and landing films are
+# copied, appended to INCIDENT.S03 each naming a still of its own, and each
+# scene block sends its launch and landing to the copy its number picks, so
+# mission after mission she is seen from another side.  The two late scenes
+# that show her with another ship (INCIDENT.S02 blocks 15 and 21) get views
+# of their own.
+INCIDENT_BLOCKS = 26                     # INCIDENT.S02's; the copies follow
+LANDING_VIEWS = [10, 12, 3, 24, 31]      # LAND.V45.. (block 4, then its copies)
+LAUNCH_VIEWS = [10, 11, 26, 12, 27]      # LAUNCH.V45.. (block 5, then its copies)
+LATE_LANDING_STILLS = [(15, "LAND.V50", 25), (21, "LAND.V51", 32)]
+LANDING_BLOCKS = [WATERLOO_LANDING] + list(range(INCIDENT_BLOCKS, INCIDENT_BLOCKS + len(LANDING_VIEWS) - 1))
+LAUNCH_BLOCKS = [WATERLOO_LAUNCH] + list(range(LANDING_BLOCKS[-1] + 1, LANDING_BLOCKS[-1] + len(LAUNCH_VIEWS)))
 
 
-def waterloo_still(gamedat, name):
-    """The carrier still `name` (a one-sprite table) with the Waterloo in the Concordia's place."""
+def carrier_stills():
+    """[(the Concordia still, our file, the Waterloo's view)] for every still our INCIDENT.S03 names."""
+    return ([("LAND.V39", "LAND.V%02d" % (45 + i), v) for i, v in enumerate(LANDING_VIEWS)] +
+            [("LAUNCH.V39", "LAUNCH.V%02d" % (45 + i), v) for i, v in enumerate(LAUNCH_VIEWS)] +
+            [("LAND.V39", name, v) for _, name, v in LATE_LANDING_STILLS])
+
+
+def waterloo_incidents(data):
+    """INCIDENT.S03 (a copy of INCIDENT.S02) naming our stills, with the
+    copies of its launch and landing films appended."""
+    parts = wc2data.read_container(data)
+    assert len(parts) == INCIDENT_BLOCKS, len(parts)
+    blocks, flags = [b for _, b in parts], [f for f, _ in parts]
+
+    def named(b, old, new):
+        assert b.count(old) == 1, old
+        return b.replace(old, new)
+    land, launch = blocks[WATERLOO_LANDING], blocks[WATERLOO_LAUNCH]
+    blocks[3] = named(blocks[3], b"land.v39", b"land.v45")
+    for b, name, _ in LATE_LANDING_STILLS:
+        blocks[b] = named(blocks[b], b"land.v39", name.lower().encode())
+    for i, b in enumerate(LANDING_BLOCKS):
+        copy = named(land, b"land.v39", b"land.v%02d" % (45 + i))
+        if b < len(blocks):
+            blocks[b] = copy
+        else:
+            blocks.append(copy)
+            flags.append(flags[WATERLOO_LANDING])
+    for i, b in enumerate(LAUNCH_BLOCKS):
+        copy = named(launch, b"launch.v39", b"launch.v%02d" % (45 + i))
+        if b < len(blocks):
+            blocks[b] = copy
+        else:
+            blocks.append(copy)
+            flags.append(flags[WATERLOO_LAUNCH])
+    assert len(blocks) == LAUNCH_BLOCKS[-1] + 1
+    return wc2data.compose_container(blocks, flags)
+
+
+def waterloo_still(gamedat, name, view_number):
+    """The carrier still `name` (a one-sprite table) with the Waterloo seen from `view_number` in the Concordia's place."""
     (flag, block), = wc2data.read_container(os.path.join(gamedat, name))
     first = struct.unpack_from("<I", block, 4)[0] & 0xFFFFFF
     x2, x1, y1, y2, rows = wc2data.decode_sprite(block[first:])
@@ -135,7 +180,7 @@ def waterloo_still(gamedat, name):
         colours |= {c for r in wc2data.decode_sprite(b[struct.unpack_from("<I", b, 4)[0] & 0xFFFFFF:])[4].values() for c in r.values()}
     pal = open(os.path.join(gamedat, "WC2PAL"), "rb").read()
     palette = [tuple(pal[3 * i:3 * i + 3]) for i in range(256)]
-    view = ship[WATERLOO_VIEW][1]
+    view = ship[view_number][1]
     px, w, h = wc2data.sprite_fitted(view[struct.unpack_from("<I", view, 4)[0] & 0xFFFFFF:], box[2], box[3], palette, sorted(colours))
     ox, oy = box[0] + (box[2] - w) // 2, box[1] + (box[3] - h) // 2
     new = {}
@@ -145,13 +190,19 @@ def waterloo_still(gamedat, name):
 
 
 def waterloo_films(blocks):
-    """The scene blocks with their Concordia films made the Waterloo's, and how many entries changed."""
+    """The scene blocks with their Concordia films made the Waterloo's (block
+    k's launch and landing the copies k picks), and how many entries changed."""
     out, changed = [], 0
-    for b in blocks:
-        b, n = wc2data.retarget_films(b, WATERLOO_FILMS)
+    for k, b in enumerate(blocks):
+        mapping = dict([(("incident.s00", c), ("incident.s03", LAUNCH_BLOCKS[(k + 2) % len(LAUNCH_BLOCKS)])) for c in CONCORDIA_LAUNCHES] +
+                       [(("incident.s00", c), ("incident.s03", LANDING_BLOCKS[k % len(LANDING_BLOCKS)])) for c in CONCORDIA_LANDINGS] +
+                       [(("incident.s00", c), ("incident.s03", WATERLOO_STILL)) for c in CONCORDIA_STILLS])
+        b, n = wc2data.retarget_films(b, mapping)
         out.append(b)
         changed += n
     return out, changed
+
+
 RECOLOURED_FACES = [("PEOPLE.V02", "PEOPLE.V46", BANBRIDGE), ("PEOPLE.V01", "PEOPLE.V47", BERGSTROM)]
 FACE_FILES = [(b"people.v02", b"people.v46"), (b"people.v01", b"people.v47"), (b"people.v32", b"people.v09")]
 
@@ -282,10 +333,7 @@ def main():
                 assert len(old) == len(new) and data.count(old) == 1, old
                 data = data.replace(old, new)
         if n == "INCIDENT.S02":
-            for old, new in CARRIER_STILLS:
-                old, new = old.lower().encode(), new.lower().encode()
-                assert len(old) == len(new) and data.count(old) >= 1, old
-                data = data.replace(old, new)
+            data = waterloo_incidents(data)
         if n == "GAMEFLOW.S02":
             parts = wc2data.read_container(data)
             blocks, changed = waterloo_films([b for _, b in parts])
@@ -293,9 +341,9 @@ def main():
             print("GAMEFLOW.S03: %d Concordia film entries made the Waterloo's" % changed)
         open(os.path.join(pgd, renumber(n, 3)), "wb").write(data)
 
-    for old, new in CARRIER_STILLS:
-        open(os.path.join(pgd, new), "wb").write(waterloo_still(gamedat, old))
-        print("%s: %s with the Waterloo's view %d in the Concordia's place" % (new, old, WATERLOO_VIEW))
+    for old, new, view in carrier_stills():
+        open(os.path.join(pgd, new), "wb").write(waterloo_still(gamedat, old, view))
+        print("%s: %s with the Waterloo's view %d in the Concordia's place" % (new, old, view))
 
     # the faces: the scenes draw a person from the portrait file CAMPAIGN's
     # shape list names at that person's place (docs/newcampaign.md), so our
