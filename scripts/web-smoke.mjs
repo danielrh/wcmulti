@@ -81,7 +81,7 @@ console.log(`room ${room}, ${seconds}s${noHost ? ", native host" : ""}`);
 let host = null;
 if (!noHost) {
   host = await open("host", "HOST");
-  await host.waitForFunction(() => /Room .*: joining|Share this page/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
+  await host.waitForFunction(() => /Room .*: joining|Share this page|gives friends the way in/.test(document.getElementById("status").textContent), null, { timeout: 120000 });
   // Give the host time to reach the barracks/mission start before the wingman joins.
   await new Promise((r) => setTimeout(r, 8000));
 }
