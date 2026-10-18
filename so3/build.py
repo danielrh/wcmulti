@@ -125,18 +125,26 @@ LAUNCH_VIEWS = [10, 11, 26, 12, 27]      # LAUNCH.V45.. (block 5, then its copie
 LATE_LANDING_STILLS = [(15, "LAND.V50", 25), (21, "LAND.V51", 32)]
 LANDING_BLOCKS = [WATERLOO_LANDING] + list(range(INCIDENT_BLOCKS, INCIDENT_BLOCKS + len(LANDING_VIEWS) - 1))
 LAUNCH_BLOCKS = [WATERLOO_LAUNCH] + list(range(LANDING_BLOCKS[-1] + 1, LANDING_BLOCKS[-1] + len(LAUNCH_VIEWS)))
+# Wing Commander II's films of the Concordia head-on in front of a planet
+# (INCIDENT.S00 blocks 38, 62, 64: wormhole.v01 with planets, the last with
+# the repair bay): copied to the end of our INCIDENT.S03 naming a Waterloo
+# head-on instead (view 14, from a little above; view 28, from below).
+HEADON_FILMS = [(38, "WORMHOLE.V45", 14), (62, "WORMHOLE.V45", 14), (64, "WORMHOLE.V46", 28)]
+HEADON_BLOCKS = list(range(LAUNCH_BLOCKS[-1] + 1, LAUNCH_BLOCKS[-1] + 1 + len(HEADON_FILMS)))
 
 
 def carrier_stills():
     """[(the Concordia still, our file, the Waterloo's view)] for every still our INCIDENT.S03 names."""
     return ([("LAND.V39", "LAND.V%02d" % (45 + i), v) for i, v in enumerate(LANDING_VIEWS)] +
             [("LAUNCH.V39", "LAUNCH.V%02d" % (45 + i), v) for i, v in enumerate(LAUNCH_VIEWS)] +
-            [("LAND.V39", name, v) for _, name, v in LATE_LANDING_STILLS])
+            [("LAND.V39", name, v) for _, name, v in LATE_LANDING_STILLS] +
+            sorted(set(("WORMHOLE.V01", name, v) for _, name, v in HEADON_FILMS)))
 
 
-def waterloo_incidents(data):
+def waterloo_incidents(data, gamedat):
     """INCIDENT.S03 (a copy of INCIDENT.S02) naming our stills, with the
-    copies of its launch and landing films appended."""
+    copies of its launch and landing films and of WC2's head-on films
+    appended."""
     parts = wc2data.read_container(data)
     assert len(parts) == INCIDENT_BLOCKS, len(parts)
     blocks, flags = [b for _, b in parts], [f for f, _ in parts]
@@ -163,6 +171,11 @@ def waterloo_incidents(data):
             blocks.append(copy)
             flags.append(flags[WATERLOO_LAUNCH])
     assert len(blocks) == LAUNCH_BLOCKS[-1] + 1
+    wc2 = wc2data.read_container(os.path.join(gamedat, "INCIDENT.S00"))
+    for (b, name, _), at in zip(HEADON_FILMS, HEADON_BLOCKS):
+        assert len(blocks) == at
+        blocks.append(named(wc2[b][1], b"wormhole.v01", name.lower().encode()))
+        flags.append(wc2[b][0])
     return wc2data.compose_container(blocks, flags)
 
 
@@ -196,7 +209,8 @@ def waterloo_films(blocks):
     for k, b in enumerate(blocks):
         mapping = dict([(("incident.s00", c), ("incident.s03", LAUNCH_BLOCKS[(k + 2) % len(LAUNCH_BLOCKS)])) for c in CONCORDIA_LAUNCHES] +
                        [(("incident.s00", c), ("incident.s03", LANDING_BLOCKS[k % len(LANDING_BLOCKS)])) for c in CONCORDIA_LANDINGS] +
-                       [(("incident.s00", c), ("incident.s03", WATERLOO_STILL)) for c in CONCORDIA_STILLS])
+                       [(("incident.s00", c), ("incident.s03", WATERLOO_STILL)) for c in CONCORDIA_STILLS] +
+                       [(("incident.s00", b), ("incident.s03", at)) for (b, _, _), at in zip(HEADON_FILMS, HEADON_BLOCKS)])
         b, n = wc2data.retarget_films(b, mapping)
         out.append(b)
         changed += n
@@ -333,7 +347,7 @@ def main():
                 assert len(old) == len(new) and data.count(old) == 1, old
                 data = data.replace(old, new)
         if n == "INCIDENT.S02":
-            data = waterloo_incidents(data)
+            data = waterloo_incidents(data, gamedat)
         if n == "GAMEFLOW.S02":
             parts = wc2data.read_container(data)
             blocks, changed = waterloo_films([b for _, b in parts])

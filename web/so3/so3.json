@@ -55,7 +55,7 @@
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "3e7db3c97534a5d8825adf5f",
+ "iv": "efac341eed4c5dd7abb24038",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -71,7 +71,7 @@
   },
   {
    "path": "GAMEDAT/INCIDENT.S03",
-   "size": 64072
+   "size": 69342
   },
   {
    "path": "GAMEDAT/INTELSHP.001",
@@ -172,7 +172,15 @@
   {
    "path": "GAMEDAT/TEMPGLOB.003",
    "size": 1538
+  },
+  {
+   "path": "GAMEDAT/WORMHOLE.V45",
+   "size": 6243
+  },
+  {
+   "path": "GAMEDAT/WORMHOLE.V46",
+   "size": 8163
   }
  ],
- "bytes": 918322
+ "bytes": 938054
 }
