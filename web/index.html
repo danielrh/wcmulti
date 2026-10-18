@@ -137,7 +137,6 @@
   #setup label { display: flex; flex-direction: column; gap: 2px; color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
   #room { width: 12ch; }
   #callsign, #firstname, #lastname { width: 11.5ch; }
-  #players { width: 3.5em; padding-right: 0; }
   #padSelect { width: 21ch; }
   #voice { width: 9.5ch; }
   #voiceInput { width: 27ch; max-width: 100%; }
@@ -255,15 +254,16 @@
         <h2><b>2</b> Room</h2>
         <div class="acts">
           <button type="submit" form="setup" id="join">Join room</button>
+          <button type="button" class="secondary" id="share" hidden title="Copies a link that lands a friend in this room">Copy link</button>
           <button type="button" class="secondary" id="leave" hidden>Leave room</button>
         </div>
       </div>
       <form id="setup">
         <label title="A code of the page's own making starts with the game it is for (WC1, WC2, SM2, SO1, SO2, SO3)">Room code <input type="text" id="room" placeholder="WC1-4821" pattern="[A-Za-z0-9_\-]{4,64}" required></label>
+        <label class="check" title="A room has three seats; tick this when making one to keep it to two (not remembered)"><input type="checkbox" id="twoSeats"> 2 players only</label>
         <label>Callsign <input type="text" id="callsign" placeholder="Maverick"></label>
         <label id="firstnameLabel" hidden>First name <input type="text" id="firstname" placeholder="Christopher" maxlength="12"></label>
         <label>Last name <input type="text" id="lastname" placeholder="Blair"></label>
-        <label title="Players in the room: 2, or 3"># players <input type="number" id="players" min="2" max="3" value="2"></label>
         <label>Controller <select id="padSelect"><option value="none">Keyboard + mouse</option></select></label>
         <label id="voiceLabel" title="Voice between the players, when everybody in the room has opted in">Voice <select id="voice">
           <option value="off">Off</option>

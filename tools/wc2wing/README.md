@@ -1,12 +1,13 @@
 # wc2wing: a third seat for Wing Commander II missions
 
 The multiplayer hooks seat a second human in a fighter of the player's
-wing.  A mission that launches two such fighters seats two: the host and two
-wingmen.  `wc2wing` gives a mission a second wing fighter, a copy of the
-first wingman's record (or of the player's ship, in a mission the story
-flies alone) that the game's own AI flies when no human takes it.  It works
-on any `MODULE.00n` of WC2.EXE, SO1.EXE, SO2.EXE or a campaign built on them
-(SO3's `MODULE.003` becomes SO3P's `MODULE.004` this way, `so3/build.py`).
+wing, and since 2026-10-18 make a third pilot's ship themselves (the host's
+game spawns the wingman's record again: docs/wc2-port.md section 4), so no
+mission data needs this any more.  `wc2wing` remains for authoring: it
+gives a mission a second wing fighter in its data, a copy of the first
+wingman's record (or of the player's ship, in a mission the story flies
+alone) that the game's own AI flies when no human takes it.  It works on
+any `MODULE.00n` of WC2.EXE, SO1.EXE, SO2.EXE or a campaign built on them.
 
     cargo build --release --manifest-path tools/wc2wing/Cargo.toml
     tools/wc2wing/target/release/wc2wing list wc2/GAMEDAT/MODULE.002 -m s1m1 --gamedat wc2/GAMEDAT

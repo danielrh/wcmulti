@@ -253,6 +253,9 @@ message Game {
     optional uint32 seat = 4;
     // The server's pace, frames a second: a client that paces itself keeps it.
     optional uint32 fps = 5;
+    // A gunner: the view it starts in (3 the rear turret, 1 and 2 the side
+    // turrets: a second gunner takes another turret).
+    optional uint32 start_view = 6;
 }
 
 message ClientStartMissionReq {

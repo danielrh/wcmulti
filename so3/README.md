@@ -9,16 +9,11 @@ missions, `texts.py` the scene texts, `build.py` makes the game files,
 the game's data files to make this possible; `docs/newcampaign.md` how to
 make the next campaign.
 
-**SO3P** is the same campaign with a seat for a third player: data set 4
-(`MODULE.004`, `SERIES.S04`, ..., `SO3P.EXE`, `savegame.so4`), whose
-missions each launch a second fighter of the wing -- Doomsday's, a copy of
-the wingman's record, flown by the game when no human takes it
-(`campaign.THIRD_SEAT` names another pilot for a mission).  `tools/wc2wing`
-adds it (`build.py` runs the tool on `MODULE.003`; where a mission's
-sixteen records or its launch list were full, the tool took out one enemy
-follower and said so).  The page lists it as "Special Operations 3
-(Culloden), three seats" (room tag `SO3P`) and makes its rooms with three
-seats.
+A third player needs no data of its own: the multiplayer layer has the
+host's game spawn the wingman's record a second time when a third pilot
+wants a seat (docs/wc2-port.md section 4), so every mission flies with two
+or three.  (`tools/wc2wing` writes a second wing fighter into a MODULE
+file for a mission authored that way; the campaign does not use it.)
 
 ## How it works
 
@@ -38,15 +33,13 @@ of byte sequences in the manifest (`so3.json`, `exe`), and the page makes
     so3/build.py --hellcat <dir with XSHIP.V50 and PCSHIP.V50> [--test-game]
     node so3/pack.mjs pack build-so3/plain wc2/GAMEDAT/SERIES.S02 web/so3
 
-`build-so3/plain/` is the SO3 and SO3P file set (the tool is built with
-cargo if `tools/wc2wing/target/release/wc2wing` is not there); `--test-game`
-also makes `build-so3/game/`, the whole game directory with both programs,
-for a native run:
+`build-so3/plain/` is the SO3 file set; `--test-game` also makes
+`build-so3/game/`, the whole game directory, for a native run:
 
     env WCNET=0 build-native/src/dosbox -c "mount c build-so3/game" -c "c:" \
         -c "loadfix -34 so3 Origin -k l s1 m0"
 
-Three native instances of SO3P: `so3/rig/w2trio.sh` (`so3/rig/README.md`).
+Three native instances: `GAME=so3 so3/rig/w2trio.sh` (`so3/rig/README.md`).
 
 `build-so3/` is ignored by git: it is made from the game's own files.
 

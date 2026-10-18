@@ -80,8 +80,8 @@ public:
     virtual Seat seat() const { return SEAT_WINGMAN; }
     bool is_drone() const { return seat() == SEAT_DRONE; }
     bool is_gunner() const { return seat() == SEAT_GUNNER; }
-    // Server: the turret of our ship a gunner mans, or -1.
-    virtual int gunner_turret() const { return -1; }
+    // Server: does a gunner man this turret of our ship?
+    virtual bool turret_manned(int turret) const { (void)turret; return false; }
     // A drone can ride behind the leader instead of flying itself.
     virtual void toggle_chase() {}
     // A drone riding behind the leader is the leader's copilot: its keys go

@@ -216,9 +216,6 @@ static const KnownGame kGames[] = {
     // SO3.EXE is SO2.EXE with its data-file number set to 3 (so3/build.py):
     // the same code, the same tables, the Culloden campaign's files.
     { GAME_WC2, BUILD_SO2, "SO3.EXE", 0x1924, 0x025A, "Loading WC2 - SPECIAL OPERATIONS 2", "Wing Commander II: Special Operations 3 (Culloden)", load_so2_code },
-    // SO3P.EXE: the same with the number 4, the campaign's missions with a
-    // seat for a third player (tools/wc2wing).
-    { GAME_WC2, BUILD_SO2, "SO3P.EXE", 0x1924, 0x025A, "Loading WC2 - SPECIAL OPERATIONS 2", "Wing Commander II: Special Operations 3 (Culloden), three seats", load_so2_code },
 };
 static const KnownGame *g_program = NULL;   // the entry of the program that is running
 

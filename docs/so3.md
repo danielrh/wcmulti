@@ -221,35 +221,27 @@ debriefing (Talk3, 31-38, with 39-41 a recording) and three radio lines
 first block keeps the script and replaces the strings; writing new scenes
 means writing the bytecode, which has not been decoded.
 
-## 6. The third seat (SO3P)
+## 6. The third seat
 
-The hooks seat a client in the slot of its network id (1, then 3) when that
-slot holds a fighter of the player's wing (the header's eight words), and
-since SO3P in the first slot that holds one no human flies when it does
-not (`ServerSession::reseat`): in most of Special Operations' missions the
-launch list begins with the carrier, so the wingman is slot 2.  Slots at
-launch, from the slot table dumped in flight (`@launch` in a key script,
-`slotMissionShip` at SO2.EXE's `dseg:70C4`): the player's ship is slot 0
-wherever the launch nav point's list has it, the list's other ships take
-slots 1, 2, ... in order (s1m1's `Concordia, player, Stingray` gives the
-Concordia slot 1 and Stingray slot 2), and a wing ship the list leaves out
-is spawned ahead of the list when the player is left out too (s2m1 lists
-neither: Stingray took slot 1).  A field takes no slot.
-
-`tools/wc2wing` (Rust, no dependencies) gives a mission a second wing
-fighter: a copy of the wingman's record (the player's in a mission flown
-alone) in the header's wing list and in the launch list, placed so that it
-takes slot 3 where the list allows, in formation place 2, 500 km to one side
-of the wingman and 1000 km behind, with an ordinary pilot's orders (4: the
-hooks hold the AI off a human's ship, and the game flies it when the seat is
-empty).  Sixteen records and ten list places are the limits; `--make-room`
-takes out the enemy follower with the highest index nothing refers to.
-SO3P is SO3's set copied to the number 4 (the scene files' `series.s03`
-references made `s04`) with `MODULE.004` made so, and `SO3P.EXE` the number
-4 patch of SO2.EXE (`savegame.so4`).  Eight of SO3's missions needed a
-record freed (1-3, 2-2, 3-1, 3-2, 4-0, 4-1, 5-0 a follower each, 2-1 one of
-its six Gothri, the launch list being full), none of them a ship a scene
-tests.
+A third player's seat is the multiplayer layer's: when a pilot wants a seat
+and no fighter of the wing is free, the host's game spawns the wingman's
+mission ship a second time (docs/wc2-port.md section 4; the game refuses a
+mission ship it finds in its slot table, so the entry is hidden for the
+call).  No data set of its own is needed; SO3P, a number 4 set with a
+second wing fighter written into every mission by `tools/wc2wing`, was
+built and shipped for a day (2026-10-17) and retired for this.  The tool
+remains for a mission authored with two wing fighters: it adds a copy of
+the wingman's record to the header's wing list and the launch list (slot 3
+where the list allows), 500 km aside and 1000 km behind, with an ordinary
+pilot's orders; `--make-room` takes out the enemy follower with the highest
+index nothing refers to when the sixteen records or the ten list places
+are full.  Slots at launch, from the slot table dumped in flight
+(`@launch`, `slotMissionShip` at SO2.EXE's `dseg:70C4`): the player's ship
+is slot 0 wherever the list has it, the list's other ships take slots 1,
+2, ... in order (s1m1's `Concordia, player, Stingray` gives the Concordia
+slot 1 and Stingray slot 2), a wing ship the list leaves out is spawned
+ahead of the list when the player is left out too (s2m1), and a field
+takes no slot.
 
 ## 7. Test rigs
 

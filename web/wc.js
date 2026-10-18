@@ -139,7 +139,7 @@ function sourceStatus(text, state) { const el = $("sourceStatus"); el.textConten
 const mb = (n) => (n / 1048576).toFixed(1) + " MB";
 
 // Prefill from the URL (?room=CODE&callsign=...) so a link can be shared.
-for (const k of ["room", "callsign", "firstname", "lastname", "players"]) if (query.get(k)) $(k).value = query.get(k);
+for (const k of ["room", "callsign", "firstname", "lastname"]) if (query.get(k)) $(k).value = query.get(k);
 // The pilot's names are remembered in this browser and filled in on the next
 // visit.  A name the link brought is the pilot's own (the page's links carry
 // no names but the ones typed here) and is kept too; what the pilot types
@@ -200,8 +200,6 @@ function setSource(s, want) {
     const g = programs.find((p) => p.id === want) || programs.find((p) => p.id === hostsProgram) || programs.find((p) => p === codeGame(roomCode)) || programs.find((p) => p.id === kept) || base;
     s.base = base.id; s.programs = programs;
     s.game = { id: g.id, title: g.title, run: g.run, multiplayer: g.multiplayer };
-    // A program made for more seats (SO3P: three) sizes the room to be made.
-    if (!lobby.game && g.players) $("players").value = String(g.players);
     // (A file of the game's name is not yet the game: the hooks fly one
     // build of each program, and the public lobby is for pilots who have it.)
     s.known = knownBuild(g, s.files);
@@ -942,8 +940,12 @@ async function joinRoom({ create = true } = {}) {
       // dies, and the host makes a new room.  Tokenless "claims" would let
       // anyone with the code replace a player after 40 s of lobby silence,
       // which is every player in flight.
+      // A room has three seats: a third pilot gets a ship of the mission's
+      // wing, or one the host's game makes (a second wingman, a second
+      // gunner), when they come.  "2 players only" keeps a room to two; it
+      // is off by default and not remembered.
       create: !create ? undefined
-        : { maxPlayers: Math.max(2, Math.min(3, Number($("players").value) || 2)), waitUntilFull: false, allowLateJoin: true,
+        : { maxPlayers: $("twoSeats").checked ? 2 : 3, waitUntilFull: false, allowLateJoin: true,
             allowReconnect: true, allowReplacement: false, reconnectPolicy: "token-only" },
       storage: "session",
       storageKey: "wclobby-" + code,
@@ -952,28 +954,36 @@ async function joinRoom({ create = true } = {}) {
     lobby.game = game;
     lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
     lobby.unsubscribe = game.onEvent(onLobbyEvent);
-    const url = new URL(location.href);
-    url.searchParams.set("room", code);
-    url.searchParams.delete("callsign"); url.searchParams.delete("firstname"); url.searchParams.delete("lastname");
-    history.replaceState(null, "", withServer(url));
+    // The address keeps no room: a link's code is for the join it brought,
+    // not for every reload and bookmark after (rooms die; a pilot stuck in
+    // a dead one's link could not get out).  "Copy link" makes the link.
+    clearRoomFromAddress();
     $("lobby").hidden = false;
     $("leave").hidden = false;
+    $("share").hidden = false;
     if (game.selfId === 0) lobby.mission = parseMission(query.get("mission")) || { series: 1, mis: 0 };
     lobby.rocks = game.selfId === 0 ? rocksMode({ 0: "off", 2: "soft" }[query.get("rocks")] || query.get("rocks")) : "on";
     lobby.wingBumps = game.selfId === 0 ? wingBumpsMode({ 0: "game", 1: "harmless" }[query.get("bumps")] || query.get("bumps")) : "harmless";
     lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "low";
     renderMission();
-    for (const id of ["room", "players", "server", "relay"]) $(id).disabled = true;
-    chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. Share this page's link.`, "sys");
+    for (const id of ["room", "twoSeats", "server", "relay"]) $(id).disabled = true;
+    chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
     log(`lobby: joined room ${code} as player ${game.selfId} of ${game.maxPlayers}`);
     renderRoster(); updateActions();
     $("chatInput").focus();
   } catch (e) {
-    status(e && e.code === "room-not-found" ? `Room ${code} is not open any more.`
-      : e && e.code === "room-full" ? `Room ${code} is full.`
+    // (A link to a full or dead room is spent: the address loses the code.)
+    clearRoomFromAddress();
+    status(e && e.code === "room-not-found" ? `Room ${code} is not open any more: ask for another room in the lobby, or make one.`
+      : e && e.code === "room-full" ? `Room ${code} is full: ask for another room in the lobby, or make one.`
       : `Could not join room ${code}: ${e && e.code ? e.code + ": " : ""}${e && e.message ? e.message : e}.${e && serverDown(e.code) ? " " + OTHER_SERVER : ""}`);
     $("join").disabled = false;
   }
+}
+function clearRoomFromAddress() {
+  const url = new URL(location.href);
+  for (const k of ["room", "callsign", "firstname", "lastname"]) url.searchParams.delete(k);
+  history.replaceState(null, "", withServer(url));
 }
 
 // A room code clicked in the public lobby: the pilot wants to be in that
@@ -1037,14 +1047,23 @@ function leaveRoom() {
   if (lobby.game) { try { lobby.game.close(); } catch (e) { /* gone */ } }
   lobby.game = null; lobby.unsubscribe = null; lobby.adopted = false; lobby.backlog = [];
   lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
-  $("lobby").hidden = true; $("leave").hidden = true; $("join").disabled = false;
-  for (const id of ["room", "players", "server", "relay"]) $(id).disabled = false;
+  $("lobby").hidden = true; $("leave").hidden = true; $("share").hidden = true; $("join").disabled = false;
+  for (const id of ["room", "twoSeats", "server", "relay"]) $(id).disabled = false;
   $("roster").innerHTML = "";
   updateActions();
 }
 
 $("setup").addEventListener("submit", (ev) => { ev.preventDefault(); void joinRoom(); });
 $("leave").addEventListener("click", leaveRoom);
+// The link to this room, to the clipboard (shown in the status line where
+// the clipboard is out of reach).
+$("share").addEventListener("click", async () => {
+  if (!lobby.game) return;
+  const link = roomLink(lobby.game.code);
+  try { await navigator.clipboard.writeText(link); $("share").textContent = "Copied"; }
+  catch (e) { status(`The link to room ${lobby.game.code}: ${link}`); $("share").textContent = "See below"; }
+  setTimeout(() => { $("share").textContent = "Copy link"; }, 2500);
+});
 $("chatForm").addEventListener("submit", (ev) => {
   ev.preventDefault();
   const text = $("chatInput").value.trim();
@@ -1152,7 +1171,7 @@ async function start(fromGesture) {
       callsign: $("callsign").value.trim(),
       lastname: $("lastname").value.trim(),
       firstname: gameInfo() && gameInfo().firstName ? $("firstname").value.trim() : "",
-      players: String(lobby.game.maxPlayers),
+      players: "3",
       server: serverUrl(),
       relay: $("relay").checked,
       verbose: $("verbose").checked,
@@ -1249,7 +1268,7 @@ async function start(fromGesture) {
     $("fullscreen").hidden = false;
     if (fromGesture) goFullscreen();
     status(source.game.multiplayer
-      ? `Room ${cfg.code}. Share this page's link so friends land in the same room.`
+      ? `Room ${cfg.code}. "Copy link" (step 2) gives friends the way in.`
       : `${source.game.title} is running.`);
   } catch (e) {
     running = false;

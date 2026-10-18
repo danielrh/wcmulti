@@ -1,9 +1,9 @@
 #!/bin/bash
-# Three native WC2-family instances: a host and two wingmen (SO3P, or any
-# mission tools/wc2wing gave a second wing fighter).
+# Three native WC2-family instances: a host and two wingmen (the host's game
+# spawns a second copy of the wingman for the third).
 #   w2trio.sh <outdir> <duration_s> "<series> <mission>" "<host keys>" "<client keys>" "<client2 keys>" [extra env for all]
 # DIRECT=" " for the campaign mode (barracks), default "l" (mission test).
-# GAME (so3p), GAMEDIR (the host's game directory); CLIENTGAMEDIR and
+# GAME (so3, so2, wc2), GAMEDIR (the host's game directory); CLIENTGAMEDIR and
 # CLIENT2GAMEDIR give the wingmen directories of their own (two programs on
 # one directory corrupt each other's save files).
 # HOSTENV / CLIENTENV / CLIENT2ENV: extra "VAR=val" for one side only.
@@ -11,7 +11,7 @@ set -u
 ROOT=/home/sandbox/dev/dosbox3d
 OUT="$1"; DURATION="$2"; MISSION="$3"; HOSTKEYS="$4"; CLIENTKEYS="$5"; CLIENT2KEYS="$6"; shift 6
 PORT="${WCPORT:-13481}"
-GAME="${GAME:-so3p}"
+GAME="${GAME:-so3}"
 GAMEDIR="${GAMEDIR:-$ROOT/build-so3/game}"
 mkdir -p "$OUT/host" "$OUT/client" "$OUT/client2"
 cat > "$OUT/dosbox.conf" <<EOC

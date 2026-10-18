@@ -115,8 +115,8 @@ check(roomTag("WC1-4821") === "WC1" && roomTag("so2-1") === "SO2" && roomTag("WC
 check(normalizeCode("wc1-AbCd") === "WC1-AbCd" && normalizeCode("Falcon-7") === "Falcon-7", "normalizeCode");
 check(retagRoomCode("WC-4821", "WC2") === "WC2-4821" && retagRoomCode("WC1-4821", "") === "WC-4821" && retagRoomCode("FALCON-7", "WC2") === "FALCON-7" && retagRoomCode("WC-FALCON", "WC2") === "WC-FALCON", "retagRoomCode");
 for (let i = 0; i < 20000; i++) {
-  const c = newRoomCode(["WC1", "WC2", "SM2", "SO1", "SO2", "SO3", "SO3P", "", "junk"][i % 9]);
-  if (!/^(WC|WC1|WC2|SM2|SO1|SO2|SO3|SO3P)-\d{4}$/.test(c) || c.endsWith("-1488") || isProfane(c) || hasLink(c) || codes(c) !== c) { check(false, "a bad new room code: " + c); break; }
+  const c = newRoomCode(["WC1", "WC2", "SM2", "SO1", "SO2", "SO3", "", "junk"][i % 8]);
+  if (!/^(WC|WC1|WC2|SM2|SO1|SO2|SO3)-\d{4}$/.test(c) || c.endsWith("-1488") || isProfane(c) || hasLink(c) || codes(c) !== c) { check(false, "a bad new room code: " + c); break; }
 }
 check(newRoomCode("junk").startsWith("WC-") && newRoomCode("SO1").startsWith("SO1-"), "newRoomCode's prefix");
 
@@ -124,7 +124,7 @@ check(newRoomCode("junk").startsWith("WC-") && newRoomCode("SO1").startsWith("SO
 // the lobby takes, for every mission of every game in the registry.
 {
   const { GAMES } = await import("../web/gamefiles.js");
-  check(GAMES.filter((g) => g.multiplayer).map((g) => g.tag).sort().join() === "SM2,SO1,SO2,SO3,SO3P,WC1,WC2", "the registry's tags: " + GAMES.map((g) => g.tag));
+  check(GAMES.filter((g) => g.multiplayer).map((g) => g.tag).sort().join() === "SM2,SO1,SO2,SO3,WC1,WC2", "the registry's tags: " + GAMES.map((g) => g.tag));
   for (const g of GAMES) {
     for (const s of (g.campaign ? g.campaign.series : [])) {
       const n = Array.isArray(s.missions) ? s.missions.length : s.missions;

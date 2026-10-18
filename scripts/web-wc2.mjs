@@ -31,8 +31,7 @@ const game = { wc2: { tag: "WC2", id: "wc2", title: "Wing Commander II", options
                so1: { tag: "SO1", id: "wc2so1", title: "Wing Commander II: Special Operations 1", options: 21, speed: 0x5FC8, camera: 0x923B, turret: 0xCC3A },
                so2: { tag: "SO2", id: "wc2so2", title: "Wing Commander II: Special Operations 2", options: 21, speed: 0x6264, camera: 0x94DB, turret: 0xCED0 },
                // Special Operations 3 is SO2's program with the Culloden campaign's files (so3/README.md)
-               so3: { tag: "SO3", id: "wc2so3", title: "Wing Commander II: Special Operations 3 (Culloden)", options: 21, menu: /Ch 1, mission 1/, speed: 0x6264, camera: 0x94DB, turret: 0xCED0 },
-               so3p: { tag: "SO3P", id: "wc2so3p", title: "Wing Commander II: Special Operations 3 (Culloden), three seats", options: 21, menu: /Ch 1, mission 1/, speed: 0x6264, camera: 0x94DB, turret: 0xCED0 } }[process.env.GAME || "wc2"];
+               so3: { tag: "SO3", id: "wc2so3", title: "Wing Commander II: Special Operations 3 (Culloden)", options: 21, menu: /Ch 1, mission 1/, speed: 0x6264, camera: 0x94DB, turret: 0xCED0 } }[process.env.GAME || "wc2"];
 const room = game.tag + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || "/usr/bin/google-chrome",
   args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--use-fake-device-for-media-stream"] });

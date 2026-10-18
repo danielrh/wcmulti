@@ -7,7 +7,7 @@
 #   GAME_FILE=/path/to/wc2.zip scripts/web-wc2.sh [series/mission] [drone|gunner|wingman] [door x,y]
 #   GAME=so1 GAME_FILE=/path/to/wc2.zip scripts/web-wc2.sh 1/1 drone 0.48,0.55    # Special Operations 1 (GAME=so2: 1/0; GAME=so3 1/0 wingman: the Culloden campaign)
 #   GAME_FILE=/path/to/wc2.zip scripts/web-wc2.sh intro     # the introduction's speech (scripts/web-wc2-intro.mjs)
-#   GAME_FILE=/path/to/wc2.zip scripts/web-wc2.sh trio      # three pages in SO3P's first mission (scripts/web-trio.mjs; GAME=wc2 for WC2 2/0)
+#   GAME_FILE=/path/to/wc2.zip scripts/web-wc2.sh trio      # three pages in SO3's first mission (scripts/web-trio.mjs; GAME=wc2, GAME=wc1 with the WC1 file)
 #   GAME_FILE=/path/to/wc2.zip scripts/web-wc2.sh pad       # a controller's stick in two cockpits (scripts/web-pad.mjs)
 #
 # The zip must be the whole folder, GAMEDAT/TEMPGLOB.000 included (GOG ships
@@ -47,7 +47,7 @@ if [ "${1:-}" = intro ]; then
 fi
 if [ "${1:-}" = trio ]; then
     shift
-    PLAYWRIGHT_DIR="$PW" SHOT_DIR="$OUT" GAME_FILE="$GAME_FILE" GAME="${GAME:-so3p}" node "$ROOT/scripts/web-trio.mjs" \
+    PLAYWRIGHT_DIR="$PW" SHOT_DIR="$OUT" GAME_FILE="$GAME_FILE" GAME="${GAME:-so3}" node "$ROOT/scripts/web-trio.mjs" \
         "http://localhost:$PORT/" "http://127.0.0.1:$LOBBY_PORT" "$@" 2>&1 | tee "$OUT/run.log"
     exit "${PIPESTATUS[0]}"
 fi

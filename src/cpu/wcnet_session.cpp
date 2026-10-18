@@ -654,6 +654,8 @@ struct RemoteClient {
     bool inMission;              // takes part in the frame exchange
     bool leftThisMission;        // died/ejected/exited this mission
     int skipPendingEvents;       // events already covered by the start state
+    bool seatSpawnFailed = false;  // a ship made for its seat came to nothing this mission
+    int startView = 0;           // a gunner: the view (turret) it starts in
     // The last frame of its whose position we took (by either channel), and when (emulated ms).
     Bit64u lastPosition = 0;
     double lastPositionEmu = 0;
@@ -741,17 +743,17 @@ public:
     virtual void queue_outgoing_event(const Event &ev) {
         *pendingFrame_.mutable_frame()->add_event() = ev;
     }
-    virtual int gunner_turret() const {
+    virtual bool turret_manned(int turret) const {
         for (size_t i = 0; i < clients_.size(); i++) {
             const RemoteClient *c = clients_[i];
-            if (c->connected() && c->inMission && c->seat == SEAT_GUNNER && c->mannedTurret >= 0) {
-                return c->mannedTurret;
+            if (c->connected() && c->inMission && c->seat == SEAT_GUNNER && c->mannedTurret == turret) {
+                return true;
             }
         }
-        return -1;
+        return false;
     }
     virtual void on_spawned(const Spawn &spawn) { spawns_.add(spawn); }
-    virtual void on_despawned(int net) { spawns_.remove(net); }
+    virtual void on_despawned(int net) { spawns_.remove(net); seatSlots_.erase(net); }
 
     virtual int mode_setting() const { return modeSetting_; }
     virtual int mode() const { return modeSetting_ != MODE_AUTO ? modeSetting_ : autoMode_; }
@@ -833,10 +835,12 @@ public:
         epoch_ += 1;
         frameNumber_ = 0;
         hadClientInMission_ = false;
-        extraWingTried_ = false;
+        seatSlots_.clear();
+        seatSpawn_.active = false;
         for (size_t i = 0; i < clients_.size(); i++) {
             clients_[i]->leftThisMission = false;
             clients_[i]->missionTreeProgress.clear();
+            clients_[i]->seatSpawnFailed = false;
         }
         // inMission is cleared when the mission-end frame goes out (flush).
     }
@@ -904,81 +908,15 @@ public:
             ignoreNextFrameTop_ = false;
             return;
         }
-        if (spawn_extra_wing()) {
-            return;  // its spawn runs before this frame; the exchange (and the start states) wait a frame for it
-        }
         exchange(false);
     }
 
-    // Wing Commander gives a mission one wingman.  In a room of three (or
-    // with WCNET_EXTRAWING=1) the mission's wingman record is spawned a
-    // second time at the first frame of every mission: a second ship of the
-    // same type and pilot, the game's own AI flying it until a human takes
-    // it (reseat).  Returns true the once it enqueues the spawn.
-    bool want_extra_wing() const {
-        const char *env = getenv("WCNET_EXTRAWING");
-        return env && env[0] ? atoi(env) > 0 : net_config.lobby_players >= 3;
-    }
-    bool spawn_extra_wing() {
-        if (extraWingTried_ || !is_wc1() || !within_briefed_mission || !want_extra_wing()) {
-            return false;
-        }
-        extraWingTried_ = true;
-        const std::map<int, Spawn> &all = spawns_.all();
-        std::map<int, Spawn>::const_iterator wing = all.find(kPlayerSlot + 1);
-        if (wing == all.end() || !slot_in_use(kPlayerSlot + 1) || entity_type(kPlayerSlot + 1) != ET_SHIP) {
-            wclog(1, "a third seat was wanted, but slot 1 holds no wingman to copy");
-            return false;
-        }
-        // A mission with more than the one wingman in its records (the
-        // Ralari escort), at launch or joining later, is left as it is: the
-        // third seat is one of them.
-        int wingmen = wing_records_wc1();
-        if (wingmen >= 2) {
-            wclog(1, "a third seat: the mission has %d wingmen of its own, one of them is it", wingmen);
-            return false;
-        }
-        wclog(1, "a third seat: the wingman's mission ship %d is spawned again", wing->second.mission_ship_id());
-        enqueue_server_spawn((int)wing->second.mission_ship_id(), (int)wing->second.situation_id(), kPlayerSlot + 1);
-        return true;
-    }
-    // The wingmen in flight, by slot, the mission's own first: the seats a
-    // human can take in Wing Commander.  A wingman is a fighter of our side
-    // flying formation on the player (or on another wingman).  The mission
-    // ship record (0x2a bytes), as read from Enyo 1's at launch: word 0 the
-    // ship type, word 1 the side (0 ours, 1 Kilrathi), word 2 the mission
-    // ship it flies formation on (Spirit's says the player's; the carrier's
-    // patrol pair, 5,000 km out, says the carrier and each other), word 3
-    // the behaviour (4 in formation).  The server's spawn registry says which
-    // mission ship each slot flies.
     enum { kMsSide = 2, kMsLeader = 4, kMsBehaviour = 6, kMsInFormation = 4, kMsRecords = 16 };
     // Is mission ship `ms` a wingman's record: our side, in formation on one of `leaders`?
     bool wing_record_wc1(int ms, const std::set<int> &leaders) const {
         Bit16u rec = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms);
         return rd16((Bit16u)(rec + kMsSide)) == 0 && rd16((Bit16u)(rec + kMsBehaviour)) == kMsInFormation &&
                leaders.count((Bit16s)rd16((Bit16u)(rec + kMsLeader))) > 0;
-    }
-    // How many wingmen the mission's records hold, spawned or not (they may
-    // join at a later nav point).
-    int wing_records_wc1() const {
-        if (!ds::known(ds::missionShipTable) || !ds::known(ds::playerMissionShip)) {
-            return 0;
-        }
-        int player = (Bit16s)rd16(ds::playerMissionShip);
-        std::set<int> leaders;
-        leaders.insert(player);
-        int count = 0;
-        for (bool grew = true; grew;) {
-            grew = false;
-            for (int ms = 0; ms < kMsRecords; ms++) {
-                if (ms != player && !leaders.count(ms) && wing_record_wc1(ms, leaders)) {
-                    leaders.insert(ms);
-                    count++;
-                    grew = true;
-                }
-            }
-        }
-        return count;
     }
     std::vector<int> wing_slots_wc1() const {
         std::vector<int> out;
@@ -1007,22 +945,6 @@ public:
         std::sort(out.begin(), out.end());
         return out;
     }
-    // The slot of that second ship, or -1: the registry's other spawn of the
-    // wingman's mission ship.
-    int extra_wing_slot() const {
-        const std::map<int, Spawn> &all = spawns_.all();
-        std::map<int, Spawn>::const_iterator wing = all.find(kPlayerSlot + 1);
-        if (wing == all.end()) {
-            return -1;
-        }
-        for (std::map<int, Spawn>::const_iterator it = all.begin(); it != all.end(); ++it) {
-            if (it->first != kPlayerSlot + 1 && it->second.mission_ship_id() == wing->second.mission_ship_id() && slot_in_use(it->first)) {
-                return it->first;
-            }
-        }
-        return -1;
-    }
-
     virtual void on_async_tick() {
         accept_clients(false);
         NetworkMessage msg;
@@ -1071,12 +993,13 @@ public:
     virtual void on_autopilot_finished() {
         AutoPilotEvent *ape = pendingFrame_.mutable_frame()->add_event()->mutable_autopiloting();
         ape->set_finish_camera(true);
-        // Wing Commander brings its one wingman along on an autopilot; the
-        // second copy, while the AI flies it, is brought along here.
-        int extra = is_wc1() ? extra_wing_slot() : -1;
-        if (extra >= 0 && !client_for_slot(extra)) {
-            park_beside(extra);
-            wclog(2, "the second wingman (slot %d, the AI's) comes along after the autopilot", extra);
+        // The game brings its own wingmen along on an autopilot; a ship the
+        // server made for a seat, while the AI flies it, is brought along here.
+        for (std::set<int>::const_iterator it = seatSlots_.begin(); it != seatSlots_.end(); ++it) {
+            if (slot_in_use(*it) && !client_for_slot(*it)) {
+                park_beside(*it);
+                wclog(2, "the seat in slot %d (the AI's) comes along after the autopilot", *it);
+            }
         }
         exchange(true);
         quiet_links();
@@ -1154,39 +1077,22 @@ private:
         return c->connected() && c->seat == SEAT_WINGMAN && !c->leftThisMission ? c : NULL;
     }
 
-    // What a client is in this mission.  WC.EXE gives every mission a
-    // wingman, and his ship is the client's.  WC2 has missions the story
-    // flies alone: the slot is then empty or something else entirely (the
-    // carrier, a transport to escort).  A wingman there is a fighter in the
-    // player's wing list; without one the client is the gunner when the
-    // leader's ship has turrets, and a drone when it has none.  WCSEAT
-    // (drone, gunner) on the server overrides, for tests.
-    Seat seat_for(const RemoteClient *c) const {
-        if (!is_wc2() || !ds::known(ds::playerWing)) {
-            return SEAT_WINGMAN;
-        }
-        const char *env = getenv("WCSEAT");
-        const bool turrets = turret_count(kPlayerSlot) > 0;
-        if (env && !strcasecmp(env, "drone")) {
-            return SEAT_DRONE;
-        }
-        if (env && !strcasecmp(env, "gunner") && turrets) {
-            return SEAT_GUNNER;
-        }
-        if (slot_in_use(c->net) && entity_type(c->net) == ET_SHIP) {
-            Bit16u missionShip = rd16((Bit16u)(ds::slotMissionShip + 2 * c->net));
-            for (int i = 0; i < 8; i++) {
-                if (rd16((Bit16u)(ds::playerWing + 2 * i)) == missionShip) {
-                    return SEAT_WINGMAN;
-                }
-            }
-        }
-        return turrets ? SEAT_GUNNER : SEAT_DRONE;
-    }
+    // The seats.  A client flies a ship of the player's wing that no human
+    // flies: in Wing Commander a fighter of our side in formation on the
+    // player (the mission's wingman, slot 1, first), in Wing Commander II a
+    // fighter in the mission's wing list (the carrier is slot 1 in most of
+    // Special Operations' missions, so the wingman is slot 2 there).  When
+    // none is free the server makes one: the wingman's mission ship spawned
+    // again (the game's own AI flies it until a human does), or, in a Wing
+    // Commander II mission flown alone, a copy of the player's own ship --
+    // after its turrets, which seat a gunner each.  A drone only when a
+    // spawn failed.  The client's network id becomes the slot it flies
+    // (move_client); the id goes to the client with its start state, and the
+    // other machines know the ship by the server's slot number anyway.
+    // WCSEAT=drone|gunner on the server forces a seat (tests).
+    enum SeatPlan { SEAT_READY, SEAT_WAIT };
 
-    // Is the ship in a slot one a human can fly: a fighter of the player's
-    // wing (seat_for's test)?
-    bool wing_fighter_slot(int slot) const {
+    bool wing_fighter_slot_wc2(int slot) const {
         if (!is_wc2() || !ds::known(ds::playerWing) || !slot_in_use(slot) || entity_type(slot) != ET_SHIP) {
             return false;
         }
@@ -1198,50 +1104,144 @@ private:
         }
         return false;
     }
-
-    // The slot a client flies is its network id, given when it connected (1,
-    // then 3).  In Wing Commander II the mission decides what is in a slot:
-    // the carrier is slot 1 in most of Special Operations' missions and the
-    // wingman slot 2, and a mission with a second wing fighter (SO3P,
-    // tools/wc2wing) may have it in any slot.  So, with each mission's start
-    // state: a client whose own slot holds no fighter of the wing takes the
-    // first one no human flies, and keeps its seat as a gunner or a drone
-    // only when there is none.  The id goes to the client with the start
-    // state; the other machines know the ship by the server's slot number,
-    // which is what it always was.
-    void reseat(RemoteClient *c) {
+    // The slots a human can fly, in slot order: the mission's wingmen and
+    // the ships the server made as seats.
+    std::vector<int> wing_seats() const {
+        std::vector<int> out;
         if (is_wc1()) {
-            // The mission's wingman (slot 1), then the other wingmen in
-            // flight (the mission's own, or the second copy of the wingman
-            // that spawn_extra_wing made), whichever no human flies.
-            std::vector<int> seats = wing_slots_wc1();
-            for (size_t i = 0; i < seats.size(); i++) {
-                int slot = seats[i];
-                if (slot == c->net) {
-                    return;
+            out = wing_slots_wc1();
+        } else if (is_wc2()) {
+            for (int slot = kPlayerSlot + 1; slot <= kMaxShipSlot; slot++) {
+                if (wing_fighter_slot_wc2(slot)) {
+                    out.push_back(slot);
                 }
-                if (slot < (int)clients_.size() && clients_[slot]->connected()) {
-                    continue;
+            }
+        }
+        for (std::set<int>::const_iterator it = seatSlots_.begin(); it != seatSlots_.end(); ++it) {
+            if (slot_in_use(*it) && std::find(out.begin(), out.end(), *it) == out.end()) {
+                out.push_back(*it);
+            }
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+    bool human_at(int slot) const {
+        return slot < (int)clients_.size() && clients_[slot]->connected();
+    }
+    int gunners_in_mission(const RemoteClient *except) const {
+        int n = 0;
+        for (size_t i = 0; i < clients_.size(); i++) {
+            const RemoteClient *o = clients_[i];
+            if (o != except && o->connected() && o->inMission && o->seat == SEAT_GUNNER) {
+                n++;
+            }
+        }
+        return n;
+    }
+    // The view a gunner starts in: the rear turret (F4) for the first, the
+    // side turrets (F2, F3) for the next.
+    int gunner_view(const RemoteClient *c) const {
+        static const int kViews[] = { 3, 1, 2 };
+        return kViews[gunners_in_mission(c) % 3];
+    }
+
+    SeatPlan plan_seat(RemoteClient *c) {
+        c->seat = SEAT_WINGMAN;
+        c->startView = 0;
+        const char *env = getenv("WCSEAT");
+        const int turrets = is_wc2() ? turret_count(kPlayerSlot) : 0;
+        if (is_wc2() && env && !strcasecmp(env, "drone")) {
+            c->seat = SEAT_DRONE;
+            return SEAT_READY;
+        }
+        if (is_wc2() && env && !strcasecmp(env, "gunner") && turrets > 0) {
+            c->seat = SEAT_GUNNER;
+            c->startView = gunner_view(c);
+            return SEAT_READY;
+        }
+        std::vector<int> seats = wing_seats();
+        if (std::find(seats.begin(), seats.end(), c->net) != seats.end()) {
+            return SEAT_READY;
+        }
+        for (size_t i = 0; i < seats.size(); i++) {
+            if (!human_at(seats[i])) {
+                wclog(1, "player %d takes slot %d, %s", c->net, seats[i],
+                      seatSlots_.count(seats[i]) ? "a ship made for a seat" : seats[i] == kPlayerSlot + 1 ? "the mission's wingman" : "a wingman of the mission");
+                move_client(c, seats[i]);
+                return SEAT_READY;
+            }
+        }
+        if (seats.empty() && turrets > gunners_in_mission(c)) {
+            c->seat = SEAT_GUNNER;
+            c->startView = gunner_view(c);
+            return SEAT_READY;
+        }
+        if (seatSpawn_.active) {
+            return SEAT_WAIT;  // one is on its way (for whoever asked first)
+        }
+        if (!c->seatSpawnFailed && (is_wc1() || is_wc2())) {
+            int ms = -1, situation = -1;
+            const char *whose = "";
+            const std::map<int, Spawn> &all = spawns_.all();
+            if (!seats.empty()) {
+                std::map<int, Spawn>::const_iterator it = all.find(seats[0]);
+                if (it != all.end()) {
+                    ms = (int)it->second.mission_ship_id();
+                    whose = seatSlots_.count(seats[0]) ? "the record of a seat made before" : "the wingman's record";
+                    situation = is_wc2() && ds::known(ds::currentNavPoint) ? rd16(ds::currentNavPoint) : (int)it->second.situation_id();
                 }
-                wclog(1, "player %d takes slot %d, %s", c->net, slot, slot == kPlayerSlot + 1 ? "the mission's wingman"
-                      : slot == extra_wing_slot() ? "the second wingman" : "another wingman the mission launched");
-                move_client(c, slot);
+            } else if (is_wc2() && ds::known(ds::playerMissionShip) && ds::known(ds::currentNavPoint)) {
+                ms = rd16(ds::playerMissionShip);
+                whose = "our own ship's record";
+                situation = rd16(ds::currentNavPoint);
+            }
+            if (ms >= 0) {
+                seatSpawn_.active = true;
+                seatSpawn_.forNet = c->net;
+                seatSpawn_.missionShip = ms;
+                seatSpawn_.frames = 0;
+                seatSpawn_.before.clear();
+                for (std::map<int, Spawn>::const_iterator it = all.begin(); it != all.end(); ++it) {
+                    seatSpawn_.before.insert(it->first);
+                }
+                wclog(1, "a seat for player %d: mission ship %d (%s) is spawned again", c->net, ms, whose);
+                enqueue_server_spawn(ms, situation);
+                return SEAT_WAIT;
+            }
+        }
+        if (is_wc2()) {
+            c->seat = turrets > gunners_in_mission(c) ? SEAT_GUNNER : SEAT_DRONE;
+            if (c->seat == SEAT_GUNNER) {
+                c->startView = gunner_view(c);
+            }
+        }
+        return SEAT_READY;
+    }
+
+    // A frame after a seat's spawn was asked for: the ship it made (the
+    // registry's new slot with that mission ship) becomes a seat, parked
+    // on our wing; nothing new after a few frames means the spawn failed
+    // and the client asking gets another seat.
+    void resolve_seat_spawn() {
+        if (!seatSpawn_.active) {
+            return;
+        }
+        const std::map<int, Spawn> &all = spawns_.all();
+        for (std::map<int, Spawn>::const_iterator it = all.begin(); it != all.end(); ++it) {
+            if (!seatSpawn_.before.count(it->first) && (int)it->second.mission_ship_id() == seatSpawn_.missionShip && slot_in_use(it->first)) {
+                seatSlots_.insert(it->first);
+                park_beside(it->first);
+                wclog(1, "the seat made for player %d is slot %d", seatSpawn_.forNet, it->first);
+                seatSpawn_.active = false;
                 return;
             }
-            return;
         }
-        const char *env = getenv("WCSEAT");
-        if (!is_wc2() || !ds::known(ds::playerWing) || (env && env[0]) || wing_fighter_slot(c->net)) {
-            return;
-        }
-        for (int slot = kPlayerSlot + 1; slot <= kMaxShipSlot; slot++) {
-            if (!wing_fighter_slot(slot) || (slot < (int)clients_.size() && clients_[slot]->connected())) {
-                continue;
+        if (++seatSpawn_.frames > 3) {
+            wclog(1, "no ship came of the spawn for player %d's seat", seatSpawn_.forNet);
+            if (seatSpawn_.forNet < (int)clients_.size()) {
+                clients_[seatSpawn_.forNet]->seatSpawnFailed = true;
             }
-            wclog(1, "player %d takes slot %d, the wing's fighter there (its slot %d holds %s)", c->net, slot, c->net,
-                  !slot_in_use(c->net) ? "nothing" : entity_type(c->net) == ET_SHIP ? "a fighter not of the wing" : "a ship that is not a fighter");
-            move_client(c, slot);
-            return;
+            seatSpawn_.active = false;
         }
     }
 
@@ -1421,12 +1421,17 @@ private:
         msg.set_epoch(epoch_);
         msg.set_frame_number(frameNumber_);
         Game *game = msg.mutable_game();
-        reseat(c);
+        if (plan_seat(c) == SEAT_WAIT) {
+            c->needsMissionStartState = true;  // next frame, when the ship made for it is there
+            return false;
+        }
         game->set_assigned_player_id(c->net);
-        c->seat = seat_for(c);
         c->mannedTurret = -1;
         c->acked = frameNumber_;
         game->set_seat(c->seat);
+        if (c->seat == SEAT_GUNNER) {
+            game->set_start_view((Bit32u)c->startView);
+        }
         if (c->seat == SEAT_WINGMAN) {
             take_station(c->net);
         }
@@ -1941,6 +1946,7 @@ private:
                 stamp_pilot(ev->mutable_spawn());
             }
         }
+        resolve_seat_spawn();
         for (size_t i = 0; i < clients_.size(); i++) {
             RemoteClient *c = clients_[i];
             if (!c->connected()) {
@@ -2095,7 +2101,12 @@ private:
     Bit32u epoch_;
     Bit64u frameNumber_;
     bool hadClientInMission_;    // a wingman has had this mission's start state
-    bool extraWingTried_ = false;  // WC1: the second wingman's spawn was tried this mission
+    std::set<int> seatSlots_;      // ships the server spawned as seats for humans (slots)
+    struct {                       // a seat's spawn in flight (one at a time)
+        bool active = false;
+        int forNet = -1, missionShip = -1, frames = 0;
+        std::set<int> before;      // the registry's slots before it
+    } seatSpawn_;
     ServerSendBriefingStart lastBriefing_;
     NetworkMessage pendingFrame_;
     SpawnRegistry spawns_;
@@ -2706,6 +2717,7 @@ private:
             entities_.set_own_ship(-1);
             entities_.map(kPlayerSlot, kPlayerSlot);
             seatFrames_ = 0;
+            startView_ = game.has_start_view() && game.start_view() >= 1 && game.start_view() <= 3 ? (int)game.start_view() : 3;
         } else if (seat_ == SEAT_DRONE) {
             // No ship of the mission is ours: every spawn of the server's is
             // another ship here, and the leader's is made first.  (The seat
@@ -2782,7 +2794,7 @@ private:
                 if (seatFrames_ >= 0 && ++seatFrames_ >= kSeatAfter) {
                     seatFrames_ = -1;
                     if (rd16(ds::cameraMode) != kInTurret) {
-                        enqueue_gunner_seat();
+                        enqueue_gunner_seat(startView_);
                     }
                 }
                 frame->set_manned_turret(rd16(ds::cameraMode) == kInTurret ? rd16(ds::mannedTurret) + 1 : 0);
@@ -2895,6 +2907,7 @@ private:
     Seat seat_;
     bool chase_;  // a drone rides behind the leader
     int seatFrames_;  // a gunner: frames flown before it is put in its turret (-1: done)
+    int startView_ = 3;  // a gunner: the turret view it starts in (Game.start_view)
     Bit64u lastServerFrame_;  // the number of the last server frame applied (Frame.ack)
     double lastServerFrameAt_;   // when it came (real ms): our ack_delay
     double lastServerFrameEmu_;  // the same in emulated ms (-1: none yet this mission)

@@ -12,7 +12,7 @@ the scripts); nothing here touches the game's own files.
   machine (`CLIENTGAMEDIR` gives the wingman its own game directory: two
   programs on one directory corrupt each other's save files).
 * `w2trio.sh OUT SECONDS "s m" HOSTKEYS CLIENTKEYS CLIENT2KEYS` -- host +
-  two wingmen, for SO3P (`GAME=so3p`, the default; `CLIENTGAMEDIR` and
+  two wingmen (`GAME=so3`, `so2`, `wc2`; `CLIENTGAMEDIR` and
   `CLIENT2GAMEDIR` default to `build-so3/game-client` and `-client2`, copies
   of `build-so3/game`).
 * `spawntest.sh` -- every mission once with two programs: launch, autopilot

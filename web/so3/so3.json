@@ -51,43 +51,14 @@
      "count": 1
     }
    ]
-  },
-  {
-   "source": "SO2.EXE",
-   "target": "SO3P.EXE",
-   "sha256": "f9b53260a85340416febc68dd10dc0efb5570a5f97c872f3425e6f87e65207ae",
-   "patches": [
-    {
-     "what": "the data-file number, mov word [cb16], 2",
-     "find": "c70616cb0200",
-     "replace": "c70616cb0400",
-     "count": 5
-    },
-    {
-     "what": "the saved game's name",
-     "find": "7361766567616d652e736f32",
-     "replace": "7361766567616d652e736f34",
-     "count": 1
-    },
-    {
-     "what": "the game number of a resumed story",
-     "find": "c746fa02009a2f0088048b46fa5ec9cb",
-     "replace": "c746fa04009a2f0088048b46fa5ec9cb",
-     "count": 1
-    }
-   ]
   }
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "787dafc1f660130e7940a475",
+ "iv": "5fc391d3652cb70549a57be1",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
-   "size": 4701
-  },
-  {
-   "path": "GAMEDAT/ALTSHIPS.004",
    "size": 4701
   },
   {
@@ -95,23 +66,11 @@
    "size": 19832
   },
   {
-   "path": "GAMEDAT/CAMPAIGN.S04",
-   "size": 19832
-  },
-  {
    "path": "GAMEDAT/GAMEFLOW.S03",
    "size": 4580
   },
   {
-   "path": "GAMEDAT/GAMEFLOW.S04",
-   "size": 4580
-  },
-  {
    "path": "GAMEDAT/INCIDENT.S03",
-   "size": 54672
-  },
-  {
-   "path": "GAMEDAT/INCIDENT.S04",
    "size": 54672
   },
   {
@@ -124,10 +83,6 @@
   },
   {
    "path": "GAMEDAT/MODULE.003",
-   "size": 177824
-  },
-  {
-   "path": "GAMEDAT/MODULE.004",
    "size": 177824
   },
   {
@@ -147,23 +102,11 @@
    "size": 20493
   },
   {
-   "path": "GAMEDAT/PLANETS.V04",
-   "size": 20493
-  },
-  {
    "path": "GAMEDAT/SECTOR.003",
    "size": 5
   },
   {
-   "path": "GAMEDAT/SECTOR.004",
-   "size": 5
-  },
-  {
    "path": "GAMEDAT/SERIES.S03",
-   "size": 151024
-  },
-  {
-   "path": "GAMEDAT/SERIES.S04",
    "size": 151024
   },
   {
@@ -179,17 +122,9 @@
    "size": 1538
   },
   {
-   "path": "GAMEDAT/STARTGLB.004",
-   "size": 1538
-  },
-  {
    "path": "GAMEDAT/TEMPGLOB.003",
-   "size": 1538
-  },
-  {
-   "path": "GAMEDAT/TEMPGLOB.004",
    "size": 1538
   }
  ],
- "bytes": 1319015
+ "bytes": 882535
 }

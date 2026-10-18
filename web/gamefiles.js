@@ -139,16 +139,6 @@ const SO3_SERIES = [
   { series: 4, missions: ["Countersign, with Maniac", "Ceremony, with Maniac", "The yard, with Maniac", "Duel, with Maniac"] },
   { series: 5, missions: ["The assault (the raid called off), with Stingray", "Picket line (a second chance), with Downtown", "Blown (a second chance), with Maniac", "The last patrol, with Maniac"] },
 ];
-// SO3P: the same missions with a seat for a third player (so3/build.py:
-// tools/wc2wing puts a second wing fighter in every mission, Doomsday's
-// where the wing had one fighter; 1-1 and 2-0 flew two already).
-const SO3P_SERIES = [
-  { series: 1, missions: ["Shakedown, with Maniac and Doomsday", "Hand-me-downs, with Doomsday and Downtown", "The relay, with Stingray and Doomsday", "Prize, with Maniac and Doomsday"] },
-  { series: 2, missions: ["First patrol, with Maniac and Downtown", "Scramble, with Stingray and Doomsday", "Beacon, with Toro and Doomsday", "Valkyrie, with Maniac and Doomsday"] },
-  { series: 3, missions: ["The traders, with Maniac and Doomsday", "Theft, with Maniac and Doomsday", "Rendezvous, with Maniac and Doomsday", "Jump point, with Maniac and Doomsday"] },
-  { series: 4, missions: ["Countersign, with Maniac and Doomsday", "Ceremony, with Maniac and Doomsday", "The yard, with Maniac and Doomsday", "Duel, with Maniac and Doomsday"] },
-  { series: 5, missions: ["The assault (the raid called off), with Stingray and Doomsday", "Picket line (a second chance), with Downtown and Doomsday", "Blown (a second chance), with Maniac and Doomsday", "The last patrol, with Maniac and Doomsday"] },
-];
 
 // What the page says under the mission menu, in a line: with a mission
 // picked (`forced`), and for the barracks, to the host and to a wingman.
@@ -157,12 +147,12 @@ const WC1_HINTS = {
   forced: "Everyone flies it from a fresh start with the callsigns entered above.",
   host: "The barracks: your save game and your walk to the briefing decide the mission; wingmen get it in the briefing room.",
   wing: "The host flies from the barracks: walk into the briefing room after the host has started, and you get the host's mission.",
-  help: "From the barracks (no mission picked): the host's save game and walk to the briefing room decide the mission; a wingman walks into the briefing room on their own ship after the host has started, and gets the host's mission there. With a mission picked, everyone flies it from a fresh start with the callsigns entered above. The second player flies the mission's wingman. In a room of three the host's game launches a second copy of that wingman for the third player (the game's own AI flies it until someone does), except where the mission has more than one wingman of its own: then the third player takes one of those." };
+  help: "From the barracks (no mission picked): the host's save game and walk to the briefing room decide the mission; a wingman walks into the briefing room on their own ship after the host has started, and gets the host's mission there. With a mission picked, everyone flies it from a fresh start with the callsigns entered above. The second player flies the mission's wingman; a third gets a second copy of that wingman, which the host's game launches for them (where the mission has more wingmen of its own, one of those)." };
 const WC2_HINTS = {
   forced: "Everyone starts in the barracks at that point of the story: click \"Fly mission\" there.",
   host: "The barracks: your saved game decides the mission; click \"Fly mission\" and wingmen get your mission.",
   wing: "The host flies from the barracks: click \"Fly mission\" and you get the host's mission.",
-  help: "Everyone starts in the barracks, with the story at the mission picked or at the host's saved game: click the door the game calls \"Fly mission\" (point at a door and it is named), and the briefing plays first; wingmen get the host's place in the story, the briefing and the mission. In a mission flown alone the second player is the gunner if the ship has turrets (starting in the rear turret; F2 and F3 are the side turrets, F4 the rear one, F1 the pilot's view), and otherwise a drone riding behind the leader as its copilot: Up and Down shift the leader's shields to the rear and the front, Space puts shields into the guns, Enter guns into the weakest shield, + and - set the leader's cruising speed, and its gauges show the leader's. Nothing sees or hits the drone; 0, then /chase and Enter, flies it free." };
+  help: "Everyone starts in the barracks, with the story at the mission picked or at the host's saved game: click the door the game calls \"Fly mission\" (point at a door and it is named), and the briefing plays first; wingmen get the host's place in the story, the briefing and the mission. Wingmen fly the mission's wing; when the wing is short of ships, the host's game launches another copy of the wingman's for whoever is left, so two or three can fly. In a mission flown alone the second player is the gunner if the ship has turrets (starting in the rear turret; F2 and F3 are the side turrets, F4 the rear one, F1 the pilot's view) and a third the next turret, and otherwise each gets a copy of the leader's own ship to fly. Only when no ship can be made does a player ride as a drone behind the leader, as its copilot: Up and Down shift the leader's shields to the rear and the front, Space puts shields into the guns, Enter guns into the weakest shield, + and - set the leader's cruising speed, and its gauges show the leader's. Nothing sees or hits the drone; 0, then /chase and Enter, flies it free." };
 // "Origin s<series> m<mission>" on the command line of Wing Commander II's
 // programs puts the story at that mission and starts in the barracks.
 const wc2Mission = (m) => `Origin s${m.series} m${m.mis}`;
@@ -228,18 +218,6 @@ export const GAMES = [
     pointer: { fromGame: true },
     dosbox: "[sblaster]\nirq=5\n",
     campaign: { series: SO3_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
-  // SO3P: the Culloden campaign with a seat for a third player, the same
-  // program with the data-file number 4 (both come out of the sealed
-  // package).  Its rooms want three seats: `players` sets the room's size
-  // when the program is picked.
-  { id: "wc2so3p", tag: "SO3P", partOf: "wc2", title: "Wing Commander II: Special Operations 3 (Culloden), three seats", detect: ["SO2.EXE"], run: "loadfix -34 so3p", multiplayer: true,
-    addon: "so3", players: 3,
-    build: { para: 0x1924, off: 0x025A, text: "Loading WC2 - SPECIAL OPERATIONS 2" },
-    saves: ["GAMEDAT/SAVEGAME.SO4"], cycles: 8000,
-    firstName: true,
-    pointer: { fromGame: true },
-    dosbox: "[sblaster]\nirq=5\n",
-    campaign: { series: SO3P_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
 ];
 
 // The registry entry of a game id, or null (a game picked by its executable).

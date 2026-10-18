@@ -1213,10 +1213,11 @@ top-level README for the workflow).  What differs:
   drops mid-mission.
 * A client that died cannot rejoin the mission in progress; it gets the next
   briefing.
-* Only two client slots (network ids 1 and 3) are allowed, as before.  A
-  third seat needs a ship: Wing Commander II missions with two wing
-  fighters (SO3P), or, in Wing Commander, the second copy of the wingman
-  the host spawns for a room of three (docs/wc2-port.md section 4).
+* Two client slots (network ids 1 and 3 when they connect; the slot each
+  flies is decided with the mission's start state): rooms have three
+  seats (two when the host ticks "2 players only" on making one), and a
+  third pilot's ship is made by the host's game when the wing has none
+  free (docs/wc2-port.md section 4).
 * Rocks and mines are per machine (section 2): two pilots in the same field
   do not see the same rocks, and one can watch the other fly through a rock
   unharmed.

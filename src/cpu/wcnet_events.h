@@ -38,12 +38,13 @@ void leader_name_tick();
 void leader_name_restore();
 // A drone client: make a ship for the server's player (network id 0).
 void enqueue_host_body();
-// Server: spawn a mission ship as the game's own setup would, broadcast to
-// the clients (a third seat in Wing Commander: the wingman's record again).
-// The game will not spawn a mission ship that is in a slot already: with
-// hideSlot >= 0 that slot's entry in the slot table is hidden for the call.
-void enqueue_server_spawn(int missionShip, int situation, int hideSlot = -1);
-void enqueue_gunner_seat();  // WC2: the gunner's view goes to the rear turret
+// Server: spawn a mission ship again, as the game's own setup would, and
+// broadcast it (a seat for a third pilot: the wingman's record, or the
+// player's).  The game will not spawn a mission ship that is in a slot
+// already: every slot-table entry naming it is hidden for the call, here
+// and on the clients (Spawn.again).
+void enqueue_server_spawn(int missionShip, int situation);
+void enqueue_gunner_seat(int view);  // WC2: the gunner's view goes to its turret (3 the rear, 1 and 2 the sides)
 // Turrets (WC2).  A gunner's machine reports its shots (on_turret_fire_shot)
 // and the server fires them from its own ship (enqueue_turret_fire); the
 // server's automatic fire leaves the gunner's turret alone

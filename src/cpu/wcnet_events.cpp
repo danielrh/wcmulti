@@ -371,7 +371,7 @@ public:
     // mode BROADCAST: the server's own spawn (args from the intercepted call).
     // mode REPLAY: a spawn received from the server.
     enum Mode { BROADCAST, REPLAY };
-    SpawnJob(Mode mode, const Spawn &spawn, int hideSlot = -1) : mode_(mode), spawn_(spawn), hideSlot_(hideSlot) {}
+    SpawnJob(Mode mode, const Spawn &spawn) : mode_(mode), spawn_(spawn) {}
     virtual bool start() {
         if (!spawn_.has_mission_ship_id() || !spawn_.has_situation_id()) {
             wclog(0, "invalid spawn event");
@@ -380,24 +380,31 @@ public:
         if (mode_ == REPLAY && spawn_.has_seed()) {
             seed_rng(spawn_.seed());
         }
-        if (mode_ == REPLAY && spawn_.has_again() && spawn_.again() && hideSlot_ < 0 && ds::known(ds::slotMissionShip)) {
-            // the server's second ship of a mission ship: here too that
-            // mission ship sits in a slot (the first wingman's), to hide
+        if (spawn_.has_again() && spawn_.again() && ds::known(ds::slotMissionShip)) {
+            // another ship of a mission ship that is in a slot already (a
+            // seat the server makes): the game refuses one it finds in its
+            // slot table, so every entry naming it is hidden for the call
+            // (as HostBodyJob does for the leader's) -- the player's own
+            // slot 0, the first wingman's, a seat made before ...
             for (int s = kPlayerSlot; s <= kMaxShipSlot; s++) {
                 if (slot_in_use(s) && rd16((Bit16u)(ds::slotMissionShip + 2 * s)) == spawn_.mission_ship_id()) {
-                    hideSlot_ = s;
-                    break;
+                    hidden_.push_back(std::make_pair(s, rd16((Bit16u)(ds::slotMissionShip + 2 * s))));
+                    wr16((Bit16u)(ds::slotMissionShip + 2 * s), 0xffff);
                 }
             }
-        }
-        if (hideSlot_ >= 0 && ds::known(ds::slotMissionShip)) {
-            // a second ship of a mission ship that is in a slot: the game
-            // refuses one it finds in its slot table, so that entry is
-            // hidden for the call (as HostBodyJob does for the leader's)
-            hidden_ = rd16((Bit16u)(ds::slotMissionShip + 2 * hideSlot_));
-            wr16((Bit16u)(ds::slotMissionShip + 2 * hideSlot_), 0xffff);
-        } else {
-            hideSlot_ = -1;
+            // ... and a copy of the player's own record flies with an
+            // ordinary pilot's orders (6, the player's, is error 024 in any
+            // slot but 0)
+            if (g_params.missionShipAiOff && ds::known(ds::missionShipTable)) {
+                enum { kThePlayer = 6, kOrdinaryPilot = 4 };
+                aiOff_ = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * spawn_.mission_ship_id() + g_params.missionShipAiOff);
+                if (rd16(aiOff_) == kThePlayer) {
+                    ai_ = kThePlayer;
+                    wr16(aiOff_, kOrdinaryPilot);
+                } else {
+                    aiOff_ = 0;
+                }
+            }
         }
         wclog(2, "spawn mission ship %d situation %d", spawn_.mission_ship_id(), spawn_.situation_id());
         call_of(code::outerSpawnShipEntity)
@@ -406,8 +413,11 @@ public:
         return true;
     }
     virtual void finish() {
-        if (hideSlot_ >= 0) {
-            wr16((Bit16u)(ds::slotMissionShip + 2 * hideSlot_), hidden_);
+        for (size_t i = 0; i < hidden_.size(); i++) {
+            wr16((Bit16u)(ds::slotMissionShip + 2 * hidden_[i].first), hidden_[i].second);
+        }
+        if (aiOff_) {
+            wr16(aiOff_, ai_);
         }
         int slot = (int)(reg_eax & 0xffff);
         wclog(2, "spawn produced slot %d", slot);
@@ -461,8 +471,8 @@ public:
 private:
     Mode mode_;
     Spawn spawn_;
-    int hideSlot_;        // the slot whose slot-table entry is hidden for the call, or -1
-    Bit16u hidden_ = 0;   // ... and what it held
+    std::vector<std::pair<int, Bit16u> > hidden_;  // slot-table entries hidden for the call, and what they held
+    Bit16u aiOff_ = 0, ai_ = 0;  // the record's AI word changed for the call (a copy of the player's ship), and what it was
 };
 
 class DespawnJob : public VmJob {
@@ -546,9 +556,8 @@ private:
     const char *why_;
 };
 
-void enqueue_gunner_seat() {
-    enum { kRearView = 3 };
-    g_trampoline.enqueue(new ViewJob(kRearView, "the gunner's seat at the start"));
+void enqueue_gunner_seat(int view) {
+    g_trampoline.enqueue(new ViewJob(view, "the gunner's seat at the start"));
 }
 
 class AutopilotJob : public VmJob {
@@ -802,15 +811,13 @@ private:
     Bit16u aiOff_ = 0, ai_ = 0;
 };
 
-void enqueue_server_spawn(int missionShip, int situation, int hideSlot) {
+void enqueue_server_spawn(int missionShip, int situation) {
     Spawn spawn;
     spawn.set_mission_ship_id((Bit32u)missionShip);
     spawn.set_situation_id((Bit32u)situation);
     spawn.set_seed(rd32(ds::randomSeed));
-    if (hideSlot >= 0) {
-        spawn.set_again(true);
-    }
-    g_trampoline.enqueue(new SpawnJob(SpawnJob::BROADCAST, spawn, hideSlot));
+    spawn.set_again(true);
+    g_trampoline.enqueue(new SpawnJob(SpawnJob::BROADCAST, spawn));
 }
 
 void enqueue_host_body() {
@@ -989,7 +996,7 @@ void on_turret_auto_next() {
         return;
     }
     int turret = (Bit16s)mem_readw(SegPhys(ss) + ((reg_ebp - 0x1c) & 0xffff));
-    if (turret == s->gunner_turret()) {
+    if (s->turret_manned(turret)) {
         wclog(4, "automatic fire leaves turret %d to the gunner", turret);
         reg_eip = code::turretAutoSkip.off;
     }
