@@ -37,7 +37,7 @@ const browser = await chromium.launch({ headless: true, executablePath: chrome,
 const logs = { host: [], wing: [] };
 const seen = { host: new Set(), wing: new Set() };
 const milestones = [
-  "joined room", "connected as player", "connected to ", "mission start", "frame 301", "autopilot",
+  "joined room", "a room of", "connected as player", "connected to ", "mission start", "frame 301", "autopilot",
   "installed", "waiting for", "lost the server", "could not", "failed", "Aborted", "RuntimeError", "unreachable",
 ];
 

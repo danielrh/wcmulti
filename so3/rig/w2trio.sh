@@ -22,7 +22,7 @@ irq=5
 EOC
 launch() {  # name keyscript gamedir extra-env...
     local name="$1" keys="$2" dir="$3"; shift 3
-    ( cd "$OUT/$name" && exec env "$@" WCPORT="$PORT" WCNET_LOG="${WCNET_LOG:-2}" WCNET_KEYSCRIPT="$keys" WCNET_DUMP_DIR="$OUT/$name" \
+    ( cd "$OUT/$name" && exec env WCPLAYERS=3 "$@" WCPORT="$PORT" WCNET_LOG="${WCNET_LOG:-2}" WCNET_KEYSCRIPT="$keys" WCNET_DUMP_DIR="$OUT/$name" \
         SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
         timeout -s KILL "$DURATION" "$ROOT/build-native/src/dosbox" -conf "$OUT/dosbox.conf" \
         -c "mount c $dir" -c "c:" -c "loadfix -34 $GAME Origin ${KFLAG--k} ${DIRECT:-l} s${MISSION% *} m${MISSION#* }" -c "exit" \

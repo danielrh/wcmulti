@@ -681,6 +681,17 @@ struct RemoteClient {
 
 class ServerSession;
 
+// The pilots the room seats: the lobby room's own size (the page's "3
+// players" box makes it three), or WCPLAYERS over TCP (two by default).
+static int room_seats() {
+#ifdef C_LOBBYLINK
+    if (g_lobby && g_lobby->max_players() > 0) {
+        return g_lobby->max_players();
+    }
+#endif
+    return net_config.lobby_players;
+}
+
 // WCNET_BESTEFFORT=0: no positions by the best-effort channel in the
 // high-latency mode (to measure what it is worth).
 static bool best_effort_wanted() {
@@ -722,6 +733,8 @@ public:
           highWindow_(kHighWindowMin), modeSince_(0), modeTickAt_(0), ownFrames_(0), rtt_(-1) {
         allowedIds_.push_back(1);
         allowedIds_.push_back(3);
+        seats_ = room_seats();
+        wclog(1, "a room of %d: %s", seats_, seats_ >= 3 ? "seats are made for a third pilot" : "the second pilot's seat is the one slot 1 gives");
         reset_pending_frame();
         const char *env = getenv("WCNET_MODE");
         wclog(1, "exchange mode setting: %s (%s)", mode_name(modeSetting_), env && env[0] ? "WCNET_MODE" : "the default");
@@ -1090,6 +1103,8 @@ private:
     // (move_client); the id goes to the client with its start state, and the
     // other machines know the ship by the server's slot number anyway.
     // WCSEAT=drone|gunner on the server forces a seat (tests).
+    // All of that is for a room of three; a room of two keeps the seats it
+    // had before (plan_seat_of_two).
     enum SeatPlan { SEAT_READY, SEAT_WAIT };
 
     bool wing_fighter_slot_wc2(int slot) const {
@@ -1145,9 +1160,39 @@ private:
         return kViews[gunners_in_mission(c) % 3];
     }
 
+    // A room of two: the seat as it was before rooms of three (9ee65420,
+    // 2026-10-17), nothing moved and nothing spawned.  The client flies its
+    // own slot, 1.  Wing Commander gives every mission a wingman, and his
+    // ship is the client's; in Wing Commander II the client is the wingman
+    // when that slot holds a fighter of the player's wing, else the gunner
+    // (the rear turret) when the leader's ship has turrets and the drone when
+    // it has none.
+    SeatPlan plan_seat_of_two(RemoteClient *c) {
+        enum { kRearView = 3 };
+        if (!is_wc2() || !ds::known(ds::playerWing)) {
+            return SEAT_READY;
+        }
+        const char *env = getenv("WCSEAT");
+        const bool turrets = turret_count(kPlayerSlot) > 0;
+        if (env && !strcasecmp(env, "drone")) {
+            c->seat = SEAT_DRONE;
+        } else if (env && !strcasecmp(env, "gunner") && turrets) {
+            c->seat = SEAT_GUNNER;
+        } else if (!wing_fighter_slot_wc2(c->net)) {
+            c->seat = turrets ? SEAT_GUNNER : SEAT_DRONE;
+        }
+        if (c->seat == SEAT_GUNNER) {
+            c->startView = kRearView;
+        }
+        return SEAT_READY;
+    }
+
     SeatPlan plan_seat(RemoteClient *c) {
         c->seat = SEAT_WINGMAN;
         c->startView = 0;
+        if (seats_ < 3) {
+            return plan_seat_of_two(c);
+        }
         const char *env = getenv("WCSEAT");
         const int turrets = is_wc2() ? turret_count(kPlayerSlot) : 0;
         if (is_wc2() && env && !strcasecmp(env, "drone")) {
@@ -2101,7 +2146,8 @@ private:
     Bit32u epoch_;
     Bit64u frameNumber_;
     bool hadClientInMission_;    // a wingman has had this mission's start state
-    std::set<int> seatSlots_;      // ships the server spawned as seats for humans (slots)
+    int seats_;                  // the room's size (room_seats): three has seats made on demand, two the seats of before
+    std::set<int> seatSlots_;     // ships the server spawned as seats for humans (slots)
     struct {                       // a seat's spawn in flight (one at a time)
         bool active = false;
         int forNet = -1, missionShip = -1, frames = 0;

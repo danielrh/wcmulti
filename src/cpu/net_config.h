@@ -9,7 +9,9 @@
 //   TCP:       WCHOST unset = listen on WCPORT (server); set = connect to it.
 //   lobbylink: WCROOM=<code> meets everyone in that room on the lobby
 //              server WCLOBBY (default: the public test server).  The first
-//              player in is the server.  WCPLAYERS caps the room (default 3),
+//              player in is the server.  WCPLAYERS sizes a room it makes and,
+//              over TCP, says the room's size (default 2; 3 for seats made
+//              for a third pilot),
 //              WCLOBBY_ORIGIN overrides the Origin header ("" = none, for a
 //              local server with --allow-no-origin), WCLOBBY_RELAY=1 forces
 //              the TURN relay.

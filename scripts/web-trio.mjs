@@ -97,6 +97,7 @@ const [hf, wf, tf] = await Promise.all([fly(host, "host"), fly(wing, "wing"), fl
 check("all three reached the cockpit", hf && wf && tf, [hf, wf, tf]);
 await sleep(12);
 await shot(host, "host-flight"); await shot(wing, "wing-flight"); await shot(third, "third-flight");
+check("the host's game knows the room is three", has("host", "a room of 3"), logs.host.filter((l) => l.includes("a room of")));
 const starts = logs.host.filter((l) => l.includes("mission start state"));
 check("the host seats both as wingmen", starts.filter((l) => l.includes("(the wingman,")).length === 2, starts);
 check("the host's game made a seat for the third", has("host", "is spawned again") && has("host", "the seat made for player"), logs.host.filter((l) => l.includes("a seat for player") || l.includes("seat made for")));

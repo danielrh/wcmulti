@@ -130,22 +130,26 @@ WC.EXE gives every mission a wingman, and the client flies his ship.  A third
 of WC2's missions have none (the table below): slot 1 is then the carrier, a
 transport to escort, or empty, and a client that took it for its ship would
 "fly" a capital ship.  So the server decides, with the mission start state
-(`Game.seat`, `ServerSession::seat_for`), what a client is:
+(`Game.seat`, `ServerSession::plan_seat_of_two` in a room of two), what a
+client is:
 
 * **Wingman** when the client's slot holds a fighter (entity type 12) whose
   mission ship is in the player's wing list: eight words at `dseg:C1B6`,
   after the player's own mission ship at `dseg:C1B4` (`ovr116:1C5C` tests
   both; `dseg:6E1E` has the mission ship of every slot).  "Recon", the Sabre
   that leads the last mission's escort, counts: the second player flies it.
-  **Seats since 2026-10-18** (`ServerSession::plan_seat`, with each
-  client's mission start state): a client flies a ship of the wing that no
+  **Seats in a room of three, since 2026-10-18** (`ServerSession::plan_seat`,
+  with each client's mission start state; a room of two keeps the seats of
+  this list, its client flying slot 1, nothing moved or spawned): a client
+  flies a ship of the wing that no
   human flies -- in Wing Commander a fighter of our side flying formation on
   the player (its mission ship record, 0x2a bytes: word 0 type, word 1 side,
   word 2 the mission ship it follows, word 3 behaviour, 4 in formation; the
   carrier's patrol pair follows the carrier and does not count), in Wing
   Commander II a fighter of the mission's wing list (the carrier is slot 1
   in most of Special Operations' missions, so the wingman is slot 2 and the
-  second player flies it now; it used to ride as a drone or gunner there).
+  second player flies it in a room of three; in a room of two it rides as a
+  drone or gunner there, as it always did).
   When none is free the host's game makes one: the wingman's mission ship
   spawned again (`enqueue_server_spawn`, the game's own spawn broadcast like
   any; the game refuses a mission ship it finds in its slot table --
@@ -169,7 +173,9 @@ transport to escort, or empty, and a client that took it for its ship would
   left wing, the next on the right (`take_station`).  Rooms have two
   seats unless the host ticks "3 players" (marked beta) when making one,
   which gives three and never more (the box is off by default and not
-  remembered); the page's `#players` field is gone.
+  remembered); the page's `#players` field is gone.  The host reads the
+  room's size once (`room_seats`: the lobby room's own, or `WCPLAYERS` over
+  TCP, two by default; `so3/rig/w2trio.sh` sets 3) and logs "a room of N".
 * **Gunner** when there is no such wingman and the leader's ship has turrets
   (the Broadsword's three, the Sabre's one); see below.
 * **Drone** otherwise (`WCSEAT=drone` or `WCSEAT=gunner` on the server

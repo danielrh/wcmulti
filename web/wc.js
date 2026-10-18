@@ -1171,7 +1171,7 @@ async function start(fromGesture) {
       callsign: $("callsign").value.trim(),
       lastname: $("lastname").value.trim(),
       firstname: gameInfo() && gameInfo().firstName ? $("firstname").value.trim() : "",
-      players: "3",
+      players: String(lobby.game.maxPlayers || 2),   // (the game reads the room's own size; this agrees with it)
       server: serverUrl(),
       relay: $("relay").checked,
       verbose: $("verbose").checked,
