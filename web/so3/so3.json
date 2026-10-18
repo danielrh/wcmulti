@@ -55,7 +55,7 @@
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "1a37c97433e30af208450947",
+ "iv": "917f82c580e15f05324b6ac1",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -80,6 +80,14 @@
   {
    "path": "GAMEDAT/INTELSHP.045",
    "size": 89
+  },
+  {
+   "path": "GAMEDAT/LAND.V45",
+   "size": 6610
+  },
+  {
+   "path": "GAMEDAT/LAUNCH.V45",
+   "size": 2641
   },
   {
    "path": "GAMEDAT/MODULE.003",
@@ -126,5 +134,5 @@
    "size": 1538
   }
  ],
- "bytes": 853460
+ "bytes": 862761
 }

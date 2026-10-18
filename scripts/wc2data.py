@@ -614,6 +614,48 @@ def sprite_length(data):
     return None
 
 
+def sprite_fitted(data, w, h, palette, colours):
+    """The pixels of a sprite fitted into w x h (its aspect kept), as {(x,
+    y): colour} from (0, 0), and the size they take: sampled bilinearly in
+    colour (palette: 256 (r, g, b), clear pixels weighing nothing), a pixel
+    kept where it is half covered, its colour the nearest of `colours`."""
+    x2, x1, y1, y2, rows = decode_sprite(data)
+    src = {(x, y): c for y, r in rows.items() for x, c in r.items()}
+    x0 = min(x for x, _ in src)
+    y0 = min(y for _, y in src)
+    sw = max(x for x, _ in src) - x0 + 1
+    sh = max(y for _, y in src) - y0 + 1
+    s = min(w / sw, h / sh)
+    nw, nh = max(1, int(round(sw * s))), max(1, int(round(sh * s)))
+    choices = [(c, palette[c]) for c in colours]
+    nearest = {}
+    out = {}
+    for y in range(nh):
+        v = (y + 0.5) / s - 0.5
+        vy = int(v // 1)
+        fy = v - vy
+        for x in range(nw):
+            u = (x + 0.5) / s - 0.5
+            ux = int(u // 1)
+            fx = u - ux
+            r = g = b = a = 0.0
+            for dx, dy, wt in ((0, 0, (1 - fx) * (1 - fy)), (1, 0, fx * (1 - fy)), (0, 1, (1 - fx) * fy), (1, 1, fx * fy)):
+                c = src.get((x0 + ux + dx, y0 + vy + dy))
+                if c is not None and wt > 0:
+                    pr, pg, pb = palette[c]
+                    r += pr * wt
+                    g += pg * wt
+                    b += pb * wt
+                    a += wt
+            if a < 0.5:
+                continue
+            key = (int(r / a), int(g / a), int(b / a))
+            if key not in nearest:
+                nearest[key] = min(choices, key=lambda cc: sum((cc[1][k] - key[k]) ** 2 for k in range(3)))[0]
+            out[(x, y)] = nearest[key]
+    return out, nw, nh
+
+
 def compact_sprite_table(block):
     """A table block of sprites with each one packed as cheaply as the format
     allows, where it reads as a whole sprite and its pixels come back the

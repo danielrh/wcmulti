@@ -247,13 +247,22 @@ INCIDENT.S00's: launches per fighter type (blocks 2, 10-13, 17, 23, and
 `laungame.v12`, 4 `wormhole.v01`, the red alert); each launch opens with
 the boarding in her hangar (`launch.v00`) and ends past her hull
 (`laungame.v11`/`v12` and the fighter's `laungame.v0N`).  Special
-Operations 2's own INCIDENT.S02 has a Waterloo's: block 1 a still
-(`laungame.v39`, its "TCS Centurion"), 4 the landing (`land.v39`,
-`land.v30`), 5 the launch (`launch.v39`, `launch.v30`), played after block
-6, SO2's boarding, in the missions it flies from one.  SO3's copies send
-every Concordia film to the Waterloo's (`so3/build.py`, WATERLOO_FILMS:
-650 entries in SERIES.S03, 26 in GAMEFLOW.S03); the launch has no boarding
-in the hangar then.  The rooms are the scripts' (`setupbackground n`:
+Operations 2's own INCIDENT.S02 has the films of the missions it flies from
+a cruiser: block 1 a still of a Waterloo (`laungame.v39`, its "TCS
+Centurion"), 4 the landing (`land.v39`, `land.v30`), 5 the launch
+(`launch.v39`, `launch.v30`), played after block 6, SO2's boarding; but
+`land.v39` and `launch.v39` are stills of the Concordia again (the user
+spotted it).  Each is one sprite with its origin at the top left, drawn
+where it stands (the landing at 70, 61 in every frame; the launch pans
+across it) while the fighters (`*.v30`) move.  SO3's copies send every
+Concordia film to those blocks (`so3/build.py`, WATERLOO_FILMS: 650
+entries in SERIES.S03, 26 in GAMEFLOW.S03), and our INCIDENT.S03 names
+`land.v45` and `launch.v45` instead of the .V39 stills: the Waterloo's
+in-flight sprite (SHIP.V17 view 10, bow down and left as the Concordia
+stands) fitted into the box the Concordia filled (`wc2data.sprite_fitted`:
+bilinear in colour, back to the sprite's own colours in WC2PAL, which the
+films' palette matches for all 129 of them, dumped from a running film).
+The launch has no boarding in the hangar then.  The rooms are the scripts' (`setupbackground n`:
 CAMPAIGN.S0n's `setupbackdrop` switches on n to a shape of the SHAP list,
 `closeup.v00` blocks for most of 1-55, SO1's `closeup.v01` for 100-103,
 SO2's `closeup.v02` for 202-204); no campaign has Waterloo rooms, so
