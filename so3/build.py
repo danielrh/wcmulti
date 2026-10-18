@@ -270,7 +270,18 @@ def main():
     # side and rear views, and the Sabre's rear view is its turret.  The
     # Hellcat has none: the Rapier's rear view (the user, 2026-10-17).
     parts[3] = wc2data.blocks_of(os.path.join(gamedat, "PCSHIP.V01"))[3]
+    # Academy's front view keeps every pixel plain (no runs: 36 KB, near
+    # twice the Rapier's); packed as the format allows, the same pixels take
+    # half that.  The game holds the views outside the heap ships load into
+    # (its free count did not move), so this is the package's size, not room
+    # in flight (the user, 2026-10-18).
+    saved = 0
+    for i, fl in enumerate(flags):
+        if fl == 0xC1:
+            parts[i], n = wc2data.compact_sprite_table(parts[i])
+            saved += n
     wc2data.write_container(os.path.join(pgd, "PCSHIP.V%02d" % campaign.HELLCAT), parts, flags)
+    print("Hellcat cockpit: %d bytes (%d saved by packing its views)" % (os.path.getsize(os.path.join(pgd, "PCSHIP.V%02d" % campaign.HELLCAT)), saved))
     shutil.copyfile(os.path.join(gamedat, "INTELSHP.041"), os.path.join(pgd, "INTELSHP.%03d" % campaign.HELLCAT))
     # A type flown by a pilot without an INTEL file of his own needs the type's
     # INTELSHP; the game has none for the Rapier (never AI-flown in SO2).

@@ -55,7 +55,7 @@
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "6938e7e78a23a3f04e547e04",
+ "iv": "1a37c97433e30af208450947",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -87,15 +87,15 @@
   },
   {
    "path": "GAMEDAT/PCSHIP.V45",
-   "size": 137229
+   "size": 115818
   },
   {
    "path": "GAMEDAT/PEOPLE.V46",
-   "size": 46695
+   "size": 43061
   },
   {
    "path": "GAMEDAT/PEOPLE.V47",
-   "size": 35762
+   "size": 33016
   },
   {
    "path": "GAMEDAT/PLANETS.V03",
@@ -115,7 +115,7 @@
   },
   {
    "path": "GAMEDAT/SHIP.V45",
-   "size": 81299
+   "size": 80015
   },
   {
    "path": "GAMEDAT/STARTGLB.003",
@@ -126,5 +126,5 @@
    "size": 1538
   }
  ],
- "bytes": 882535
+ "bytes": 853460
 }

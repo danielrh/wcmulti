@@ -532,34 +532,106 @@ def decode_sprite(data):
     return x2, x1, y1, y2, rows
 
 
+def _encode_span(span):
+    """The cheapest packing of one row span (colour indices): (bytes, raw)
+    with raw=True for an even-key record of plain pixels.  Sub-runs: a run
+    of one colour costs 2 bytes, n plain pixels 1 + n; at most 127 each."""
+    n = len(span)
+    best = [0] + [None] * n
+    how = [None] * (n + 1)
+    for i in range(n):
+        if best[i] is None:
+            continue
+        length = 1
+        while length <= 127 and i + length <= n and span[i + length - 1] == span[i]:
+            if best[i + length] is None or best[i] + 2 < best[i + length]:
+                best[i + length], how[i + length] = best[i] + 2, (True, i)
+            length += 1
+        for length in range(1, min(127, n - i) + 1):
+            if best[i + length] is None or best[i] + 1 + length < best[i + length]:
+                best[i + length], how[i + length] = best[i] + 1 + length, (False, i)
+    units, j = [], n
+    while j > 0:
+        run, i = how[j]
+        units.append((run, span[i:j]))
+        j = i
+    body = bytearray()
+    for run, u in reversed(units):
+        body += bytes((2 * len(u) + 1, u[0])) if run else bytes((2 * len(u),)) + bytes(u)
+    if len(body) >= n:
+        return bytes(span), True
+    return bytes(body), False
+
+
 def encode_sprite(x2, x1, y1, y2, rows):
-    """The inverse of decode_sprite: one packed record per run of set pixels."""
+    """The inverse of decode_sprite: one record per span of drawn pixels
+    (every pixel decode_sprite listed, colour 0 too: it is drawn black),
+    packed as cheaply as the format allows.  Origin's own views come out a
+    few per cent smaller than their files."""
     out = bytearray(struct.pack("<hhhh", x2, x1, y1, y2))
     for y in sorted(rows):
         row = rows[y]
-        xs = sorted(x for x in row if row[x] != 0)
+        xs = sorted(row)
         i = 0
         while i < len(xs):
             j = i
             while j + 1 < len(xs) and xs[j + 1] == xs[j] + 1:
                 j += 1
             span = [row[x] for x in xs[i:j + 1]]
-            out += struct.pack("<hhh", 2 * len(span) + 1, xs[i], y)
-            k = 0
-            while k < len(span):
-                run = 1
-                while k + run < len(span) and span[k + run] == span[k] and run < 127:
-                    run += 1
-                if run >= 3:
-                    out += bytes((2 * run + 1, span[k])); k += run
-                else:
-                    lit = k
-                    while lit < len(span) and lit - k < 127 and not (lit + 2 < len(span) and span[lit] == span[lit + 1] == span[lit + 2]):
-                        lit += 1
-                    out += bytes((2 * (lit - k),)) + bytes(span[k:lit]); k = lit
+            body, raw = _encode_span(span)
+            out += struct.pack("<hhh", 2 * len(span) + (0 if raw else 1), xs[i], y) + body
             i = j + 1
-    out += struct.pack("<hhh", 0, 0, 0)
+    out += struct.pack("<h", 0)   # the end mark, as Origin's views have it
     return bytes(out)
+
+
+def sprite_length(data):
+    """Where a sprite's records finish (after the end mark, a zero key of two
+    bytes), or None when the bytes do not read as one."""
+    off = 8
+    while off + 2 <= len(data):
+        key = struct.unpack_from("<h", data, off)[0]
+        if key == 0:
+            return off + 2
+        if key < 0 or off + 6 > len(data):
+            return None
+        off += 6
+        if key % 2 == 0:
+            off += key // 2
+        else:
+            n = 0
+            while n < key // 2:
+                if off >= len(data):
+                    return None
+                k = data[off]
+                off += 1
+                if k == 0:
+                    return None
+                n += k // 2
+                off += k // 2 if k % 2 == 0 else 1
+            if n != key // 2:
+                return None
+    return None
+
+
+def compact_sprite_table(block):
+    """A table block of sprites with each one packed as cheaply as the format
+    allows, where it reads as a whole sprite and its pixels come back the
+    same (anything else is kept as it was): (block, bytes saved)."""
+    size, first = struct.unpack("<II", block[:8])
+    n = (first & 0xFFFFFF) // 4 - 1
+    offs = [struct.unpack_from("<I", block, 4 + 4 * i)[0] & 0xFFFFFF for i in range(n)] + [len(block)]
+    out = []
+    for i in range(n):
+        sp = block[offs[i]:offs[i + 1]]
+        if sprite_length(sp) == len(sp):
+            pixels = decode_sprite(sp)
+            new = encode_sprite(*pixels)
+            if len(new) < len(sp) and decode_sprite(new) == pixels:
+                sp = new
+        out.append(sp)
+    new_block = _tree(out)
+    return new_block, len(block) - len(new_block)
 
 
 def scale_sprite(data, s):

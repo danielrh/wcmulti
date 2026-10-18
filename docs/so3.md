@@ -194,7 +194,20 @@ cockpit from a `pcship.vNN` named in the scene file's shape list
 **View sprites.**  Header four int16 x2, x1, y1, y2 (the sprite spans
 [-x1-1, x2] by [-y1-1, y2] around its origin); records of int16 key, vx,
 vy: key even = key/2 raw pixels, key odd = key/2 pixels of sub-runs (a
-byte k: even = k/2 raw pixels, odd = one colour k/2 times); key 0 ends.
+byte k: even = k/2 raw pixels, odd = one colour k/2 times); a key of 0
+(two bytes, no vx, vy) ends.  Every pixel a record covers is drawn, colour
+0 as black: only pixels no record covers are clear.  `wc2data.encode_sprite`
+packs each span as cheaply as the format allows (a run costs 2 bytes, n
+plain pixels 1 + n): every one of the 2,814 sprites in WC2's PCSHIP, PEOPLE
+and SHIP files comes back pixel for pixel, 2.5% smaller than Origin's
+packing.  (The encoder before 2026-10-18 took colour 0 for clear: the
+recoloured portraits had lost their black pixels, Banbridge his pupils.)
+Academy's Hellcat cockpit stored every pixel plain, no runs: its front view
+was 36 KB, the Rapier's 20; `compact_sprite_table` packs it to 18 KB (the
+whole file 137 KB to 116).  That is the package's size only: the game's
+free heap in flight (`!mem`) did not move with it, in any view, so the
+cockpit views are not held in the heap the ship types load into (the
+loader also reports an EMS pool, likely where they are).
 `wc2data.decode_sprite` / `encode_sprite` (lossless round trip on every
 view the game has) and `scale_fighter` (the Hellcat at 0.75: 142 KB to 81
 KB; the per-view hardpoint pixel positions in packet 2 and the eleven
