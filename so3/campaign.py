@@ -194,9 +194,9 @@ CULLODEN = lambda **kw: capital("Culloden", WATERLOO, 0, pos=(0, 0, 0), yaw=45, 
 # light type more.
 
 def m_shakedown():
-    """1-0 Shakedown (Hellcats; Maniac).  Live fire on the hulks at the range;
-    the reaction force the relay's ping called in arrives there once the hulks
-    are dead; the Gothri recon pair at Nav 2 must not get home.
+    """1-0 Shakedown (Hellcats; Maniac).  Live fire on the hulk at the range;
+    the reaction force the relay's ping called in arrives there once the hulk
+    is dead; the Gothri recon pair at Nav 2 must not get home.
 
     One enemy fighter type for the whole mission.  A player who leaves the
     range with a hulk alive leaves the wave record pending, and the nav
@@ -205,22 +205,22 @@ def m_shakedown():
     Gothri file is 89 KB), and a 2026-10-17 play ended in "Divide error /
     Null pointer assignment" with 34 KB free while loading ship.v50.  With
     the recon pair Gothri too, a late visit loads nothing new."""
+    # One hulk (the user, 2026-10-17): nothing to leave alive by mistake, and
+    # fewer of its views to load (the reaction force comes with its death).
     ships = [
         CULLODEN(),                                                               # 0
         player(HELLCAT),                                                          # 1
         wingman("Maniac", HELLCAT, MANIAC),                                       # 2
         hulk("Target hulk", HULK, pos=(0, 0, -2500), yaw=20),                     # 3
-        hulk("Target hulk", HULK, pos=(1800, 300, -4000), yaw=-70),               # 4
-        hulk("Target hulk", HULK, pos=(-1700, -200, -4200), yaw=140),             # 5
     ]
-    ships += wing("Gothri", GOTHRI, 4, pos=(9000, 0, -12000), yaw=170, group=1, objective=1, pilot=KILRATHI_ACE, first_index=6)    # 6-9
-    ships += wing("Gothri", GOTHRI, 2, pos=(8000, 0, 7000), yaw=-130, group=2, objective=1, pilot=KILRATHI_ACE, first_index=10)    # 10-11  the recon pair ("two recon contacts" in the texts)
-    range_ = dict(name="Range", pos=(30000, 0, 40000), types=[HULK, GOTHRI], ships=[3, 4, 5])
+    ships += wing("Gothri", GOTHRI, 4, pos=(9000, 0, -12000), yaw=170, group=1, objective=1, pilot=KILRATHI_ACE, first_index=4)    # 4-7
+    ships += wing("Gothri", GOTHRI, 2, pos=(8000, 0, 7000), yaw=-130, group=2, objective=1, pilot=KILRATHI_ACE, first_index=8)     # 8-9  the recon pair ("two recon contacts" in the texts)
+    range_ = dict(name="Range", pos=(30000, 0, 40000), types=[HULK, GOTHRI], ships=[3])
     navs = [
         dict(name="Culloden", pos=(0, 0, 0), types=[WATERLOO, HELLCAT], ships=[1, 2, 0]),
         range_,
-        wave(range_, types=[GOTHRI], ships=[6, 7, 8, 9]),     # (its type is listed on the range too: loaded before the fight fragments the heap)
-        dict(name="Nav 2", pos=(70000, 0, 85000), types=[GOTHRI], ships=[10, 11]),
+        wave(range_, types=[GOTHRI], ships=[4, 5, 6, 7]),     # (its type is listed on the range too: loaded before the fight fragments the heap)
+        dict(name="Nav 2", pos=(70000, 0, 85000), types=[GOTHRI], ships=[8, 9]),
     ]
     objectives = [(0, 1, "Live fire at the range, Nav 1"), (0, 3, "Sweep Nav 2"), (5, 3, ".the recon patrol: nothing goes home"), (1, 0, "Return to the Culloden"), (0, 0, "")]
     return mission(1, 0, "Shakedown", ships, navs, objectives, [2], series_name="Culloden")

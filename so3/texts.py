@@ -45,7 +45,7 @@ SERIES_TEXT[0] = [
     "TCS Culloden, Flight Operations",                                                                            # 23 title
     "",                                                                                                           # 24
     "Colonel, this is Prescott in Flight Ops.  The Hellcats are fuelled, armed, and they still smell of the factory.",  # 25
-    "Captain Banbridge wants a full shakedown before we go dark: live fire on the hulks at Nav 1, then a sweep of Nav 2.",  # 26
+    "Captain Banbridge wants a full shakedown before we go dark: live fire on the hulk at Nav 1, then a sweep of Nav 2.",  # 26
     "The new hand-off computers do the targeting for you now.  Trust them.  That is what they are for.",         # 27
     "One more thing.  If you meet anything out there, nothing goes home to report us.  Nothing.",                 # 28
     "Understood.  A new fighter and a free-fire range.  It's almost my birthday.",                                # 29 player
@@ -62,7 +62,7 @@ SERIES_TEXT[0] = [
     "Their escort is the Colonel from K'Tithrak Mang.  Tell our friends to make him comfortable.",                # 40
     "He will be the first to find out what his new fighter does when we ask it to.",                             # 41
     "Culloden to \x86: two recon contacts at Nav 2.  Do not let them jump.",                                    # 42 radio
-    "Range control: the hulks are hot.  Weapons free, Colonel.",                                                  # 43
+    "Range control: the hulk is hot.  Weapons free, Colonel.",                                                  # 43
     "Flight Ops: your computers are reporting a fault.  Disregard, it is a telemetry glitch.",                    # 44
 ]
 

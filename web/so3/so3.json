@@ -80,7 +80,7 @@
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "822378dbde920416dcf44772",
+ "iv": "787dafc1f660130e7940a475",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -160,11 +160,11 @@
   },
   {
    "path": "GAMEDAT/SERIES.S03",
-   "size": 151026
+   "size": 151024
   },
   {
    "path": "GAMEDAT/SERIES.S04",
-   "size": 151026
+   "size": 151024
   },
   {
    "path": "GAMEDAT/SHIP.V29",
@@ -191,5 +191,5 @@
    "size": 1538
   }
  ],
- "bytes": 1319019
+ "bytes": 1319015
 }

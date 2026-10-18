@@ -119,8 +119,8 @@ with us; Bear (`v10`) is spoken for by the novels.
    in every log.  Nothing has failed, but whoever holds the key can switch
    the hand-off and the missile locks off, in a fight, by radio.  Banbridge
    grounds the Hellcats.  The same ping told the Kilrathi where the Culloden
-   was: that is the Gothri that arrive at the range once the hulks are dead,
-   and why the Drakhri pair at Nav 2 must not get home.
+   was: that is the Gothri that arrive at the range once the hulk is dead,
+   and why the Gothri pair at Nav 2 must not get home.
 3. **1-1 Hand-me-downs: find the source.**  Sparks' direction finders ride
    the utility barge, Stingray driving; the reserve squadron in Epees keeps
    it alive while it takes the bearing.  The bearing points into the rocks.
@@ -171,7 +171,7 @@ data; `texts.py` every line of the 24 scene blocks.
 
 | slot | mission | ships | the second player |
 |---|---|---|---|
-| 1-0 | Shakedown | Hellcats; hulks, Gothri wave, Drakhri | Maniac |
+| 1-0 | Shakedown | Hellcats; a hulk, Gothri wave, a Gothri pair | Maniac |
 | 1-1 | Hand-me-downs | Epees and the barge; Grikath, Kur'ratha, Drakhri | Doomsday |
 | 1-2 | The relay | Sabres; Grikath, the Vak'thra and Drakhri, the core | Stingray |
 | 1-3 | Prize | Hellcats; Drakhri, the Kirrah'ka and her escort, Jalkehi | Maniac |
