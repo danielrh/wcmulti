@@ -77,14 +77,20 @@ host, 2026-10-17): 138 KB free at launch (Hellcat, Waterloo), 81 KB at the
 range after its two types (the hulks' file and the Gothri) loaded, 86 KB
 once the hulks were dead, 76 KB at Nav 2 (the range's types freed, the
 Drakhri loaded), 138 KB again back at the carrier: a nav point's types go
-when the next one is set up.  **A wave record is a nav point to the nav
-computer:** a player who leaves a nav point with an enemy alive (a hulk,
-say) leaves the following phase record pending, and after the next nav
-point the autopilot goes back to it; its types then load on top of the
-current nav point's, and 1-0 as first built (Drakhri at Nav 2) died there
-in "Divide error / Null pointer assignment" with 34 KB free, `ship.v50` on
-the stack.  So a wave's types should be the types of the nav points after
-it as well (1-0 now flies Gothri at Nav 2 too).
+when the next one is set up, and a type the next nav point lists too stays
+(Nav 2 with Gothri: 86 KB stays 86 KB).  1-0 as first built (Drakhri at
+Nav 2) died in a play at the autopilot after Nav 2, "Divide error / Null
+pointer assignment" with 34 KB free and `ship.v50` (the Gothri's file) on
+the stack: the loader ran with another fighter type resident.  How the
+computer came to load it there is not known (in the rig the wave spawns
+on the first hulk kill and the autopilot never goes back to the wave
+record); what is sure is that a second enemy fighter type leaves too
+little room for any load after it.  So a mission flies one enemy fighter
+type where it can, and a wave's type is a type the later nav points have
+too (1-0 flies Gothri at Nav 2 now).  Guns, two missiles and the comm
+menu changed nothing in the figure (80,827 bytes before and after), so
+fighting as such does not eat the heap; what a death and a replayed
+mission leave behind is the open question.
 
 **Mission ship** (`ovr116:1CED` spawns, `19C3` sets up): name[19], +0x13
 alternate ship (ALTSHIPS); +0x14 type byte, +0x15 class word (5 asteroid
