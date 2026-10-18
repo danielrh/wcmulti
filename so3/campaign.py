@@ -196,7 +196,15 @@ CULLODEN = lambda **kw: capital("Culloden", WATERLOO, 0, pos=(0, 0, 0), yaw=45, 
 def m_shakedown():
     """1-0 Shakedown (Hellcats; Maniac).  Live fire on the hulks at the range;
     the reaction force the relay's ping called in arrives there once the hulks
-    are dead; the Drakhri recon pair at Nav 2 must not get home."""
+    are dead; the Gothri recon pair at Nav 2 must not get home.
+
+    One enemy fighter type for the whole mission.  A player who leaves the
+    range with a hulk alive leaves the wave record pending, and the nav
+    computer sends them back to it after Nav 2: the game then loads that
+    record's types with Nav 2's still resident (about 75 KB free there; the
+    Gothri file is 89 KB), and a 2026-10-17 play ended in "Divide error /
+    Null pointer assignment" with 34 KB free while loading ship.v50.  With
+    the recon pair Gothri too, a late visit loads nothing new."""
     ships = [
         CULLODEN(),                                                               # 0
         player(HELLCAT),                                                          # 1
@@ -206,13 +214,13 @@ def m_shakedown():
         hulk("Target hulk", HULK, pos=(-1700, -200, -4200), yaw=140),             # 5
     ]
     ships += wing("Gothri", GOTHRI, 4, pos=(9000, 0, -12000), yaw=170, group=1, objective=1, pilot=KILRATHI_ACE, first_index=6)    # 6-9
-    ships += wing("Drakhri", DRAKHRI, 3, pos=(8000, 0, 7000), yaw=-130, group=2, objective=1, pilot=KILRATHI_ACE, first_index=10)  # 10-12
+    ships += wing("Gothri", GOTHRI, 2, pos=(8000, 0, 7000), yaw=-130, group=2, objective=1, pilot=KILRATHI_ACE, first_index=10)    # 10-11  the recon pair ("two recon contacts" in the texts)
     range_ = dict(name="Range", pos=(30000, 0, 40000), types=[HULK, GOTHRI], ships=[3, 4, 5])
     navs = [
         dict(name="Culloden", pos=(0, 0, 0), types=[WATERLOO, HELLCAT], ships=[1, 2, 0]),
         range_,
         wave(range_, types=[GOTHRI], ships=[6, 7, 8, 9]),     # (its type is listed on the range too: loaded before the fight fragments the heap)
-        dict(name="Nav 2", pos=(70000, 0, 85000), types=[DRAKHRI], ships=[10, 11, 12]),
+        dict(name="Nav 2", pos=(70000, 0, 85000), types=[GOTHRI], ships=[10, 11]),
     ]
     objectives = [(0, 1, "Live fire at the range, Nav 1"), (0, 3, "Sweep Nav 2"), (5, 3, ".the recon patrol: nothing goes home"), (1, 0, "Return to the Culloden"), (0, 0, "")]
     return mission(1, 0, "Shakedown", ships, navs, objectives, [2], series_name="Culloden")
@@ -229,7 +237,7 @@ def m_handmedowns():
         wingman("Doomsday", EPEE, DOOMSDAY),                                      # 2
         third("Downtown", EPEE, DOWNTOWN),                                        # 3
         escortee("Barge", FREE_TRADER, pos=(1500, -300, -1500), pilot=STINGRAY),  # 4  the finder barge
-        lone("Sartha", SARTHA, pos=(4000, 0, -6000), yaw=150, objective=4),       # 5  a scout at Nav 1 (not the Drakhri of 1-0's last nav: a wingman's program died on a type repeated across the mission boundary)
+        lone("Sartha", SARTHA, pos=(4000, 0, -6000), yaw=150, objective=4),       # 5  a scout at Nav 1 (not the type of 1-0's last nav, the Gothri: a wingman's program died on a type repeated across the mission boundary)
     ]
     ships += wing("Grikath", GRIKATH, 4, pos=(5000, 400, -8000), yaw=160, group=1, objective=4, first_index=6)   # 6-9  go for the barge
     ships += [capital("Kur'ratha", KAMEKH, 1, pos=(2500, 0, -9000), yaw=170, pilot=KILRATHI_SHIP, important=0, behave=2, objective=4, ai=3)]  # 10

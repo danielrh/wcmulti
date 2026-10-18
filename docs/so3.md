@@ -72,7 +72,19 @@ each; capital ships and bases (41-block files) load views on demand.  Two
 new fighter types beside the player's Hellcat at one nav point ran the game
 out of memory ("Error: ship.v07, packet 1 ... FREE: 9276"), so a mission
 puts one new fighter type at a nav point and spends the other slots on
-capital ships, fields and pods.
+capital ships, fields and pods.  Measured with `!mem` in SO3's 1-0 (the
+host, 2026-10-17): 138 KB free at launch (Hellcat, Waterloo), 81 KB at the
+range after its two types (the hulks' file and the Gothri) loaded, 86 KB
+once the hulks were dead, 76 KB at Nav 2 (the range's types freed, the
+Drakhri loaded), 138 KB again back at the carrier: a nav point's types go
+when the next one is set up.  **A wave record is a nav point to the nav
+computer:** a player who leaves a nav point with an enemy alive (a hulk,
+say) leaves the following phase record pending, and after the next nav
+point the autopilot goes back to it; its types then load on top of the
+current nav point's, and 1-0 as first built (Drakhri at Nav 2) died there
+in "Divide error / Null pointer assignment" with 34 KB free, `ship.v50` on
+the stack.  So a wave's types should be the types of the nav points after
+it as well (1-0 now flies Gothri at Nav 2 too).
 
 **Mission ship** (`ovr116:1CED` spawns, `19C3` sets up): name[19], +0x13
 alternate ship (ALTSHIPS); +0x14 type byte, +0x15 class word (5 asteroid
@@ -160,7 +172,11 @@ The Hellcat's are `HELLCAT_STATS` in so3/campaign.py.
 
 **The Hellcat's cockpit file** is Academy's, whose side and rear views are
 the Sabre's blocks; the Sabre's rear view is its turret, so block 3 is the
-Rapier's rear view in ours.  The record's words nobody has named (32-41,
+Rapier's rear view in ours.  Its front view is 36 KB against the Rapier's
+20 KB and the sides 24 against 18; the game holds one view at a time (the
+free heap rose, not fell, on F2 and F4 in both SO2 and SO3), so only the
+front view's size counts in flight, and simpler side and rear pictures
+would save nothing there.  The record's words nobody has named (32-41,
 46-53) are the Sabre's (the user's pick of a sturdier template); the rest
 of the unknowns stay HCl's.
 
