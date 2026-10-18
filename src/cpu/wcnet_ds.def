@@ -97,7 +97,7 @@ WC_DS(turretCooldown, 0x0000, 0x0000, 0x9022, 0x8ED4, 0x9174)          // WC2: w
 WC_DS(campaignState, 0x0000, 0x0000, 0xCF3A, 0xCE0A, 0xD432)           // WC2: far pointer to the campaign record (+4 series, +6 mission: what the briefing and the flight load)
 WC_DS(landedOn, 0x662E, 0x6950, 0x0000, 0x0000, 0x0000)                // WC1: word, the slot of the ship landed on (ovr141:1841 with missionStatus = 1; -1 none); the landing sequence draws the carrier from it
 WC_DS(playerWing, 0x0000, 0x0000, 0xC1B6, 0xC0B2, 0xC348)              // WC2: eight words, the mission ships that fly in the player's wing (0xffff: none)
-WC_DS(slotMissionShip, 0x0000, 0x0000, 0x6E1E, 0x6E28, 0x70C4)         // WC2: [slotMissionShip + 2*slot] word: the mission ship in a slot
+WC_DS(slotMissionShip, 0xC974, 0xCC5A, 0x6E1E, 0x6E28, 0x70C4)         // [slotMissionShip + 2*slot] word: the mission ship in a slot (WC1: ten words before shieldMax, read from Enyo 1's launch: 1 2 0 3 4; free slots hold 0)
 WC_DS(slotIntelRecord, 0x0000, 0x0000, 0x6E46, 0x6E50, 0x70EC)         // WC2: [slotIntelRecord + 2*slot] word: the slot's record in the table of intelligence records (dseg:C9EE, 81 bytes each), -1 in an empty slot (seg006:1B7A)
 WC_DS(pendingScene, 0x0000, 0x0000, 0x7D9A, 0x7DC0, 0x8058)            // WC2: byte, the in-flight scene a nav point step left pending (0xff none): seg001:0580 plays it 40 frames after it is armed, an autopilot's end at once (ovr107:01CA)
 WC_DS(pendingSceneArmed, 0x0000, 0x0000, 0x7D9F, 0x7DC5, 0x805D)       // WC2: word, nonzero while the pending scene's countdown runs

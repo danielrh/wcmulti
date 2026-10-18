@@ -152,6 +152,26 @@ transport to escort, or empty, and a client that took it for its ship would
   wingmen's alike (`ClientSession::is_remote_player_slot`).  The first
   wingman that spawns inside the leader is put on the left wing, the second
   on the right (`take_station`).
+  **Wing Commander's third seat** (2026-10-17): a room of three (WCPLAYERS
+  3, or `WCNET_EXTRAWING=1`) makes the host's game spawn the mission's
+  wingman record a second time at the first frame of every mission
+  (`ServerSession::spawn_extra_wing`, `enqueue_server_spawn`: the game's
+  own spawn, broadcast like any), a second ship of the same type and pilot
+  that the game's AI flies until a human takes it; after the host's
+  autopilot the AI-flown copy is parked on the host's wing again (WC.EXE
+  brings only its own wingman along).  A mission whose records hold two or
+  more wingmen, at launch or joining later, is left alone and the third
+  player takes one of them.  A wingman, for this, is a fighter of our side
+  whose mission ship record (0x2a bytes: word 0 type, word 1 side, word 2
+  the mission ship it flies formation on, word 3 behaviour 4 = in formation)
+  names the player (or another wingman) as its leader: the carrier's patrol
+  pair at launch (Enyo 1, the Kurasawa missions) names the carrier and does
+  not count.  The game refuses a second spawn of a mission ship it finds in
+  its slot table (ten words at `dseg:C974`, before `shieldMax`; `slotMissionShip`
+  has WC1's address now), so the spawn hides the wingman's entry for the
+  call on the host, and the clients, told by `Spawn.again`, hide theirs when
+  they replay it.  A client's seat is slot 1, then the other wingmen's
+  slots, whichever no human flies (`reseat`, WC1 branch).
 * **Gunner** when there is no such wingman and the leader's ship has turrets
   (the Broadsword's three, the Sabre's one); see below.
 * **Drone** otherwise (`WCSEAT=drone` or `WCSEAT=gunner` on the server

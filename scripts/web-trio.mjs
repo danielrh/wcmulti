@@ -7,6 +7,7 @@
 // scripts/web-wc2.sh trio.
 //
 //   GAME=so3p GAME_FILE=wc2.zip node scripts/web-trio.mjs PAGE_URL LOBBY_URL [series/mission] [door x,y]
+//   GAME=wc1 GAME_FILE=setup_wing_commander.exe node scripts/web-trio.mjs PAGE_URL LOBBY_URL 1/0
 //
 // The default is SO3P's first mission (Shakedown: Maniac's and Doomsday's
 // Hellcats), the door at 0.48,0.55 (the Culloden's barracks).
@@ -17,8 +18,11 @@ const [pageUrl, lobbyUrl, mission = "1/0", doorArg = "0.48,0.55"] = process.argv
 const door = doorArg.split(",").map(Number);
 const require = createRequire(path.join(process.env.PLAYWRIGHT_DIR || process.cwd(), "package.json"));
 const { chromium } = require("playwright");
+// GAME=wc1 flies Wing Commander (GAME_FILE: the GOG installer or a zip of the
+// folder): a room of three makes the host's game spawn a second wingman.
 const game = { so3p: { tag: "SO3P", id: "wc2so3p", title: "Wing Commander II: Special Operations 3 (Culloden), three seats", options: 21, menu: /Ch 1, mission 1/ },
-               wc2: { tag: "WC2", id: "wc2", title: "Wing Commander II", options: 49, menu: /Ch 2, mission 1/ } }[process.env.GAME || "so3p"];
+               wc2: { tag: "WC2", id: "wc2", title: "Wing Commander II", options: 49, menu: /Ch 2, mission 1/ },
+               wc1: { tag: "WC1", id: "wc1", title: "Wing Commander", menu: /Enyo/ } }[process.env.GAME || "so3p"];
 const room = game.tag + "-" + Math.random().toString(36).slice(2, 8).toUpperCase();
 const browser = await chromium.launch({ headless: true, executablePath: process.env.CHROME || "/usr/bin/google-chrome",
   args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required", "--use-fake-device-for-media-stream"] });
@@ -32,14 +36,22 @@ async function open(name, callsign, before) {
   page.on("console", (m) => logs[name].push(m.text()));
   page.on("pageerror", (e) => console.log(`[${name}] PAGE ERROR: ${e.message}`));
   const u = new URL(pageUrl);
-  for (const [k, v] of Object.entries({ room, server: lobbyUrl, callsign, firstname: "Chris", "env.WCNET_LOG": "2" })) u.searchParams.set(k, v);
+  for (const [k, v] of Object.entries({ room, server: lobbyUrl, callsign, firstname: "Chris", "env.WCNET_LOG": "2", players: "3" })) u.searchParams.set(k, v);
   await page.goto(u.toString());
+  // the room is made when the host's files are in: three seats before that
+  // (SO3P sets it itself when the program is picked)
+  if (name === "host" && game.id !== "wc2so3p") await page.$eval("#players", (el) => { el.value = "3"; });
   await page.setInputFiles("#gamefile", process.env.GAME_FILE);
   await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   console.log(`[${name}] ` + (await page.$eval("#sourceStatus", (el) => `${el.dataset.state}: ${el.textContent || "plays " + document.getElementById("program").value}`)).slice(0, 200));
   check(`${name}: the room's code picks the program`, (await page.$eval("#program", (el) => el.value)) === game.id, await page.$eval("#program", (el) => el.value));
   // (the mission menu is built on joining the room: wait for the roster first)
-  await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });
+  try {
+    await page.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 0, null, { timeout: 60000 });
+  } catch (e) {
+    console.log(`[${name}] never joined the room: status "${await page.$eval("#status", (el) => el.textContent)}"; chat: ${(await page.$eval("#chatLog", (el) => el.innerText.replace(/\n+/g, " | "))).slice(0, 300)}`);
+    throw e;
+  }
   if (before) await before(page);
   return page;
 }
@@ -61,10 +73,9 @@ async function fly(page, name) {
 
 const host = await open("host", "HOST", async (page) => {
   // the program sizes the room: three seats for SO3P
-  check("the players field follows the program", (await page.$eval("#players", (el) => el.value)) === (game.id === "wc2so3p" ? "3" : "2"), await page.$eval("#players", (el) => el.value));
-  if (game.id !== "wc2so3p") await page.$eval("#players", (el) => { el.value = "3"; });
+  check("the players field follows the program", (await page.$eval("#players", (el) => el.value)) === "3", await page.$eval("#players", (el) => el.value));
   const options = await page.$eval("#mission", (el) => Array.from(el.options).map((o) => o.textContent));
-  check(`the host's mission menu is ${game.title}'s`, options.length === game.options && game.menu.test(options.join("|")), [options.length, options[1]]);
+  check(`the host's mission menu is ${game.title}'s`, (!game.options || options.length === game.options) && game.menu.test(options.join("|")), [options.length, options[1]]);
   await page.$eval("#mission", (el, v) => { el.value = v; el.dispatchEvent(new Event("change")); }, mission);
 });
 const joiner = (who) => async (page) => {
@@ -87,6 +98,7 @@ await sleep(12);
 await shot(host, "host-flight"); await shot(wing, "wing-flight"); await shot(third, "third-flight");
 const starts = logs.host.filter((l) => l.includes("mission start state"));
 check("the host seats both as wingmen", starts.filter((l) => l.includes("(the wingman,")).length === 2, starts);
+if (game.id === "wc1") check("the host's game spawned a second wingman", has("host", "is spawned again") || has("host", "wingmen (slots"), logs.host.filter((l) => l.includes("third seat")));
 check("every game knows the three humans", ["wing", "third"].every((n) => logs[n].some((l) => /humans fly net 0 \d \d/.test(l))),
       ["wing", "third"].map((n) => logs[n].filter((l) => l.includes("humans fly")).slice(-1)[0]));
 check("each wingman flies a ship of its own", has("wing", "is us (slot 0)") && has("third", "is us (slot 0)"),

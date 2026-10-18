@@ -833,6 +833,7 @@ public:
         epoch_ += 1;
         frameNumber_ = 0;
         hadClientInMission_ = false;
+        extraWingTried_ = false;
         for (size_t i = 0; i < clients_.size(); i++) {
             clients_[i]->leftThisMission = false;
             clients_[i]->missionTreeProgress.clear();
@@ -903,7 +904,123 @@ public:
             ignoreNextFrameTop_ = false;
             return;
         }
+        if (spawn_extra_wing()) {
+            return;  // its spawn runs before this frame; the exchange (and the start states) wait a frame for it
+        }
         exchange(false);
+    }
+
+    // Wing Commander gives a mission one wingman.  In a room of three (or
+    // with WCNET_EXTRAWING=1) the mission's wingman record is spawned a
+    // second time at the first frame of every mission: a second ship of the
+    // same type and pilot, the game's own AI flying it until a human takes
+    // it (reseat).  Returns true the once it enqueues the spawn.
+    bool want_extra_wing() const {
+        const char *env = getenv("WCNET_EXTRAWING");
+        return env && env[0] ? atoi(env) > 0 : net_config.lobby_players >= 3;
+    }
+    bool spawn_extra_wing() {
+        if (extraWingTried_ || !is_wc1() || !within_briefed_mission || !want_extra_wing()) {
+            return false;
+        }
+        extraWingTried_ = true;
+        const std::map<int, Spawn> &all = spawns_.all();
+        std::map<int, Spawn>::const_iterator wing = all.find(kPlayerSlot + 1);
+        if (wing == all.end() || !slot_in_use(kPlayerSlot + 1) || entity_type(kPlayerSlot + 1) != ET_SHIP) {
+            wclog(1, "a third seat was wanted, but slot 1 holds no wingman to copy");
+            return false;
+        }
+        // A mission with more than the one wingman in its records (the
+        // Ralari escort), at launch or joining later, is left as it is: the
+        // third seat is one of them.
+        int wingmen = wing_records_wc1();
+        if (wingmen >= 2) {
+            wclog(1, "a third seat: the mission has %d wingmen of its own, one of them is it", wingmen);
+            return false;
+        }
+        wclog(1, "a third seat: the wingman's mission ship %d is spawned again", wing->second.mission_ship_id());
+        enqueue_server_spawn((int)wing->second.mission_ship_id(), (int)wing->second.situation_id(), kPlayerSlot + 1);
+        return true;
+    }
+    // The wingmen in flight, by slot, the mission's own first: the seats a
+    // human can take in Wing Commander.  A wingman is a fighter of our side
+    // flying formation on the player (or on another wingman).  The mission
+    // ship record (0x2a bytes), as read from Enyo 1's at launch: word 0 the
+    // ship type, word 1 the side (0 ours, 1 Kilrathi), word 2 the mission
+    // ship it flies formation on (Spirit's says the player's; the carrier's
+    // patrol pair, 5,000 km out, says the carrier and each other), word 3
+    // the behaviour (4 in formation).  The server's spawn registry says which
+    // mission ship each slot flies.
+    enum { kMsSide = 2, kMsLeader = 4, kMsBehaviour = 6, kMsInFormation = 4, kMsRecords = 16 };
+    // Is mission ship `ms` a wingman's record: our side, in formation on one of `leaders`?
+    bool wing_record_wc1(int ms, const std::set<int> &leaders) const {
+        Bit16u rec = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms);
+        return rd16((Bit16u)(rec + kMsSide)) == 0 && rd16((Bit16u)(rec + kMsBehaviour)) == kMsInFormation &&
+               leaders.count((Bit16s)rd16((Bit16u)(rec + kMsLeader))) > 0;
+    }
+    // How many wingmen the mission's records hold, spawned or not (they may
+    // join at a later nav point).
+    int wing_records_wc1() const {
+        if (!ds::known(ds::missionShipTable) || !ds::known(ds::playerMissionShip)) {
+            return 0;
+        }
+        int player = (Bit16s)rd16(ds::playerMissionShip);
+        std::set<int> leaders;
+        leaders.insert(player);
+        int count = 0;
+        for (bool grew = true; grew;) {
+            grew = false;
+            for (int ms = 0; ms < kMsRecords; ms++) {
+                if (ms != player && !leaders.count(ms) && wing_record_wc1(ms, leaders)) {
+                    leaders.insert(ms);
+                    count++;
+                    grew = true;
+                }
+            }
+        }
+        return count;
+    }
+    std::vector<int> wing_slots_wc1() const {
+        std::vector<int> out;
+        if (!ds::known(ds::missionShipTable) || !ds::known(ds::playerMissionShip)) {
+            return out;
+        }
+        std::set<int> leaders;
+        leaders.insert((Bit16s)rd16(ds::playerMissionShip));
+        const std::map<int, Spawn> &all = spawns_.all();
+        for (bool grew = true; grew;) {
+            grew = false;
+            for (std::map<int, Spawn>::const_iterator it = all.begin(); it != all.end(); ++it) {
+                int slot = it->first, ms = (int)it->second.mission_ship_id();
+                if (slot == kPlayerSlot || !is_ship_slot(slot) || !slot_in_use(slot) || entity_type(slot) != ET_SHIP ||
+                    std::find(out.begin(), out.end(), slot) != out.end()) {
+                    continue;
+                }
+                if (!wing_record_wc1(ms, leaders)) {
+                    continue;
+                }
+                out.push_back(slot);
+                leaders.insert(ms);
+                grew = true;
+            }
+        }
+        std::sort(out.begin(), out.end());
+        return out;
+    }
+    // The slot of that second ship, or -1: the registry's other spawn of the
+    // wingman's mission ship.
+    int extra_wing_slot() const {
+        const std::map<int, Spawn> &all = spawns_.all();
+        std::map<int, Spawn>::const_iterator wing = all.find(kPlayerSlot + 1);
+        if (wing == all.end()) {
+            return -1;
+        }
+        for (std::map<int, Spawn>::const_iterator it = all.begin(); it != all.end(); ++it) {
+            if (it->first != kPlayerSlot + 1 && it->second.mission_ship_id() == wing->second.mission_ship_id() && slot_in_use(it->first)) {
+                return it->first;
+            }
+        }
+        return -1;
     }
 
     virtual void on_async_tick() {
@@ -954,6 +1071,13 @@ public:
     virtual void on_autopilot_finished() {
         AutoPilotEvent *ape = pendingFrame_.mutable_frame()->add_event()->mutable_autopiloting();
         ape->set_finish_camera(true);
+        // Wing Commander brings its one wingman along on an autopilot; the
+        // second copy, while the AI flies it, is brought along here.
+        int extra = is_wc1() ? extra_wing_slot() : -1;
+        if (extra >= 0 && !client_for_slot(extra)) {
+            park_beside(extra);
+            wclog(2, "the second wingman (slot %d, the AI's) comes along after the autopilot", extra);
+        }
         exchange(true);
         quiet_links();
     }
@@ -1086,6 +1210,26 @@ private:
     // state; the other machines know the ship by the server's slot number,
     // which is what it always was.
     void reseat(RemoteClient *c) {
+        if (is_wc1()) {
+            // The mission's wingman (slot 1), then the other wingmen in
+            // flight (the mission's own, or the second copy of the wingman
+            // that spawn_extra_wing made), whichever no human flies.
+            std::vector<int> seats = wing_slots_wc1();
+            for (size_t i = 0; i < seats.size(); i++) {
+                int slot = seats[i];
+                if (slot == c->net) {
+                    return;
+                }
+                if (slot < (int)clients_.size() && clients_[slot]->connected()) {
+                    continue;
+                }
+                wclog(1, "player %d takes slot %d, %s", c->net, slot, slot == kPlayerSlot + 1 ? "the mission's wingman"
+                      : slot == extra_wing_slot() ? "the second wingman" : "another wingman the mission launched");
+                move_client(c, slot);
+                return;
+            }
+            return;
+        }
         const char *env = getenv("WCSEAT");
         if (!is_wc2() || !ds::known(ds::playerWing) || (env && env[0]) || wing_fighter_slot(c->net)) {
             return;
@@ -1344,26 +1488,52 @@ private:
     // sort it out, and that AI is off for a human's ship: put a ship that
     // starts inside ours on our left wing instead (where the game's own
     // formation puts the first wingman: 752 lengths of the right vector).
+    // Is `slot` within the two hit spheres of `other`?
+    bool inside(int slot, int other) const {
+        if (!slot_in_use(other) || other == slot) {
+            return false;
+        }
+        Vec3 a = read_vec(vec_slot(ds::gPositionVector, other));
+        Vec3 pos = read_vec(vec_slot(ds::gPositionVector, slot));
+        double dx = (double)pos.x - a.x, dy = (double)pos.y - a.y, dz = (double)pos.z - a.z;
+        double clear = 256.0 * (rd16((Bit16u)(ds::gMaybeShipRadius + 2 * other)) + rd16((Bit16u)(ds::gMaybeShipRadius + 2 * slot)));
+        return dx * dx + dy * dy + dz * dz <= clear * clear;
+    }
+
     void take_station(int slot) {
         if (!slot_in_use(slot) || !slot_in_use(kPlayerSlot)) {
             return;
         }
-        Vec3 own = read_vec(vec_slot(ds::gPositionVector, kPlayerSlot));
-        Vec3 pos = read_vec(vec_slot(ds::gPositionVector, slot));
-        double dx = (double)pos.x - own.x, dy = (double)pos.y - own.y, dz = (double)pos.z - own.z;
-        double clear = 256.0 * (rd16((Bit16u)(ds::gMaybeShipRadius)) + rd16((Bit16u)(ds::gMaybeShipRadius + 2 * slot)));
-        if (dx * dx + dy * dy + dz * dz > clear * clear) {
+        // inside our ship, or inside another human's (a second copy of the
+        // wingman's record spawns where the first one did)
+        bool crowded = inside(slot, kPlayerSlot);
+        for (size_t i = 0; i < clients_.size() && !crowded; i++) {
+            if ((int)i != slot && clients_[i]->connected() && clients_[i]->inMission && clients_[i]->seat == SEAT_WINGMAN) {
+                crowded = inside(slot, (int)i);
+            }
+        }
+        if (!crowded) {
             return;
         }
+        park_beside(slot);
+    }
+
+    // `slot` on our wing, with our heading and speed: the first wingman on
+    // the left, the second on the right, a third further out on the left;
+    // the AI's copy of the wingman on the right.
+    void park_beside(int slot) {
+        Vec3 own = read_vec(vec_slot(ds::gPositionVector, kPlayerSlot));
+        Vec3 pos = own;
         enum { kAbeam = 752 };
-        // the first wingman on our left wing, the second on our right, a
-        // third further out on the left
         int others = 0;
         for (size_t i = 0; i < clients_.size(); i++) {
             const RemoteClient *o = clients_[i];
             if ((int)i != slot && o->connected() && o->inMission && o->seat == SEAT_WINGMAN) {
                 others++;
             }
+        }
+        if (!client_for_slot(slot)) {
+            others = 1;
         }
         double abeam = (others % 2 == 0 ? -1.0 : 1.0) * kAbeam * (1 + others / 2);
         Vec3 right = read_vec(vec_slot(ds::gOrientationRightVector, kPlayerSlot));
@@ -1925,6 +2095,7 @@ private:
     Bit32u epoch_;
     Bit64u frameNumber_;
     bool hadClientInMission_;    // a wingman has had this mission's start state
+    bool extraWingTried_ = false;  // WC1: the second wingman's spawn was tried this mission
     ServerSendBriefingStart lastBriefing_;
     NetworkMessage pendingFrame_;
     SpawnRegistry spawns_;

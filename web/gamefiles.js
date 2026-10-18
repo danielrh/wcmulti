@@ -157,7 +157,7 @@ const WC1_HINTS = {
   forced: "Everyone flies it from a fresh start with the callsigns entered above.",
   host: "The barracks: your save game and your walk to the briefing decide the mission; wingmen get it in the briefing room.",
   wing: "The host flies from the barracks: walk into the briefing room after the host has started, and you get the host's mission.",
-  help: "From the barracks (no mission picked): the host's save game and walk to the briefing room decide the mission; a wingman walks into the briefing room on their own ship after the host has started, and gets the host's mission there. With a mission picked, everyone flies it from a fresh start with the callsigns entered above. The second player flies the mission's wingman." };
+  help: "From the barracks (no mission picked): the host's save game and walk to the briefing room decide the mission; a wingman walks into the briefing room on their own ship after the host has started, and gets the host's mission there. With a mission picked, everyone flies it from a fresh start with the callsigns entered above. The second player flies the mission's wingman. In a room of three the host's game launches a second copy of that wingman for the third player (the game's own AI flies it until someone does), except where the mission has more than one wingman of its own: then the third player takes one of those." };
 const WC2_HINTS = {
   forced: "Everyone starts in the barracks at that point of the story: click \"Fly mission\" there.",
   host: "The barracks: your saved game decides the mission; click \"Fly mission\" and wingmen get your mission.",

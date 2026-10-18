@@ -80,6 +80,10 @@ message Spawn {
         // enemy ace.  The replaying side writes it, since the replayed spawn
         // only builds the ship.
         optional uint32 pilot = 6;
+        // A second ship of a mission ship that is in a slot already (Wing
+        // Commander's third seat): the game refuses one it finds in its slot
+        // table, so the replaying side hides that entry for the call too.
+        optional bool again = 7;
 }
 
 message Despawn {

@@ -371,7 +371,7 @@ public:
     // mode BROADCAST: the server's own spawn (args from the intercepted call).
     // mode REPLAY: a spawn received from the server.
     enum Mode { BROADCAST, REPLAY };
-    SpawnJob(Mode mode, const Spawn &spawn) : mode_(mode), spawn_(spawn) {}
+    SpawnJob(Mode mode, const Spawn &spawn, int hideSlot = -1) : mode_(mode), spawn_(spawn), hideSlot_(hideSlot) {}
     virtual bool start() {
         if (!spawn_.has_mission_ship_id() || !spawn_.has_situation_id()) {
             wclog(0, "invalid spawn event");
@@ -380,6 +380,25 @@ public:
         if (mode_ == REPLAY && spawn_.has_seed()) {
             seed_rng(spawn_.seed());
         }
+        if (mode_ == REPLAY && spawn_.has_again() && spawn_.again() && hideSlot_ < 0 && ds::known(ds::slotMissionShip)) {
+            // the server's second ship of a mission ship: here too that
+            // mission ship sits in a slot (the first wingman's), to hide
+            for (int s = kPlayerSlot; s <= kMaxShipSlot; s++) {
+                if (slot_in_use(s) && rd16((Bit16u)(ds::slotMissionShip + 2 * s)) == spawn_.mission_ship_id()) {
+                    hideSlot_ = s;
+                    break;
+                }
+            }
+        }
+        if (hideSlot_ >= 0 && ds::known(ds::slotMissionShip)) {
+            // a second ship of a mission ship that is in a slot: the game
+            // refuses one it finds in its slot table, so that entry is
+            // hidden for the call (as HostBodyJob does for the leader's)
+            hidden_ = rd16((Bit16u)(ds::slotMissionShip + 2 * hideSlot_));
+            wr16((Bit16u)(ds::slotMissionShip + 2 * hideSlot_), 0xffff);
+        } else {
+            hideSlot_ = -1;
+        }
         wclog(2, "spawn mission ship %d situation %d", spawn_.mission_ship_id(), spawn_.situation_id());
         call_of(code::outerSpawnShipEntity)
             .arg((Bit16u)spawn_.mission_ship_id()).arg((Bit16u)spawn_.situation_id())
@@ -387,6 +406,9 @@ public:
         return true;
     }
     virtual void finish() {
+        if (hideSlot_ >= 0) {
+            wr16((Bit16u)(ds::slotMissionShip + 2 * hideSlot_), hidden_);
+        }
         int slot = (int)(reg_eax & 0xffff);
         wclog(2, "spawn produced slot %d", slot);
         if (slot != kInvalidSlot && is_ship_slot(slot) && !slot_in_use(slot)) {
@@ -439,6 +461,8 @@ public:
 private:
     Mode mode_;
     Spawn spawn_;
+    int hideSlot_;        // the slot whose slot-table entry is hidden for the call, or -1
+    Bit16u hidden_ = 0;   // ... and what it held
 };
 
 class DespawnJob : public VmJob {
@@ -777,6 +801,17 @@ private:
     Bit16u own_ = 0xffff;
     Bit16u aiOff_ = 0, ai_ = 0;
 };
+
+void enqueue_server_spawn(int missionShip, int situation, int hideSlot) {
+    Spawn spawn;
+    spawn.set_mission_ship_id((Bit32u)missionShip);
+    spawn.set_situation_id((Bit32u)situation);
+    spawn.set_seed(rd32(ds::randomSeed));
+    if (hideSlot >= 0) {
+        spawn.set_again(true);
+    }
+    g_trampoline.enqueue(new SpawnJob(SpawnJob::BROADCAST, spawn, hideSlot));
+}
 
 void enqueue_host_body() {
     g_trampoline.enqueue(new HostBodyJob());
