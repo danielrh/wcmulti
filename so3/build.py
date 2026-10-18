@@ -34,6 +34,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 sys.path.insert(0, os.path.join(ROOT, "so3"))
 import wc2data   # noqa: E402
 import campaign  # noqa: E402
+import doorplates  # noqa: E402
 
 # GAMEDAT files whose names the program builds from its number (seen in a
 # traced run of SO2.EXE through the barracks, a briefing, a flight and a
@@ -131,6 +132,11 @@ LAUNCH_BLOCKS = [WATERLOO_LAUNCH] + list(range(LANDING_BLOCKS[-1] + 1, LANDING_B
 # head-on instead (view 14, from a little above; view 28, from below).
 HEADON_FILMS = [(38, "WORMHOLE.V45", 14), (62, "WORMHOLE.V45", 14), (64, "WORMHOLE.V46", 28)]
 HEADON_BLOCKS = list(range(LAUNCH_BLOCKS[-1] + 1, LAUNCH_BLOCKS[-1] + 1 + len(HEADON_FILMS)))
+# Wing Commander II's door films (INCIDENT.S00 blocks 81-86, 88: doors.v00)
+# show the Concordia's plates; copied to the end of our INCIDENT.S03 naming
+# DOORS.V45, the same doors with the Culloden's plates (so3/doorplates.py).
+DOOR_FILMS = [81, 82, 83, 84, 85, 86, 88]
+DOOR_BLOCKS = list(range(HEADON_BLOCKS[-1] + 1, HEADON_BLOCKS[-1] + 1 + len(DOOR_FILMS)))
 
 
 def carrier_stills():
@@ -176,6 +182,10 @@ def waterloo_incidents(data, gamedat):
         assert len(blocks) == at
         blocks.append(named(wc2[b][1], b"wormhole.v01", name.lower().encode()))
         flags.append(wc2[b][0])
+    for b, at in zip(DOOR_FILMS, DOOR_BLOCKS):
+        assert len(blocks) == at
+        blocks.append(named(wc2[b][1], b"doors.v00", b"doors.v45"))
+        flags.append(wc2[b][0])
     return wc2data.compose_container(blocks, flags)
 
 
@@ -210,7 +220,11 @@ def waterloo_films(blocks):
         mapping = dict([(("incident.s00", c), ("incident.s03", LAUNCH_BLOCKS[(k + 2) % len(LAUNCH_BLOCKS)])) for c in CONCORDIA_LAUNCHES] +
                        [(("incident.s00", c), ("incident.s03", LANDING_BLOCKS[k % len(LANDING_BLOCKS)])) for c in CONCORDIA_LANDINGS] +
                        [(("incident.s00", c), ("incident.s03", WATERLOO_STILL)) for c in CONCORDIA_STILLS] +
-                       [(("incident.s00", b), ("incident.s03", at)) for (b, _, _), at in zip(HEADON_FILMS, HEADON_BLOCKS)])
+                       # (SO2's own scenes for its cruiser missions name the launch and landing directly)
+                       [(("incident.s03", WATERLOO_LAUNCH), ("incident.s03", LAUNCH_BLOCKS[(k + 2) % len(LAUNCH_BLOCKS)])),
+                        (("incident.s03", WATERLOO_LANDING), ("incident.s03", LANDING_BLOCKS[k % len(LANDING_BLOCKS)]))] +
+                       [(("incident.s00", b), ("incident.s03", at)) for (b, _, _), at in zip(HEADON_FILMS, HEADON_BLOCKS)] +
+                       [(("incident.s00", b), ("incident.s03", at)) for b, at in zip(DOOR_FILMS, DOOR_BLOCKS)])
         b, n = wc2data.retarget_films(b, mapping)
         out.append(b)
         changed += n
@@ -358,6 +372,8 @@ def main():
     for old, new, view in carrier_stills():
         open(os.path.join(pgd, new), "wb").write(waterloo_still(gamedat, old, view))
         print("%s: %s with the Waterloo's view %d in the Concordia's place" % (new, old, view))
+    open(os.path.join(pgd, "DOORS.V45"), "wb").write(doorplates.culloden_doors(open(os.path.join(gamedat, "DOORS.V00"), "rb").read()))
+    print("DOORS.V45: DOORS.V00 with the Culloden's plates")
 
     # the faces: the scenes draw a person from the portrait file CAMPAIGN's
     # shape list names at that person's place (docs/newcampaign.md), so our
