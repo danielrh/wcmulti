@@ -85,6 +85,35 @@ BANBRIDGE = {160 + i: 232 + min(6, i) for i in range(10)}
 BANBRIDGE.update({71 + i: 40 + i for i in range(7)})
 BERGSTROM = {121 + i: 136 + i for i in range(5)}
 BERGSTROM.update({52 + i: 164 + i for i in range(7)})
+
+# Launches and landings.  Special Operations 2's scenes play Wing Commander
+# II's Concordia films (INCIDENT.S00: the carrier's hull and hangar around
+# the player's fighter, one launch and one landing per fighter type, and
+# stills of her hull: head-on for a red alert, abeam before a first launch);
+# the Culloden is a
+# Waterloo-class cruiser, and Special Operations 2 has a Waterloo's launch,
+# landing and still among its own incidents (the .V39 films: INCIDENT.S02
+# blocks 5, 4 and 1, our INCIDENT.S03).  Every film table entry naming one
+# of the Concordia's names the Waterloo's instead (the user, 2026-10-18:
+# "the so3 campaign talks about the Waterloo cruiser but the scenes don't
+# take from that"); the scripts play films by number, so they are untouched.
+CONCORDIA_LAUNCHES = [2, 10, 11, 12, 13, 17, 23, 98, 99, 100, 101, 102]
+CONCORDIA_LANDINGS = [3, 5, 6, 7, 8, 9, 24]
+CONCORDIA_STILLS = [0, 4]
+WATERLOO_LAUNCH, WATERLOO_LANDING, WATERLOO_STILL = 5, 4, 1
+WATERLOO_FILMS = dict([(("incident.s00", b), ("incident.s03", WATERLOO_LAUNCH)) for b in CONCORDIA_LAUNCHES] +
+                      [(("incident.s00", b), ("incident.s03", WATERLOO_LANDING)) for b in CONCORDIA_LANDINGS] +
+                      [(("incident.s00", b), ("incident.s03", WATERLOO_STILL)) for b in CONCORDIA_STILLS])
+
+
+def waterloo_films(blocks):
+    """The scene blocks with their Concordia films made the Waterloo's, and how many entries changed."""
+    out, changed = [], 0
+    for b in blocks:
+        b, n = wc2data.retarget_films(b, WATERLOO_FILMS)
+        out.append(b)
+        changed += n
+    return out, changed
 RECOLOURED_FACES = [("PEOPLE.V02", "PEOPLE.V46", BANBRIDGE), ("PEOPLE.V01", "PEOPLE.V47", BERGSTROM)]
 FACE_FILES = [(b"people.v02", b"people.v46"), (b"people.v01", b"people.v47"), (b"people.v32", b"people.v09")]
 
@@ -214,6 +243,11 @@ def main():
             for old, new in FACE_FILES:
                 assert len(old) == len(new) and data.count(old) == 1, old
                 data = data.replace(old, new)
+        if n == "GAMEFLOW.S02":
+            parts = wc2data.read_container(data)
+            blocks, changed = waterloo_films([b for _, b in parts])
+            data = wc2data.compose_container(blocks, [f for f, _ in parts])
+            print("GAMEFLOW.S03: %d Concordia film entries made the Waterloo's" % changed)
         open(os.path.join(pgd, renumber(n, 3)), "wb").write(data)
 
     # the faces: the scenes draw a person from the portrait file CAMPAIGN's
@@ -279,6 +313,8 @@ def main():
         if len(strings) != len(old):
             sys.exit("SO3: block %d has %d strings, campaign.py gives %d" % (i, len(old), len(strings)))
         blocks[i] = wc2data.series_set_strings(blocks[i], [s.encode("latin1") for s in strings])
+    blocks, changed = waterloo_films(blocks)
+    print("SERIES.S03: %d Concordia film entries made the Waterloo's" % changed)
     wc2data.write_container(os.path.join(pgd, "SERIES.S03"), blocks, [f for f, _ in series])
 
     files = sorted(os.path.relpath(os.path.join(dp, f), plain) for dp, _, fs in os.walk(plain) for f in fs)

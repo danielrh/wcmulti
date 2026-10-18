@@ -221,6 +221,32 @@ debriefing (Talk3, 31-38, with 39-41 a recording) and three radio lines
 first block keeps the script and replaces the strings; writing new scenes
 means writing the bytecode, which has not been decoded.
 
+**Films.**  `89 nn` plays film nn of the block's own `FORM FILM / FILE`
+table: a little-endian word n, n file numbers (0-based into the names that
+follow), n block numbers (0-based, the container's own), then the file
+names (`series.s0n`, `incident.s00`, `incident.s0n`, ...), NUL separated
+(`wc2data.scene_films`, `retarget_films`; checked against a traced run:
+film 5 opened `wormhole.v01`, INCIDENT.S00 block 4).  A briefing ends with
+the launch film and a debriefing starts with the landing film (`6F ss 00
+89 nn`: the caption string, then the film).  WC2's Concordia films are
+INCIDENT.S00's: launches per fighter type (blocks 2, 10-13, 17, 23, and
+98-102 without one), landings (3, 5-9, 24), stills of her hull (0
+`laungame.v12`, 4 `wormhole.v01`, the red alert); each launch opens with
+the boarding in her hangar (`launch.v00`) and ends past her hull
+(`laungame.v11`/`v12` and the fighter's `laungame.v0N`).  Special
+Operations 2's own INCIDENT.S02 has a Waterloo's: block 1 a still
+(`laungame.v39`, its "TCS Centurion"), 4 the landing (`land.v39`,
+`land.v30`), 5 the launch (`launch.v39`, `launch.v30`), played after block
+6, SO2's boarding, in the missions it flies from one.  SO3's copies send
+every Concordia film to the Waterloo's (`so3/build.py`, WATERLOO_FILMS:
+650 entries in SERIES.S03, 26 in GAMEFLOW.S03); the launch has no boarding
+in the hangar then.  The rooms are the scripts' (`setupbackground n`:
+CAMPAIGN.S0n's `setupbackdrop` switches on n to a shape of the SHAP list,
+`closeup.v00` blocks for most of 1-55, SO1's `closeup.v01` for 100-103,
+SO2's `closeup.v02` for 202-204); no campaign has Waterloo rooms, so
+SO3's are still the Concordia's, and the door films (`doors.v00`) still
+carry Tolwyn's nameplate.
+
 ## 6. The third seat
 
 A third player's seat is the multiplayer layer's: when a pilot wants a seat

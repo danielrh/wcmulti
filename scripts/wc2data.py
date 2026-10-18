@@ -167,6 +167,48 @@ def scene_strings(block):
     return []
 
 
+def scene_films(block):
+    """The film table of a scene block (FORM FILM / FILE): [(file name,
+    block)] by film number, the number a script's `89 nn` plays.  The chunk
+    is a little-endian word n, n file numbers (0-based into the names), n
+    block numbers, then the file names, NUL separated."""
+    top = iff_chunks(block, 0, len(block))[0]
+    for cid, s, e in iff_chunks(block, top[1], top[2]):
+        if cid == b"FORMFILM":
+            for c2, s2, e2 in iff_chunks(block, s, e):
+                if c2 == b"FILE":
+                    n = struct.unpack_from("<H", block, s2)[0]
+                    names = [x.decode("latin1") for x in block[s2 + 2 + 2 * n:e2].split(b"\0") if x]
+                    return [(names[block[s2 + 2 + i]], block[s2 + 2 + n + i]) for i in range(n)]
+    return []
+
+
+def retarget_films(block, mapping):
+    """A scene block whose film table sends every film listed in `mapping`
+    ((file name, block) -> (file name, block), the names as the table has
+    them) to the other incident instead, and how many films it changed.  The
+    bytes keep their places: the script that plays a film by its number is
+    untouched."""
+    data = bytearray(block)
+    top = iff_chunks(data, 0, len(data))[0]
+    changed = 0
+    for cid, s, e in iff_chunks(data, top[1], top[2]):
+        if cid != b"FORMFILM":
+            continue
+        for c2, s2, e2 in iff_chunks(data, s, e):
+            if c2 != b"FILE":
+                continue
+            n = struct.unpack_from("<H", data, s2)[0]
+            names = [x.decode("latin1") for x in bytes(data[s2 + 2 + 2 * n:e2]).split(b"\0") if x]
+            for i in range(n):
+                new = mapping.get((names[data[s2 + 2 + i]], data[s2 + 2 + n + i]))
+                if new:
+                    data[s2 + 2 + i] = names.index(new[0])
+                    data[s2 + 2 + n + i] = new[1]
+                    changed += 1
+    return bytes(data), changed
+
+
 def series_set_strings(block, strings, drop_speech=True):
     """A scene block with its FORM TEXT replaced by `strings` (bytes, by
     index: the script names them by number, so keep the count) and, with
