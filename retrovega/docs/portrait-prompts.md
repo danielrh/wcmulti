@@ -176,37 +176,101 @@ laid over it.
 | mouth | 33-67% | 59-80% |
 | eyes | 29-71% | 39-55% |
 
-**The edit prompt.** Put one shape from the table below in place of `<SHAPE>`:
+**The edit prompts.** Paste these in order, one message each, into the
+conversation that holds the character's portrait. Save each result under the
+file name above its prompt. The portrait itself is `mouth_0` and `eyes_0`.
+
+First, with the portrait as the latest image:
 
 ```
-Edit this exact portrait. Change ONLY the mouth and lips (the jaw just below may move a
-little) so that: <SHAPE>. Keep everything else identical: the same face, eyes, hair,
+I'm going to ask for ten small edits of this portrait, one per message. Always start each
+edit from this original portrait, never from a previous edit. Keep the output the same
+size, framing and style, and change only the part I name.
+```
+
+`mouth_1` (m b p)
+```
+Edit the original portrait. Change ONLY the mouth: the lips pressed firmly together in a
+straight line, slightly compressed, as when saying "M", "B" or "P". The expression stays
+neutral. Keep everything else identical: the same face, eyes, hair, lighting, colours, line
+style, framing and background. Same character, same moment.
+```
+
+`mouth_2` (f v)
+```
+Edit the original portrait. Change ONLY the mouth: the upper front teeth resting lightly on
+the lower lip, the lower lip tucked slightly under them, as when saying "F" or "V". The
+expression stays neutral. Keep everything else identical: the same face, eyes, hair,
 lighting, colours, line style, framing and background. Same character, same moment.
 ```
 
-| file | mouth shape (`<SHAPE>`) | letters it voices |
-|---|---|---|
-| `mouth_0` | (the portrait itself: relaxed, closed) | spaces, pauses |
-| `mouth_1` | the lips pressed firmly together, as when saying "M", "B" or "P" | m b p |
-| `mouth_2` | the upper front teeth resting lightly on the lower lip, as when saying "F" or "V" | f v |
-| `mouth_3` | the mouth slightly open with the tongue tip just visible behind the upper front teeth, as when saying "TH" or "L" | th t d n l |
-| `mouth_4` | the teeth closed together and the lips parted in a narrow, wide shape showing both rows of teeth, as when saying "S" | s z sh ch |
-| `mouth_5` | the mouth open wide in a relaxed "AH", the upper teeth visible, the tongue low | a |
-| `mouth_6` | the mouth half open and wide, as when saying "EH", the upper teeth visible | e i y k g h |
-| `mouth_7` | the lips rounded into an open "OH" | o |
-| `mouth_8` | the lips pushed forward into a small round pucker, as when saying "OO" or "W" | u w q r |
-
-**Blinks:**
-
+`mouth_3` (th t d n l)
 ```
-Edit this exact portrait. Change ONLY the eyes: <STATE>. Keep everything else identical:
-face, mouth, hair, lighting, colours, line style, framing and background.
+Edit the original portrait. Change ONLY the mouth and the jaw just below it: the mouth
+slightly open, the tip of the tongue just visible touching the back of the upper front
+teeth, as when saying "TH" or "L". The expression stays neutral. Keep everything else
+identical: the same face, eyes, hair, lighting, colours, line style, framing and
+background. Same character, same moment.
 ```
 
-| file | `<STATE>` |
-|---|---|
-| `eyes_1` | both upper eyelids lowered halfway, mid-blink |
-| `eyes_2` | both eyes fully closed in a natural, relaxed blink |
+`mouth_4` (s z sh ch)
+```
+Edit the original portrait. Change ONLY the mouth: the teeth closed together and the lips
+parted and stretched slightly wide, showing both rows of teeth, as when saying "S". The
+expression stays neutral, not a smile. Keep everything else identical: the same face,
+eyes, hair, lighting, colours, line style, framing and background. Same character, same
+moment.
+```
+
+`mouth_5` (a)
+```
+Edit the original portrait. Change ONLY the mouth and the jaw just below it: the mouth open
+wide in a relaxed "AH", the jaw dropped, the upper teeth visible and the tongue resting
+low. The expression stays neutral. Keep everything else identical: the same face, eyes,
+hair, lighting, colours, line style, framing and background. Same character, same moment.
+```
+
+`mouth_6` (e i y k g h)
+```
+Edit the original portrait. Change ONLY the mouth and the jaw just below it: the mouth half
+open and a little wide, as when saying "EH", the upper teeth visible. The expression stays
+neutral, not a smile. Keep everything else identical: the same face, eyes, hair, lighting,
+colours, line style, framing and background. Same character, same moment.
+```
+
+`mouth_7` (o)
+```
+Edit the original portrait. Change ONLY the mouth and the jaw just below it: the lips
+rounded into an open oval, as when saying "OH", the jaw dropped a little. The expression
+stays neutral. Keep everything else identical: the same face, eyes, hair, lighting,
+colours, line style, framing and background. Same character, same moment.
+```
+
+`mouth_8` (u w q r)
+```
+Edit the original portrait. Change ONLY the mouth: the lips pushed forward into a small,
+tight round pucker with a small dark opening, as when saying "OO" or "W". The expression
+stays neutral. Keep everything else identical: the same face, eyes, hair, lighting,
+colours, line style, framing and background. Same character, same moment.
+```
+
+`eyes_1`
+```
+Edit the original portrait. Change ONLY the eyes: both upper eyelids lowered halfway over
+the eyes, mid-blink, the irises half covered. The eyebrows do not move. Keep everything
+else identical: the same face, mouth, hair, lighting, colours, line style, framing and
+background. Same character, same moment.
+```
+
+`eyes_2`
+```
+Edit the original portrait. Change ONLY the eyes: both eyes fully closed in a natural,
+relaxed blink, the lashes resting on the cheeks. The eyebrows do not move. Keep everything
+else identical: the same face, mouth, hair, lighting, colours, line style, framing and
+background. Same character, same moment.
+```
+
+Locally, use the same prompts for inpainting, without the first sentence.
 
 **Two looks: the lounge and the cockpit.** A portrait made with a headset
 is the in-flight comm look; the lounge look has none. To get the lounge
@@ -222,7 +286,9 @@ hair, lighting, colours, line style, framing and background. Same character, sam
 
 Then make the mouth and blink edits again from the new portrait: the old
 mouth frames still carry the microphone, and an edit may shift the face a
-little. To give a pilot without one a headset (for a full comm set), ask
+little. Do it in a fresh conversation: upload the new `base.png` and paste
+the eleven messages above, so "the original portrait" can only mean that
+one. To give a pilot without one a headset (for a full comm set), ask
 for the reverse: "Add a slim black pilot headset: band over the head,
 earpiece on the left ear, thin boom mic ending beside the mouth. Keep
 everything else identical."
