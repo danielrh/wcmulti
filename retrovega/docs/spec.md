@@ -588,31 +588,44 @@ sheet and a posterised preview.
   - any term may end in `@top` or `@bottom` to paint only the surfaces facing that way. The Franklin is `fin>0.95|band:0.55-0.7` in the primary colour and `spine<0.07@bottom` (a stripe under the belly) in the secondary.
 - **glass:** a rule for the canopy, drawn dark navy and glossy in every livery. The Franklin's is `blue>0.12`, the oval dome on its nose taper.
 
-**Palette** (one fixed 256-colour palette in flight):
+**Palette** (one fixed 256-colour palette in flight; `tools/palette.py` builds it from the rendered roster into `build/flight.pal` and `build/palette.json`, swatch in [palette.png](palette.png)):
 
 | index | use |
 |---|---|
-| 0 | transparent / black |
+| 0 | transparent / black (never an opaque sprite pixel) |
 | 1-15 | HUD and UI |
-| 16-31 | hull whites and greys |
-| 32-47 | Aera hull steels |
-| 48-63 | Rlaan hull charcoals |
-| 64-71 | livery primary (placeholder ramp) |
-| 72-79 | livery secondary (placeholder ramp) |
-| 80-87 | canopy glass, navy to highlight |
-| 88-127 | the liveries' target ramps, 8 shades each: green, blue, red, gold, black. Aera teal and Rlaan violet liveries use their faction's hull ramps. |
+| 16-63, 160-207 | the hull block: 96 colours by median cut over every ship's hull pixels |
+| 64-71 | livery primary (placeholder ramp, holding the default livery, carrier green) |
+| 72-79 | livery secondary (placeholder ramp, deep navy) |
+| 80-87 | canopy glass, by brightness |
+| 88-127 | five target ramps for the other liveries' colours, liveries a ship wears first |
 | 128-143 | fire and explosions (cycled) |
 | 144-151 | engine glow, Terran orange |
-| 152-159 | engine glow, Aera cyan and Rlaan magenta |
-| 160-223 | the scene block: the cockpit in flight, backgrounds and faces elsewhere |
+| 152-155 | engine glow, Aera cyan |
+| 156-159 | engine glow, Rlaan magenta |
+| 208-223 | the scene block: the cockpit in flight, backgrounds elsewhere |
 | 224-239 | stars and nebula |
 | 240-254 | comm-face skin |
 | 255 | white |
 
-The quantiser (M3) sends paint pixels (from the paint masks) to the
-placeholder ramps by brightness, glass pixels to the glass ramp, and everything else to the nearest hull or
-glow colour, without dithering. Until it exists, the renderer's `_256`
-sheet is a 48-colour median-cut preview.
+A livery's eight shades are the same lighting factors for every colour:
+the quantiles of how lit the painted pixels are (their brightness over the
+livery colour's). So a target ramp is its colour at those eight
+brightnesses, and swapping a livery is remapping indices 64-79 onto its
+ramps (`palette.json` lists each livery's).
+
+**Packing** (`tools/pack.py`). Each view is quantised without dithering:
+
+- hull pixels to the nearest hull or engine-glow colour;
+- painted pixels to their ramp by how lit they are;
+- glass pixels by brightness.
+
+Each view is then encoded with WC's run-length code. A ship becomes
+`SHIPnn.RV` (nn its type in hex): a WC container whose block 0 is the
+table of its views and block 1 its record (`'RVSH'`, type, view count,
+flags with bit 0 asymmetric, default livery, lod0 px).
+[packed.png](packed.png) is decoded back from those files, with one ship
+in every livery.
 
 **VDU images** (`-hud` files, really DDS whatever the extension) become
 the targeting VDU and briefing/ship-select art. They are posterised into
