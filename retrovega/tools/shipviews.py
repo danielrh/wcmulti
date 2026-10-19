@@ -80,10 +80,11 @@ void main() {
 # uses), hazard (alternating bands beyond a fraction of the half-span), fin
 # (vertical surfaces beyond a fraction of the half-span: wingtip fins), band
 # (a stripe across the wings between two fractions of the half-span), above
-# (higher than a fraction of the ship's height: a canopy on the deck); each
-# may be limited to the surfaces facing up (1) or down (-1) on the ship.
-# The glass rules pick the canopy, drawn dark blue and glossy whatever the
-# livery.
+# (higher than a fraction of the ship's height), blue (texels of the
+# diffuse map bluer than their red and green by a margin: a canopy the
+# Vega Strike artist painted navy); each may be limited to the surfaces
+# facing up (1) or down (-1) on the ship.  The glass rules pick the canopy,
+# drawn dark blue and glossy whatever the livery.
 FS = '''
 #version 330
 uniform sampler2D diffuse_map;
@@ -110,6 +111,12 @@ uniform vec4 rule3;     // the same for the glass
 uniform vec4 rule3b;
 uniform vec4 side3;
 uniform vec4 side3b;
+uniform vec4 rule1c;    // blue, unused x3, for each of the three
+uniform vec4 rule2c;
+uniform vec4 rule3c;
+uniform vec4 side1c;
+uniform vec4 side2c;
+uniform vec4 side3c;
 uniform float whiten;
 uniform float detail_ref;
 uniform float exposure;
@@ -125,9 +132,10 @@ layout(location = 0) out vec4 frag;
 layout(location = 1) out vec4 paint;
 vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 float facing(float side, float ny) { return side == 0.0 ? 1.0 : step(0.2, side * ny); }
-float area(vec4 r, vec4 rb, vec4 sd, vec4 sdb, float ny, float nx) {
+float area(vec4 r, vec4 rb, vec4 rc, vec4 sd, vec4 sdb, vec4 sdc, float ny, float nx) {
     float x = abs(v_obj.x) / half_span;
     float p = 0.0;
+    if (rc.x > 0.0) p = max(p, step(rc.x, texture(lum_map, v_uv).g) * facing(sdc.x, ny));
     if (rb.x > 0.0) p = max(p, step(rb.x, x) * step(0.5, nx) * facing(sdb.x, ny));
     if (rb.z > 0.0) p = max(p, step(rb.y, x) * step(x, rb.z) * facing(sdb.y, ny));
     if (rb.w > 0.0) p = max(p, step(rb.w, (v_obj.y - y_lo) / (y_hi - y_lo)) * facing(sdb.w, ny));
@@ -146,11 +154,11 @@ void main() {
     float detail = clamp(pow(l / detail_ref, 0.5), 0.75, 1.2);
     albedo = mix(albedo, vec3(0.62) * detail, whiten);
     vec3 on = normalize(v_on) * (gl_FrontFacing ? 1.0 : -1.0);
-    float p1 = area(rule1, rule1b, side1, side1b, on.y, abs(on.x)) * paint_on;
-    float p2 = area(rule2, rule2b, side2, side2b, on.y, abs(on.x)) * paint_on;
+    float p1 = area(rule1, rule1b, rule1c, side1, side1b, side1c, on.y, abs(on.x)) * paint_on;
+    float p2 = area(rule2, rule2b, rule2c, side2, side2b, side2c, on.y, abs(on.x)) * paint_on;
     albedo = mix(albedo, primary * detail, p1);
     albedo = mix(albedo, secondary * detail, p2);
-    float g = area(rule3, rule3b, side3, side3b, on.y, abs(on.x));
+    float g = area(rule3, rule3b, rule3c, side3, side3b, side3c, on.y, abs(on.x));
     albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
     float shin = mix(8.0, 80.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5, 0.0, 1.0));
@@ -244,24 +252,28 @@ def used_texels(size, tri_uv):
 
 
 def lum_map(diffuse, tri_uv):
-    """The diffuse map's luminance, smoothed, as percentiles of the texels the
-    mesh uses (0..1), so 'lum>0.8' means its brightest fifth of panels; also
-    the median linear luminance (the reference for keeping panel detail)."""
+    """Two masks of the diffuse map for the paint rules, as an RGB image: in
+    red its luminance, smoothed, as percentiles of the texels the mesh uses
+    (0..1), so 'lum>0.8' means its brightest fifth of panels; in green its
+    blueness, blue minus the larger of red and green (0..1).  Also the
+    median linear luminance (the reference for keeping panel detail)."""
     a = np.asarray(diffuse, dtype=np.float32) / 255
     lum = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
     used = used_texels(diffuse.size, tri_uv)
     smooth = ndimage.gaussian_filter(lum, diffuse.size[0] / 200.0)
     ranks = np.searchsorted(np.sort(smooth[used]), smooth) / max(used.sum(), 1)
     ref = float(np.median((a ** 2.2)[used] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)))
-    return Image.fromarray((np.clip(ranks, 0, 1) * 255).astype(np.uint8), 'L'), max(ref, 0.02)
+    blue = ndimage.gaussian_filter(a[..., 2] - np.maximum(a[..., 0], a[..., 1]), 1.0)
+    rgb = np.dstack([np.clip(ranks, 0, 1), np.clip(blue, 0, 1), np.zeros_like(blue)])
+    return Image.fromarray((rgb * 255).astype(np.uint8), 'RGB'), max(ref, 0.02)
 
 
 def rule_vec(rule):
-    """'fin>0.95|band:0.55-0.7|spine<0.07@bottom' -> the shader's two
-    parameter vectors and two side vectors.  Terms: span>F, spine<F, lum>P,
-    hazard>F, fin>F, band:A-B, above>F; one ending in @top or @bottom paints
-    only the surfaces facing that way on the ship."""
-    v, side = [0.0] * 8, [0.0] * 8
+    """'fin>0.95|band:0.55-0.7|spine<0.07@bottom' -> the shader's three
+    parameter vectors and three side vectors.  Terms: span>F, spine<F,
+    lum>P, hazard>F, fin>F, band:A-B, above>F, blue>D; one ending in @top or
+    @bottom paints only the surfaces facing that way on the ship."""
+    v, side = [0.0] * 12, [0.0] * 12
     for r in filter(None, (rule or '').split('|')):
         r, _, where = r.partition('@')
         w = {'': 0.0, 'top': 1.0, 'bottom': -1.0}[where]
@@ -269,7 +281,7 @@ def rule_vec(rule):
             lo, hi = r[5:].split('-')
             v[5], v[6], side[5] = float(lo), float(hi), w
             continue
-        for name, i in (('span>', 0), ('spine<', 1), ('lum>', 2), ('hazard>', 3), ('fin>', 4), ('above>', 7)):
+        for name, i in (('span>', 0), ('spine<', 1), ('lum>', 2), ('hazard>', 3), ('fin>', 4), ('above>', 7), ('blue>', 8)):
             if r.startswith(name):
                 v[i], side[i] = float(r[len(name):]), w
                 break
@@ -277,7 +289,7 @@ def rule_vec(rule):
             sys.exit('unknown paint term %r' % r)
     # side[5] is the band's; the shader reads it as the second side of the b vector
     sb = (side[4], side[5], 0.0, side[7])
-    return tuple(v[:4]), tuple(v[4:]), tuple(side[:4]), sb
+    return tuple(v[:4]), tuple(v[4:8]), tuple(v[8:]), tuple(side[:4]), sb, tuple(side[8:])
 
 
 def view_matrix(elev, head):
@@ -333,9 +345,9 @@ def render(row, outdir, size, assets, livery_name=None):
     prog['y_hi'].value = float(allpos[:, 1].max() - center[1])
     prog['glass_col'].value = tuple((c / 255.0) ** 2.2 for c in GLASS)
     for n, rule in (('1', art.get('paint')), ('2', art.get('paint2')), ('3', art.get('glass'))):
-        a, b, sa, sb = rule_vec(rule)
-        prog['rule' + n].value, prog['rule%sb' % n].value = a, b
-        prog['side' + n].value, prog['side%sb' % n].value = sa, sb
+        a, b, c, sa, sb, sc = rule_vec(rule)
+        prog['rule' + n].value, prog['rule%sb' % n].value, prog['rule%sc' % n].value = a, b, c
+        prog['side' + n].value, prog['side%sb' % n].value, prog['side%sc' % n].value = sa, sb, sc
 
     drawables = []
     for m in parts:
@@ -349,7 +361,7 @@ def render(row, outdir, size, assets, livery_name=None):
             imgs[idx] = load_image(os.path.join(unit_dir, names[0]) if names else None, fallback)
         lum, ref = lum_map(imgs[0], m.tri_uv)
         tex = {i: make_texture(ctx, im) for i, im in imgs.items()}
-        tex['lum'] = make_texture(ctx, lum, 1)
+        tex['lum'] = make_texture(ctx, lum)
         drawables.append((vao, tex, ref))
 
     big = size * SS

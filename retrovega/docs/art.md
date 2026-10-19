@@ -54,13 +54,14 @@ Paint terms:
 | `spine<F` | a stripe along the centre line, F of the half-span wide |
 | `hazard>F` | alternating bands beyond F of the half-span |
 | `lum>P` | the brightest panels: above the P-th fraction of the texture's used texels, smoothed |
-| `above>F` | everything higher than F of the ship's height (a canopy on the deck) |
+| `above>F` | everything higher than F of the ship's height |
+| `blue>D` | texels of the diffuse map bluer than their red and green by D (0..1): a canopy the Vega Strike artist painted navy |
 
 Any term can end in `@top` or `@bottom` to paint only the surfaces facing
 that way on the ship. The Franklin uses `fin>0.95|band:0.55-0.7` in the
 primary colour and `spine<0.07@bottom` in the secondary. Its glass is
-`above>0.76`: the dome on the deck above the hull's top surface, which
-leaves a white frame where the dome meets the deck.
+`blue>0.12`: the oval dome on the nose taper, painted navy in its texture.
+The hull's own texels are never more than 0.03 bluer; the dome's are 0.26.
 
 ## Liveries: data/liveries.csv
 

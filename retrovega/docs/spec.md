@@ -571,8 +571,9 @@ sheet and a posterised preview.
   - `fin>F`: vertical surfaces beyond F of the half-span (wingtip fins);
   - `band:A-B`: a stripe across the wings between A and B of the half-span;
   - `above>F`: everything higher than F of the ship's height;
+  - `blue>D`: texels bluer than their red and green by D, i.e. a canopy painted navy in the Vega Strike texture;
   - any term may end in `@top` or `@bottom` to paint only the surfaces facing that way. The Franklin is `fin>0.95|band:0.55-0.7` in the primary colour and `spine<0.07@bottom` (a stripe under the belly) in the secondary.
-- **glass:** a rule for the canopy, drawn dark navy and glossy in every livery. The Franklin's dome is `above>0.76`.
+- **glass:** a rule for the canopy, drawn dark navy and glossy in every livery. The Franklin's is `blue>0.12`, the oval dome on its nose taper.
 
 **Palette** (one fixed 256-colour palette in flight):
 
