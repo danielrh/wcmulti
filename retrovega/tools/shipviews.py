@@ -100,7 +100,9 @@ void main() {
 # Paint rules arrive as uniforms: span (outer wings beyond a fraction of the
 # half-span), spine (a stripe along the centre line narrower than a
 # fraction), lum (the brightest panels: a percentile of the texels the mesh
-# uses), hazard (alternating bands beyond a fraction of the half-span), fin
+# uses), hazard (alternating bands beyond a fraction of the half-span), dorsal
+# (thin upright surfaces on the centre line, higher than a fraction of the
+# ship's height: a top fin), fin
 # (vertical surfaces beyond a fraction of the half-span: wingtip fins), band
 # (a stripe across the wings between two fractions of the half-span), above
 # (higher than a fraction of the ship's height), blue (texels of the
@@ -134,13 +136,14 @@ uniform vec4 rule3;     // the same for the glass
 uniform vec4 rule3b;
 uniform vec4 side3;
 uniform vec4 side3b;
-uniform vec4 rule1c;    // blue, unused x3, for each of the three
+uniform vec4 rule1c;    // blue, dorsal, unused x2, for each of the three
 uniform vec4 rule2c;
 uniform vec4 rule3c;
 uniform vec4 side1c;
 uniform vec4 side2c;
 uniform vec4 side3c;
 uniform float whiten;
+uniform float hull_gain;  // the hull's diffuse brightened before paint (detail kept)
 uniform vec3 tint;        // the whole hull's colour multiplied in, luminance kept (1 1 1: none)
 uniform float detail_k;   // how much of the texture's fine detail shows
 uniform float bump_k;     // how much that detail bends the light (bevels)
@@ -280,6 +283,7 @@ float area(vec4 r, vec4 rb, vec4 rc, vec4 sd, vec4 sdb, vec4 sdc, float ny, floa
     float x = abs(v_obj.x) / half_span;
     float p = 0.0;
     if (rc.x > 0.0) p = max(p, step(rc.x, texture(lum_map, v_uv).g) * facing(sdc.x, ny));
+    if (rc.y > 0.0) p = max(p, step(rc.y, (v_obj.y - y_lo) / (y_hi - y_lo)) * step(0.6, nx) * step(x, 0.06));
     if (rb.x > 0.0) p = max(p, step(rb.x, x) * step(0.5, nx) * facing(sdb.x, ny));
     if (rb.z > 0.0) p = max(p, step(rb.y, x) * step(x, rb.z) * facing(sdb.y, ny));
     if (rb.w > 0.0) p = max(p, step(rb.w, (v_obj.y - y_lo) / (y_hi - y_lo)) * facing(sdb.w, ny));
@@ -302,7 +306,7 @@ void main() {
     if (alpha_cut > 0.5 && diff.a < 0.5) discard;
     vec3 albedo = lin(diff.rgb);
     albedo = mix(albedo, vec3(0.62), whiten);
-    albedo *= tint;
+    albedo *= tint * hull_gain;
     vec3 on = normalize(v_on) * (gl_FrontFacing ? 1.0 : -1.0);
     vec4 dec = decal(on.y);
     float p1 = area(rule1, rule1b, rule1c, side1, side1b, side1c, on.y, abs(on.x)) * paint_on * (1.0 - dec.a);
@@ -310,8 +314,9 @@ void main() {
     albedo = mix(albedo, primary, p1);
     albedo = mix(albedo, secondary, p2);
     albedo = mix(albedo, lin(dec.rgb), dec.a);
-    // canon ships keep their own texture; detail goes back only where paint replaced it
-    albedo *= mix(1.0, detail, vs_mode > 0.5 ? max(p1, p2) : 1.0);
+    // canon ships keep their own texture; detail goes back only where paint
+    // (or whitening) flattened it
+    albedo *= mix(1.0, detail, vs_mode > 0.5 ? max(max(p1, p2), step(0.001, whiten)) : 1.0);
     float g = area(rule3, rule3b, rule3c, side3, side3b, side3c, on.y, abs(on.x));
     albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
@@ -473,7 +478,7 @@ def lum_map(diffuse, tri_uv):
 def rule_vec(rule):
     """'fin>0.95|band:0.55-0.7|spine<0.07@bottom' -> the shader's three
     parameter vectors and three side vectors.  Terms: span>F, spine<F,
-    lum>P, hazard>F, fin>F, band:A-B, above>F, blue>D; one ending in @top or
+    lum>P, hazard>F, fin>F, band:A-B, above>F, blue>D, dorsal>H; one ending in @top or
     @bottom paints only the surfaces facing that way on the ship."""
     v, side = [0.0] * 12, [0.0] * 12
     for r in filter(None, (rule or '').split('|')):
@@ -483,7 +488,8 @@ def rule_vec(rule):
             lo, hi = r[5:].split('-')
             v[5], v[6], side[5] = float(lo), float(hi), w
             continue
-        for name, i in (('span>', 0), ('spine<', 1), ('lum>', 2), ('hazard>', 3), ('fin>', 4), ('above>', 7), ('blue>', 8)):
+        for name, i in (('span>', 0), ('spine<', 1), ('lum>', 2), ('hazard>', 3), ('fin>', 4), ('above>', 7),
+                        ('blue>', 8), ('dorsal>', 9)):
             if r.startswith(name):
                 v[i], side[i] = float(r[len(name):]), w
                 break
@@ -616,6 +622,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     t = [(float(v) / 255.0) ** 2.2 for v in (art.get('tint') or '255 255 255').split()]
     lum = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
     prog['tint'].value = tuple(c / lum for c in t)
+    prog['hull_gain'].value = float(art.get('gain') or 1.0)
     prog['detail_k'].value = float(art.get('detail') or 0.6)
     prog['bump_k'].value = float(art.get('bump') or (1.0 if (art.get('mode') or 'vs') == 'retro' else 0.0))
     prog['shine'].value = shine if shine is not None else float(art.get('shine') or 0.3)
