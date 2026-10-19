@@ -69,7 +69,7 @@ Possible series:
 
 | | Terran Confederation | Aera | Rlaan |
 |---|---|---|---|
-| fighters | Schroedinger (light, the starter), Gawain (interceptor), Redeemer (militia assault), Pacifier/Osprey (fighter-bomber with a rear gunner seat), Lancelot/Destiny (heavy, if the art budget allows); Progeny/Mongoose rare, mostly escorted | Nicander, Ariston, Areus, plus three new riffs on them: Agis (light swarm fighter), Cleomenes (heavy assault), Archidamus (ace) | Shizu (scout), Zhuangzong (line), Taizong (assault bomber), Shizong (disabler), Xuanzong (jammer), Gaozong (probe) |
+| fighters | Schroedinger (light, the starter), Gawain (interceptor), Redeemer (militia assault), Pacifier/Osprey (fighter-bomber with a rear gunner seat), Lancelot/Destiny (heavy, if the art budget allows); Progeny/Mongoose rare, mostly escorted | Nicander, Ariston, Areus, plus three new hulls built from them (tools/hulls.py): Agis (swarm fighter, gull-winged), Cleomenes (heavy assault, cross-winged), Archidamus (the aces' asymmetric fighter) | Shizu (scout), Zhuangzong (line), Taizong (assault bomber), Shizong (disabler), Xuanzong (jammer), Gaozong (probe) |
 | small craft | Franklin, the personnel transport: usually escorted, flown by the player on one or two missions where nothing else can get through | | |
 | capital ships | Clydesdale (home carrier), Kahan (Andolian destroyer), Hawking (cruiser), Mule and Ox (transports) | Agasicles (destroyer), Anaxidamus (cruiser), Agesipolis (carrier), Charillus (transport), Leonidas (dreadnought) | Ruizong (destroyer), Shundi (cruiser and launch ship), Shenzong (transport) |
 
@@ -79,8 +79,9 @@ The factions differ in defence:
 - Aera ships have strong shields.
 - Rlaan ships have thin shields and very thick organic armour, as their Vega Strike stats have it.
 
-Vega Strike has only three Aera fighters, so the other three are mesh edits
-of those, rendered through the same pipeline so that they match.
+Vega Strike has only three Aera fighters, so the other three are built
+from those meshes by recipe and rendered through the same pipeline so
+that they match.
 
 ## Open questions
 

@@ -465,6 +465,11 @@ x2, x1, y1, y2, giving the extent around the origin. Its body is WC's
 run-length code, so `scripts/wc2data.py` (`encode_sprite`,
 `decode_sprite`) reads and writes ours too.
 
+**Asymmetric ships** cannot be mirrored. They carry 62 views: the 37
+above, then headings 210, 240, 270, 300 and 330 of each band, in band
+order (37..61). A flag in the ship's record tells the engine to use them
+instead of mirroring. Archidamus is the first.
+
 Our order inside each band is the one above. WC1's own files use the same
 37 slots but do not run every band front to back. If we ever want sprites
 to move between the two games, a 37-entry remap table bridges them.
@@ -540,7 +545,10 @@ every ship. It shades flat panels from bright to dark, with no ink lines. Each f
 - Rlaan: charcoal and violet organic shapes.
 
 **The renderer** (`tools/shipviews.py`, setup in [art.md](art.md)) is a
-minimal headless OpenGL renderer (moderngl on Mesa). It draws each ship's
+minimal headless OpenGL renderer (moderngl on Mesa). It has two looks.
+Canon Vega Strike ships keep Vega Strike's own look: its uber shader,
+ported, as metal not plastic (art.md lists each change). Ships repainted
+from scratch (the Franklin) get the retro look described here. It draws each ship's
 Vega Strike mesh (`.bfxm`, read by `tools/bfxm.py`) with its own diffuse,
 specular and glow maps into the 37 views, 4× supersampled and boxed down.
 Lighting:

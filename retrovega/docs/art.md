@@ -1,7 +1,36 @@
 # Ship sprites from Vega Strike meshes
 
 `tools/shipviews.py` renders a ship from Vega Strike's assets into the 37
-views of WC1's layout (spec §8) at twice WC1's resolution, in a livery.
+views of WC1's layout (spec §8) at twice WC1's resolution, in a livery
+(62 views for an asymmetric ship). `tools/render_all.py` renders the whole
+roster into `build/sprites/` (not committed) and a gallery.
+
+## Two looks
+
+| `mode` (data/art.csv) | used for | lighting |
+|---|---|---|
+| `vs` (the default) | the canon Vega Strike ships | Vega Strike's own uber shader (`programs/uber.fp`), ported |
+| `retro` | ships repainted from scratch, so far only the Franklin | the custom WC1-style look below: whitened hull, point light, cel bands |
+
+The `vs` port keeps uber.fp's material typing (matte, metal, dielectric,
+glass from the diffuse and specular colours), gloss from the specular
+map's intensity, and environment reflections blurred by gloss from a Vega
+Strike background cube (`textures/backgrounds/white_light.cube`, read by
+`tools/ddscube.py`). It is lit by the same off-axis key as `retro`.
+
+Each change from uber.fp was made after looking at the result:
+
+- **Metal, not plastic.** The reflected light (the key's highlight plus the environment) is multiplied by the specular map's colour and added. uber's dielectric Fresnel coat put a white reflection over every surface, which looked like cling film on a sprite; it is kept for glass only. The Rlaan's imperial purple comes from their violet specular maps through uber's metal diffuse.
+- **Matte surfaces take the diffuse once linearised.** uber squares it twice over, which only Vega Strike's bright HDR lights make up for.
+- **Reflections are never mirror-sharp.** The environment is sampled at mip 4 or blurrier; a sharp one reads as crumpled foil.
+- **Self-shadow term:** uber's own alternative `clamp(4 N.L)`. The current one caps every light at a quarter.
+- **Diffuse alpha is ignored.** Some Rlaan maps keep other data in alpha.
+- **Divisions are guarded.**
+
+Liveries in `vs` mode replace the texture only where the paint rules hit
+(the texture's fine detail goes back on top of the paint). `tint`
+recolours a whole hull and keeps its brightness: the Aera capital ships
+whose `AeraHull` map is missing are teal, as on their VDUs.
 [franklin-sheet.png](franklin-sheet.png) shows all 37 views of the
 Franklin; [franklin-liveries.png](franklin-liveries.png) shows nine of them
 in four liveries.
@@ -39,6 +68,8 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | `stretch` | x y z scale before rendering. The Franklin is `1 1.8 1`, because its mesh is a 0.6 m-thick dart. |
 | `exposure` | overall brightness |
 | `toon` | key-light bands (3 gives a cel look; 0 is smooth) |
+| `mode` | `vs` or `retro` (above) |
+| `tint` | r g b: the whole hull's colour multiplied in, its brightness kept |
 | `whiten` | 0..1: how far the hull goes toward light grey |
 | `detail` | 0..1: how much of the texture's fine detail (panel lines, vents, grime) shows on top of the whitened hull and the paint. Default 0.6. |
 | `bump` | how much that detail bends the light, so panel edges catch it like bevels and greebles. Default 1. |
@@ -108,7 +139,39 @@ darkest accents are deep navy (26 36 84) or dark brown (70 42 26). The sprites k
 placeholder ramps, so a livery costs nothing at run time: the engine
 recolours when it decodes a ship type for a mission (spec §8).
 
+## New hulls by recipe: tools/hulls.py
+
+A ship whose mesh in `ships.csv` is `hull:NAME` is built from Vega Strike
+meshes by the recipe NAME. It starts from a base ship (its mesh, maps and
+exhaust points) and applies these operations:
+
+| operation | does |
+|---|---|
+| `scale` | stretches the hull |
+| `clip` | shortens the wings |
+| `sweep` | bends the wingtips forward or back |
+| `lift` | gull or anhedral wings |
+| `cut` | removes a box of triangles |
+| `graft` | copies a box of triangles from any Vega Strike mesh, scaled, placed, rolled about the nose axis and optionally mirrored |
+
+Normals follow each deformation through its Jacobian. The three new Aera
+fighters, compared with their bases in
+[aera-new.png](aera-new.png):
+
+| ship | built from |
+|---|---|
+| Agis | Nicander cut short, its wings swept forward into a gull W: a swarm fighter |
+| Cleomenes | Areus with a copy of its own wing upright above and below: a cross seen from the front |
+| Archidamus | Ariston rebuilt asymmetric: its big rear wing, half again as large, on the right only, and two small front wings angled up and down on the left. The aces' ship. `ARCHIDM_CLAW`, the first forward-swept version, is kept as an alternative. |
+
+An asymmetric recipe cannot use WC1's mirrored headings. It renders 62
+views: WC1's 37, then headings 210, 240, 270, 300 and 330 of each band
+(37..61).
+
 ## Facts about the Vega Strike data
+
+- **Shared textures:** maps a ship names but does not hold are found in the shared `textures/` folder, matched without case, then without extension, then by prefix (`AeraHull.png` becomes `AeraHull2.bmp`, the only one there).
+- **Shared-vertex meshes** (Shizong, Shenzong) keep their texture coordinates on the vertices; their polygon corners are all zero.
 
 - **Textures:** files named `.png` or `.jpg` are often DDS (DXT1/3/5); Pillow reads them. Texture `t` runs top-down, so images go to OpenGL unflipped.
 - **Meshes:** `.bfxm` records are a ship's separate parts; the meshes inside a record are its levels of detail, finest first. A record whose texture is an `.ani` is a running light. `bfxm.parts()` takes the finest mesh of each real part.

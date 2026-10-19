@@ -50,6 +50,10 @@ SS = 4  # supersampling per axis
 BANDS = (60, 30, 0, -30, -60)
 HEADINGS = (0, 30, 60, 90, 120, 150, 180)
 VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
+# An asymmetric ship cannot be mirrored: 25 more views, headings 210..330 of
+# each band (37..61), drawn after WC1's 37.
+ASYM_HEADINGS = (210, 240, 270, 300, 330)
+VIEWS_ASYM = VIEWS + [(e, h) for e in BANDS for h in ASYM_HEADINGS]
 
 GLOW = {'terran': (255, 168, 72), 'aera': (96, 240, 200), 'rlaan': (240, 90, 220)}
 GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflection
@@ -577,9 +581,12 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     if livery is None:
         sys.exit('no livery %r in data/liveries.csv' % livery_name)
     stretch = np.array([float(v) for v in (art.get('stretch') or '1 1 1').split()])
+    views_wanted = VIEWS
     if row['mesh'].startswith('hull:'):
         base_lights = unit_lights(assets, hulls.RECIPES[row['mesh'][5:]][0].split('/')[0])
         parts, raw_lights, _base = hulls.build(row['mesh'][5:], assets, base_lights)
+        if hulls.asymmetric(row['mesh'][5:]):
+            views_wanted = VIEWS_ASYM
     else:
         parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
         raw_lights = unit_lights(assets, row['vs_unit'])
@@ -669,7 +676,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
 
     views, paints = [], []
     glow = GLOW.get(row['faction'], (255, 200, 120))
-    for elev, head in VIEWS:
+    for elev, head in views_wanted:
         rot = view_matrix(elev, head)
         proj = np.diag([1 / radius, 1 / radius, -1 / radius, 1.0])
         mvp = (proj @ np.vstack([np.hstack([rot, np.zeros((3, 1))]), [0, 0, 0, 1]])).astype('f4')
@@ -749,9 +756,14 @@ def post(rgba, paint, z, size, engines, glow):
 
 
 def make_sheet(views, size):
-    rows = [[views[0]]] + [views[1 + 7 * b:8 + 7 * b] for b in range(5)] + [[views[36]]]
+    """Rows top, the five bands, bottom; headings 0..180 (then 210..330 for
+    an asymmetric ship) across."""
+    asym = len(views) > 37
+    rows = [[views[0]]] + [views[1 + 7 * b:8 + 7 * b] + (views[37 + 5 * b:42 + 5 * b] if asym else [])
+                           for b in range(5)] + [[views[36]]]
+    cols = 12 if asym else 7
     pad = 4
-    sheet = Image.new('RGBA', (7 * (size + pad), 7 * (size + pad)), (0, 0, 0, 0))
+    sheet = Image.new('RGBA', (cols * (size + pad), 7 * (size + pad)), (0, 0, 0, 0))
     for r, row in enumerate(rows):
         for c, img in enumerate(row):
             sheet.paste(img, ((3 if len(row) == 1 else c) * (size + pad), r * (size + pad)))
@@ -782,7 +794,8 @@ def main():
     key = tuple(float(v) for v in args.key.split(',')) if args.key else KEY_DIR
     r = render(row, args.outdir, size, args.assets, args.livery, key, args.ambient, args.shine, args.tag,
                args.env, args.env_gain, args.key_power, args.exposure, args.reflect)
-    print('%s: 37 views at %d px, radius %.2f' % (row['name'], size, r))
+    asym = row['mesh'].startswith('hull:') and hulls.asymmetric(row['mesh'][5:])
+    print('%s: %d views at %d px, radius %.2f' % (row['name'], 62 if asym else 37, size, r))
 
 
 if __name__ == '__main__':

@@ -10,11 +10,20 @@ applies operations in order:
                                  length at the tip (negative: back), growing as a power 1.5
     ('lift', x0, dy)             beyond x0 of the half-span, the wing rises by dy of the height
                                  at the tip (gull or anhedral wings)
-    ('graft', unit, box, place)  copy the triangles of another Vega Strike mesh whose centres lie
-                                 in box (x0 x1 y0 y1 z0 z1, fractions of that mesh's bounding box)
-                                 and set them at place (scale, x y z as fractions of this hull's
-                                 bounding box, from its centre), with their own maps; 'mirror' in
-                                 place's last slot adds the mirror image on the other side
+    ('cut', box)                 remove the hull's triangles whose centres lie in box (fractions
+                                 of the reference box below, -1..1)
+    ('graft', unit, box, place)  copy the triangles of a Vega Strike mesh (this hull's own base, or
+                                 another) whose centres lie in box (x0 x1 y0 y1 z0 z1, fractions
+                                 of that mesh's bounding box, -1..1) and set them at place: (scale,
+                                 x, y, z, mirror, roll) with x y z fractions of this hull's
+                                 half-extent from its centre, mirror 'x' or 'y' (also add the mirror
+                                 image across that axis) or None, roll in degrees about the nose
+                                 axis, turning the piece about its own box centre first
+
+Placement and cuts are measured against the reference box: the base hull's
+bounding box, carried through the deformations but not changed by cuts or
+grafts.  A recipe marked asymmetric gets all its headings rendered (62
+views) instead of mirroring half of them (37).
 
 Normals follow each deformation through its Jacobian, so the lighting stays
 right on bent and stretched panels.
@@ -38,16 +47,27 @@ RECIPES = {
         ('sweep', 0.3, 0.30),
         ('lift', 0.35, 0.35),
     ]),
-    # Cleomenes: a heavy assault ship.  Areus thickened, its wings swept
-    # back, with a Nicander hull grafted onto each side as an outboard pod.
+    # Cleomenes: a heavy assault ship.  Areus thickened, with a copy of its
+    # own wing set upright above and below: a cross seen from the front,
+    # Areus still at a glance.
     'CLEOMEN': ('Areus/areus.bfxm', [
-        ('scale', 1.15, 1.25, 1.2),
-        ('sweep', 0.3, -0.25),
-        ('graft', 'Nicander/nicander.bfxm', (-1, 1, -1, 1, -1, 1), (0.42, 0.62, -0.15, -0.15, 'mirror')),
+        ('scale', 1.1, 1.15, 1.15),
+        ('graft', 'Areus/areus.bfxm', (0.3, 1, -1, 1, -1, 0.6), (0.85, 0.0, 0.62, -0.1, 'y', 90)),
     ]),
-    # Archidamus: the aces' superiority fighter.  Ariston with forward-swept,
-    # slightly raised wing tips and a longer nose.
+    # Archidamus: the aces' fighter, one of a kind.  Ariston's wings come
+    # off; its big rear wing goes back on the right only, half again as
+    # large, and two copies of its small front wing go on the left, one
+    # angled 30 degrees up, one 30 degrees down.
     'ARCHIDM': ('Ariston/ariston.bfxm', [
+        ('cut', (0.28, 1, -1, 1, -1, 1)),
+        ('cut', (-1, -0.28, -1, 1, -1, 1)),
+        ('graft', 'Ariston/ariston.bfxm', (0.28, 1, -1, 1, -1, 0.15), (1.6, 0.86, 0.0, -0.43, None)),
+        ('graft', 'Ariston/ariston.bfxm', (0.28, 1, -1, 1, 0.2, 1), (0.8, -0.5, 0.5, 0.5, None, 150)),
+        ('graft', 'Ariston/ariston.bfxm', (0.28, 1, -1, 1, 0.2, 1), (0.8, -0.5, -0.5, 0.35, None, 210)),
+    ], {'asym': True}),
+    # The first Archidamus (forward-swept, raised wing tips), kept as an
+    # alternative.
+    'ARCHIDM_CLAW': ('Ariston/ariston.bfxm', [
         ('scale', 1.05, 1.0, 1.12),
         ('sweep', 0.5, 0.24),
         ('lift', 0.6, 0.25),
@@ -108,16 +128,28 @@ def _point_ops(op, lo, hi):
     raise ValueError('unknown operation %r' % (kind,))
 
 
-def _graft(parts, assets, op):
+def _cut(parts, ref, box):
+    lo, hi = ref
+    b = np.array(box, dtype=float).reshape(3, 2)
+    blo, bhi = lo + (b[:, 0] + 1) / 2 * (hi - lo), lo + (b[:, 1] + 1) / 2 * (hi - lo)
+    for m in parts:
+        c = m.positions[m.tri_index].mean(1)
+        drop = np.all((c >= blo) & (c <= bhi), axis=1)
+        m.tri_index, m.tri_uv = m.tri_index[~drop], m.tri_uv[~drop]
+
+
+def _graft(parts, assets, op, ref):
     _kind, unit, box, place = op
     src = bfxm.parts(os.path.join(assets, 'units', 'vessels', unit))
     slo, shi = _bbox(src)
-    lo, hi = _bbox(parts)
+    lo, hi = ref
     centre, size = (lo + hi) / 2, hi - lo
     b = np.array(box, dtype=float).reshape(3, 2)
     blo = slo + (b[:, 0] + 1) / 2 * (shi - slo)
     bhi = slo + (b[:, 1] + 1) / 2 * (shi - slo)
-    scale, px, py, pz, mirror = place
+    scale, px, py, pz, mirror = place[:5]
+    roll = np.radians(place[5]) if len(place) > 5 else 0.0
+    rz = np.array([[np.cos(roll), -np.sin(roll), 0.0], [np.sin(roll), np.cos(roll), 0.0], [0.0, 0.0, 1.0]])
     added = []
     for m in src:
         c = m.positions[m.tri_index].mean(1)
@@ -130,39 +162,58 @@ def _graft(parts, assets, op):
         g = bfxm.Mesh()
         g.textures, g.material, g.unit_dir = m.textures, m.material, m.unit_dir
         bc = (blo + bhi) / 2
-        g.positions = (m.positions[used] - bc) * scale * float(np.max(size)) / float(np.max(shi - slo)) \
+        g.positions = ((m.positions[used] - bc) @ rz.T) * scale * float(np.max(size)) / float(np.max(shi - slo)) \
             + centre + np.array([px, py, pz]) * size / 2
-        g.normals = m.normals[used]
+        g.normals = m.normals[used] @ rz.T
         g.tri_index = remap[m.tri_index[keep]]
         g.tri_uv = m.tri_uv[keep]
         added.append(g)
         if mirror:
+            flip = np.array([-1.0, 1.0, 1.0]) if mirror in ('x', 'mirror') else np.array([1.0, -1.0, 1.0])
             h = bfxm.Mesh()
             h.textures, h.material, h.unit_dir = g.textures, g.material, g.unit_dir
-            h.positions = g.positions * np.array([-1.0, 1.0, 1.0])
-            h.normals = g.normals * np.array([-1.0, 1.0, 1.0])
+            h.positions = (g.positions - centre) * flip + centre
+            h.normals = g.normals * flip
             h.tri_index = g.tri_index[:, ::-1].copy()
             h.tri_uv = g.tri_uv[:, ::-1].copy()
             added.append(h)
     parts.extend(added)
 
 
+def asymmetric(name):
+    return len(RECIPES[name]) > 2 and RECIPES[name][2].get('asym', False)
+
+
 def build(name, assets, lights):
     """(parts, lights, base unit) of the recipe NAME; lights are the base
-    ship's exhaust points (x, y, z, size), moved with the hull."""
-    base, ops = RECIPES[name]
+    ship's exhaust points (x, y, z, size), moved with the hull (a light inside
+    a cut is dropped)."""
+    base, ops = RECIPES[name][:2]
     parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', base))
+    ref = _bbox(parts)
     pts = np.array([l[:3] for l in lights], dtype=float).reshape(-1, 3)
+    sizes = [l[3] for l in lights]
     for op in ops:
         if op[0] == 'graft':
-            _graft(parts, assets, op)
+            _graft(parts, assets, op, ref)
             continue
-        lo, hi = _bbox(parts)
-        f = _point_ops(op, lo, hi)
+        if op[0] == 'cut':
+            _cut(parts, ref, op[1])
+            lo, hi = ref
+            b = np.array(op[1], dtype=float).reshape(3, 2)
+            blo, bhi = lo + (b[:, 0] + 1) / 2 * (hi - lo), lo + (b[:, 1] + 1) / 2 * (hi - lo)
+            keep = ~np.all((pts >= blo) & (pts <= bhi), axis=1) if len(pts) else np.zeros(0, bool)
+            pts, sizes = pts[keep], [s for s, k in zip(sizes, keep) if k]
+            continue
+        f = _point_ops(op, *_bbox(parts))
         _deform(parts, f)
+        corners = np.array([[x, y, z] for x in (ref[0][0], ref[1][0]) for y in (ref[0][1], ref[1][1])
+                            for z in (ref[0][2], ref[1][2])])
+        moved = f(corners)
+        ref = (moved.min(0), moved.max(0))
         if len(pts):
             pts = f(pts)
-    return parts, [(tuple(p), l[3]) for p, l in zip(pts, lights)], os.path.dirname(base)
+    return parts, [(tuple(p), s) for p, s in zip(pts, sizes)], os.path.dirname(base)
 
 
 
