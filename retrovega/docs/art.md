@@ -39,9 +39,13 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | `stretch` | x y z scale before rendering. The Franklin is `1 1.8 1`, because its mesh is a 0.6 m-thick dart. |
 | `exposure` | overall brightness |
 | `toon` | key-light bands (3 gives a cel look; 0 is smooth) |
-| `whiten` | 0..1: how far the hull goes toward light grey. Some panel detail stays. |
+| `whiten` | 0..1: how far the hull goes toward light grey |
+| `detail` | 0..1: how much of the texture's fine detail (panel lines, vents, grime) shows on top of the whitened hull and the paint. Default 0.6. |
+| `bump` | how much that detail bends the light, so panel edges catch it like bevels and greebles. Default 1. |
+| `shine` | the hull's least specular strength: higher gives broader, whiter sheen, like WC1's shiny hulls. Default 0.3. |
 | `paint`, `paint2` | rules for the primary and secondary livery colours, terms joined with `\|` |
 | `glass` | the rule for the canopy: dark navy glass with a sharp highlight and a reflected sky, whatever the livery |
+| `decals` | up to four decals, joined with `\|` (below) |
 | `livery` | the default livery |
 
 Paint terms:
@@ -62,6 +66,37 @@ that way on the ship. The Franklin uses `fin>0.95|band:0.55-0.7` in the
 primary colour and `spine<0.07@bottom` in the secondary. Its glass is
 `blue>0.12`: the oval dome on the nose taper, painted navy in its texture.
 The hull's own texels are never more than 0.03 bluer; the dome's are 0.26.
+
+Decals are written `name:x z size rot`, with optional suffixes:
+
+- **x:** a signed fraction of the half-span.
+- **z:** a fraction of the length from the tail.
+- **size:** a fraction of the length.
+- **rot:** degrees.
+- **`@top` or `@bottom`:** puts the decal on one side only.
+- **`~m`:** mirrors it onto both wings.
+
+They are projected straight down (or up) onto the hull. They keep their own
+colours, so a livery never recolours them, and the texture's detail shows
+through them. The decals are drawn by the renderer itself:
+
+| decal | what |
+|---|---|
+| `arrows` | two red chevrons pointing forward |
+| `roundel` | a navy disc with a white ring and a gold star |
+| `hazard` | yellow and black diagonal bands |
+
+The Franklin carries `arrows:0 0.56 0.13 0@top|roundel:0.82 0.13 0.09 0@top~m`:
+the chevrons just behind its canopy, and a roundel near each wingtip.
+
+## The light
+
+Every ship gets the same light, so the sprites match one another
+(`KEY_DIR`, `KEY_DISTANCE` in `shipviews.py`). It is a point light up and
+to the left and only a little in front, well off the view axis as in WC1's
+renders, at three ship radii. Faces turned toward it are bright, faces
+turned away fall into shadow, and flat panels shade across. A dim cool
+fill comes from the lower right.
 
 ## Liveries: data/liveries.csv
 

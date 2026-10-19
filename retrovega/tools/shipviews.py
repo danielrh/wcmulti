@@ -51,6 +51,14 @@ VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
 
 GLOW = {'terran': (255, 168, 72), 'aera': (96, 240, 200), 'rlaan': (240, 90, 220)}
 GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflection
+# The key light, the same for every ship so the sprites match: a point light
+# well off the view axis (up and to the left, and only a little in front),
+# at three ship radii, so faces turned toward it are bright, faces turned
+# away fall into shadow, and flat panels shade across.
+KEY_DIR = (-0.70, 0.60, 0.40)
+KEY_DISTANCE = 3.0
+DECAL_SIZE = 128   # each decal's cell in the atlas
+MAX_DECALS = 4
 
 VS = '''
 #version 330
@@ -118,7 +126,12 @@ uniform vec4 side1c;
 uniform vec4 side2c;
 uniform vec4 side3c;
 uniform float whiten;
-uniform float detail_ref;
+uniform float detail_k;   // how much of the texture's fine detail shows
+uniform float bump_k;     // how much that detail bends the light (bevels)
+uniform float shine;      // the hull's least specular strength
+uniform sampler2D decal_atlas;
+uniform vec4 decal_pos[4];  // centre x, centre z, size (ship units), rotation (radians)
+uniform vec4 decal_opt[4];  // atlas cell, side (0, 1 top, -1 bottom), mirrored, in use
 uniform float exposure;
 uniform float toon;
 uniform vec3 key_pos;     // a point light, view space, ship units
@@ -132,6 +145,20 @@ layout(location = 0) out vec4 frag;
 layout(location = 1) out vec4 paint;
 vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
 float facing(float side, float ny) { return side == 0.0 ? 1.0 : step(0.2, side * ny); }
+vec4 decal(float ny) {
+    vec4 acc = vec4(0.0);
+    for (int i = 0; i < 4; i++) {
+        if (decal_opt[i].w < 0.5 || facing(decal_opt[i].y, ny) < 0.5) continue;
+        float x = decal_opt[i].z > 0.5 ? abs(v_obj.x) : v_obj.x;
+        vec2 d = vec2(x - decal_pos[i].x, v_obj.z - decal_pos[i].y) / decal_pos[i].z;
+        float c = cos(decal_pos[i].w), s = sin(decal_pos[i].w);
+        d = vec2(c * d.x - s * d.y, s * d.x + c * d.y);
+        if (abs(d.x) > 0.5 || abs(d.y) > 0.5) continue;
+        vec4 t = texture(decal_atlas, vec2((decal_opt[i].x + d.x + 0.5) / 4.0, 0.5 - d.y));
+        acc = vec4(mix(acc.rgb, t.rgb, t.a), max(acc.a, t.a));
+    }
+    return acc;
+}
 float area(vec4 r, vec4 rb, vec4 rc, vec4 sd, vec4 sdb, vec4 sdc, float ny, float nx) {
     float x = abs(v_obj.x) / half_span;
     float p = 0.0;
@@ -149,19 +176,26 @@ void main() {
     vec3 n = normalize(v_n);
     if (!gl_FrontFacing) n = -n;
     vec3 v = vec3(0.0, 0.0, 1.0);
+    // the texture's fine detail (panel lines, vents, grime) as a height around 0
+    float hd = texture(lum_map, v_uv).b - 0.5;
+    // ... bending the normal, so panel edges catch the light like bevels
+    n = normalize(n - vec3(dFdx(hd), dFdy(hd), 0.0) * bump_k * 3.0);
+    float detail = 1.0 + detail_k * 1.4 * hd;
     vec3 albedo = lin(texture(diffuse_map, v_uv).rgb);
-    float l = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
-    float detail = clamp(pow(l / detail_ref, 0.5), 0.75, 1.2);
-    albedo = mix(albedo, vec3(0.62) * detail, whiten);
+    albedo = mix(albedo, vec3(0.62), whiten);
     vec3 on = normalize(v_on) * (gl_FrontFacing ? 1.0 : -1.0);
-    float p1 = area(rule1, rule1b, rule1c, side1, side1b, side1c, on.y, abs(on.x)) * paint_on;
-    float p2 = area(rule2, rule2b, rule2c, side2, side2b, side2c, on.y, abs(on.x)) * paint_on;
-    albedo = mix(albedo, primary * detail, p1);
-    albedo = mix(albedo, secondary * detail, p2);
+    vec4 dec = decal(on.y);
+    float p1 = area(rule1, rule1b, rule1c, side1, side1b, side1c, on.y, abs(on.x)) * paint_on * (1.0 - dec.a);
+    float p2 = area(rule2, rule2b, rule2c, side2, side2b, side2c, on.y, abs(on.x)) * paint_on * (1.0 - dec.a);
+    albedo = mix(albedo, primary, p1);
+    albedo = mix(albedo, secondary, p2);
+    albedo = mix(albedo, lin(dec.rgb), dec.a);
+    albedo *= detail;
     float g = area(rule3, rule3b, rule3c, side3, side3b, side3c, on.y, abs(on.x));
     albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
-    float shin = mix(8.0, 80.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5, 0.0, 1.0));
+    specc = max(specc, vec3(shine));
+    float shin = mix(7.0, 60.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5 - shine, 0.0, 1.0));
     vec3 sky = vec3(0.60, 0.62, 0.68), ground = vec3(0.10, 0.10, 0.11);
     vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5) * 0.42;
     vec3 key_dir = normalize(key_pos - v_view);
@@ -174,7 +208,7 @@ void main() {
     vec3 col = albedo * (amb + kd * vec3(1.06, 1.0, 0.90) * 1.9 + fd * vec3(0.45, 0.48, 0.58) * 0.3);
     float matte = (1.0 - 0.85 * max(p1, p2)) * (1.0 - g);
     vec3 h = normalize(key_dir + v);
-    col += (specc + 0.06) * pow(max(dot(n, h), 0.0), shin) * 1.1 * matte;
+    col += specc * pow(max(dot(n, h), 0.0), shin) * 2.2 * matte;
     vec3 r = reflect(-v, n);
     col += specc * mix(ground, sky, r.y * 0.5 + 0.5) * 0.3 * matte;
     col += vec3(0.40, 0.44, 0.52) * pow(1.0 - max(n.z, 0.0), 3.0) * 0.3 * matte;
@@ -255,8 +289,9 @@ def lum_map(diffuse, tri_uv):
     """Two masks of the diffuse map for the paint rules, as an RGB image: in
     red its luminance, smoothed, as percentiles of the texels the mesh uses
     (0..1), so 'lum>0.8' means its brightest fifth of panels; in green its
-    blueness, blue minus the larger of red and green (0..1).  Also the
-    median linear luminance (the reference for keeping panel detail)."""
+    blueness, blue minus the larger of red and green (0..1); in blue its fine
+    detail (panel lines, vents, grime) as a height around 0.5.  Also the
+    median linear luminance."""
     a = np.asarray(diffuse, dtype=np.float32) / 255
     lum = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
     used = used_texels(diffuse.size, tri_uv)
@@ -264,7 +299,10 @@ def lum_map(diffuse, tri_uv):
     ranks = np.searchsorted(np.sort(smooth[used]), smooth) / max(used.sum(), 1)
     ref = float(np.median((a ** 2.2)[used] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)))
     blue = ndimage.gaussian_filter(a[..., 2] - np.maximum(a[..., 0], a[..., 1]), 1.0)
-    rgb = np.dstack([np.clip(ranks, 0, 1), np.clip(blue, 0, 1), np.zeros_like(blue)])
+    # fine detail: the luminance against its own blur, +-0.15 mapped to 0..1
+    fine = lum - ndimage.gaussian_filter(lum, diffuse.size[0] / 128.0)
+    height = 0.5 + 0.5 * np.clip(fine / 0.15, -1, 1)
+    rgb = np.dstack([np.clip(ranks, 0, 1), np.clip(blue, 0, 1), height])
     return Image.fromarray((rgb * 255).astype(np.uint8), 'RGB'), max(ref, 0.02)
 
 
@@ -290,6 +328,61 @@ def rule_vec(rule):
     # side[5] is the band's; the shader reads it as the second side of the b vector
     sb = (side[4], side[5], 0.0, side[7])
     return tuple(v[:4]), tuple(v[4:8]), tuple(v[8:]), tuple(side[:4]), sb, tuple(side[8:])
+
+
+def decal_image(name):
+    """One decal, drawn here (RGBA, DECAL_SIZE square, its top toward the nose)."""
+    n = DECAL_SIZE
+    img = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if name == 'arrows':      # two red chevrons pointing forward
+        for y0 in (int(n * 0.12), int(n * 0.46)):
+            d.polygon([(n * 0.5, y0), (n * 0.92, y0 + n * 0.34), (n * 0.74, y0 + n * 0.42),
+                       (n * 0.5, y0 + n * 0.2), (n * 0.26, y0 + n * 0.42), (n * 0.08, y0 + n * 0.34)],
+                      fill=(214, 28, 24, 255))
+    elif name == 'roundel':   # a navy disc, a white ring, a gold star
+        d.ellipse((4, 4, n - 4, n - 4), fill=(24, 40, 120, 255))
+        d.ellipse((n * 0.16, n * 0.16, n * 0.84, n * 0.84), fill=(236, 236, 236, 255))
+        d.ellipse((n * 0.24, n * 0.24, n * 0.76, n * 0.76), fill=(24, 40, 120, 255))
+        c, r1, r2 = n / 2, n * 0.24, n * 0.09
+        pts = []
+        for k in range(10):
+            a = math.pi / 2 + k * math.pi / 5
+            r = r1 if k % 2 == 0 else r2
+            pts.append((c + r * math.cos(a), c - r * math.sin(a)))
+        d.polygon(pts, fill=(240, 196, 40, 255))
+    elif name == 'hazard':    # yellow and black diagonal bands
+        for k in range(-4, 8):
+            x = k * n / 4
+            d.polygon([(x, n), (x + n / 8, n), (x + n / 8 + n, 0), (x + n, 0)], fill=(240, 200, 30, 255))
+            d.polygon([(x + n / 8, n), (x + n / 4, n), (x + n / 4 + n, 0), (x + n / 8 + n, 0)], fill=(24, 24, 28, 255))
+    else:
+        sys.exit('unknown decal %r' % name)
+    return img
+
+
+def decal_uniforms(spec, pos):
+    """The decal atlas and uniforms from a spec such as
+    'arrows:0 0.55 0.15 0@top|roundel:0.8 0.15 0.1 0@top~m': name:x z size rot
+    with x a signed fraction of the half-span, z a fraction of the length
+    from the tail, size a fraction of the length, rot in degrees; @top or
+    @bottom to put it on one side; ~m to mirror it onto both wings."""
+    atlas = Image.new('RGBA', (DECAL_SIZE * MAX_DECALS, DECAL_SIZE), (0, 0, 0, 0))
+    hs = float(np.max(np.abs(pos[:, 0])))
+    zlo, length = float(pos[:, 2].min()), float(pos[:, 2].max() - pos[:, 2].min())
+    upos, uopt = [(0.0, 0.0, 1.0, 0.0)] * MAX_DECALS, [(0.0, 0.0, 0.0, 0.0)] * MAX_DECALS
+    for i, item in enumerate(filter(None, (spec or '').split('|'))):
+        if i >= MAX_DECALS:
+            sys.exit('at most %d decals' % MAX_DECALS)
+        mirror = item.endswith('~m')
+        item = item[:-2] if mirror else item
+        item, _, where = item.partition('@')
+        name, _, args = item.partition(':')
+        x, z, size, rot = (float(v) for v in args.split())
+        atlas.paste(decal_image(name), (i * DECAL_SIZE, 0))
+        upos[i] = (x * hs, zlo + z * length, size * length, math.radians(rot))
+        uopt[i] = (float(i), {'': 0.0, 'top': 1.0, 'bottom': -1.0}[where], 1.0 if mirror else 0.0, 1.0)
+    return atlas, upos, uopt
 
 
 def view_matrix(elev, head):
@@ -330,12 +423,21 @@ def render(row, outdir, size, assets, livery_name=None):
         prog[name].value = unit
     # the key is a point light up and to the left, near enough that flat
     # panels shade from bright to dark across the hull
-    prog['key_pos'].value = tuple(np.array([-1.5, 1.7, 2.6]) * radius)
+    kd = np.array(KEY_DIR) / np.linalg.norm(KEY_DIR)
+    prog['key_pos'].value = tuple(kd * KEY_DISTANCE * radius)
     fill = np.array([0.7, -0.35, 0.45]); fill /= np.linalg.norm(fill)
     prog['fill_dir'].value = tuple(fill)
     prog['exposure'].value = float(art.get('exposure') or 1)
     prog['toon'].value = float(art.get('toon') or 0)
     prog['whiten'].value = float(art.get('whiten') or 0)
+    prog['detail_k'].value = float(art.get('detail') or 0.6)
+    prog['bump_k'].value = float(art.get('bump') or 1.0)
+    prog['shine'].value = float(art.get('shine') or 0.3)
+    prog['decal_atlas'].value = 4
+    atlas, pos, opt = decal_uniforms(art.get('decals'), allpos - center)
+    decal_tex = make_texture(ctx, atlas, 4)
+    prog['decal_pos'].value = pos
+    prog['decal_opt'].value = opt
     prog['primary'].value = linear(livery['primary'])
     prog['secondary'].value = linear(livery['secondary'])
     prog['paint_on'].value = 1.0 if livery['primary'].strip() else 0.0
@@ -385,8 +487,7 @@ def render(row, outdir, size, assets, livery_name=None):
         ctx.enable(moderngl.DEPTH_TEST)
         ctx.disable(moderngl.CULL_FACE)
         for vao, tex, ref in drawables:
-            prog['detail_ref'].value = ref
-            tex[0].use(0); tex[1].use(1); tex[3].use(2); tex['lum'].use(3)
+            tex[0].use(0); tex[1].use(1); tex[3].use(2); tex['lum'].use(3); decal_tex.use(4)
             vao.render(moderngl.TRIANGLES)
         z = np.frombuffer(depth.read(), dtype=np.float32).reshape(big, big)[::-1]
         facing = (rot @ np.array([0.0, 0.0, -1.0]))[2]

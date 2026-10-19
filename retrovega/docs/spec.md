@@ -529,9 +529,11 @@ Input:
 
 The look follows WC1's Confed ships (`SHIPTYPE.V00`..`V03`): white or light
 hulls with large saturated panels (green, red), accent stripes and hazard
-bands on the wing edges. The lighting is that of 1990s pre-renders: a point
-light up and to the left shades flat panels from bright to dark, with no
-ink lines. Each faction keeps its character:
+bands on the wing edges, and markings such as red arrow chevrons. The hull
+itself shows texture: speckled, greebled metal with bevelled panels and
+bright white specular sheen. The lighting is that of 1990s pre-renders:
+one point light well off the view axis, up and to the left, the same for
+every ship. It shades flat panels from bright to dark, with no ink lines. Each faction keeps its character:
 
 - Terran: white hulls in carrier liveries;
 - Aera: steel and teal with glowing trim;
@@ -543,7 +545,10 @@ Vega Strike mesh (`.bfxm`, read by `tools/bfxm.py`) with its own diffuse,
 specular and glow maps into the 37 views, 4× supersampled and boxed down.
 Lighting:
 
-- a warm point key light, a cool fill and a soft rim;
+- a warm point key light well off the view axis, a cool fill and a soft rim;
+- the texture's fine detail kept on the whitened hull and used as a bump, so panel edges bevel and greebles catch the light;
+- a minimum specular per ship, for white sheen on shiny hulls;
+- decals (arrow chevrons, roundels, hazard bands) projected onto the top or bottom, keeping their own colours;
 - hemisphere ambient;
 - an optional banded key light for a cel look;
 - matte paint, so liveries stay saturated.
