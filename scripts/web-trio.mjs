@@ -39,9 +39,19 @@ async function open(name, callsign, before) {
   page.on("console", (m) => logs[name].push(m.text()));
   page.on("pageerror", (e) => console.log(`[${name}] PAGE ERROR: ${e.message}`));
   const u = new URL(pageUrl);
-  for (const [k, v] of Object.entries({ room, server: lobbyUrl, callsign, firstname: "Chris", "env.WCNET_LOG": "2" })) u.searchParams.set(k, v);
+  const maker = name === "host";
+  for (const [k, v] of Object.entries({ room, server: lobbyUrl, callsign, firstname: "Chris", "env.WCNET_LOG": "2" })) {
+    if (k !== "room" || !maker) u.searchParams.set(k, v);
+  }
   await page.goto(u.toString());
-  await page.check("#threeSeats");      // (whoever makes the room makes it for three)
+  if (maker) {
+    // Whoever makes the room makes it for three: the box is read when the
+    // room is made, and a page opened by a room link joins (and locks the
+    // box) as soon as it loads, so the host types the code instead.
+    await page.check("#threeSeats");
+    await page.fill("#room", room);
+    await page.click("#join");
+  }
   await page.setInputFiles("#gamefile", process.env.GAME_FILE);
   await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   console.log(`[${name}] ` + (await page.$eval("#sourceStatus", (el) => `${el.dataset.state}: ${el.textContent || "plays " + document.getElementById("program").value}`)).slice(0, 200));
