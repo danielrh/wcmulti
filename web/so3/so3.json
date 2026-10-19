@@ -55,7 +55,7 @@
  ],
  "anchorSize": 147124,
  "keyCheck": "eab025bd0f3665e2d8198112a98c61c56e45c9941aa73c417cce72c946b9ac09",
- "iv": "d1ed99d11b6267ef8a5b1707",
+ "iv": "b184d97285c864a22e5e6533",
  "files": [
   {
    "path": "GAMEDAT/ALTSHIPS.003",
@@ -75,7 +75,7 @@
   },
   {
    "path": "GAMEDAT/INCIDENT.S03",
-   "size": 75054
+   "size": 85524
   },
   {
    "path": "GAMEDAT/INTELSHP.001",
@@ -186,5 +186,5 @@
    "size": 8163
   }
  ],
- "bytes": 1123844
+ "bytes": 1134314
 }

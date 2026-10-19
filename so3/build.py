@@ -137,6 +137,12 @@ HEADON_BLOCKS = list(range(LAUNCH_BLOCKS[-1] + 1, LAUNCH_BLOCKS[-1] + 1 + len(HE
 # DOORS.V45, the same doors with the Culloden's plates (so3/doorplates.py).
 DOOR_FILMS = [81, 82, 83, 84, 85, 86, 88]
 DOOR_BLOCKS = list(range(HEADON_BLOCKS[-1] + 1, HEADON_BLOCKS[-1] + 1 + len(DOOR_FILMS)))
+# Wing Commander II's flight deck and repair deck films print the place
+# themselves ("Flight Deck, TCS Concordia": INCIDENT.S00 blocks 89-94;
+# "Repair Deck, TCS Concordia": 108-112): copied to the end of our
+# INCIDENT.S03 with the Culloden's name in that one string.
+CAPTION_FILMS = [(b, "Flight Deck,\nTCS Culloden") for b in range(89, 95)] + [(b, "Repair Deck,\nTCS Culloden") for b in range(108, 113)]
+CAPTION_BLOCKS = list(range(DOOR_BLOCKS[-1] + 1, DOOR_BLOCKS[-1] + 1 + len(CAPTION_FILMS)))
 
 
 def carrier_stills():
@@ -186,6 +192,12 @@ def waterloo_incidents(data, gamedat):
         assert len(blocks) == at
         blocks.append(named(wc2[b][1], b"doors.v00", b"doors.v45"))
         flags.append(wc2[b][0])
+    for (b, caption), at in zip(CAPTION_FILMS, CAPTION_BLOCKS):
+        assert len(blocks) == at
+        strings = wc2data.scene_strings(wc2[b][1])
+        assert b"TCS Concordia" in strings[0], (b, strings[0])
+        blocks.append(wc2data.series_set_strings(wc2[b][1], [caption.encode("latin1")] + strings[1:], drop_speech=False))
+        flags.append(wc2[b][0])
     return wc2data.compose_container(blocks, flags)
 
 
@@ -224,7 +236,8 @@ def waterloo_films(blocks):
                        [(("incident.s03", WATERLOO_LAUNCH), ("incident.s03", LAUNCH_BLOCKS[(k + 2) % len(LAUNCH_BLOCKS)])),
                         (("incident.s03", WATERLOO_LANDING), ("incident.s03", LANDING_BLOCKS[k % len(LANDING_BLOCKS)]))] +
                        [(("incident.s00", b), ("incident.s03", at)) for (b, _, _), at in zip(HEADON_FILMS, HEADON_BLOCKS)] +
-                       [(("incident.s00", b), ("incident.s03", at)) for b, at in zip(DOOR_FILMS, DOOR_BLOCKS)])
+                       [(("incident.s00", b), ("incident.s03", at)) for b, at in zip(DOOR_FILMS, DOOR_BLOCKS)] +
+                       [(("incident.s00", b), ("incident.s03", at)) for (b, _), at in zip(CAPTION_FILMS, CAPTION_BLOCKS)])
         b, n = wc2data.retarget_films(b, mapping)
         out.append(b)
         changed += n
