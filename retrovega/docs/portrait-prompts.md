@@ -40,8 +40,8 @@ frames or borders. Square, 1024x1024.
 ```
 photo, photorealistic, 3d render, cgi, plastic skin, doll, chibi, anime eyes, caricature,
 exaggerated features, oversized head, long hair, ponytail, afro, full beard, hat, helmet,
-sunglasses, hands, text, watermark, signature, frame, border, busy background, tilted head,
-three-quarter view, open mouth, smile with teeth
+headset, headphones, microphone, sunglasses, hands, text, watermark, signature, frame,
+border, busy background, tilted head, three-quarter view, open mouth, smile with teeth
 ```
 
 Remove "open mouth" from the negative prompt for the mouth edits in section 3.
@@ -52,12 +52,13 @@ Remove "open mouth" from the negative prompt for the mouth edits in section 3.
 |---|---|
 | pilots | an olive-drab Terran Confederation flight suit with a high zipped collar, an orange squadron patch on the left shoulder and a pale name tape on the chest |
 | the hero | the same flight suit in slate blue, with a gold squadron patch |
-| headsets | a slim black pilot headset: band over the head, earpiece on the left ear, thin boom mic ending beside the mouth |
 
 ## 2. The portraits
 
 All hair is short military regulation. Facial hair is small: a moustache, a
-goatee or stubble at most.
+goatee or stubble at most. No one wears a headset or helmet: these are the
+faces of the lounge, the bar and the briefing room. Pilots in a headset are
+a second, optional set for in-flight comms (section 3, "Two looks").
 
 **RAY: Augustin "Ray" Reyes, the barman (a retired pilot)**
 ```
@@ -81,8 +82,7 @@ patch on the left shoulder, pale name tape on the chest.
 A 31-year-old woman fighter pilot of East Asian descent. Light skin, black hair pulled back
 into a tight low regulation bun, dark eyes, fine features, small nose, calm and composed
 look. Olive-drab Terran Confederation flight suit with a high zipped collar, orange
-squadron patch on the left shoulder, pale name tape on the chest. A slim black pilot
-headset: band over the head, earpiece on the left ear, thin boom mic beside the mouth.
+squadron patch on the left shoulder, pale name tape on the chest.
 ```
 
 **ECHO: Kasia Wren, pilot**
@@ -90,9 +90,7 @@ headset: band over the head, earpiece on the left ear, thin boom mic beside the 
 A 26-year-old woman fighter pilot. Very fair skin with light freckles across the nose and
 cheeks, short auburn hair in a side-parted crop, green eyes, narrow chin, small upturned
 nose, determined look. Olive-drab Terran Confederation flight suit with a high zipped
-collar, orange squadron patch on the left shoulder, pale name tape on the chest. A slim
-black pilot headset: band over the head, earpiece on the left ear, thin boom mic beside
-the mouth.
+collar, orange squadron patch on the left shoulder, pale name tape on the chest.
 ```
 
 **TORCH: Rafael Ortega, pilot**
@@ -108,8 +106,7 @@ orange squadron patch on the left shoulder, pale name tape on the chest.
 A 30-year-old man fighter pilot of East Asian descent. Light skin, black high-and-tight
 haircut, dark eyes, narrow chin, a thin pale scar through his left eyebrow, calm and alert
 look. Olive-drab Terran Confederation flight suit with a high zipped collar, orange
-squadron patch on the left shoulder, pale name tape on the chest. A slim black pilot
-headset: band over the head, earpiece on the left ear, thin boom mic beside the mouth.
+squadron patch on the left shoulder, pale name tape on the chest.
 ```
 
 **DRIFTER: Owen Price, pilot**
@@ -117,8 +114,7 @@ headset: band over the head, earpiece on the left ear, thin boom mic beside the 
 A 33-year-old man fighter pilot. Fair skin, sandy-blond crew cut, blue-grey eyes, square
 jaw, light stubble, an easy, faintly amused look. Olive-drab Terran Confederation flight
 suit with a high zipped collar, orange squadron patch on the left shoulder, pale name tape
-on the chest. A slim black pilot headset: band over the head, earpiece on the left ear,
-thin boom mic beside the mouth.
+on the chest.
 ```
 
 **HERO_M: "Wildcard", the player (male)**
@@ -126,8 +122,7 @@ thin boom mic beside the mouth.
 A 27-year-old man fighter pilot, a fresh academy graduate. Brown skin, dark-brown
 high-and-tight haircut, brown eyes, square jaw, clean-shaven, determined but open look.
 Slate-blue Terran Confederation flight suit with a high zipped collar, gold squadron patch
-on the left shoulder, pale name tape on the chest. A slim black pilot headset: band over
-the head, earpiece on the left ear, thin boom mic beside the mouth.
+on the left shoulder, pale name tape on the chest.
 ```
 
 **HERO_F: "Wildcard", the player (female)**
@@ -135,8 +130,7 @@ the head, earpiece on the left ear, thin boom mic beside the mouth.
 A 27-year-old woman fighter pilot, a fresh academy graduate. Fair skin, short brown hair in
 a side-parted crop, hazel-brown eyes, rounded face, small nose, determined but open look.
 Slate-blue Terran Confederation flight suit with a high zipped collar, gold squadron patch
-on the left shoulder, pale name tape on the chest. A slim black pilot headset: band over
-the head, earpiece on the left ear, thin boom mic beside the mouth.
+on the left shoulder, pale name tape on the chest.
 ```
 
 **XO: Commander Mira Solberg**
@@ -214,6 +208,25 @@ face, mouth, hair, lighting, colours, line style, framing and background.
 | `eyes_1` | both upper eyelids lowered halfway, mid-blink |
 | `eyes_2` | both eyes fully closed in a natural, relaxed blink |
 
+**Two looks: the lounge and the cockpit.** A portrait made with a headset
+is the in-flight comm look; the lounge look has none. To get the lounge
+look from a headset portrait, send this in the conversation that made it:
+
+```
+Edit this exact portrait. Remove the headset completely: the band over the head, the
+earpiece and the boom microphone. Fill in what they covered with what belongs there: the
+short regulation haircut, the ear, the cheek and the skin beside the mouth, matching the
+rest of the face. Keep everything else identical: the same face, expression, mouth, eyes,
+hair, lighting, colours, line style, framing and background. Same character, same moment.
+```
+
+Then make the mouth and blink edits again from the new portrait: the old
+mouth frames still carry the microphone, and an edit may shift the face a
+little. To give a pilot without one a headset (for a full comm set), ask
+for the reverse: "Add a slim black pilot headset: band over the head,
+earpiece on the left ear, thin boom mic ending beside the mouth. Keep
+everything else identical."
+
 ## 4. Tips
 
 - **One conversation or seed per character.** In ChatGPT, keep each character's edits in the conversation where its portrait was made. Locally, keep the portrait's seed for its edits.
@@ -233,3 +246,11 @@ retrovega/art/people/RAY/eyes_1.png, eyes_2.png
 
 `base.png` is the portrait and doubles as `mouth_0` and `eyes_0`; every
 file is the full 1024 square. The keys are those of data/people.csv.
+
+The headset look, where there is one, goes in a `comm/` folder beside it
+with the same file names:
+
+```
+retrovega/art/people/FROST/base.png ...        the lounge (no headset)
+retrovega/art/people/FROST/comm/base.png ...   in flight (headset)
+```

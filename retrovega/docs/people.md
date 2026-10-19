@@ -22,7 +22,9 @@
 | TECH | Chief Ana Kowalski | Sparks | Venture (LIHW) | the flight-deck chief, an ex-racer |
 
 Everyone wears a short military regulation haircut; facial hair is a
-moustache, a goatee or stubble at most.
+moustache, a goatee or stubble at most. The portraits have no headsets
+(they are the lounge and briefing faces); a headset set for in-flight comms
+is optional and lives in `art/people/KEY/comm/`.
 
 ## Licence
 
