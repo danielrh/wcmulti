@@ -272,6 +272,31 @@ background. Same character, same moment.
 
 Locally, use the same prompts for inpainting, without the first sentence.
 
+**If an edit won't come out.** Some models balk at `mouth_3`'s tongue. Try
+this version instead:
+
+```
+Edit the original portrait. Change ONLY the mouth and the jaw just below it: the lips
+parted a little and the teeth slightly apart, a small relaxed opening, as when saying "N"
+or "D". The expression stays neutral. Keep everything else identical: the same face, eyes,
+hair, lighting, colours, line style, framing and background. Same character, same moment.
+```
+
+Or copy the nearest shape under the missing name. At 100 ms a step nobody
+sees the difference.
+
+| missing | copy |
+|---|---|
+| `mouth_1` | the portrait (`base.png`) |
+| `mouth_2` | `mouth_1` |
+| `mouth_3` | `mouth_4` |
+| `mouth_4` | `mouth_3` |
+| `mouth_5` | `mouth_6` |
+| `mouth_6` | `mouth_5` |
+| `mouth_7` | `mouth_8` |
+| `mouth_8` | `mouth_7` |
+| `eyes_1` | `eyes_2` |
+
 **Two looks: the lounge and the cockpit.** A portrait made with a headset
 is the in-flight comm look; the lounge look has none. To get the lounge
 look from a headset portrait, send this in the conversation that made it:
