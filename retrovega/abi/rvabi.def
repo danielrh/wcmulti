@@ -1,0 +1,171 @@
+# RetroVega puppet ABI, version 1: the one source of every place the
+# multiplayer hook layer (src/cpu/wcnet_*) reads, writes or calls in RV.EXE.
+#
+# tools/rvabi.py lays this file out and prints the offsets (docs/spec.md
+# section 4 is its output); later it also writes the game's rvabi.h / .inc
+# and the RV column of src/cpu/wcnet_ds.def.  Names are the hook layer's own
+# (wcnet_ds.def, wcnet_code.h) wherever it already has one, so the same
+# accessor reads the same thing in WC.EXE and RV.EXE; rv* names are new.
+#
+#   SECTION name start      a fixed region of DGROUP from `start` (hex); the
+#                           next SECTION's start (or END) is its hard limit
+#   VAR   name bytes        one variable
+#   SLOT  name bytes        one element per entity slot (SLOTS of them)
+#   TABLE name bytes count  `count` records of `bytes`
+#   FUNC  name args ret     a thunk in RVHOOK, entered with a far cdecl call
+#                           (16-bit args); thunk n sits at 0x20 + 5*n
+#   SITE  name offset       an instruction in RVHOOK at a fixed offset
+#
+# Units (as WC.EXE has them, so the hook layer's arithmetic carries over):
+# positions int32, 256 = 1 km; orientation vectors int32, 256 = 1.0, "up"
+# points down the screen; velocity = position change per frame; one frame
+# = one simulation step (20 per second).
+
+SLOTS 128
+MAXSHIPSLOT 9          # bring-up: ships in 1..9 like WC.EXE; 47 once the layer takes it from GameParams
+DGROUP_PARA 0x0100     # DGROUP's paragraph in the image (RVHOOK, 4 KB, is paragraph 0)
+
+SECTION header 0x0000
+VAR   rvNullGuard                 16    # zeros: a write through a near NULL shows up here
+VAR   rvPuppetHeader              48    # "RVPUPPET", ABI version, SLOTS, MAXSHIPSLOT, sizes (spec 4.1)
+VAR   rvPuppetDirectory          192    # one word per VAR/SLOT/TABLE below, in this order: its offset
+
+SECTION scalars 0x0100
+VAR   missionStatus                2    # 0 flying, 1 landed, 2 ejected, 3 on the carrier, 4 dead, 5 exit
+VAR   playerCanBeDamaged           2    # do_damage ignores slot 0 while zero
+VAR   frameCounter                 2    # +1 per simulation frame, nothing else
+VAR   randomSeed                   4    # the only gameplay random state (spec 6.3)
+VAR   currentNavPoint              2
+VAR   currentMission               1
+VAR   currentSeries                1
+VAR   playerMissionShip            2    # which mission ship the player flies
+VAR   playerTarget                 2    # slot, 0xffff none
+VAR   landedOn                     2    # slot landed on, 0xffff none
+VAR   victoryPoints                2
+VAR   pendingCampaign              2    # 0xffff none
+VAR   savedGameLoaded              2
+VAR   skipRecRoom                  2    # nonzero: runHangarMission goes straight to the barracks
+VAR   fieldCount                   2
+VAR   fieldRockTally               2
+VAR   currentField                 2    # offset of the field record the player is in, 0 none
+VAR   mouseShift                   1    # 1: mouse x 0..639 -> logical x 0..319 (as WC2 states it)
+VAR   rvVideoMode                  1    # 0 320x200 (mode 13h), 1 640x400 (VESA 100h)
+VAR   steerInput                   4    # pitch (down +), yaw: -9..9 keys, 1..5 and 8 from the pointer
+VAR   steerStepsX                 12    # pointer distances where each turn step begins, logical 320x200 px
+VAR   steerStepsY                 12
+VAR   viewRect                     8    # 3D view left, top, right, bottom in LOGICAL 320x200 coordinates
+VAR   commTextTimer                2
+VAR   commSpeaker                  2
+VAR   commVdu                     16    # the comm VDU; its screen rectangle is four words at +4 (logical)
+VAR   commGlobalTxt               80
+VAR   vduText                    160
+VAR   pilotCallsign               14
+VAR   pilotLastName               14
+VAR   pilotRecords                16    # near pointers, one per named pilot (8); name at +0xE
+VAR   statusPilots                16    # word per named pilot: 0 alive, else series*4 + mission of death
+VAR   systemDamage                10    # byte per system (9 used), 0..4
+VAR   cockpitDamage                8    # word per instrument (4): 1 broken
+VAR   vduStatus10WhenPlayerHitsSmth 2
+VAR   tempVector                  12
+VAR   entitiesToDespawn           20    # slots of the current field's rocks or mines, 0xff free
+VAR   navPointState              152    # 8 x 19 bytes: mission tree progress
+VAR   campaignTable                2    # near pointer to the campaign table (spec 4.4)
+VAR   rvPlayerCount                1    # humans in the flight, written by the layer (1 in single player)
+VAR   rvNetRole                    1    # 0 single player, 1 host, 2 client: the engine only reads it
+
+SECTION scratch 0x0400
+VAR   aLoadingWingCom            128    # starts "Loading RETROVEGA" (the layer's signature), then its scratch
+VAR   aSorryAnErrorHasOccured    256    # the layer's call thunks; the game never reads either again
+
+SECTION entities 0x0600
+SLOT  maybeEntityType              2    # EntityType (spec 4.3)
+SLOT  gInstanceShipTypes           2    # ship type: row of data/ships.csv
+SLOT  parentShipForShip            1    # 0xff none
+SLOT  commAnimInfo                 2    # side: 0 Terran (the player's), 1 Aera, 2 Rlaan
+SLOT  shipStateByte                1    # pilot: 0..7 named pilots, 8 a human player, 0xff none
+SLOT  slotMissionShip              2    # mission ship in the slot, 0xffff none
+SLOT  gPositionVector             12
+SLOT  gVelocityVector             12
+SLOT  gOrientationRightVector     12
+SLOT  gOrientationUpVector        12
+SLOT  gOrientationFrontVector     12
+SLOT  setSpeed                     4    # throttle, kps (spec 6.1)
+SLOT  speedLo                      4    # current speed, kps
+SLOT  curShield                    4    # word[2]: front, rear
+SLOT  shieldMax                    4
+SLOT  armorState                   8    # word[4]: front, rear, left, right
+SLOT  damagePoints                 2    # accumulated hull damage
+SLOT  coreHp                       1    # starts at 4
+SLOT  hullCounter                  1
+SLOT  gunDamage                    1    # 0..5
+SLOT  engineFlag                   1    # 0xff disabled
+SLOT  gunEnergy                    2    # recharges to 100
+SLOT  gunTable                  0x33    # count byte + 10 x 5-byte guns: type word, mount x, mount y, state
+SLOT  missileTarget                1    # 0xff none
+SLOT  shipAiState                  2    # 9 dying
+SLOT  gMaybeShipRadius             2    # km
+SLOT  formationOffset              6    # right, up, forward on the leader, km
+SLOT  entityCullStatus             2    # last frame's screen x, 0x8001 culled
+SLOT  entityScreenY                2
+SLOT  damageProperty               2    # bolts: damage; ships: AI timers
+SLOT  rvController                 1    # 0 AI, 1 the local player, 2 puppet (a remote human), 3 script, 4 frozen
+SLOT  rvNetId                      1    # network id, 0xff none: the layer's, the engine never reads it
+SLOT  rvFlags                      2    # 1 invulnerable, 2 local-only hazard, 4 docked, 8 jamming, 16 cloaked
+SLOT  rvLastWrite                  2    # frameCounter when the layer last wrote the slot's motion
+SLOT  rvTarget                     1    # what this ship targets, 0xff none
+SLOT  rvAfterburner                1    # 0 off, 1 on
+
+SECTION mission 0x6400
+TABLE navPointTable             0x4d 16 # ten mission-ship words at +0x39
+TABLE missionShipTable          0x2a 64 # +0 ship type, +2 side, +4 leader, +6 behaviour (4 pilot in formation, 6 the player)
+TABLE fieldTable                0x14  7 # type, position, radius
+
+END 0x8000                               # C data (_DATA, CONST, _BSS) and the stack follow
+
+# --- RVHOOK: code at paragraph 0 of the image -------------------------------
+# Thunks: `jmp far impl` at 0x20 + 5*n.  The hook layer hooks the thunk (the
+# callers' far call lands there with [ret ip, ret cs, args...] on the stack)
+# and calls game code through it.  Every in-game caller goes through the
+# thunk too, so a hook sees every call.
+FUNC  rvHello                     0 -   # first call after start-up: the layer can take DS from here
+FUNC  do_damage                   4 ax  # (src, dst, qty, near Vec3* where) -> 0 when nothing was done
+FUNC  delayedDespawn              2 -   # (src, ship)
+FUNC  fireGunFromShip             2 ax  # (ship, gun) -> bolt or missile slot, 0xffff none
+FUNC  maybe_fire_all_guns         1 -   # (ship)
+FUNC  aiSetSpeed                  2 -   # (ship, speed): the AI's throttle; skipped for a puppet
+FUNC  outerSpawnShipEntity        2 ax  # (missionShip, navPoint) -> slot, 0xffff none
+FUNC  enterNavPoint               1 -   # (nav)
+FUNC  despawn                     1 -   # (ship)
+FUNC  aiShipThink                 1 -   # (slot): capital ships
+FUNC  aiFighterThink              1 -   # (slot): fighters
+FUNC  showCommMessage             2 -   # (ship, msg); msg 0 = show commGlobalTxt as it is
+FUNC  autoAnimation               3 -   # (camShipType, camMode, duration); (0,0,0) ends the camera
+FUNC  autopilotFinished           0 -   # probe
+FUNC  briefingStarted             0 -   # probe
+FUNC  enterBarracks               0 ax  # -> 7 leaves at once (the layer's return value)
+FUNC  missionStarting             0 -   # probe
+FUNC  missionVictoryCalc          0 -   # probe
+FUNC  missionEnded                0 -   # probe
+FUNC  runHangarMission            0 ax  # nonzero: go on through the barracks
+FUNC  simulatorStart              0 -   # probe
+FUNC  simulatorEnd                0 -   # probe
+FUNC  clearFields                 0 -
+FUNC  farShipTest                 2 ax  # (slot, km) -> 1 when the ship is too far to keep (spec 5.3)
+FUNC  despawnQuietly              1 -   # (slot): gone without explosion, debris or comm line
+FUNC  setController               2 -   # (slot, rvController value): also stops or starts its AI
+FUNC  playScene                   2 -   # (scene, arg): an in-flight cut-scene
+FUNC  rvFrameDone                 0 -   # probe: the frame is drawn and flipped
+
+# Sites: instructions in RVHOOK's hand-written flight loop (rvhook.asm) at
+# fixed offsets, with the same instruction and register contract as the
+# WC.EXE place of the same name (spec 5.2).
+SITE  mainLoopTop             0x0400    # interrupts on, no live registers but SI DI BP
+SITE  statusCheckAfterKeys    0x0440    # just before `cmp missionStatus,0 / jne exit`
+SITE  statusSetByExitKey      0x0438
+SITE  statusCheckAfterFrame   0x0480
+SITE  skipOrchestra           0x0500    # a 5-byte `call far`; the layer may step over it
+SITE  afterStartup            0x0510
+SITE  afterHangarMission      0x0520
+SITE  autopilotKey            0x0540    # a 5-byte `call far` the layer steps over on clients
+SITE  cockpitPointer          0x0560    # a 4-byte `call far [mem]`, caller cleans up
+SITE  autoAnimationBody       0x0580    # after autoAnimation's `push bp / mov bp,sp`

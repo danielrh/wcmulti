@@ -1,0 +1,34 @@
+type,code,name,faction,kind,damage,speed_kps,range_km,refire_frames,energy,lock,lock_s,vs_source,notes
+0x00,LAS,Laser,terran,gun,3,2200,3.0,4,3,,,Laser,"The light gun everyone starts with"
+0x01,MDR,Mass Driver,terran,gun,5,1500,2.6,6,4,,,MiniDriver,"Slug-thrower: ignores the shield bonus of ION, half damage to shields"
+0x02,PRT,Particle Cannon,terran,gun,6,2000,2.8,6,6,,,ParticleBeam/Reaper,
+0x03,ION,Ion Cannon,terran,gun,7,1700,2.4,8,8,,,HeavyIonBeam/ShieldBreaker,"Double damage to shields, half to armour"
+0x04,DSR,Disruptor,terran,gun,5,1900,3.2,6,6,,,LR_Disruptor,"Long range"
+0x08,PH2,Photon Mk II,aera,gun,7,1900,3.0,7,7,,,Photon_MKII,
+0x09,PH3,Photon Mk III,aera,gun,3,2400,3.0,3,3,,,Photon_MKIII,"Fast and light: the Aera's common gun"
+0x0A,PEN,Penetrator,aera,gun,10,1400,2.5,12,12,,,Penetrator,"Half its damage passes through shields"
+0x10,KTK,Ktek,rlaan,gun,4,2100,2.5,4,4,,,Ktek,
+0x11,KTB,Ktek Beam,rlaan,gun,9,0,1.5,14,14,,,KtekBeam,"Beam: hits at once, short range"
+0x12,CRP,Crippler,rlaan,gun,1,1800,2.4,8,6,,,Crippler,"Drains 20 gunEnergy and flickers the engine (engineFlag) for 2 s"
+0x13,GRV,Grav Thumper,rlaan,gun,2,1200,1.0,40,20,,,MiniGravThumper,"Pushes the target 0.5 km (velocity kick)"
+0x14,LAST,Laser Turret,terran,turret,4,2200,3.5,6,,,,CS_UV_Laser,
+0x15,PRTT,Particle Turret,terran,turret,14,1600,5.0,20,,,,RelativisticParticleBeam,"Anti-capital"
+0x16,MDRT,Mass Driver Turret,terran,turret,5,1500,2.6,8,,,,MiniDriver,
+0x17,PENT,Penetrator Turret,aera,turret,12,1400,3.0,14,,,,PenetratorMKVI,
+0x18,PH3T,Photon Turret,aera,turret,3,2400,3.0,4,,,,Photon_MKIII,
+0x19,LPBT,Long Particle Beam,aera,turret,16,0,6.0,30,,,,LR_ParticleBeam,"Beam, anti-capital"
+0x1A,GGS,Grand Gauss,aera,turret,60,1800,8.0,60,,,,GrandGauss,"The Leonidas' main guns"
+0x1B,ICE,Icepick,rlaan,turret,30,1600,6.0,40,,,,icepick,
+0x1C,HSP,Hellspawn,rlaan,turret,2,2600,1.5,2,,,,hellspawn,"Point defence: shoots missiles"
+0x20,DF,Dumbfire,terran,missile,20,1000,3.0,20,,none,,Dumbfire,
+0x21,HS,Heat Seeker,terran,missile,22,900,4.0,20,,heat,3.0,HeatSeeker,"Locks from the target's rear arc"
+0x22,IR,Image Recognition,terran,missile,24,950,5.0,20,,image,2.0,ImageRecognition,
+0x23,FF,Friend or Foe,terran,missile,18,1000,4.0,20,,auto,0.2,FriendOrFoe,"Takes the nearest enemy; fooled by Rlaan jamming"
+0x24,TOR,Torpedo,terran,torpedo,120,400,6.0,60,,image,5.0,Torpedo,"Capital ships only"
+0x28,AHS,Seeker,aera,missile,24,950,4.0,20,,heat,2.5,HeatSeeker,
+0x29,JAV,Javelin Pod,aera,rocket,6,1300,2.5,6,,none,,Javelin,"Four per trigger pull"
+0x2A,ATP,Advanced Torpedo,aera,torpedo,160,500,6.0,60,,image,4.0,AdvTorpedo,
+0x2B,PRC,Porcupine Mine,aera,mine,30,0,0.5,40,,proximity,,PorcupineMine,"Dropped behind; lives 60 s"
+0x2C,CML,Capship Missile,aera,missile,60,700,8.0,80,,image,3.0,CapshipMissile,
+0x30,RSP,Spore Torpedo,rlaan,torpedo,100,450,5.0,60,,image,4.0,,"New: Vega Strike gives Rlaan fighters no torpedo"
+0x38,JAM,Jammer,rlaan,special,0,0,3.0,0,,,,,"Xuanzong: inside 3 km locks break and comm lines turn to static"
