@@ -10,7 +10,8 @@ TAG = KEY-LIVERY:
 
     OUTDIR/TAG_NN.png         one RGBA sprite per view (hard alpha)
     OUTDIR/TAG_paint_NN.png   where the livery is: 1 primary, 2 secondary
-                              (those pixels go to the palette's livery ramps)
+                              (those pixels go to the palette's livery ramps),
+                              3 canopy glass
     OUTDIR/TAG_sheet.png      the views as a grid: rows top, +60, +30, 0,
                               -30, -60, bottom; columns headings 0..180
     OUTDIR/TAG_sheet_256.png  the same posterised (a preview of the palette)
@@ -49,6 +50,7 @@ HEADINGS = (0, 30, 60, 90, 120, 150, 180)
 VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
 
 GLOW = {'terran': (255, 168, 72), 'aera': (96, 240, 200), 'rlaan': (240, 90, 220)}
+GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflection
 
 VS = '''
 #version 330
@@ -77,8 +79,11 @@ void main() {
 # fraction), lum (the brightest panels: a percentile of the texels the mesh
 # uses), hazard (alternating bands beyond a fraction of the half-span), fin
 # (vertical surfaces beyond a fraction of the half-span: wingtip fins), band
-# (a stripe across the wings between two fractions of the half-span); each
+# (a stripe across the wings between two fractions of the half-span), above
+# (higher than a fraction of the ship's height: a canopy on the deck); each
 # may be limited to the surfaces facing up (1) or down (-1) on the ship.
+# The glass rules pick the canopy, drawn dark blue and glossy whatever the
+# livery.
 FS = '''
 #version 330
 uniform sampler2D diffuse_map;
@@ -90,14 +95,21 @@ uniform vec3 secondary;
 uniform float paint_on;
 uniform float half_span;
 uniform float length_;
+uniform float y_lo;
+uniform float y_hi;
+uniform vec3 glass_col;
 uniform vec4 rule1;     // span, spine, lum, hazard for the primary colour
-uniform vec4 rule1b;    // fin, band from, band to, unused
+uniform vec4 rule1b;    // fin, band from, band to, above
 uniform vec4 rule2;     // the same two for the secondary colour
 uniform vec4 rule2b;
 uniform vec4 side1;     // per term: 0 anywhere, 1 only facing up, -1 only facing down
 uniform vec4 side1b;
 uniform vec4 side2;
 uniform vec4 side2b;
+uniform vec4 rule3;     // the same for the glass
+uniform vec4 rule3b;
+uniform vec4 side3;
+uniform vec4 side3b;
 uniform float whiten;
 uniform float detail_ref;
 uniform float exposure;
@@ -118,6 +130,7 @@ float area(vec4 r, vec4 rb, vec4 sd, vec4 sdb, float ny, float nx) {
     float p = 0.0;
     if (rb.x > 0.0) p = max(p, step(rb.x, x) * step(0.5, nx) * facing(sdb.x, ny));
     if (rb.z > 0.0) p = max(p, step(rb.y, x) * step(x, rb.z) * facing(sdb.y, ny));
+    if (rb.w > 0.0) p = max(p, step(rb.w, (v_obj.y - y_lo) / (y_hi - y_lo)) * facing(sdb.w, ny));
     if (r.x > 0.0) p = max(p, step(r.x, x) * facing(sd.x, ny));
     if (r.y > 0.0) p = max(p, step(x, r.y) * facing(sd.y, ny));
     if (r.z > 0.0) p = max(p, step(r.z, texture(lum_map, v_uv).r) * facing(sd.z, ny));
@@ -137,6 +150,8 @@ void main() {
     float p2 = area(rule2, rule2b, side2, side2b, on.y, abs(on.x)) * paint_on;
     albedo = mix(albedo, primary * detail, p1);
     albedo = mix(albedo, secondary * detail, p2);
+    float g = area(rule3, rule3b, side3, side3b, on.y, abs(on.x));
+    albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
     float shin = mix(8.0, 80.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5, 0.0, 1.0));
     vec3 sky = vec3(0.60, 0.62, 0.68), ground = vec3(0.10, 0.10, 0.11);
@@ -149,17 +164,20 @@ void main() {
     }
     float fd = max(dot(n, fill_dir), 0.0);
     vec3 col = albedo * (amb + kd * vec3(1.06, 1.0, 0.90) * 1.9 + fd * vec3(0.45, 0.48, 0.58) * 0.3);
-    float matte = 1.0 - 0.85 * max(p1, p2);
+    float matte = (1.0 - 0.85 * max(p1, p2)) * (1.0 - g);
     vec3 h = normalize(key_dir + v);
     col += (specc + 0.06) * pow(max(dot(n, h), 0.0), shin) * 1.1 * matte;
     vec3 r = reflect(-v, n);
     col += specc * mix(ground, sky, r.y * 0.5 + 0.5) * 0.3 * matte;
     col += vec3(0.40, 0.44, 0.52) * pow(1.0 - max(n.z, 0.0), 3.0) * 0.3 * matte;
+    // glass: a sharp highlight and a dark sky reflected in it
+    col += g * (vec3(0.9) * pow(max(dot(n, h), 0.0), 60.0)
+                + mix(vec3(0.01, 0.015, 0.03), vec3(0.16, 0.24, 0.42), smoothstep(-0.2, 0.8, r.y)) * 0.4);
     col += lin(texture(glow_map, v_uv).rgb);
     col *= exposure;
     col = col / (1.0 + 0.12 * col);
     frag = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
-    paint = vec4(p1 > 0.5 ? 1.0 : 0.0, p2 > 0.5 ? 1.0 : 0.0, 0.0, 1.0);
+    paint = vec4(p1 > 0.5 ? 1.0 : 0.0, p2 > 0.5 ? 1.0 : 0.0, g > 0.5 ? 1.0 : 0.0, 1.0);
 }
 '''
 
@@ -241,8 +259,8 @@ def lum_map(diffuse, tri_uv):
 def rule_vec(rule):
     """'fin>0.95|band:0.55-0.7|spine<0.07@bottom' -> the shader's two
     parameter vectors and two side vectors.  Terms: span>F, spine<F, lum>P,
-    hazard>F, fin>F, band:A-B; one ending in @top or @bottom paints only
-    the surfaces facing that way on the ship."""
+    hazard>F, fin>F, band:A-B, above>F; one ending in @top or @bottom paints
+    only the surfaces facing that way on the ship."""
     v, side = [0.0] * 8, [0.0] * 8
     for r in filter(None, (rule or '').split('|')):
         r, _, where = r.partition('@')
@@ -251,14 +269,14 @@ def rule_vec(rule):
             lo, hi = r[5:].split('-')
             v[5], v[6], side[5] = float(lo), float(hi), w
             continue
-        for i, name in enumerate(('span>', 'spine<', 'lum>', 'hazard>', 'fin>')):
+        for name, i in (('span>', 0), ('spine<', 1), ('lum>', 2), ('hazard>', 3), ('fin>', 4), ('above>', 7)):
             if r.startswith(name):
                 v[i], side[i] = float(r[len(name):]), w
                 break
         else:
             sys.exit('unknown paint term %r' % r)
     # side[5] is the band's; the shader reads it as the second side of the b vector
-    sb = (side[4], side[5], 0.0, 0.0)
+    sb = (side[4], side[5], 0.0, side[7])
     return tuple(v[:4]), tuple(v[4:]), tuple(side[:4]), sb
 
 
@@ -311,7 +329,10 @@ def render(row, outdir, size, assets, livery_name=None):
     prog['paint_on'].value = 1.0 if livery['primary'].strip() else 0.0
     prog['half_span'].value = float(np.max(np.abs(allpos[:, 0] - center[0])))
     prog['length_'].value = float(allpos[:, 2].max() - allpos[:, 2].min())
-    for n, rule in (('1', art.get('paint')), ('2', art.get('paint2'))):
+    prog['y_lo'].value = float(allpos[:, 1].min() - center[1])
+    prog['y_hi'].value = float(allpos[:, 1].max() - center[1])
+    prog['glass_col'].value = tuple((c / 255.0) ** 2.2 for c in GLASS)
+    for n, rule in (('1', art.get('paint')), ('2', art.get('paint2')), ('3', art.get('glass'))):
         a, b, sa, sb = rule_vec(rule)
         prog['rule' + n].value, prog['rule%sb' % n].value = a, b
         prog['side' + n].value, prog['side%sb' % n].value = sa, sb
@@ -393,6 +414,7 @@ def post(rgba, paint, z, size, engines, glow):
     rgb = down(rgb) / np.maximum(a, 1e-6)[..., None]
     p1 = down(paint[..., 0]) / np.maximum(a, 1e-6)
     p2 = down(paint[..., 1]) / np.maximum(a, 1e-6)
+    p3 = down(paint[..., 2]) / np.maximum(a, 1e-6)
     zmin = zf.reshape(h, SS, w, SS).min(axis=(1, 3))
     solid = a >= 0.4
     # a darkened silhouette edge, in the hull's own colour
@@ -415,7 +437,7 @@ def post(rgba, paint, z, size, engines, glow):
         rgb = np.where(solid[..., None], rgb + add, add + rgb * solid[..., None])
         solid = solid | (g > 0.3)
     out = np.dstack([np.clip(rgb * 255, 0, 255), solid * 255.0]).astype(np.uint8)
-    pm = np.where(solid & (p2 >= 0.5), 2, np.where(solid & (p1 >= 0.5), 1, 0)).astype(np.uint8)
+    pm = np.where(solid & (p3 >= 0.5), 3, np.where(solid & (p2 >= 0.5), 2, np.where(solid & (p1 >= 0.5), 1, 0))).astype(np.uint8)
     return Image.fromarray(out, 'RGBA'), Image.fromarray(pm, 'L')
 
 

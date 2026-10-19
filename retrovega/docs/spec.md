@@ -570,7 +570,9 @@ sheet and a posterised preview.
   - `lum>P`: panels brighter than the P-th fraction of the texels the mesh uses;
   - `fin>F`: vertical surfaces beyond F of the half-span (wingtip fins);
   - `band:A-B`: a stripe across the wings between A and B of the half-span;
+  - `above>F`: everything higher than F of the ship's height;
   - any term may end in `@top` or `@bottom` to paint only the surfaces facing that way. The Franklin is `fin>0.95|band:0.55-0.7` in the primary colour and `spine<0.07@bottom` (a stripe under the belly) in the secondary.
+- **glass:** a rule for the canopy, drawn dark navy and glossy in every livery. The Franklin's dome is `above>0.76`.
 
 **Palette** (one fixed 256-colour palette in flight):
 
@@ -581,9 +583,10 @@ sheet and a posterised preview.
 | 16-31 | hull whites and greys |
 | 32-47 | Aera hull steels |
 | 48-63 | Rlaan hull charcoals |
-| 64-79 | livery primary (placeholder ramp) |
-| 80-87 | livery secondary (placeholder ramp) |
-| 88-127 | the liveries' target ramps (green, blue, red, gold, teal, violet: 8 shades each) |
+| 64-71 | livery primary (placeholder ramp) |
+| 72-79 | livery secondary (placeholder ramp) |
+| 80-87 | canopy glass, navy to highlight |
+| 88-127 | the liveries' target ramps, 8 shades each: green, blue, red, gold, black. Aera teal and Rlaan violet liveries use their faction's hull ramps. |
 | 128-143 | fire and explosions (cycled) |
 | 144-151 | engine glow, Terran orange |
 | 152-159 | engine glow, Aera cyan and Rlaan magenta |
@@ -593,7 +596,7 @@ sheet and a posterised preview.
 | 255 | white |
 
 The quantiser (M3) sends paint pixels (from the paint masks) to the
-placeholder ramps by brightness, and everything else to the nearest hull or
+placeholder ramps by brightness, glass pixels to the glass ramp, and everything else to the nearest hull or
 glow colour, without dithering. Until it exists, the renderer's `_256`
 sheet is a 48-colour median-cut preview.
 

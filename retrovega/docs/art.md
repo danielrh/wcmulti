@@ -28,7 +28,7 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | file | contents |
 |---|---|
 | `TAG_NN.png` | view NN (0 top, 1-35 the bands, 36 bottom), RGBA, hard alpha, centred on the ship |
-| `TAG_paint_NN.png` | the paint mask: 1 primary, 2 secondary, 0 hull. It sends those pixels to the livery ramps of the palette. |
+| `TAG_paint_NN.png` | the paint mask: 1 primary, 2 secondary, 3 canopy glass, 0 hull. It sends those pixels to the livery ramps and the glass ramp of the palette. |
 | `TAG_sheet.png` | the 37 views as a grid. Rows: top, +60, +30, 0, −30, −60, bottom. Columns: headings 0 (nose toward you), 30, ..., 90 (nose left), ..., 180 (tail toward you). |
 | `TAG_sheet_256.png` | a 48-colour posterised preview, until the real palette exists |
 
@@ -41,6 +41,7 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | `toon` | key-light bands (3 gives a cel look; 0 is smooth) |
 | `whiten` | 0..1: how far the hull goes toward light grey. Some panel detail stays. |
 | `paint`, `paint2` | rules for the primary and secondary livery colours, terms joined with `\|` |
+| `glass` | the rule for the canopy: dark navy glass with a sharp highlight and a reflected sky, whatever the livery |
 | `livery` | the default livery |
 
 Paint terms:
@@ -53,10 +54,13 @@ Paint terms:
 | `spine<F` | a stripe along the centre line, F of the half-span wide |
 | `hazard>F` | alternating bands beyond F of the half-span |
 | `lum>P` | the brightest panels: above the P-th fraction of the texture's used texels, smoothed |
+| `above>F` | everything higher than F of the ship's height (a canopy on the deck) |
 
 Any term can end in `@top` or `@bottom` to paint only the surfaces facing
 that way on the ship. The Franklin uses `fin>0.95|band:0.55-0.7` in the
-primary colour and `spine<0.07@bottom` in the secondary.
+primary colour and `spine<0.07@bottom` in the secondary. Its glass is
+`above>0.76`: the dome on the deck above the hull's top surface, which
+leaves a white frame where the dome meets the deck.
 
 ## Liveries: data/liveries.csv
 
