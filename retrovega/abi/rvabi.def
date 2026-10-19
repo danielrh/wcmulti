@@ -114,6 +114,7 @@ SLOT  rvFlags                      2    # 1 invulnerable, 2 local-only hazard, 4
 SLOT  rvLastWrite                  2    # frameCounter when the layer last wrote the slot's motion
 SLOT  rvTarget                     1    # what this ship targets, 0xff none
 SLOT  rvAfterburner                1    # 0 off, 1 on
+SLOT  rvLivery                     1    # row of data/liveries.csv: the ramps the sprite's paint pixels take
 
 SECTION mission 0x6400
 TABLE navPointTable             0x4d 16 # ten mission-ship words at +0x39

@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""Render a Vega Strike ship into RetroVega's 37 sprite views (WC1's layout).
+
+    shipviews.py KEY OUTDIR [--size PX] [--livery NAME] [--assets DIR]
+
+KEY is a row of data/ships.csv (key or name).  data/art.csv may give the
+ship a stretch, an exposure, a whitening of its hull, paint rules and a
+default livery; data/liveries.csv names the liveries.  Writes, with
+TAG = KEY-LIVERY:
+
+    OUTDIR/TAG_NN.png         one RGBA sprite per view (hard alpha)
+    OUTDIR/TAG_paint_NN.png   where the livery is: 1 primary, 2 secondary
+                              (those pixels go to the palette's livery ramps)
+    OUTDIR/TAG_sheet.png      the views as a grid: rows top, +60, +30, 0,
+                              -30, -60, bottom; columns headings 0..180
+    OUTDIR/TAG_sheet_256.png  the same posterised (a preview of the palette)
+
+The minimal renderer, headless on Mesa (EGL) through moderngl (docs/art.md):
+the ship's own Vega Strike maps (diffuse, specular, glow); lights fixed to
+the screen like a 1990s sprite set (a warm point light up and to the left,
+so flat panels shade across, a dim fill, a rim); hemisphere ambient; an optional banded key light for a cel
+look; livery paint from rules; engine glows at the exhaust points of Vega
+Strike's units.csv (its Light column); a darkened silhouette edge and a
+little depth-based cavity shading.
+"""
+import argparse
+import csv
+import math
+import os
+import sys
+
+import moderngl
+import numpy as np
+from PIL import Image, ImageDraw
+from scipy import ndimage
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import bfxm  # noqa: E402
+
+SS = 4  # supersampling per axis
+
+# The 37 views: (elevation, heading) in degrees.  Elevation is the camera's
+# height above the ship's wing plane; heading 0 = nose toward the viewer,
+# 90 = profile with the nose to the LEFT, 180 = tail toward the viewer.  The
+# headings 210..330 are drawn mirrored.  Top and bottom are drawn nose left.
+BANDS = (60, 30, 0, -30, -60)
+HEADINGS = (0, 30, 60, 90, 120, 150, 180)
+VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
+
+GLOW = {'terran': (255, 168, 72), 'aera': (96, 240, 200), 'rlaan': (240, 90, 220)}
+
+VS = '''
+#version 330
+uniform mat4 mvp;
+uniform mat3 rot;
+in vec3 in_pos;
+in vec3 in_norm;
+in vec2 in_uv;
+out vec3 v_n;
+out vec2 v_uv;
+out vec3 v_obj;
+out vec3 v_view;
+out vec3 v_on;
+void main() {
+    gl_Position = mvp * vec4(in_pos, 1.0);
+    v_view = rot * in_pos;
+    v_on = in_norm;
+    v_n = rot * in_norm;
+    v_uv = in_uv;
+    v_obj = in_pos;
+}
+'''
+
+# Paint rules arrive as uniforms: span (outer wings beyond a fraction of the
+# half-span), spine (a stripe along the centre line narrower than a
+# fraction), lum (the brightest panels: a percentile of the texels the mesh
+# uses), hazard (alternating bands beyond a fraction of the half-span), fin
+# (vertical surfaces beyond a fraction of the half-span: wingtip fins), band
+# (a stripe across the wings between two fractions of the half-span); each
+# may be limited to the surfaces facing up (1) or down (-1) on the ship.
+FS = '''
+#version 330
+uniform sampler2D diffuse_map;
+uniform sampler2D spec_map;
+uniform sampler2D glow_map;
+uniform sampler2D lum_map;
+uniform vec3 primary;
+uniform vec3 secondary;
+uniform float paint_on;
+uniform float half_span;
+uniform float length_;
+uniform vec4 rule1;     // span, spine, lum, hazard for the primary colour
+uniform vec4 rule1b;    // fin, band from, band to, unused
+uniform vec4 rule2;     // the same two for the secondary colour
+uniform vec4 rule2b;
+uniform vec4 side1;     // per term: 0 anywhere, 1 only facing up, -1 only facing down
+uniform vec4 side1b;
+uniform vec4 side2;
+uniform vec4 side2b;
+uniform float whiten;
+uniform float detail_ref;
+uniform float exposure;
+uniform float toon;
+uniform vec3 key_pos;     // a point light, view space, ship units
+uniform vec3 fill_dir;
+in vec3 v_n;
+in vec2 v_uv;
+in vec3 v_obj;
+in vec3 v_view;
+in vec3 v_on;
+layout(location = 0) out vec4 frag;
+layout(location = 1) out vec4 paint;
+vec3 lin(vec3 c) { return pow(c, vec3(2.2)); }
+float facing(float side, float ny) { return side == 0.0 ? 1.0 : step(0.2, side * ny); }
+float area(vec4 r, vec4 rb, vec4 sd, vec4 sdb, float ny, float nx) {
+    float x = abs(v_obj.x) / half_span;
+    float p = 0.0;
+    if (rb.x > 0.0) p = max(p, step(rb.x, x) * step(0.5, nx) * facing(sdb.x, ny));
+    if (rb.z > 0.0) p = max(p, step(rb.y, x) * step(x, rb.z) * facing(sdb.y, ny));
+    if (r.x > 0.0) p = max(p, step(r.x, x) * facing(sd.x, ny));
+    if (r.y > 0.0) p = max(p, step(x, r.y) * facing(sd.y, ny));
+    if (r.z > 0.0) p = max(p, step(r.z, texture(lum_map, v_uv).r) * facing(sd.z, ny));
+    if (r.w > 0.0) p = max(p, step(r.w, x) * step(0.5, fract(v_obj.z / length_ * 9.0)) * facing(sd.w, ny));
+    return p;
+}
+void main() {
+    vec3 n = normalize(v_n);
+    if (!gl_FrontFacing) n = -n;
+    vec3 v = vec3(0.0, 0.0, 1.0);
+    vec3 albedo = lin(texture(diffuse_map, v_uv).rgb);
+    float l = dot(albedo, vec3(0.2126, 0.7152, 0.0722));
+    float detail = clamp(pow(l / detail_ref, 0.5), 0.75, 1.2);
+    albedo = mix(albedo, vec3(0.62) * detail, whiten);
+    vec3 on = normalize(v_on) * (gl_FrontFacing ? 1.0 : -1.0);
+    float p1 = area(rule1, rule1b, side1, side1b, on.y, abs(on.x)) * paint_on;
+    float p2 = area(rule2, rule2b, side2, side2b, on.y, abs(on.x)) * paint_on;
+    albedo = mix(albedo, primary * detail, p1);
+    albedo = mix(albedo, secondary * detail, p2);
+    vec3 specc = lin(texture(spec_map, v_uv).rgb);
+    float shin = mix(8.0, 80.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5, 0.0, 1.0));
+    vec3 sky = vec3(0.60, 0.62, 0.68), ground = vec3(0.10, 0.10, 0.11);
+    vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5) * 0.42;
+    vec3 key_dir = normalize(key_pos - v_view);
+    float kd = max(dot(n, key_dir), 0.0);
+    if (toon > 0.0) {
+        float b = kd * toon;
+        kd = (floor(b) + smoothstep(0.35, 0.65, fract(b))) / toon;
+    }
+    float fd = max(dot(n, fill_dir), 0.0);
+    vec3 col = albedo * (amb + kd * vec3(1.06, 1.0, 0.90) * 1.9 + fd * vec3(0.45, 0.48, 0.58) * 0.3);
+    float matte = 1.0 - 0.85 * max(p1, p2);
+    vec3 h = normalize(key_dir + v);
+    col += (specc + 0.06) * pow(max(dot(n, h), 0.0), shin) * 1.1 * matte;
+    vec3 r = reflect(-v, n);
+    col += specc * mix(ground, sky, r.y * 0.5 + 0.5) * 0.3 * matte;
+    col += vec3(0.40, 0.44, 0.52) * pow(1.0 - max(n.z, 0.0), 3.0) * 0.3 * matte;
+    col += lin(texture(glow_map, v_uv).rgb);
+    col *= exposure;
+    col = col / (1.0 + 0.12 * col);
+    frag = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
+    paint = vec4(p1 > 0.5 ? 1.0 : 0.0, p2 > 0.5 ? 1.0 : 0.0, 0.0, 1.0);
+}
+'''
+
+
+def table_row(name, key, column='key'):
+    for row in csv.DictReader(open(os.path.join(HERE, '..', 'data', name))):
+        if key.lower() == row[column].lower():
+            return row
+    return None
+
+
+def ship_row(key):
+    for row in csv.DictReader(open(os.path.join(HERE, '..', 'data', 'ships.csv'))):
+        if key.lower() in (row['key'].lower(), row['name'].lower()):
+            return row
+    sys.exit('no ship %r in data/ships.csv' % key)
+
+
+def linear(text):
+    if not text.strip():
+        return (0.0, 0.0, 0.0)
+    return tuple((int(v) / 255.0) ** 2.2 for v in text.split())
+
+
+def unit_lights(assets, unit):
+    """Exhaust points (x, y, z, size) from Vega Strike's units.csv Light column."""
+    rows = csv.reader(open(os.path.join(assets, 'units', 'units.csv'), newline='', encoding='utf-8', errors='replace'))
+    header = next(rows)
+    col = header.index('Light')
+    for r in rows:
+        if r and r[0] == unit:
+            out = []
+            for item in r[col].split('}'):
+                f = item.strip('{').split(';')
+                try:
+                    out.append(tuple(float(v) for v in f[1:5]))
+                except (ValueError, IndexError):
+                    pass
+            return [o for o in out if len(o) == 4]
+    return []
+
+
+def load_image(path, fallback):
+    if path and os.path.exists(path):
+        return Image.open(path).convert('RGB')
+    return Image.new('RGB', (4, 4), fallback)
+
+
+def make_texture(ctx, img, components=3):
+    tex = ctx.texture(img.size, components, img.tobytes())
+    tex.build_mipmaps()
+    tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+    tex.repeat_x = tex.repeat_y = True
+    return tex
+
+
+def used_texels(size, tri_uv):
+    """Mask of the texels the mesh's triangles cover (texture space)."""
+    cov = Image.new('L', size, 0)
+    d = ImageDraw.Draw(cov)
+    for t in tri_uv:
+        d.polygon([(u * size[0], v * size[1]) for u, v in t], fill=255)
+    return np.asarray(cov) > 0
+
+
+def lum_map(diffuse, tri_uv):
+    """The diffuse map's luminance, smoothed, as percentiles of the texels the
+    mesh uses (0..1), so 'lum>0.8' means its brightest fifth of panels; also
+    the median linear luminance (the reference for keeping panel detail)."""
+    a = np.asarray(diffuse, dtype=np.float32) / 255
+    lum = a @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    used = used_texels(diffuse.size, tri_uv)
+    smooth = ndimage.gaussian_filter(lum, diffuse.size[0] / 200.0)
+    ranks = np.searchsorted(np.sort(smooth[used]), smooth) / max(used.sum(), 1)
+    ref = float(np.median((a ** 2.2)[used] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)))
+    return Image.fromarray((np.clip(ranks, 0, 1) * 255).astype(np.uint8), 'L'), max(ref, 0.02)
+
+
+def rule_vec(rule):
+    """'fin>0.95|band:0.55-0.7|spine<0.07@bottom' -> the shader's two
+    parameter vectors and two side vectors.  Terms: span>F, spine<F, lum>P,
+    hazard>F, fin>F, band:A-B; one ending in @top or @bottom paints only
+    the surfaces facing that way on the ship."""
+    v, side = [0.0] * 8, [0.0] * 8
+    for r in filter(None, (rule or '').split('|')):
+        r, _, where = r.partition('@')
+        w = {'': 0.0, 'top': 1.0, 'bottom': -1.0}[where]
+        if r.startswith('band:'):
+            lo, hi = r[5:].split('-')
+            v[5], v[6], side[5] = float(lo), float(hi), w
+            continue
+        for i, name in enumerate(('span>', 'spine<', 'lum>', 'hazard>', 'fin>')):
+            if r.startswith(name):
+                v[i], side[i] = float(r[len(name):]), w
+                break
+        else:
+            sys.exit('unknown paint term %r' % r)
+    # side[5] is the band's; the shader reads it as the second side of the b vector
+    sb = (side[4], side[5], 0.0, 0.0)
+    return tuple(v[:4]), tuple(v[4:]), tuple(side[:4]), sb
+
+
+def view_matrix(elev, head):
+    """Rotation (3x3) from ship space to view space for a view, camera on +z."""
+    e, h = math.radians(elev), math.radians(head)
+    d = np.array([math.sin(h) * math.cos(e), math.sin(e), math.cos(h) * math.cos(e)])
+    if abs(elev) == 90:
+        up = np.array([-1.0, 0.0, 0.0]) if elev > 0 else np.array([1.0, 0.0, 0.0])
+    else:
+        up = np.array([0.0, 1.0, 0.0])
+    f = -d
+    s = np.cross(f, up); s /= np.linalg.norm(s)
+    u = np.cross(s, f)
+    return np.array([s, u, -f])
+
+
+def render(row, outdir, size, assets, livery_name=None):
+    art = table_row('art.csv', row['key']) or {}
+    livery_name = livery_name or art.get('livery') or 'none'
+    livery = table_row('liveries.csv', livery_name, 'name')
+    if livery is None:
+        sys.exit('no livery %r in data/liveries.csv' % livery_name)
+    stretch = np.array([float(v) for v in (art.get('stretch') or '1 1 1').split()])
+    unit_dir = os.path.join(assets, 'units', 'vessels', os.path.dirname(row['mesh']))
+    parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
+    for m in parts:
+        m.positions = m.positions * stretch
+        n = m.normals / stretch
+        m.normals = n / np.maximum(np.linalg.norm(n, axis=1), 1e-9)[:, None]
+    allpos = np.concatenate([m.positions for m in parts])
+    center = (allpos.min(0) + allpos.max(0)) / 2
+    radius = float(np.max(np.linalg.norm(allpos - center, axis=1))) * 1.04
+    lights = [(np.array(l[:3]) * stretch, l[3]) for l in unit_lights(assets, row['vs_unit'])]
+
+    ctx = moderngl.create_standalone_context(backend='egl')
+    prog = ctx.program(vertex_shader=VS, fragment_shader=FS)
+    for name, unit in (('diffuse_map', 0), ('spec_map', 1), ('glow_map', 2), ('lum_map', 3)):
+        prog[name].value = unit
+    # the key is a point light up and to the left, near enough that flat
+    # panels shade from bright to dark across the hull
+    prog['key_pos'].value = tuple(np.array([-1.5, 1.7, 2.6]) * radius)
+    fill = np.array([0.7, -0.35, 0.45]); fill /= np.linalg.norm(fill)
+    prog['fill_dir'].value = tuple(fill)
+    prog['exposure'].value = float(art.get('exposure') or 1)
+    prog['toon'].value = float(art.get('toon') or 0)
+    prog['whiten'].value = float(art.get('whiten') or 0)
+    prog['primary'].value = linear(livery['primary'])
+    prog['secondary'].value = linear(livery['secondary'])
+    prog['paint_on'].value = 1.0 if livery['primary'].strip() else 0.0
+    prog['half_span'].value = float(np.max(np.abs(allpos[:, 0] - center[0])))
+    prog['length_'].value = float(allpos[:, 2].max() - allpos[:, 2].min())
+    for n, rule in (('1', art.get('paint')), ('2', art.get('paint2'))):
+        a, b, sa, sb = rule_vec(rule)
+        prog['rule' + n].value, prog['rule%sb' % n].value = a, b
+        prog['side' + n].value, prog['side%sb' % n].value = sa, sb
+
+    drawables = []
+    for m in parts:
+        corners = m.tri_index.reshape(-1)
+        data = np.hstack([m.positions[corners] - center, m.normals[corners],
+                          m.tri_uv.reshape(-1, 2)]).astype('f4')
+        vao = ctx.vertex_array(prog, [(ctx.buffer(data.tobytes()), '3f 3f 2f', 'in_pos', 'in_norm', 'in_uv')])
+        imgs = {}
+        for idx, fallback in ((0, (200, 200, 200)), (1, (40, 40, 40)), (3, (0, 0, 0))):
+            names = [n for t, n in m.textures.get(idx, []) if t == 2]
+            imgs[idx] = load_image(os.path.join(unit_dir, names[0]) if names else None, fallback)
+        lum, ref = lum_map(imgs[0], m.tri_uv)
+        tex = {i: make_texture(ctx, im) for i, im in imgs.items()}
+        tex['lum'] = make_texture(ctx, lum, 1)
+        drawables.append((vao, tex, ref))
+
+    big = size * SS
+    color, paint = ctx.texture((big, big), 4), ctx.texture((big, big), 4)
+    depth = ctx.depth_texture((big, big))
+    fbo = ctx.framebuffer(color_attachments=[color, paint], depth_attachment=depth)
+
+    def grab(tex):
+        return np.frombuffer(tex.read(), dtype=np.uint8).reshape(big, big, 4)[::-1].astype(np.float32) / 255
+
+    views, paints = [], []
+    glow = GLOW.get(row['faction'], (255, 200, 120))
+    for elev, head in VIEWS:
+        rot = view_matrix(elev, head)
+        proj = np.diag([1 / radius, 1 / radius, -1 / radius, 1.0])
+        mvp = (proj @ np.vstack([np.hstack([rot, np.zeros((3, 1))]), [0, 0, 0, 1]])).astype('f4')
+        prog['mvp'].write(mvp.T.tobytes())
+        prog['rot'].write(rot.astype('f4').T.tobytes())
+        fbo.use()
+        fbo.clear(0, 0, 0, 0, depth=1.0)
+        ctx.enable(moderngl.DEPTH_TEST)
+        ctx.disable(moderngl.CULL_FACE)
+        for vao, tex, ref in drawables:
+            prog['detail_ref'].value = ref
+            tex[0].use(0); tex[1].use(1); tex[3].use(2); tex['lum'].use(3)
+            vao.render(moderngl.TRIANGLES)
+        z = np.frombuffer(depth.read(), dtype=np.float32).reshape(big, big)[::-1]
+        facing = (rot @ np.array([0.0, 0.0, -1.0]))[2]
+        engines = [(rot @ (pos - center) / radius, sz / radius, facing) for pos, sz in lights]
+        img, pm = post(grab(color), grab(paint), z, size, engines, glow)
+        views.append(img)
+        paints.append(pm)
+
+    os.makedirs(outdir, exist_ok=True)
+    tag = '%s-%s' % (row['key'], livery_name)
+    for vi, (img, pm) in enumerate(zip(views, paints)):
+        img.save(os.path.join(outdir, '%s_%02d.png' % (tag, vi)))
+        pm.save(os.path.join(outdir, '%s_paint_%02d.png' % (tag, vi)))
+    sheet = make_sheet(views, size)
+    sheet.save(os.path.join(outdir, '%s_sheet.png' % tag))
+    flat = Image.new('RGB', sheet.size, (0, 0, 0))
+    flat.paste(sheet, mask=sheet.split()[3])
+    poster = flat.quantize(colors=48, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE).convert('RGB')
+    poster.putalpha(sheet.split()[3])
+    poster.save(os.path.join(outdir, '%s_sheet_256.png' % tag))
+    return radius
+
+
+def post(rgba, paint, z, size, engines, glow):
+    """Supersampled render -> one sprite view (RGBA, hard alpha) and its paint mask."""
+    cover = rgba[..., 3] > 0
+    zf = np.where(cover, z, 1.0)
+    # cavity: darken a little where the surface lies behind its neighbourhood
+    zb = ndimage.gaussian_filter(zf, sigma=SS * 2.0)
+    rgb = rgba[..., :3] * (1.0 - np.clip((zf - zb) * 40.0, 0.0, 0.25))[..., None]
+    h = w = size
+
+    def down(a):
+        return a.reshape(h, SS, w, SS, *a.shape[2:]).mean(axis=(1, 3))
+
+    a = down(cover.astype(np.float32))
+    rgb = down(rgb) / np.maximum(a, 1e-6)[..., None]
+    p1 = down(paint[..., 0]) / np.maximum(a, 1e-6)
+    p2 = down(paint[..., 1]) / np.maximum(a, 1e-6)
+    zmin = zf.reshape(h, SS, w, SS).min(axis=(1, 3))
+    solid = a >= 0.4
+    # a darkened silhouette edge, in the hull's own colour
+    edge = solid & ~ndimage.binary_erosion(solid)
+    rgb = np.where(edge[..., None], rgb * 0.55, rgb)
+    # engine glows where the exhaust faces the viewer and is not hidden
+    yy, xx = np.mgrid[0:h, 0:w]
+    for q, sz, facing in engines:
+        if facing < -0.3:
+            continue
+        px, py = (q[0] + 1) * w / 2, (1 - q[1]) * h / 2
+        ix, iy = int(round(px)), int(round(py))
+        if 0 <= ix < w and 0 <= iy < h and solid[iy, ix] and (1 - q[2]) / 2 > zmin[iy, ix] + 0.03:
+            continue
+        r = max(1.5, min(sz * 0.3, 0.09) * w / 2) * (0.6 + 0.4 * max(facing, 0.0))
+        d = np.hypot(xx - px, yy - py) / r
+        g = np.clip(1.0 - d, 0.0, 1.0) ** 1.5 * min(1.0, 0.35 + 0.8 * max(facing, 0.0))
+        core = np.clip(1.0 - d * 2.0, 0.0, 1.0)
+        add = g[..., None] * np.array(glow) / 255 + core[..., None] * 0.6
+        rgb = np.where(solid[..., None], rgb + add, add + rgb * solid[..., None])
+        solid = solid | (g > 0.3)
+    out = np.dstack([np.clip(rgb * 255, 0, 255), solid * 255.0]).astype(np.uint8)
+    pm = np.where(solid & (p2 >= 0.5), 2, np.where(solid & (p1 >= 0.5), 1, 0)).astype(np.uint8)
+    return Image.fromarray(out, 'RGBA'), Image.fromarray(pm, 'L')
+
+
+def make_sheet(views, size):
+    rows = [[views[0]]] + [views[1 + 7 * b:8 + 7 * b] for b in range(5)] + [[views[36]]]
+    pad = 4
+    sheet = Image.new('RGBA', (7 * (size + pad), 7 * (size + pad)), (0, 0, 0, 0))
+    for r, row in enumerate(rows):
+        for c, img in enumerate(row):
+            sheet.paste(img, ((3 if len(row) == 1 else c) * (size + pad), r * (size + pad)))
+    return sheet
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    ap.add_argument('ship')
+    ap.add_argument('outdir')
+    ap.add_argument('--size', type=int, default=0, help='view size in pixels (default: lod0_px)')
+    ap.add_argument('--livery', default=None, help='a name in data/liveries.csv (default: data/art.csv)')
+    ap.add_argument('--assets', default=os.path.expanduser('~/dev/vegastrike-assets'))
+    args = ap.parse_args()
+    row = ship_row(args.ship)
+    if not row['mesh']:
+        sys.exit('%s has no mesh yet' % row['name'])
+    size = args.size or int(row['lod0_px'])
+    r = render(row, args.outdir, size, args.assets, args.livery)
+    print('%s: 37 views at %d px, radius %.2f' % (row['name'], size, r))
+
+
+if __name__ == '__main__':
+    main()

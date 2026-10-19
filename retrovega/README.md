@@ -11,6 +11,7 @@ Confederation against the Aera, with the Rlaan meddling.
 - [data/weapons.csv](data/weapons.csv): guns, turrets and missiles, numbered as they appear in the gun table.
 - [abi/rvabi.def](abi/rvabi.def): the single source of every offset the hook layer uses; `tools/rvabi.py` lays it out.
 - [docs/roster.png](docs/roster.png): contact sheet of the roster's VDU images (`tools/vdu_sheet.py docs/roster.png`).
+- [docs/art.md](docs/art.md): the sprite renderer. It turns a Vega Strike mesh into WC1's 37 views at twice WC1's resolution, in a livery. [docs/franklin-liveries.png](docs/franklin-liveries.png) shows the Franklin in four liveries.
 
 The art comes from Vega Strike's Assets-Production, copied to
 `~/dev/vegastrike-assets` (GPL-2.0, © the Vega Strike contributors; see
@@ -68,7 +69,8 @@ Possible series:
 
 | | Terran Confederation | Aera | Rlaan |
 |---|---|---|---|
-| fighters | Schroedinger (light, the starter), Franklin (medium), Gawain (interceptor), Redeemer (militia assault), Pacifier/Osprey (fighter-bomber with a rear gunner seat), Lancelot/Destiny (heavy, if the art budget allows); Progeny/Mongoose rare, mostly escorted | Nicander, Ariston, Areus, plus three new riffs on them: Agis (light swarm fighter), Cleomenes (heavy assault), Archidamus (ace) | Shizu (scout), Zhuangzong (line), Taizong (assault bomber), Shizong (disabler), Xuanzong (jammer), Gaozong (probe) |
+| fighters | Schroedinger (light, the starter), Gawain (interceptor), Redeemer (militia assault), Pacifier/Osprey (fighter-bomber with a rear gunner seat), Lancelot/Destiny (heavy, if the art budget allows); Progeny/Mongoose rare, mostly escorted |
+| small craft | Franklin, the personnel transport: usually escorted, flown by the player on one or two missions where nothing else can get through | | | Nicander, Ariston, Areus, plus three new riffs on them: Agis (light swarm fighter), Cleomenes (heavy assault), Archidamus (ace) | Shizu (scout), Zhuangzong (line), Taizong (assault bomber), Shizong (disabler), Xuanzong (jammer), Gaozong (probe) |
 | capital ships | Clydesdale (home carrier), Kahan (Andolian destroyer), Hawking (cruiser), Mule and Ox (transports) | Agasicles (destroyer), Anaxidamus (cruiser), Agesipolis (carrier), Charillus (transport), Leonidas (dreadnought) | Ruizong (destroyer), Shundi (cruiser and launch ship), Shenzong (transport) |
 
 The factions differ in defence:
