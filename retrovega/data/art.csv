@@ -1,11 +1,11 @@
 key,mode,stretch,exposure,toon,whiten,tint,gain,detail,bump,shine,reflect,paint,paint2,glass,decals,livery,notes
 FRANKLN,retro,1 1.8 1,0.95,3,0.8,,,0.8,1.0,0.65,,fin>0.95|band:0.55-0.7,spine<0.07@bottom,blue>0.12,arrows:0 0.56 0.13 0@top|roundel:0.82 0.13 0.09 0@top~m,carrier-green,"Flat 0.6 m dart in Vega Strike: thickened 1.8x so it reads as a cabin; white hull; livery on the wingtip fins, a gap, then a band across the middle of each wing; an accent stripe under the belly; the canopy is the navy oval on the nose taper (blue in the texture)"
-SCHROED,vs,,1.35,,0.15,,2.6,,,,,fin>0.5|span>0.78|dorsal>0.8,,,,carrier-green,Canon texture; livery on the drooping wings' tips and on the top fin above the pod (the pod stays hull)
-GAWAIN,vs,,1.35,,0.15,,2.6,,,,,span>0.7|fin>0.6,,,,carrier-green,Canon texture; livery on the outer wings
-REDEEMR,vs,,1.35,,0.15,,2.6,,,,,span>0.74|fin>0.6,spine<0.05@top,,,militia-red,"Border militia: red outer wings, a brown spine"
-PACIFER,vs,,1.35,,0.15,,2.6,,,,,span>0.7|fin>0.5,,,,carrier-green,Canon texture; livery on the outer wings and fins
-LANCELT,vs,,1.35,,0.15,,2.6,,,,,span>0.72|fin>0.6,spine<0.05@top,,,carrier-green,"Canon texture; livery on the outer wings, a navy spine"
-PROGENY,vs,,1.35,,0.15,,2.6,,,,,fin>0.5|span>0.8,,,,confed-blue,Shaper craft: Confed blue on the outer wings
+SCHROED,vs,,1.35,,0.15,,2.6,1.0,,,,fin>0.5|span>0.78|dorsal>0.8,,,,carrier-green,Canon texture; livery on the drooping wings' tips and on the top fin above the pod (the pod stays hull)
+GAWAIN,vs,,1.35,,0.15,,2.6,1.0,,,,span>0.7|fin>0.6,,,,carrier-green,Canon texture; livery on the outer wings
+REDEEMR,vs,,1.35,,0.15,,2.6,1.0,,,,span>0.74|fin>0.6,spine<0.05@top,,,militia-red,"Border militia: red outer wings, a brown spine"
+PACIFER,vs,,1.35,,0.15,,2.6,1.0,,,,span>0.7|fin>0.5,,,,carrier-green,Canon texture; livery on the outer wings and fins
+LANCELT,vs,,1.35,,0.15,,2.6,1.0,,,,span>0.72|fin>0.6,spine<0.05@top,,,carrier-green,"Canon texture; livery on the outer wings, a navy spine"
+PROGENY,vs,,1.0,,0.15,,1.5,1.0,,,0.5,fin>0.5|span>0.8,,,,confed-blue,Shaper craft: Confed blue on the outer wings
 AGASICL,vs,,0.75,,,70 160 150,,,,,,,,,,,"Its AeraHull map is missing from the assets (AeraHull2 stands in): teal, as its VDU shows"
 AGESIPL,vs,,0.75,,,70 160 150,,,,,,,,,,,"AeraHull2 stands in for the missing AeraHull: teal, as its VDU shows"
 LEONIDS,vs,,0.75,,,70 160 150,,,,,,,,,,,AeraHull2 stands in for the missing AeraHull: teal like its sisters

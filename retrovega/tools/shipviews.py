@@ -72,6 +72,7 @@ ENV_GAIN = 4.0
 KEY_POWER = 2.8
 VS_EXPOSURE = 1.1
 VS_REFLECT = 1.0       # how strongly metal reflects (data/art.csv reflect overrides)
+VS_PAINT = 0.5         # livery colours on canon ships, darkened under their exposure
 DECAL_SIZE = 128   # each decal's cell in the atlas
 MAX_DECALS = 4
 
@@ -144,6 +145,7 @@ uniform vec4 side2c;
 uniform vec4 side3c;
 uniform float whiten;
 uniform float hull_gain;  // the hull's diffuse brightened before paint (detail kept)
+uniform float paint_scale; // the livery colours' brightness (canon ships: darker, under their brighter exposure)
 uniform vec3 tint;        // the whole hull's colour multiplied in, luminance kept (1 1 1: none)
 uniform float detail_k;   // how much of the texture's fine detail shows
 uniform float bump_k;     // how much that detail bends the light (bevels)
@@ -311,8 +313,8 @@ void main() {
     vec4 dec = decal(on.y);
     float p1 = area(rule1, rule1b, rule1c, side1, side1b, side1c, on.y, abs(on.x)) * paint_on * (1.0 - dec.a);
     float p2 = area(rule2, rule2b, rule2c, side2, side2b, side2c, on.y, abs(on.x)) * paint_on * (1.0 - dec.a);
-    albedo = mix(albedo, primary, p1);
-    albedo = mix(albedo, secondary, p2);
+    albedo = mix(albedo, primary * paint_scale, p1);
+    albedo = mix(albedo, secondary * paint_scale, p2);
     albedo = mix(albedo, lin(dec.rgb), dec.a);
     // canon ships keep their own texture; detail goes back only where paint
     // (or whitening) flattened it
@@ -320,6 +322,8 @@ void main() {
     float g = area(rule3, rule3b, rule3c, side3, side3b, side3c, on.y, abs(on.x));
     albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
+    // (paint on a canon ship is semi-matte: it keeps 40% of the metal's gloss)
+    if (vs_mode > 0.5) specc *= 1.0 - 0.6 * max(p1, p2);
     if (vs_mode > 0.5) {
         vec3 kdir = normalize(key_pos - v_view);
         vec4 glw = texture(glow_map, v_uv);
@@ -623,6 +627,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     lum = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
     prog['tint'].value = tuple(c / lum for c in t)
     prog['hull_gain'].value = float(art.get('gain') or 1.0)
+    prog['paint_scale'].value = VS_PAINT if (art.get('mode') or 'vs') == 'vs' else 1.0
     prog['detail_k'].value = float(art.get('detail') or 0.6)
     prog['bump_k'].value = float(art.get('bump') or (1.0 if (art.get('mode') or 'vs') == 'retro' else 0.0))
     prog['shine'].value = shine if shine is not None else float(art.get('shine') or 0.3)
