@@ -12,6 +12,7 @@ Confederation against the Aera, with the Rlaan meddling.
 - [abi/rvabi.def](abi/rvabi.def): the single source of every offset the hook layer uses; `tools/rvabi.py` lays it out.
 - [docs/roster.png](docs/roster.png): contact sheet of the roster's VDU images (`tools/vdu_sheet.py docs/roster.png`).
 - [docs/gallery.png](docs/gallery.png): every ship of the roster as rendered for the game, two views each (`tools/render_all.py`, then `tools/gallery.py docs/gallery.png`).
+- [docs/people.md](docs/people.md): the cast (data/people.csv: names, callsigns, birthplaces, backgrounds, looks). Their portraits come from the image-synthesis prompts in [docs/portrait-prompts.md](docs/portrait-prompts.md); mouth frames are driven by the letters of their lines (`tools/lipsync.py`), plus blinks.
 - [docs/art.md](docs/art.md): the sprite renderer. It turns a Vega Strike mesh into WC1's 37 views at twice WC1's resolution, in a livery. [docs/franklin-liveries.png](docs/franklin-liveries.png) shows the Franklin in four liveries.
 
 The art comes from Vega Strike's Assets-Production, copied to
