@@ -7,11 +7,12 @@ header (scale, material), a block of arbitrary-length attributes (detail
 texture, textures, logos, LODs, animations), then geometry: vertices
 (x y z, normal i j k, s t), and lines, triangles, quads, line strips,
 triangle strips, triangle fans and quad strips whose corners carry their
-own s t.  Only the first record (the full-detail mesh) is wanted here;
+own s t (unless the mesh shares vertices: then the vertices' s t count).  Only the first record (the full-detail mesh) is wanted here;
 LOD and shield meshes are other records or files.
 
     bfxm.py file.bfxm      print a summary
 """
+import os
 import struct
 import sys
 
@@ -33,6 +34,7 @@ class Mesh(object):
         self.tri_uv = []
         self.textures = {}
         self.material = {}
+        self.unit_dir = ''     # where its maps are
 
 
 def _words(data):
@@ -57,6 +59,7 @@ def parts(path):
     out = []
     for rec in records(path):
         if rec and any(t == 2 for ts in rec[0].textures.values() for t, _ in ts):
+            rec[0].unit_dir = os.path.dirname(path)
             out.append(rec[0])
     return out
 
@@ -84,6 +87,7 @@ def records(path):
             mbegin = w
             mheader, mlength = I[w], I[w + 1]
             m.scale = F[w + 2]
+            sharevert = I[w + 5]
             m.material = {
                 'power': F[w + 9], 'ambient': tuple(F[w + 10:w + 14]), 'diffuse': tuple(F[w + 14:w + 18]),
                 'emissive': tuple(F[w + 18:w + 22]), 'specular': tuple(F[w + 22:w + 26]),
@@ -150,6 +154,9 @@ def records(path):
                             emit(cs[k], cs[k + 1], cs[k + 3]); emit(cs[k], cs[k + 3], cs[k + 2])
             m.tri_index = np.array(tris, dtype=np.int64).reshape(-1, 3)
             m.tri_uv = np.array(uvs, dtype=np.float64).reshape(-1, 3, 2)
+            if sharevert:
+                # shared-vertex meshes keep s t on the vertices, not the corners
+                m.tri_uv = verts[:, 6:8].astype(np.float64)[m.tri_index]
             meshes.append(m)
             w = mbegin + mlength // 4
         recs.append(meshes)

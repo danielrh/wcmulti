@@ -38,6 +38,8 @@ from scipy import ndimage
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import bfxm  # noqa: E402
+import hulls  # noqa: E402
+import ddscube  # noqa: E402
 
 SS = 4  # supersampling per axis
 
@@ -59,6 +61,13 @@ GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflec
 KEY_DIR = (-0.85, 0.45, 0.27)
 KEY_DISTANCE = 3.0
 AMBIENT = 0.30     # how much light the shadow side keeps
+# The uber lighting (canon ships): the background whose reflections they
+# show, its brightness, and the key light's strength.
+ENV = 'white_light'    # neutral: the Rlaan purple comes from their own specular maps
+ENV_GAIN = 4.0
+KEY_POWER = 2.8
+VS_EXPOSURE = 1.1
+VS_REFLECT = 1.0       # how strongly metal reflects (data/art.csv reflect overrides)
 DECAL_SIZE = 128   # each decal's cell in the atlas
 MAX_DECALS = 4
 
@@ -128,9 +137,110 @@ uniform vec4 side1c;
 uniform vec4 side2c;
 uniform vec4 side3c;
 uniform float whiten;
+uniform vec3 tint;        // the whole hull's colour multiplied in, luminance kept (1 1 1: none)
 uniform float detail_k;   // how much of the texture's fine detail shows
 uniform float bump_k;     // how much that detail bends the light (bevels)
 uniform float shine;      // the hull's least specular strength
+uniform float reflect_k;  // how strongly the specular map mirrors the sky (Rlaan wings: strongly)
+uniform float alpha_cut;  // 1: the diffuse map's alpha cuts the surface
+uniform float vs_mode;    // 1: Vega Strike's uber-shader lighting (canon ships); 0: the retro look (the Franklin)
+uniform samplerCube env_map;
+uniform float env_gain;
+uniform float key_power;
+uniform float vs_exposure;
+uniform float vs_reflect;
+const float PI_OVER_3 = 1.0471975511965976;
+const float TWO_PI = 6.2831853071795862;
+const float HALF_PI = 1.5707963267948966;
+const float ENV_MIN_LOD = 4.0;
+vec3 envl(vec3 d, float lod) { vec3 c = textureLod(env_map, d, lod).rgb * env_gain; return c * c; }
+// Vega Strike's uber.fp (programs/), ported: its material typing (matte,
+// metal, dielectric, glass from the diffuse and specular colours), gloss
+// from the specular map's intensity, Fresnel, environment reflections
+// blurred by gloss and ambient from the blurred environment.  Two changes:
+// the self-shadow term is the shader's own alternative clamp(4 N.L), as
+// the current one caps every light at a quarter; and matte surfaces take
+// the diffuse once linearised, not squared twice (see below).
+float vs_fresnel(float cosa, float k, float two_sided) {
+    cosa = clamp(cosa, 0.0, 1.0);
+    float t1 = sqrt(max(1.0 - (1.0 - cosa * cosa) / (k * k), 0.0));
+    float t2 = k * cosa, t3 = k * t1;
+    float t4 = (t1 - t2) / (t1 + t2 + 0.0001);
+    t1 = (cosa - t3) / (cosa + t3 + 0.0001);
+    t2 = 0.5 * (t1 * t1 + t4 * t4);
+    t3 = 1.0 - t2;
+    t4 = 1.0 - t3 * t3;
+    return mix(t2, t4, 0.5 * two_sided);
+}
+void vs_light(vec3 l, float lsa, vec3 lcol, vec3 n, vec3 r, float gloss_sa, inout vec3 dacc, inout vec3 sacc) {
+    float shadow = clamp(4.0 * dot(n, l), 0.0, 1.0);
+    float ns = lsa / TWO_PI;
+    float ndotl = clamp((dot(n, l) + ns) / (1.0 + ns), 0.0, shadow);
+    float rdotl = clamp(dot(r, l), 0.0, shadow);
+    float shin = HALF_PI / (gloss_sa + lsa) - 0.810660172;
+    sacc += max(0.0, pow(rdotl, shin) * shin) * lcol;
+    dacc += ndotl * lcol;
+}
+vec3 vs_uber(vec4 diff, vec4 spec, vec4 glow, vec3 n, vec3 eye, vec3 key_dir, vec3 fill_d) {
+    float ao = glow.a;
+    float gin = 0.333 * dot(spec.rgb, spec.rgb);
+    vec4 gl;
+    gl.x = 0.5 * (gin + gin * gin);
+    gl.y = 7.288828847 * (255.0 / 256.0 - gl.x);
+    gl.z = PI_OVER_3 * pow(2.5, gl.y - 8.0);
+    gl.w = TWO_PI * (1.0 - cos(gl.z));
+    float alpha = clamp(diff.a * 1.2 - 0.1, 0.0, 1.0);
+    vec3 d_ = (diff + 0.05 * spec).rgb, s_ = (spec + 0.05 * diff).rgb;
+    // (guarded: a black diffuse or specular texel would divide by zero)
+    float dl = max(dot(d_, d_), 1e-6), sl = max(dot(s_, s_), 1e-6);
+    d_ *= d_; s_ *= s_;
+    vec3 metalbedo = d_ + s_;
+    vec3 nd = d_ / dl, nsp = s_ / sl;
+    vec3 tv = nd - vec3(0.333);
+    float satd = sqrt(dot(tv, tv));
+    tv = nsp - vec3(0.333);
+    float sats = sqrt(dot(tv, tv));
+    dl *= 0.333; sl *= 0.333;
+    float sum = dl + sl;
+    float is_glass = clamp(sl - alpha, 0.0, 1.0);
+    tv = nd - nsp;
+    float tf = clamp(1.0 - sqrt(dot(tv, tv)), 0.0, 1.0);
+    float is_metal = tf * tf;
+    float is_matte = clamp((dl - sl) / sum, 0.0, 1.0);
+    is_metal *= (1.0 - is_matte);
+    float is_dielk = clamp((satd - sats) / (satd + sats + 0.05), 0.0, 1.0);
+    is_metal *= alpha;
+    is_dielk = max(is_dielk, is_glass);
+    vec3 glow_col = (glow * glow).rgb;
+    vec3 mspec = metalbedo * sl / sum;
+    vec3 mdiff = metalbedo * metalbedo * (dl / sum);
+    tv = mspec + mdiff;
+    tf = 1.0 / (max(max(max(tv.r, tv.g), tv.b), 1.0) + dot(glow_col, glow_col));
+    mspec *= tf; mdiff *= tf;
+    float tk = mix(sqrt(2.5), 1.0 + sl, is_dielk);
+    float nD = mix(tk * tk, 1.48567, is_glass);
+    // (uber.fp lights matte with d_, the diffuse squared twice over; Vega
+    // Strike's bright HDR lights make up for it, our sprite lights do not,
+    // so matte surfaces take the diffuse once linearised)
+    vec3 diff_col = mix(diff.rgb, mdiff, is_metal);
+    vec3 r = normalize(-reflect(eye, n));
+    float fr = is_dielk * vs_fresnel(dot(r, n), nD, is_glass);
+    vec3 dacc = vec3(0.0), sacc = vec3(0.0);
+    vs_light(key_dir, 0.002, vec3(1.0, 0.97, 0.9) * key_power, n, r, gl.w, dacc, sacc);
+    vs_light(fill_d, 0.01, vec3(0.30, 0.34, 0.42), n, r, gl.w, dacc, sacc);
+    float t = gl.x; t *= t; t *= t;
+    // (never mirror-sharp: a sharp environment on a sprite reads as crumpled foil)
+    vec3 env = mix(envl(r, max(gl.y, ENV_MIN_LOD)), envl(r, ENV_MIN_LOD), t * t);
+    vec3 amb = envl(n, clamp(8.223776 * ao / (0.027972 + ao), 3.0, 8.0) - 0.5) * ao;
+    // Metal, not plastic: the reflected light (the key's highlight and the
+    // environment) is multiplied by the specular map's own colour, then
+    // added to the lit diffuse.  uber.fp's dielectric Fresnel coat (a white
+    // reflection over every surface, cling film on a sprite) is kept for
+    // glass only.
+    vec3 col = (dacc + amb) * diff_col * alpha + (sacc + env) * spec.rgb * vs_reflect;
+    col += (sacc + env) * fr * is_glass;
+    return col + glow_col;
+}
 uniform sampler2D decal_atlas;
 uniform vec4 decal_pos[4];  // centre x, centre z, size (ship units), rotation (radians)
 uniform vec4 decal_opt[4];  // atlas cell, side (0, 1 top, -1 bottom), mirrored, in use
@@ -184,8 +294,11 @@ void main() {
     // ... bending the normal, so panel edges catch the light like bevels
     n = normalize(n - vec3(dFdx(hd), dFdy(hd), 0.0) * bump_k * 3.0);
     float detail = 1.0 + detail_k * 1.4 * hd;
-    vec3 albedo = lin(texture(diffuse_map, v_uv).rgb);
+    vec4 diff = texture(diffuse_map, v_uv);
+    if (alpha_cut > 0.5 && diff.a < 0.5) discard;
+    vec3 albedo = lin(diff.rgb);
     albedo = mix(albedo, vec3(0.62), whiten);
+    albedo *= tint;
     vec3 on = normalize(v_on) * (gl_FrontFacing ? 1.0 : -1.0);
     vec4 dec = decal(on.y);
     float p1 = area(rule1, rule1b, rule1c, side1, side1b, side1c, on.y, abs(on.x)) * paint_on * (1.0 - dec.a);
@@ -193,10 +306,22 @@ void main() {
     albedo = mix(albedo, primary, p1);
     albedo = mix(albedo, secondary, p2);
     albedo = mix(albedo, lin(dec.rgb), dec.a);
-    albedo *= detail;
+    // canon ships keep their own texture; detail goes back only where paint replaced it
+    albedo *= mix(1.0, detail, vs_mode > 0.5 ? max(p1, p2) : 1.0);
     float g = area(rule3, rule3b, rule3c, side3, side3b, side3c, on.y, abs(on.x));
     albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
+    if (vs_mode > 0.5) {
+        vec3 kdir = normalize(key_pos - v_view);
+        vec4 glw = texture(glow_map, v_uv);
+        // (diffuse alpha 1: some Rlaan maps keep other data in alpha, and with
+        // alpha 0 the uber material keeps no diffuse at all)
+        vec3 c = vs_uber(vec4(albedo, 1.0), vec4(specc, 1.0), vec4(lin(glw.rgb), 1.0), n, v, kdir, fill_dir);
+        c *= exposure * vs_exposure;
+        frag = vec4(sqrt(clamp(c, 0.0, 1.0)), 1.0);
+        paint = vec4(p1 > 0.5 ? 1.0 : 0.0, p2 > 0.5 ? 1.0 : 0.0, g > 0.5 ? 1.0 : 0.0, 1.0);
+        return;
+    }
     specc = max(specc, vec3(shine));
     float shin = mix(7.0, 60.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5 - shine, 0.0, 1.0));
     vec3 sky = vec3(0.60, 0.62, 0.68), ground = vec3(0.10, 0.10, 0.11);
@@ -213,7 +338,7 @@ void main() {
     vec3 h = normalize(key_dir + v);
     col += specc * pow(max(dot(n, h), 0.0), shin) * 2.2 * matte;
     vec3 r = reflect(-v, n);
-    col += specc * mix(ground, sky, r.y * 0.5 + 0.5) * 0.3 * matte;
+    col += specc * mix(vec3(0.05, 0.05, 0.08), vec3(0.95, 0.95, 1.05), smoothstep(-0.4, 0.9, r.y)) * reflect_k * matte;
     col += vec3(0.40, 0.44, 0.52) * pow(1.0 - max(n.z, 0.0), 3.0) * 0.3 * matte;
     // glass: a sharp highlight and a dark sky reflected in it
     col += g * (vec3(0.9) * pow(max(dot(n, h), 0.0), 60.0)
@@ -265,10 +390,42 @@ def unit_lights(assets, unit):
     return []
 
 
-def load_image(path, fallback):
+_ASSET_INDEX = {}
+
+
+def find_texture(assets, unit_dir, name):
+    """A texture's file, as Vega Strike would find it: in the ship's own
+    folder, else anywhere in the assets (the shared textures/ folder holds
+    hull maps several ships use), the name compared without case, then
+    without extension, then as a prefix (AeraHull.png -> AeraHull2.bmp)."""
+    if not name:
+        return None
+    own = os.path.join(unit_dir, name)
+    if os.path.exists(own):
+        return own
+    if not _ASSET_INDEX:
+        for root, _dirs, files in os.walk(assets):
+            for f in files:
+                _ASSET_INDEX.setdefault(f.lower(), os.path.join(root, f))
+    low = name.lower()
+    if low in _ASSET_INDEX:
+        return _ASSET_INDEX[low]
+    stem = os.path.splitext(low)[0]
+    for key in sorted(_ASSET_INDEX):
+        if os.path.splitext(key)[0] == stem:
+            return _ASSET_INDEX[key]
+    for key in sorted(_ASSET_INDEX):
+        if key.startswith(stem) and key.endswith(('.png', '.bmp', '.jpg', '.dds', '.texture', '.image')):
+            print('  %s: using %s' % (name, _ASSET_INDEX[key]))
+            return _ASSET_INDEX[key]
+    print('  %s: not found' % name)
+    return None
+
+
+def load_image(path, fallback, mode='RGB'):
     if path and os.path.exists(path):
-        return Image.open(path).convert('RGB')
-    return Image.new('RGB', (4, 4), fallback)
+        return Image.open(path).convert(mode)
+    return Image.new(mode, (4, 4), fallback)
 
 
 def make_texture(ctx, img, components=3):
@@ -402,15 +559,30 @@ def view_matrix(elev, head):
     return np.array([s, u, -f])
 
 
-def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix=''):
+def environment(ctx, assets, name, size=256):
+    """The cube map the uber lighting reflects: a Vega Strike background, small."""
+    faces = ddscube.faces(os.path.join(assets, 'textures', 'backgrounds', name + '.cube'))
+    data = b''.join(Image.fromarray(f).resize((size, size), Image.BOX).tobytes() for f in faces)
+    tex = ctx.texture_cube((size, size), 3, data)
+    tex.build_mipmaps()
+    tex.filter = (moderngl.LINEAR_MIPMAP_LINEAR, moderngl.LINEAR)
+    return tex
+
+
+def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix='',
+           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None):
     art = table_row('art.csv', row['key']) or {}
     livery_name = livery_name or art.get('livery') or 'none'
     livery = table_row('liveries.csv', livery_name, 'name')
     if livery is None:
         sys.exit('no livery %r in data/liveries.csv' % livery_name)
     stretch = np.array([float(v) for v in (art.get('stretch') or '1 1 1').split()])
-    unit_dir = os.path.join(assets, 'units', 'vessels', os.path.dirname(row['mesh']))
-    parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
+    if row['mesh'].startswith('hull:'):
+        base_lights = unit_lights(assets, hulls.RECIPES[row['mesh'][5:]][0].split('/')[0])
+        parts, raw_lights, _base = hulls.build(row['mesh'][5:], assets, base_lights)
+    else:
+        parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
+        raw_lights = unit_lights(assets, row['vs_unit'])
     for m in parts:
         m.positions = m.positions * stretch
         n = m.normals / stretch
@@ -418,7 +590,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     allpos = np.concatenate([m.positions for m in parts])
     center = (allpos.min(0) + allpos.max(0)) / 2
     radius = float(np.max(np.linalg.norm(allpos - center, axis=1))) * 1.04
-    lights = [(np.array(l[:3]) * stretch, l[3]) for l in unit_lights(assets, row['vs_unit'])]
+    lights = [(np.array(l[0] if len(l) == 2 else l[:3]) * stretch, l[-1]) for l in raw_lights]
 
     ctx = moderngl.create_standalone_context(backend='egl')
     prog = ctx.program(vertex_shader=VS, fragment_shader=FS)
@@ -431,12 +603,24 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     prog['ambient'].value = ambient
     fill = np.array([0.7, -0.35, 0.45]); fill /= np.linalg.norm(fill)
     prog['fill_dir'].value = tuple(fill)
-    prog['exposure'].value = float(art.get('exposure') or 1)
+    prog['exposure'].value = exposure if exposure is not None else float(art.get('exposure') or 1)
     prog['toon'].value = float(art.get('toon') or 0)
     prog['whiten'].value = float(art.get('whiten') or 0)
+    t = [(float(v) / 255.0) ** 2.2 for v in (art.get('tint') or '255 255 255').split()]
+    lum = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
+    prog['tint'].value = tuple(c / lum for c in t)
     prog['detail_k'].value = float(art.get('detail') or 0.6)
-    prog['bump_k'].value = float(art.get('bump') or 1.0)
+    prog['bump_k'].value = float(art.get('bump') or (1.0 if (art.get('mode') or 'vs') == 'retro' else 0.0))
     prog['shine'].value = shine if shine is not None else float(art.get('shine') or 0.3)
+    prog['reflect_k'].value = float(art.get('reflect') or 0.3)
+    mode = art.get('mode') or 'vs'
+    prog['vs_mode'].value = 1.0 if mode == 'vs' else 0.0
+    prog['env_gain'].value = env_gain
+    prog['key_power'].value = key_power
+    prog['vs_exposure'].value = VS_EXPOSURE
+    prog['vs_reflect'].value = reflect if reflect is not None else float(art.get('reflect') or VS_REFLECT)
+    prog['env_map'].value = 5
+    env_tex = environment(ctx, assets, env)
     prog['decal_atlas'].value = 4
     atlas, pos, opt = decal_uniforms(art.get('decals'), allpos - center)
     decal_tex = make_texture(ctx, atlas, 4)
@@ -463,12 +647,17 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
         vao = ctx.vertex_array(prog, [(ctx.buffer(data.tobytes()), '3f 3f 2f', 'in_pos', 'in_norm', 'in_uv')])
         imgs = {}
         for idx, fallback in ((0, (200, 200, 200)), (1, (40, 40, 40)), (3, (0, 0, 0))):
-            names = [n for t, n in m.textures.get(idx, []) if t == 2]
-            imgs[idx] = load_image(os.path.join(unit_dir, names[0]) if names else None, fallback)
+            names = [n for t, n in m.textures.get(idx, []) if t == 2 and n]
+            imgs[idx] = load_image(find_texture(assets, m.unit_dir, names[0]) if names else None, fallback)
+        names = [n for t, n in m.textures.get(0, []) if t == 2 and n]
+        rgba = load_image(find_texture(assets, m.unit_dir, names[0]) if names else None, (200, 200, 200, 255), 'RGBA')
+        # (the diffuse alpha is no cut-out: in the uber shader alpha 0 marks glass)
+        cut = 0.0
         lum, ref = lum_map(imgs[0], m.tri_uv)
         tex = {i: make_texture(ctx, im) for i, im in imgs.items()}
+        tex[0] = make_texture(ctx, rgba, 4)
         tex['lum'] = make_texture(ctx, lum)
-        drawables.append((vao, tex, ref))
+        drawables.append((vao, tex, cut))
 
     big = size * SS
     color, paint = ctx.texture((big, big), 4), ctx.texture((big, big), 4)
@@ -490,8 +679,9 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
         fbo.clear(0, 0, 0, 0, depth=1.0)
         ctx.enable(moderngl.DEPTH_TEST)
         ctx.disable(moderngl.CULL_FACE)
-        for vao, tex, ref in drawables:
-            tex[0].use(0); tex[1].use(1); tex[3].use(2); tex['lum'].use(3); decal_tex.use(4)
+        for vao, tex, cut in drawables:
+            prog['alpha_cut'].value = cut
+            tex[0].use(0); tex[1].use(1); tex[3].use(2); tex['lum'].use(3); decal_tex.use(4); env_tex.use(5)
             vao.render(moderngl.TRIANGLES)
         z = np.frombuffer(depth.read(), dtype=np.float32).reshape(big, big)[::-1]
         facing = (rot @ np.array([0.0, 0.0, -1.0]))[2]
@@ -579,13 +769,19 @@ def main():
     ap.add_argument('--ambient', type=float, default=AMBIENT, help='try another ambient level')
     ap.add_argument('--shine', type=float, default=None, help="try another shine (overrides data/art.csv)")
     ap.add_argument('--tag', default='', help='a suffix for the output names (trials)')
+    ap.add_argument('--env', default=ENV, help='uber lighting: a textures/backgrounds/*.cube to reflect')
+    ap.add_argument('--env-gain', type=float, default=ENV_GAIN)
+    ap.add_argument('--key-power', type=float, default=KEY_POWER)
+    ap.add_argument('--exposure', type=float, default=None, help='try another exposure (overrides data/art.csv)')
+    ap.add_argument('--reflect', type=float, default=None, help='try another metal reflection strength')
     args = ap.parse_args()
     row = ship_row(args.ship)
     if not row['mesh']:
         sys.exit('%s has no mesh yet' % row['name'])
     size = args.size or int(row['lod0_px'])
     key = tuple(float(v) for v in args.key.split(',')) if args.key else KEY_DIR
-    r = render(row, args.outdir, size, args.assets, args.livery, key, args.ambient, args.shine, args.tag)
+    r = render(row, args.outdir, size, args.assets, args.livery, key, args.ambient, args.shine, args.tag,
+               args.env, args.env_gain, args.key_power, args.exposure, args.reflect)
     print('%s: 37 views at %d px, radius %.2f' % (row['name'], size, r))
 
 
