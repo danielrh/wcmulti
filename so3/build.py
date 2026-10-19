@@ -100,7 +100,8 @@ BERGSTROM.update({52 + i: 164 + i for i in range(7)})
 # Concordia films names those instead (the user, 2026-10-18:
 # "the so3 campaign talks about the Waterloo cruiser but the scenes don't
 # take from that"); the scripts play films by number, so they are untouched.
-CONCORDIA_LAUNCHES = [2, 10, 11, 12, 13, 17, 23, 98, 99, 100, 101, 102]
+CONCORDIA_LAUNCHES = [2, 10, 11, 12, 13, 17, 23]        # one per fighter type
+CONCORDIA_GENERIC_LAUNCHES = [98, 99, 100, 101, 102]   # no fighter of their own (1-0 plays one after a fighter's)
 CONCORDIA_LANDINGS = [3, 5, 6, 7, 8, 9, 24]
 CONCORDIA_STILLS = [0, 4]
 WATERLOO_LAUNCH, WATERLOO_LANDING, WATERLOO_STILL = 5, 4, 1
@@ -224,12 +225,52 @@ def waterloo_still(gamedat, name, view_number):
     return wc2data.compose_container([wc2data._tree([wc2data.encode_sprite(x2, x1, y1, y2, new)])], [flag])
 
 
+# Rooms (the user, 2026-10-18: retire the Concordia's rooms, a free
+# trader's interior, more rooms for the Culloden).  No campaign has the
+# Culloden's rooms; what moves, by the backdrops a scene's routine sets up
+# (wc2data.retarget_rooms) and the films it plays (retarget_talk_films):
+# the bridge keeps its door and caption, but not the Concordia's great
+# arched window: a console room (WC2's rooms 12 and 10, medium 43); the conversations
+# on the flight deck, in front of her numbered bays, go to a pilots' ready
+# room (SO1's lamp-lit bulkhead and padded cabin, 101 and 100), the deck
+# film (her hangar) giving way to the caption card film (86, which prints
+# the caption the scene passes it: texts.py says where); and 3-2's opening,
+# Paladin and the traders' charts, is aboard the Lucky Mandy (SO1's padded
+# cabin and small ship's cockpit, 100 and 103).
+BRIDGE = {8: 12, 9: 10, 42: 43}             # close-ups, and the medium shots' picture (MEDIUM.V00 7 -> 8)
+READY_ROOM = {23: 101, 22: 100, 46: 102}     # (MEDIUM.V00 11, the numbered bays -> SO1's MEDIUM.V01 0)
+LUCKY_MANDY = {33: 100, 34: 103, 47: 102}    # (MEDIUM.V00 12, the blue office -> SO1's padded room)
+DECK_FILM, CAPTION_CARD = 93, 86
+ROOM_MOVES = [(2, "Talk2", BRIDGE, {}), (5, "Talk2", BRIDGE, {}), (5, "Talk3", BRIDGE, {}), (8, "Talk3", BRIDGE, {}),
+              (9, "Talk2", BRIDGE, {}), (15, "Talk1", BRIDGE, {}), (15, "Talk3", BRIDGE, {}), (19, "Talk3", BRIDGE, {}),
+              (2, "Talk1", READY_ROOM, {}), (2, "Talk3", READY_ROOM, {DECK_FILM: CAPTION_CARD}),
+              (4, "Talk3", READY_ROOM, {DECK_FILM: CAPTION_CARD}), (7, "Talk2", READY_ROOM, {DECK_FILM: CAPTION_CARD}),
+              (16, "Talk3", READY_ROOM, {DECK_FILM: CAPTION_CARD}),
+              (10, "Talk1", LUCKY_MANDY, {})]
+
+
+def move_rooms(blocks):
+    """The scene blocks with ROOM_MOVES made, and how many backdrops and films moved."""
+    blocks = list(blocks)
+    rooms = films = 0
+    for b, talk, room_map, film_map in ROOM_MOVES:
+        blocks[b], n = wc2data.retarget_rooms(blocks[b], talk, room_map)
+        assert n > 0, (b, talk)
+        rooms += n
+        if film_map:
+            blocks[b], n = wc2data.retarget_talk_films(blocks[b], talk, film_map)
+            assert n > 0, (b, talk)
+            films += n
+    return blocks, rooms, films
+
+
 def waterloo_films(blocks):
     """The scene blocks with their Concordia films made the Waterloo's (block
     k's launch and landing the copies k picks), and how many entries changed."""
     out, changed = [], 0
     for k, b in enumerate(blocks):
         mapping = dict([(("incident.s00", c), ("incident.s03", LAUNCH_BLOCKS[(k + 2) % len(LAUNCH_BLOCKS)])) for c in CONCORDIA_LAUNCHES] +
+                       [(("incident.s00", c), ("incident.s03", LAUNCH_BLOCKS[(k + 3) % len(LAUNCH_BLOCKS)])) for c in CONCORDIA_GENERIC_LAUNCHES] +
                        [(("incident.s00", c), ("incident.s03", LANDING_BLOCKS[k % len(LANDING_BLOCKS)])) for c in CONCORDIA_LANDINGS] +
                        [(("incident.s00", c), ("incident.s03", WATERLOO_STILL)) for c in CONCORDIA_STILLS] +
                        # (SO2's own scenes for its cruiser missions name the launch and landing directly)
@@ -464,6 +505,8 @@ def main():
         blocks[i] = wc2data.series_set_strings(blocks[i], [s.encode("latin1") for s in strings])
     blocks, changed = waterloo_films(blocks)
     print("SERIES.S03: %d Concordia film entries made the Waterloo's" % changed)
+    blocks, rooms, films = move_rooms(blocks)
+    print("SERIES.S03: %d backdrops and %d films moved to other rooms" % (rooms, films))
     wc2data.write_container(os.path.join(pgd, "SERIES.S03"), blocks, [f for f, _ in series])
 
     files = sorted(os.path.relpath(os.path.join(dp, f), plain) for dp, _, fs in os.walk(plain) for f in fs)

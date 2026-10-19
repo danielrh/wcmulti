@@ -141,7 +141,7 @@ SERIES_TEXT[2] = [
     "Negative, Culloden.  The core is slag.  We have the relay's wreck and nothing else.",
     "Affirmative, \x86.  You are cleared to land.",
     "Glad you made it back, sir.",
-    " ",
+    "Pilots' Ready Room, TCS Culloden.",
     "Thank you, Colonel \x85, for pulling me out of there.",
     "Not a problem, Lieutenant.  I'm glad I could help.",
     "At least that relay won't be talking to anybody's fighter again.",
@@ -247,7 +247,7 @@ SERIES_TEXT[4] = [
     "That is all, ladies and gentlemen.  Dismissed.",                                                              # 23
     "",                                                                                                            # 24
     "Welcome back, sir!",                                                                                          # 25 deck
-    "Flight Deck, TCS Culloden.",                                                                                  # 26 title
+    "Pilots' Ready Room, TCS Culloden.",                                                                                  # 26 title
     "What do you have to report?",                                                                                 # 27 Valkyrie
     "Didn't make it to Nav 1.",                                                                                    # 28 player
     "Nav 1 was deserted.",                                                                                         # 29
@@ -379,7 +379,7 @@ SERIES_TEXT[7] = [
     "Toro... I don't know what to say...",                                                                         # 14 player
     "Then don't say anything, \x86.",                                                                             # 15 Toro
     " 		",                                                                                                      # 16
-    "Flight Deck, TCS Culloden.",                                                                                  # 17 title
+    "Pilots' Ready Room, TCS Culloden.",                                                                                  # 17 title
     "Hey, Colonel!  You missed one hell of a killer patrol.",                                                      # 18 Toro
     "Toro, what are you doing back from your patrol already?  And where 		is your lead?",                      # 19 player
     "Still at Nav 1.  We ran into a massive enemy force.",                                                         # 20 Toro
@@ -527,7 +527,7 @@ SERIES_TEXT[9] = [
 # observation deck, 19-26 the wing commander's office, 27-35 Paladin on the
 # radio from the Kirrah'ka.
 SERIES_TEXT[10] = [
-    "Temporary Duty Office, TCS Culloden.",                                                                        # 0 title
+    "Free Trader Lucky Mandy, alongside the Culloden.",                                                                        # 0 title
     "I have more news for you, laddie.",                                                                           # 1 Paladin
     "Scorpion, one of my Special Operations agents, went in among the yard's Mandarin technicians sixteen months ago.",  # 2
     "I hadn't heard anything from him for a year, and thought he might be dead...",                                # 3
@@ -851,7 +851,7 @@ SERIES_TEXT[16] = [
     "Outstanding, Colonel!",                                                                                       # 20 deck
     "Looks like it was a little rough out there, sir.",                                                            # 21
     "I'll do my best to put her back together, sir.",                                                              # 22
-    "	",                                                                                                          # 23
+    "Pilots' Ready Room, TCS Culloden.",                                                                                                          # 23
     "How was your patrol, \x86?",                                                                                 # 24 Valkyrie
     "At Nav 1, there were three Grikath moving closer to the Culloden.",                                           # 25 player
     "None of them survived.",                                                                                      # 26

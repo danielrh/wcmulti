@@ -209,6 +209,72 @@ def retarget_films(block, mapping):
     return bytes(data), changed
 
 
+def _talk_code(data, talk):
+    """(names, base, start, end): a scene block's SEQU routine names, where
+    its code starts in `data`, and the span of routine `talk` in that code."""
+    top = iff_chunks(data, 0, len(data))[0]
+    for cid, s, e in iff_chunks(data, top[1], top[2]):
+        if bytes(cid) != b"FORMSEQU":
+            continue
+        for c2, s2, e2 in iff_chunks(data, s, e):
+            if bytes(c2) != b"FORMSCRP":
+                continue
+            ch = dict((bytes(c3), (s3, e3)) for c3, s3, e3 in iff_chunks(data, s2, e2))
+            names = [x.decode("latin1") for x in bytes(data[ch[b"SYMB"][0]:ch[b"SYMB"][1]]).split(b"\0")[:-1]]
+            os_, oe = ch[b"OFST"]
+            k = struct.unpack_from("<H", data, os_)[0]
+            offs = struct.unpack_from("<%dI" % k, data, os_ + 2)
+            base = os_ + 2 + 4 * k
+            own = sorted((o, names[i]) for i, o in enumerate(offs) if o != 0xFFFFFFFF)
+            start = [o for o, n in own if n == talk][0]
+            end = ([o for o, n in own if o > start] + [oe - base])[0]
+            return names, base, start, end
+    raise KeyError(talk)
+
+
+def retarget_rooms(block, talk, rooms):
+    """A scene block whose routine `talk` shows other rooms: every backdrop
+    it sets up, `24 r 28 ff 28 88 <setupbackground>` (the room put in field
+    0x28 for the call) and the `24 r 28 ff 1e` after it (kept in field
+    0x1e), and every medium shot's background, `24 r 28 ff 20` (field 0x20,
+    which setupmediumslot reads: the medium rooms are numbers of their own,
+    MEDIUM.V0n's pictures), made rooms[r]; (block, how many changed)."""
+    data = bytearray(block)
+    names, base, start, end = _talk_code(data, talk)
+    call = bytes((0x88, names.index("setupbackground")))
+    changed = 0
+    i = base + start
+    while i < base + end - 7:
+        if data[i] == 0x24 and data[i + 2:i + 5] == b"\x28\xff\x20" and data[i + 1] in rooms:
+            data[i + 1] = rooms[data[i + 1]]
+            changed += 1
+            i += 5
+        elif data[i] == 0x24 and data[i + 2:i + 5] == b"\x28\xff\x28" and data[i + 5:i + 7] == call and data[i + 1] in rooms:
+            old = data[i + 1]
+            data[i + 1] = rooms[old]
+            if data[i + 7] == 0x24 and data[i + 8] == old and data[i + 9:i + 12] == b"\x28\xff\x1e":
+                data[i + 8] = rooms[old]
+            changed += 1
+            i += 7
+        else:
+            i += 1
+    return bytes(data), changed
+
+
+def retarget_talk_films(block, talk, films):
+    """A scene block whose routine `talk` plays other films: every `6f s s 89
+    n` (a string pushed, then film n) with n in `films` made films[n];
+    (block, how many changed)."""
+    data = bytearray(block)
+    names, base, start, end = _talk_code(data, talk)
+    changed = 0
+    for i in range(base + start, base + end - 4):
+        if data[i] == 0x6F and data[i + 3] == 0x89 and data[i + 4] in films:
+            data[i + 4] = films[data[i + 4]]
+            changed += 1
+    return bytes(data), changed
+
+
 def series_set_strings(block, strings, drop_speech=True):
     """A scene block with its FORM TEXT replaced by `strings` (bytes, by
     index: the script names them by number, so keep the count) and, with
