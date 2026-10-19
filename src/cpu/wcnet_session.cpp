@@ -663,7 +663,7 @@ struct RemoteClient {
     // last reported, between its updates (the AI must not fly a human's ship).
     bool hasLastLoc = false;
     Location lastLoc;
-    double driftWorst = 0, driftWindowAt = 0;
+    double driftWorst = 0, driftWorstKm = 0, driftWindowAt = 0;
     int driftUpdates = 0;
 
     explicit RemoteClient(int n)
@@ -999,6 +999,7 @@ public:
         ape->set_cam_ship_type(camShipType);
         ape->set_cam_mode(camMode);
         ape->set_duration(duration);
+        seats_apart("for the fly-by");
         exchange(true);
         quiet_links();
     }
@@ -1014,8 +1015,31 @@ public:
                 wclog(2, "the seat in slot %d (the AI's) comes along after the autopilot", *it);
             }
         }
+        seats_apart("after the autopilot");
         exchange(true);
         quiet_links();
+    }
+
+    // A made seat is the wingman's record spawned again, and the game's
+    // autopilot puts every ship of the wing at the formation place its
+    // record names: the two copies land in the same spot, one inside the
+    // other (Wing Commander, Dakota 1 with three players: the host's fly-by
+    // showed two ships of three, and after it the two wingmen flew on in
+    // lockstep inside each other, each seeing one blue dot).  Wing
+    // Commander keeps the place per slot (wing_station gives the copy its
+    // own); for the rest, the game's placing is done when these hooks run,
+    // before the frame that carries it, so a human's seat sitting inside
+    // another human's ship is parked on a wing (take_station), and its own
+    // machine takes the place from that frame as it takes every position
+    // of a fly-by.  Nothing to do in a room of two: it has no made seats.
+    void seats_apart(const char *when) {
+        for (std::set<int>::const_iterator it = seatSlots_.begin(); it != seatSlots_.end(); ++it) {
+            if (slot_in_use(*it) && client_for_slot(*it)) {
+                if (take_station(*it)) {
+                    wclog(1, "player %d's seat sat inside another ship %s: parked on our wing", *it, when);
+                }
+            }
+        }
     }
 
     // A cinematic: the frames around it are slow on both sides, and the
@@ -1276,6 +1300,7 @@ private:
             if (!seatSpawn_.before.count(it->first) && (int)it->second.mission_ship_id() == seatSpawn_.missionShip && slot_in_use(it->first)) {
                 seatSlots_.insert(it->first);
                 park_beside(it->first);
+                wing_station(it->first);
                 wclog(1, "the seat made for player %d is slot %d", seatSpawn_.forNet, it->first);
                 seatSpawn_.active = false;
                 return;
@@ -1550,9 +1575,10 @@ private:
         return dx * dx + dy * dy + dz * dz <= clear * clear;
     }
 
-    void take_station(int slot) {
+    // True when it had to be moved.
+    bool take_station(int slot) {
         if (!slot_in_use(slot) || !slot_in_use(kPlayerSlot)) {
-            return;
+            return false;
         }
         // inside our ship, or inside another human's (a second copy of the
         // wingman's record spawns where the first one did)
@@ -1563,9 +1589,29 @@ private:
             }
         }
         if (!crowded) {
-            return;
+            return false;
         }
         park_beside(slot);
+        return true;
+    }
+
+    // Wing Commander flies and places every ship of the wing at its station
+    // on its leader, three words a slot copied from its record when it
+    // spawns (dseg:C1FA, right/up/forward in km: the AI's formation flying
+    // ovr164:0AC3, the autopilot's placing ovr133:0070).  A made seat is a
+    // copy of the wingman's record and gets the wingman's station: it is
+    // given the mirror image, or the right wing when the wingman flies
+    // dead astern, so the game itself keeps the two apart.
+    void wing_station(int slot) {
+        if (!ds::known(ds::formationOffset) || !slot_in_use(slot)) {
+            return;
+        }
+        Bit16u at = (Bit16u)(ds::formationOffset + 6 * slot);
+        Bit16s x = (Bit16s)rd16(at), y = (Bit16s)rd16((Bit16u)(at + 2)), z = (Bit16s)rd16((Bit16u)(at + 4));
+        enum { kAbeamKm = 750 };
+        Bit16s nx = x != 0 ? (Bit16s)-x : (Bit16s)kAbeamKm;
+        wr16(at, (Bit16u)nx);
+        wclog(1, "the seat in slot %d flies at (%d, %d, %d) km on our wing, not at the wingman's (%d, %d, %d)", slot, nx, y, z, x, y, z);
     }
 
     // `slot` on our wing, with our heading and speed: the first wingman on
@@ -1623,14 +1669,19 @@ private:
                 double n = sqrt((double)f.x * f.x + (double)f.y * f.y + (double)f.z * f.z) * sqrt((double)r.x * r.x + (double)r.y * r.y + (double)r.z * r.z);
                 double deg = n > 0 ? acos(std::max(-1.0, std::min(1.0, dot / n))) * 180.0 / 3.14159265 : 0;
                 if (deg > rc->driftWorst) rc->driftWorst = deg;
+                // and how far our copy is from the position it reported last (km)
+                Vec3 p = read_vec(vec_slot(ds::gPositionVector, slot));
+                Vec3 q = to_vec(rc->lastLoc.pos());
+                double km = sqrt(((double)p.x - q.x) * ((double)p.x - q.x) + ((double)p.y - q.y) * ((double)p.y - q.y) + ((double)p.z - q.z) * ((double)p.z - q.z)) / 256.0;
+                if (km > rc->driftWorstKm) rc->driftWorstKm = km;
                 double now = PIC_FullIndex();
                 if (now - rc->driftWindowAt > 5000.0) {
-                    if (rc->driftWindowAt > 0 && (rc->driftWorst > 5.0 || rc->driftUpdates == 0)) {
-                        wclog(1, "player %d's copy turned up to %.0f deg from its reported heading (%d updates in %.0f s; in mission %d, ai %s)",
-                              slot, rc->driftWorst, rc->driftUpdates, (now - rc->driftWindowAt) / 1000.0, (int)rc->inMission,
+                    if (rc->driftWindowAt > 0 && (rc->driftWorst > 5.0 || rc->driftWorstKm > 500.0 || rc->driftUpdates == 0)) {
+                        wclog(1, "player %d's copy turned up to %.0f deg from its reported heading and sat up to %.0f km from its reported position (%d updates in %.0f s; in mission %d, ai %s)",
+                              slot, rc->driftWorst, rc->driftWorstKm, rc->driftUpdates, (now - rc->driftWindowAt) / 1000.0, (int)rc->inMission,
                               is_remote_player_slot(slot) ? "held off" : "RUNNING");
                     }
-                    rc->driftWindowAt = now; rc->driftWorst = 0; rc->driftUpdates = 0;
+                    rc->driftWindowAt = now; rc->driftWorst = 0; rc->driftWorstKm = 0; rc->driftUpdates = 0;
                 }
             }
             if (!is_remote_player_slot(slot)) {

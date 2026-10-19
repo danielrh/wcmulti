@@ -127,9 +127,12 @@ extra health" and "wingman explodes" behaviour.
   fighters' (`ovr163:13CF`, from the same dispatcher) still ran for a
   wingman's slot on the server, turning the host's copy up to 40 degrees
   off the heading the wingman had just reported, every frame, between the
-  wingman's updates (`player N's copy turned up to ...` in the host's log
-  with `WCNET_LOG=2`).  Both routines are held off a human's slot now
-  (`aiFighterThink`; SM2 at the same offsets).
+  wingman's updates (`player N's copy turned up to ... deg from its
+  reported heading and sat up to ... km from its reported position` in the
+  host's log with `WCNET_LOG=2`, every 5 s while either is large; around a
+  fly-by the km are the game's own moving of the ship, not the AI's).  Both
+  routines are held off a human's slot now (`aiFighterThink`; SM2 at the
+  same offsets).
 * The per-instruction hook read ~15 words of guest memory for every emulated
   instruction (`isExecutingOverlay` per hook).
 

@@ -62,6 +62,7 @@ WC_DS(campaignTable, 0x9A88, 0x9D72, 0x0000, 0x0000, 0x0000)  // near pointer: 0
 WC_DS(missileTarget, 0xC284, 0xC56A, 0x6FF4, 0x6FFE, 0x729A)  // [currentCampaign+2] byte per slot
 WC_DS(parentShipForShip, 0xC30E, 0xC5F4, 0x6392, 0x639C, 0x6638)  // byte per slot, 0xff = none
 WC_DS(gMaybeShipRadius, 0xC3B0, 0xC696, 0x627A, 0x6284, 0x6520)  // word per slot
+WC_DS(formationOffset, 0xC1FA, 0xC4E0, 0x0000, 0x0000, 0x0000)  // [formationOffset + 6*slot] 3 words: where the ship flies on its leader (right, up, forward, km), from its record; the autopilot's arrival puts it there (ovr133:0070)
 WC_DS(curShield, 0xC430, 0xC716, 0x6680, 0x668A, 0x6926)  // curShieldMaybe: word[2] per slot (front, rear)
 WC_DS(gShipBoltList, 0xC472, 0xC758, 0x67D4, 0x67DE, 0x6A7A)  // 0x33 bytes per slot: count + 10 x 5-byte gun entries
 WC_DS(tempVector, 0xC6B2, 0xC998, 0x0000, 0x0000, 0x0000)  // scratch vector used by the game

@@ -162,8 +162,25 @@ client is:
   side turrets, `Game.start_view`; `turret_manned` keeps the host's
   automatic fire out of every manned turret).  A drone only when a spawn
   came to nothing.  The AI flies a made ship until a human takes it and it
-  is parked on the host's wing after an autopilot (`park_beside`; the game
-  carries only its own wingmen).  The client's network id becomes the slot
+  is parked on the host's wing after an autopilot (`park_beside`).  A made
+  seat is the wingman's record again, and the game flies and places every
+  ship of the wing at the station its record names on its leader -- in Wing
+  Commander three words a slot (`formationOffset`, `dseg:C1FA`, right/up/
+  forward in km, copied from the record at the spawn; the AI's formation
+  flying `ovr164:0AC3` and the autopilot's placing `ovr133:0070` read it) --
+  so the two copies had one station: after the host's autopilot the two
+  wingmen sat inside each other on every machine and flew on in lockstep
+  until one of them turned (Dakota 1 with three players, 2026-10-18: the
+  host's fly-by showed two ships of three, the first wingman's radar one
+  blue dot for the host and none for the third ship, which was at its own
+  place).  `wing_station` gives a made seat the mirror image of the
+  wingman's station (the right wing when he flies dead astern) as it is
+  made, and the game keeps them apart itself; for Wing Commander II, which
+  keeps no such table the hooks know, `seats_apart` at the autopilot's
+  begin and finish parks a human's seat that sits inside another human's
+  ship on a wing (`take_station`), and the finish frame carries the place
+  to its own machine.  A room of two has no made seats and none of this
+  runs.  The client's network id becomes the slot
   it flies (`move_client`); the id goes to the client with the start state,
   the other machines know the ship by the server's slot number as before.
   Every frame says which network ids humans fly (`Frame.humans`); a client
