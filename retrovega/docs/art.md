@@ -92,15 +92,19 @@ the chevrons just behind its canopy, and a roundel near each wingtip.
 ## The light
 
 Every ship gets the same light, so the sprites match one another
-(`KEY_DIR`, `KEY_DISTANCE` in `shipviews.py`). It is a point light up and
-to the left and only a little in front, well off the view axis as in WC1's
-renders, at three ship radii. Faces turned toward it are bright, faces
+(`KEY_DIR`, `KEY_DISTANCE` in `shipviews.py`). It is a point light mostly
+from the left, somewhat above and only a little in front, well off the view
+axis as in WC1's renders, at three ship radii; the shadow side keeps 0.30
+ambient.  `--key x,y,z`, `--ambient` and `--shine` try other settings
+(`--tag` names the trial's files). Faces turned toward it are bright, faces
 turned away fall into shadow, and flat panels shade across. A dim cool
 fill comes from the lower right.
 
 ## Liveries: data/liveries.csv
 
-A livery is two colours, primary and secondary. The sprites keep paint in
+A livery is two colours, primary and secondary. No paint is near
+black: against space a black stripe reads as a hole in the hull, so the
+darkest accents are deep navy (26 36 84) or dark brown (70 42 26). The sprites keep paint in
 placeholder ramps, so a livery costs nothing at run time: the engine
 recolours when it decodes a ship type for a mission (spec §8).
 

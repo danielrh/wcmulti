@@ -1,9 +1,9 @@
 name,primary,secondary,notes
 none,,,"The texture's own colours"
+carrier-green,36 164 52,26 36 84,"Bright green with deep navy accents, after WC1's Confed trim"
 green-yellow,36 164 52,244 204 40,"Green with yellow accents"
-carrier-green,36 164 52,28 28 32,"Bright green with black accents, after WC1's Confed trim"
 confed-blue,40 96 220,220 40 32,"Blue with red accents"
-militia-red,204 40 32,32 32 36,"Border militia: red and black"
-ace-gold,232 180 40,32 32 36,"Named aces"
+militia-red,204 40 32,70 42 26,"Border militia: red with dark brown"
+ace-gold,232 180 40,26 36 84,"Named aces: gold with deep navy"
 aera-teal,40 148 136,150 170 190,"Aera default"
 rlaan-violet,116 60 156,200 70 170,"Rlaan default"

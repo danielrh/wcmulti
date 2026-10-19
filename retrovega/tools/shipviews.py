@@ -52,11 +52,13 @@ VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
 GLOW = {'terran': (255, 168, 72), 'aera': (96, 240, 200), 'rlaan': (240, 90, 220)}
 GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflection
 # The key light, the same for every ship so the sprites match: a point light
-# well off the view axis (up and to the left, and only a little in front),
+# well off the view axis (mostly from the left, somewhat above, a little in
+# front),
 # at three ship radii, so faces turned toward it are bright, faces turned
 # away fall into shadow, and flat panels shade across.
-KEY_DIR = (-0.70, 0.60, 0.40)
+KEY_DIR = (-0.85, 0.45, 0.27)
 KEY_DISTANCE = 3.0
+AMBIENT = 0.30     # how much light the shadow side keeps
 DECAL_SIZE = 128   # each decal's cell in the atlas
 MAX_DECALS = 4
 
@@ -135,6 +137,7 @@ uniform vec4 decal_opt[4];  // atlas cell, side (0, 1 top, -1 bottom), mirrored,
 uniform float exposure;
 uniform float toon;
 uniform vec3 key_pos;     // a point light, view space, ship units
+uniform float ambient;
 uniform vec3 fill_dir;
 in vec3 v_n;
 in vec2 v_uv;
@@ -197,7 +200,7 @@ void main() {
     specc = max(specc, vec3(shine));
     float shin = mix(7.0, 60.0, clamp(dot(specc, vec3(0.3, 0.6, 0.1)) * 1.5 - shine, 0.0, 1.0));
     vec3 sky = vec3(0.60, 0.62, 0.68), ground = vec3(0.10, 0.10, 0.11);
-    vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5) * 0.42;
+    vec3 amb = mix(ground, sky, n.y * 0.5 + 0.5) * ambient;
     vec3 key_dir = normalize(key_pos - v_view);
     float kd = max(dot(n, key_dir), 0.0);
     if (toon > 0.0) {
@@ -399,7 +402,7 @@ def view_matrix(elev, head):
     return np.array([s, u, -f])
 
 
-def render(row, outdir, size, assets, livery_name=None):
+def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix=''):
     art = table_row('art.csv', row['key']) or {}
     livery_name = livery_name or art.get('livery') or 'none'
     livery = table_row('liveries.csv', livery_name, 'name')
@@ -423,8 +426,9 @@ def render(row, outdir, size, assets, livery_name=None):
         prog[name].value = unit
     # the key is a point light up and to the left, near enough that flat
     # panels shade from bright to dark across the hull
-    kd = np.array(KEY_DIR) / np.linalg.norm(KEY_DIR)
+    kd = np.array(key) / np.linalg.norm(key)
     prog['key_pos'].value = tuple(kd * KEY_DISTANCE * radius)
+    prog['ambient'].value = ambient
     fill = np.array([0.7, -0.35, 0.45]); fill /= np.linalg.norm(fill)
     prog['fill_dir'].value = tuple(fill)
     prog['exposure'].value = float(art.get('exposure') or 1)
@@ -432,7 +436,7 @@ def render(row, outdir, size, assets, livery_name=None):
     prog['whiten'].value = float(art.get('whiten') or 0)
     prog['detail_k'].value = float(art.get('detail') or 0.6)
     prog['bump_k'].value = float(art.get('bump') or 1.0)
-    prog['shine'].value = float(art.get('shine') or 0.3)
+    prog['shine'].value = shine if shine is not None else float(art.get('shine') or 0.3)
     prog['decal_atlas'].value = 4
     atlas, pos, opt = decal_uniforms(art.get('decals'), allpos - center)
     decal_tex = make_texture(ctx, atlas, 4)
@@ -497,7 +501,7 @@ def render(row, outdir, size, assets, livery_name=None):
         paints.append(pm)
 
     os.makedirs(outdir, exist_ok=True)
-    tag = '%s-%s' % (row['key'], livery_name)
+    tag = '%s-%s%s' % (row['key'], livery_name, tag_suffix)
     for vi, (img, pm) in enumerate(zip(views, paints)):
         img.save(os.path.join(outdir, '%s_%02d.png' % (tag, vi)))
         pm.save(os.path.join(outdir, '%s_paint_%02d.png' % (tag, vi)))
@@ -571,12 +575,17 @@ def main():
     ap.add_argument('--size', type=int, default=0, help='view size in pixels (default: lod0_px)')
     ap.add_argument('--livery', default=None, help='a name in data/liveries.csv (default: data/art.csv)')
     ap.add_argument('--assets', default=os.path.expanduser('~/dev/vegastrike-assets'))
+    ap.add_argument('--key', default=None, help='try another key light direction: x,y,z in view space')
+    ap.add_argument('--ambient', type=float, default=AMBIENT, help='try another ambient level')
+    ap.add_argument('--shine', type=float, default=None, help="try another shine (overrides data/art.csv)")
+    ap.add_argument('--tag', default='', help='a suffix for the output names (trials)')
     args = ap.parse_args()
     row = ship_row(args.ship)
     if not row['mesh']:
         sys.exit('%s has no mesh yet' % row['name'])
     size = args.size or int(row['lod0_px'])
-    r = render(row, args.outdir, size, args.assets, args.livery)
+    key = tuple(float(v) for v in args.key.split(',')) if args.key else KEY_DIR
+    r = render(row, args.outdir, size, args.assets, args.livery, key, args.ambient, args.shine, args.tag)
     print('%s: 37 views at %d px, radius %.2f' % (row['name'], size, r))
 
 
