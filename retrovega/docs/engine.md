@@ -334,3 +334,28 @@ flips above it may not be needed: measure first.
 6. Bunks: save, load, names.
 7. The music engine. **Done.**
 8. The layer: RV.EXE recognised, DS from RVHOOK, the new thunks logged.
+   **Done** (below).
+
+Steps 1-6 are done too: `tests/run.sh` plays `tests/walk.txt` (every room,
+a save, a close-up, the briefing, the deck, a launch and its debrief),
+`tests/campaign.txt` (a whole campaign: `/winrate 20` ends in a loss,
+80 in a victory) and `tests/keys.txt` (the arrow keys) headless in DOSBox,
+with screenshots.
+
+## The layer and RV.EXE today
+
+`src/cpu/` knows RV.EXE (`GAME_RV`, `BUILD_RV`):
+
+- **Recognition:** by its name, `"RVHOOK"` at the image's first
+  paragraph, DS from the relocated word after it, and the signature at
+  DS:0400.
+- **Hooks:** the per-instruction dispatcher has its own branch for it.
+  It watches the 36 RVHOOK thunks (`src/cpu/wcnet_rv.h`, written by
+  `tools/rvabi.py --layer` from the same rvabi.def) and logs each call
+  with its arguments:
+  `RV.EXE: roomEntered(2)`, `campaignNode(0, 1)`, `missionResolved(1)`.
+- **Nothing else:** none of WC.EXE's hooks or periodic work run, so
+  between thunks the cores only test the bitmap. That is the cheapest a
+  hooked program can be, short of the hookless core.
+- **Next, for multiplayer:** RV's column of `wcnet_ds.def` (`rvabi.py
+  --column`) and the flight loop's sites (spec 5.3).

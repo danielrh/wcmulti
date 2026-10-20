@@ -25,6 +25,7 @@ enum GameId {
     GAME_NONE = 0,
     GAME_WC1,   // Wing Commander: WC.EXE (with The Secret Missions) and SM2.EXE
     GAME_WC2,   // Wing Commander II: WC2.EXE, SO1.EXE and SO2.EXE
+    GAME_RV,    // RetroVega (retrovega/): RV.EXE, the new game, hooked through its RVHOOK thunks
 };
 
 // The executable: its column of wcnet_ds.def, its table of code places.
@@ -35,6 +36,7 @@ enum BuildId {
     BUILD_WC2,  // WC2.EXE
     BUILD_SO1,  // SO1.EXE: Special Operations 1
     BUILD_SO2,  // SO2.EXE: Special Operations 2
+    BUILD_RV,   // RV.EXE: no column of wcnet_ds.def yet; its DS comes from RVHOOK (wcnet_rv.h)
 };
 
 extern GameId g_game;

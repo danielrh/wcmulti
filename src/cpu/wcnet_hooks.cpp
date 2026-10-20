@@ -25,6 +25,7 @@
 #include "wcnet_game.h"
 #include "wcnet_perf.h"
 #include "wcnet_log.h"
+#include "wcnet_rv.h"
 #include "cpu.h"
 #include "regs.h"
 #include "keyboard.h"
@@ -1597,8 +1598,46 @@ bool wc_net_key_filter(int kbdKey, bool pressed) {
     return true;
 }
 
+// RV.EXE (wcnet_rv.h): for now the layer only watches its RVHOOK thunks and
+// logs every call with its arguments; none of WC.EXE's hooks or periodic work
+// apply to it.  The thunks are entered by a far call, so the arguments sit
+// above the return address (call_arg16).
+static void rv_check_hooks() {
+    using namespace wc;
+    if (!g_watchReady) {        // a program change clears it (hooks_game_changed)
+        memset(g_watch, 0, sizeof(g_watch));
+        for (size_t i = 0; i < sizeof(kRvThunks) / sizeof(kRvThunks[0]); i++) {
+            watch(kRvThunks[i].off);
+        }
+        g_watchReady = true;
+        wclog(1, "RV.EXE: watching its %u thunks (DS %04X)", (unsigned)(sizeof(kRvThunks) / sizeof(kRvThunks[0])), DS);
+    }
+    wc_net_countdown = 0x7fffffff;  // no periodic work: only the watched places call in
+    if (SegValue(cs) != g_loadSeg) {
+        return;
+    }
+    for (size_t i = 0; i < sizeof(kRvThunks) / sizeof(kRvThunks[0]); i++) {
+        const RvThunk &t = kRvThunks[i];
+        if (reg_eip != t.off) {
+            continue;
+        }
+        char args[64] = "";
+        for (int a = 0; a < t.nargs && a < 4; a++) {
+            char one[12];
+            snprintf(one, sizeof(one), "%s%u", a ? ", " : "", (unsigned)call_arg16(a));
+            strncat(args, one, sizeof(args) - strlen(args) - 1);
+        }
+        wclog(1, "RV.EXE: %s(%s)", t.name, args);
+        return;
+    }
+}
+
 void wc_net_check_cpu_hooks() {
     using namespace wc;
+    if (g_build == BUILD_RV) {
+        rv_check_hooks();
+        return;
+    }
     static int watching = -1;
     if (watching < 0) {
         const char *env = getenv("WCNET_WATCH");

@@ -45,7 +45,7 @@ WC_CODE_LIST(X)
 // Tables
 
 static void load_ds(BuildId build) {
-#define WC_DS(name, wc1, sm2, wc2, so1, so2) { static const Bit16u at[] = { 0, wc1, sm2, wc2, so1, so2 }; ds::name = at[build]; }
+#define WC_DS(name, wc1, sm2, wc2, so1, so2) { static const Bit16u at[] = { 0, wc1, sm2, wc2, so1, so2, 0 }; ds::name = at[build]; }
 #include "wcnet_ds.def"
 #undef WC_DS
 }
@@ -191,6 +191,10 @@ static void load_wc2_code() {
 // The other builds: SM2.EXE, SO1.EXE, SO2.EXE (load_sm2_code, ...).
 #include "wcnet_ports.h"
 
+// RV.EXE, the new game (retrovega/): none of WC.EXE's places.  Its hook places
+// are the RVHOOK thunks (wcnet_rv.h), watched by the dispatcher's own branch.
+static void load_rv_code() {}
+
 // ---------------------------------------------------------------------------
 // Recognising the program
 
@@ -216,6 +220,9 @@ static const KnownGame kGames[] = {
     // SO3.EXE is SO2.EXE with its data-file number set to 3 (so3/build.py):
     // the same code, the same tables, the Culloden campaign's files.
     { GAME_WC2, BUILD_SO2, "SO3.EXE", 0x1924, 0x025A, "Loading WC2 - SPECIAL OPERATIONS 2", "Wing Commander II: Special Operations 3 (Culloden)", load_so2_code },
+    // RV.EXE: DGROUP's paragraph moves with its code size, so dgroupPara is
+    // read from the image (RVHOOK's relocated word; game_program_loaded).
+    { GAME_RV, BUILD_RV, "RV.EXE", 0, 0x0400, "Loading RETROVEGA", "RetroVega", load_rv_code },
 };
 static const KnownGame *g_program = NULL;   // the entry of the program that is running
 
@@ -231,13 +238,13 @@ const char *game_name() {
     return "";
 }
 
-static void set_game(const KnownGame *game, Bit16u loadSeg, Bit16u psp) {
+static void set_game(const KnownGame *game, Bit16u loadSeg, Bit16u psp, Bit16u dgroupPara) {
     g_program = game;
     g_game = game ? game->id : GAME_NONE;
     g_build = game ? game->build : BUILD_NONE;
     g_loadSeg = game ? loadSeg : 0;
     g_gamePsp = game ? psp : 0;
-    DS = game ? (Bit16u)(loadSeg + game->dgroupPara) : 0;
+    DS = game ? (Bit16u)(loadSeg + dgroupPara) : 0;
     DS_OFF = (PhysPt)DS * 0x10;
     load_ds(g_build);
     g_params = g_game == GAME_WC2 ? kWc2Params : g_build == BUILD_SM2 ? kSm2Params : kWc1Params;
@@ -264,7 +271,22 @@ void game_program_loaded(const char *path, Bit16u loadSeg, Bit16u psp) {
         if (name != g.exe) {
             continue;
         }
-        PhysPt at = ((PhysPt)(loadSeg + g.dgroupPara)) * 0x10 + g.signatureOff;
+        Bit16u para = g.dgroupPara;
+        if (g.build == BUILD_RV) {
+            // "RVHOOK" at the image's first paragraph, and DGROUP's segment after it
+            PhysPt hook = (PhysPt)loadSeg * 0x10;
+            static const char kMagic[] = "RVHOOK";
+            bool isRv = true;
+            for (size_t k = 0; k < 6 && isRv; k++) {
+                isRv = mem_readb(hook + (PhysPt)k) == (Bit8u)kMagic[k];
+            }
+            if (!isRv) {
+                wclog(0, "%s has no RVHOOK header: no hooks", name.c_str());
+                continue;
+            }
+            para = (Bit16u)(mem_readw(hook + 8) - loadSeg);
+        }
+        PhysPt at = ((PhysPt)(loadSeg + para)) * 0x10 + g.signatureOff;
         size_t len = strlen(g.signature);
         bool same = true;
         for (size_t k = 0; k < len && same; k++) {
@@ -274,7 +296,7 @@ void game_program_loaded(const char *path, Bit16u loadSeg, Bit16u psp) {
             wclog(0, "%s is not the %s build the hooks know: no multiplayer", name.c_str(), g.title);
             continue;
         }
-        set_game(&g, loadSeg, psp);
+        set_game(&g, loadSeg, psp, para);
         wclog(1, "%s loaded at %04X (data segment %04X)", g.title, loadSeg, DS);
         return;
     }
@@ -327,7 +349,7 @@ void game_program_ended(Bit16u psp) {
         if (g_session) {
             g_session->on_program_ended();
         }
-        set_game(NULL, 0, 0);
+        set_game(NULL, 0, 0, 0);
     }
 }
 
