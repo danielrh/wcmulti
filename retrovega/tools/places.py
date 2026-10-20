@@ -240,7 +240,8 @@ def fighter(ship, cfg, frame, cache, legs, rerender=False):
     under, ux, uy = under_layer(below, s, x, size[0], cx, cy, deck, cfg['light'])
     return {'sprite': sprite, 'x': x, 'y': y, 'under': under, 'ux': ux, 'uy': uy, 'engines': engines,
             'sleds': sled_spots(sprite, body(ship, cfg, bb, size), x, y,
-                                [frame.xy(sx, 0)[0] for sx in cfg['sleds']], legs)}
+                                [frame.xy(sx, 0)[0] for sx in cfg['sleds'] + cfg.get('more_sleds', {}).get(ship, [])],
+                                legs)}
 
 
 def body(ship, cfg, bb, size):

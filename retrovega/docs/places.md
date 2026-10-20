@@ -88,7 +88,8 @@ rest).
   body from its mesh: the triangles whose middles lie within 22% of the
   half-span of the centre line. Each leg goes to the place nearest its
   spot (`sleds`, source x: one mid-deck, one behind the cart, where it is
-  mostly hidden) where the body covers the leg's whole top and nothing
+  mostly hidden; `more_sleds` adds spots for a ship, such as a nose leg
+  for the small Redeemer) where the body covers the leg's whole top and nothing
   hangs lower. A leg behind a wing would look fixed to the wing. It may
   move up to 90 px for that. Its top meets the body's belly. Where a wing
   hangs below the body all along, as on the Schroedinger's front half, the

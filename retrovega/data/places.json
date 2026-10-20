@@ -14,6 +14,7 @@
       "bottom": 740,
       "metre": 54,
       "sleds": [790, 265],
+      "more_sleds": {"REDEEMR": [1220]},
       "legs": {"default": "retract", "FRANKLN": "sled", "GAWAIN": "forwardretract", "LANCELT": "forwardretract"},
       "elevation": 10,
       "heading": 270,
