@@ -2,23 +2,25 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <dos.h>
 #include "rv.h"
 
-static FILE *g_log;
+static int g_log_started;
 
+/* a line in RVLOG.TXT; the file is closed after each (DOSBox writes a file
+ * out to its host only on a close: the browser page reads it while the game
+ * runs) */
 void rv_log(const char *fmt, ...)
 {
     va_list ap;
-    if (!g_log)
-        g_log = fopen("RVLOG.TXT", "w");
-    if (!g_log)
+    FILE *f = fopen("RVLOG.TXT", g_log_started ? "a" : "w");
+    if (!f)
         return;
+    g_log_started = 1;
     va_start(ap, fmt);
-    vfprintf(g_log, fmt, ap);
+    vfprintf(f, fmt, ap);
     va_end(ap);
-    fputc('\n', g_log);
-    fflush(g_log);
+    fputc('\n', f);
+    fclose(f);
 }
 
 void (*rv_fail_hook)(void);   /* the video module restores text mode here */
