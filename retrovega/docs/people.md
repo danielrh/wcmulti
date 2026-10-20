@@ -19,7 +19,7 @@
 | DRIFTER | Owen Price | Drifter | Alliance (Merchant Guild) | pilot, freighter kid, bets on everything |
 | HERO_M / HERO_F | the player | Wildcard | Earth (Sol) | fresh from the academy |
 | XO | Cmdr. Mira Solberg | | Brahma (Andolian) | the XO; survived the first Aera raids, hard but fair |
-| TECH | Chief Ana Kowalski | Redline | Venture (LIHW) | the flight-deck chief, an ex-racer |
+| TECH | Chief Ana Kowalski | Kit | Venture (LIHW) | the flight-deck chief, an ex-racer who kitbashes ships from salvaged parts |
 
 Everyone wears a short military regulation haircut; facial hair is a
 moustache, a goatee or stubble at most. The portraits have no headsets
