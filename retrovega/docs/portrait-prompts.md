@@ -62,11 +62,14 @@ a second, optional set for in-flight comms (section 3, "Two looks").
 
 **RAY: Augustin "Ray" Reyes, the barman (a retired pilot)**
 ```
-A 61-year-old man, a retired fighter pilot who now runs the squadron bar. Olive skin,
-weathered face with crow's feet and faint forehead lines, short salt-and-pepper hair in a
-neat side-parted crop, a neat short grey moustache and no beard, brown eyes, square jaw,
-long straight nose, calm and knowing look. Charcoal work shirt under a brown leather bar
-apron; a small faded squadron pin on the apron strap.
+A 61-year-old man, a retired fighter pilot who now runs the squadron bar. An ordinary,
+original face that does not resemble any actor or famous person. Olive skin, a broad,
+weathered face with a heavy brow, crow's feet and deep forehead lines, a thick neck and a
+stocky build. Close-cropped grey hair, receding at the temples, no side parting. A short,
+neat grey moustache and no beard. Brown eyes under heavy lids, a broad nose once broken
+and slightly crooked, a faint burn scar on the left side of his neck from the accident
+that grounded him. Calm, patient, knowing look. Charcoal work shirt under a brown leather
+bar apron; a small faded squadron pin on the apron strap.
 ```
 
 **COMET: Adaeze Nwosu, pilot**
