@@ -26,6 +26,7 @@ little depth-based cavity shading.
 """
 import argparse
 import csv
+import json
 import math
 import os
 import sys
@@ -584,7 +585,9 @@ def environment(ctx, assets, name, size=256):
 
 
 def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix='',
-           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None):
+           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None, views=None):
+    """views: (elevation, heading) pairs to render instead of the sprite set,
+    saved as TAG_eE_hH.png with no sheet (the scenes' own views of a ship)."""
     art = table_row('art.csv', row['key']) or {}
     livery_name = livery_name or art.get('livery') or 'none'
     livery = table_row('liveries.csv', livery_name, 'name')
@@ -600,6 +603,8 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     else:
         parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
         raw_lights = unit_lights(assets, row['vs_unit'])
+    if views:
+        views_wanted = views
     for m in parts:
         m.positions = m.positions * stretch
         n = m.normals / stretch
@@ -686,7 +691,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     def grab(tex):
         return np.frombuffer(tex.read(), dtype=np.uint8).reshape(big, big, 4)[::-1].astype(np.float32) / 255
 
-    views, paints = [], []
+    views, paints, flares = [], [], []
     glow = GLOW.get(row['faction'], (255, 200, 120))
     for elev, head in views_wanted:
         rot = view_matrix(elev, head)
@@ -706,11 +711,22 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
         facing = (rot @ np.array([0.0, 0.0, -1.0]))[2]
         engines = [(rot @ (pos - center) / radius, sz / radius, facing) for pos, sz in lights]
         img, pm = post(grab(color), grab(paint), z, size, engines, glow)
+        flares.append([[round((q[0] + 1) * size / 2, 1), round((1 - q[1]) * size / 2, 1), round(sz * size / 2, 1)]
+                       for q, sz, _f in engines])
         views.append(img)
         paints.append(pm)
 
     os.makedirs(outdir, exist_ok=True)
     tag = '%s-%s%s' % (row['key'], livery_name, tag_suffix)
+    if views_wanted not in (VIEWS, VIEWS_ASYM):
+        for (elev, head), img, pm, fl in zip(views_wanted, views, paints, flares):
+            name = '%s_e%g_h%g' % (tag, elev, head)
+            img.save(os.path.join(outdir, name + '.png'))
+            pm.save(os.path.join(outdir, name + '_paint.png'))
+            # where the engines are in the picture (x, y, size in pixels), for exhaust effects
+            with open(os.path.join(outdir, name + '.json'), 'w') as f:
+                json.dump({'size': size, 'radius': round(radius, 3), 'engines': fl}, f)
+        return radius
     for vi, (img, pm) in enumerate(zip(views, paints)):
         img.save(os.path.join(outdir, '%s_%02d.png' % (tag, vi)))
         pm.save(os.path.join(outdir, '%s_paint_%02d.png' % (tag, vi)))
@@ -798,16 +814,20 @@ def main():
     ap.add_argument('--key-power', type=float, default=KEY_POWER)
     ap.add_argument('--exposure', type=float, default=None, help='try another exposure (overrides data/art.csv)')
     ap.add_argument('--reflect', type=float, default=None, help='try another metal reflection strength')
+    ap.add_argument('--views', default=None,
+                    help='render only these views, "E,H;E,H..." (elevation, heading in degrees), no sheet')
     args = ap.parse_args()
     row = ship_row(args.ship)
     if not row['mesh']:
         sys.exit('%s has no mesh yet' % row['name'])
     size = args.size or int(row['lod0_px'])
     key = tuple(float(v) for v in args.key.split(',')) if args.key else KEY_DIR
+    views = [tuple(float(v) for v in pair.split(',')) for pair in args.views.split(';')] if args.views else None
     r = render(row, args.outdir, size, args.assets, args.livery, key, args.ambient, args.shine, args.tag,
-               args.env, args.env_gain, args.key_power, args.exposure, args.reflect)
+               args.env, args.env_gain, args.key_power, args.exposure, args.reflect, views)
     asym = row['mesh'].startswith('hull:') and hulls.asymmetric(row['mesh'][5:])
-    print('%s: %d views at %d px, radius %.2f' % (row['name'], 62 if asym else 37, size, r))
+    count = len(views) if views else 62 if asym else 37
+    print('%s: %d views at %d px, radius %.2f' % (row['name'], count, size, r))
 
 
 if __name__ == '__main__':

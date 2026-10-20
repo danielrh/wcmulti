@@ -88,7 +88,9 @@ lectern (an officer will be added behind it). Behind the stage, a huge blank wal
 glowing a faint blue-grey; it is the main light in the room. Dark, quiet, expectant.
 ```
 
-**DECK: the launch deck**
+**DECK: the launch deck.** Built differently in the end: a side-on hangar
+with Kit at her cart in front and the fighter on the pad behind her, from
+an animation pack (docs/places.md). The prompt below is the first idea.
 ```
 The carrier's launch deck, from just behind and above a fighter's launch position. A long,
 dim launch bay stretches away from us to an open space door full of stars, lit by rows of
@@ -108,6 +110,8 @@ coffee mugs on the table. Bulkheads with a map rack and a hatch. No people.
 ```
 
 ## 3. The canopy closing (the launch)
+
+Optional since the side-on deck (docs/places.md) shows the launch itself.
 
 Three frames: one picture and two edits of it, in one conversation. The
 pilot wears a full helmet with the visor down, so it is everyone (the player
