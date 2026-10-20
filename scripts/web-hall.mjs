@@ -1,6 +1,7 @@
 // Headless test of the public lobby (web/hall.js) and of room codes that
 // name their game: pages enter the lobby (with a game the hooks know, and
-// not without), talk, are held to its rules by
+// not without; with no files at all, RetroVega, built into the page, is
+// that game), talk, are held to its rules by
 // their own page and by the others', advertise a room, and join it by a
 // click on its code.  Driven by scripts/web-smoke.sh hall, which starts the
 // lobby server and the web server; the pages use the server's wc.tar.gz
@@ -64,26 +65,28 @@ function zipOf(name, data) {
 }
 
 // -- room codes follow the game ---------------------------------------------------
-// A page without a game: its pilot would be in the lobby, and it has not
-// said a word to the lobby server.
+// A page with no game files plays RetroVega, built into the page: its pilot
+// is in the lobby at once, nothing pressed (the user's wish on the
+// retrovega branch: "allowing people into the lobby right away no matter
+// what").
 const none = await open("NOGAME", { game: false, hall: "GATE-" + run });
-check("a room code before any game is WC- and four digits", /^WC-\d{4}$/.test(await value(none, "room")), await value(none, "room"));
-await sleep(3);
+check("with no game files the page plays RetroVega", (await value(none, "program")) === "rv", await value(none, "program"));
+check("its room code is RV- and four digits", /^RV-\d{4}$/.test(await value(none, "room")), await value(none, "room"));
+check("and its pilot is in the lobby at once", (await inside(none)) && (await pilots(none, 1)) && sockets.NOGAME.length === 1, [await text(none, "hallState"), sockets.NOGAME]);
+check("with RetroVega's tag", /NOGAME \(you\)\s*RV/.test(await text(none, "hallRoster")), await text(none, "hallRoster"));
 const closed = (page) => page.evaluate(() => document.getElementById("hallBody").hidden && document.getElementById("hallEnter").disabled && !document.getElementById("hallNeeds").hidden);
-check("without a game the lobby is closed, and says what it needs", (await closed(none)) && /Load Wing Commander/.test(await text(none, "hallTop")), await text(none, "hallTop"));
-check("nor does the page let itself be told to enter", (await none.evaluate(() => window.__wcHall.enter())) === false, null);
-check("and the page has not connected to the lobby server", sockets.NOGAME.length === 0, sockets.NOGAME);
-// A file of the game's name that is not the game does not open it either.
+// A file of the game's name that is not the game closes it.
 const fake = Buffer.alloc(200000, 0x20);
 fake.write("MZ", 0, "latin1"); fake.writeUInt16LE(288, 8);
 await none.setInputFiles("#gamefile", { name: "fake.zip", mimeType: "application/zip", buffer: zipOf("WC.EXE", fake) });
 await none.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 30000 }).catch(() => {});
 await sleep(2);
-check("a WC.EXE that is not the build the hooks know keeps it closed", /not the build the multiplayer hooks know/.test(await text(none, "sourceStatus")) && (await closed(none)) && sockets.NOGAME.length === 0, [await text(none, "sourceStatus"), sockets.NOGAME]);
+check("a WC.EXE that is not the build the hooks know closes it, and the page says what it needs", /not the build the multiplayer hooks know/.test(await text(none, "sourceStatus")) && (await closed(none)) && /RetroVega is built in/.test(await text(none, "hallTop")), [await text(none, "sourceStatus"), await text(none, "hallTop")]);
+check("nor does the page let itself be told to enter", (await none.evaluate(() => window.__wcHall.enter())) === false, null);
 // With the game the pilot is in, and nothing had to be pressed.
 await none.unroute("**/wc.tar.gz");
 await none.evaluate(() => { const b = document.getElementById("useServer"); b.hidden = false; b.click(); });
-check("once the game is loaded the pilot is in the lobby", (await inside(none)) && (await pilots(none, 1)) && sockets.NOGAME.length === 1 && /\/ws$/.test(sockets.NOGAME[0]), [await text(none, "hallState"), sockets.NOGAME]);
+check("once the game is loaded the pilot is in the lobby again", (await inside(none)) && (await pilots(none, 1)) && /\/ws$/.test(sockets.NOGAME[sockets.NOGAME.length - 1]), [await text(none, "hallState"), sockets.NOGAME]);
 check("with the game's tag", /NOGAME \(you\)\s*WC1/.test(await text(none, "hallRoster")), await text(none, "hallRoster"));
 // ... and out again when the game goes.
 await none.setInputFiles("#gamefile", { name: "fake.zip", mimeType: "application/zip", buffer: zipOf("WC.EXE", fake) });
@@ -96,7 +99,7 @@ const a = await open("ALPHA", { busy: 2 });
 const codeA = await value(a, "room");
 check("with Wing Commander loaded it is WC1- and four digits", /^WC1-\d{4}$/.test(codeA), codeA);
 const programs = await a.$$eval("#program option", (os) => os.map((o) => o.value));
-check("the directory's programs are offered", programs.join(",") === "wc1,wc1sm2" && !(await a.$eval("#programLabel", (el) => el.hidden)), programs);
+check("the directory's programs are offered, and RetroVega", programs.join(",") === "wc1,wc1sm2,rv" && !(await a.$eval("#programLabel", (el) => el.hidden)), programs);
 await a.selectOption("#program", "wc1sm2");
 check("picking The Secret Missions 2 makes it SM2- with the same digits", (await value(a, "room")) === codeA.replace("WC1-", "SM2-"), await value(a, "room"));
 await a.selectOption("#program", "wc1");
@@ -111,19 +114,12 @@ await k.waitForFunction(() => !document.getElementById("lobby").hidden, null, { 
 await sleep(1.5);
 check("a page opened by a room's link is in the room and not in the lobby, which is open to it", (await k.$eval("#hallBody", (el) => el.hidden)) && !(await k.$eval("#hallEnter", (el) => el.hidden || el.disabled)) && !(await k.$eval("#lobby", (el) => el.hidden)), await text(k, "hallState"));
 await k.context().close();
-// A link to a room joins nothing for a page without a game: its visitor
-// presses "Join room", or loads the game.
+// A link to a room on a page without game files: RetroVega is a game to
+// fly, so the page takes its seat by itself, as one with a game does.
 const l = await open("LIMA", { game: false, query: { room: "WAIT-" + run } });
-await sleep(3);
-check("a room's link opened without a game connects to nothing", (await l.$eval("#lobby", (el) => el.hidden)) && sockets.LIMA.length === 0 && /Load your game files .* room WAIT-/.test(await status(l)), [await status(l), sockets.LIMA]);
-await l.click("#join");
-check("\"Join room\" takes the seat without a game", await l.waitForFunction(() => !document.getElementById("lobby").hidden && /player 1 of 2 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 30000 }).then(() => true, () => false), await status(l));
+check("a room's link opened without game files takes the seat with RetroVega", await l.waitForFunction(() => !document.getElementById("lobby").hidden && /player 1 of 2 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 30000 }).then(() => true, () => false), [await status(l), await value(l, "program")]);
 const m = await open("MIKE", { game: false, query: { room: "WAIT-" + run } });
-await sleep(3);
-check("a second visitor without a game waits as well", (await m.$eval("#lobby", (el) => el.hidden)) && sockets.MIKE.length === 0, sockets.MIKE);
-await m.unroute("**/wc.tar.gz");
-await m.evaluate(() => { const b = document.getElementById("useServer"); b.hidden = false; b.click(); });
-check("and is in the room once the game is loaded", await m.waitForFunction(() => !document.getElementById("lobby").hidden && /player 2 of 2 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 60000 }).then(() => true, () => false), await status(m));
+check("and a second visitor is the wingman", await m.waitForFunction(() => !document.getElementById("lobby").hidden && /player 2 of 2 in room WAIT-/.test(document.getElementById("chatLog").textContent), null, { timeout: 60000 }).then(() => true, () => false), await status(m));
 check("and not in the lobby: one socket, the room's", (await m.$eval("#hallBody", (el) => el.hidden)) && sockets.MIKE.length === 1, sockets.MIKE);
 await l.context().close();
 await m.context().close();

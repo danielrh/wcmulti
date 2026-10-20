@@ -9,6 +9,7 @@
 #   scripts/web-smoke.sh pad      # a controller's stick in a Hornet and a Rapier (scripts/web-pad.mjs)
 #   scripts/web-smoke.sh voice    # voice between two pages (scripts/web-voice.mjs)
 #   scripts/web-smoke.sh hall     # the public lobby and room codes (scripts/web-hall.mjs; scripts/web-chatfilter-test.mjs first)
+#   scripts/web-smoke.sh rv [s]   # RetroVega with no game files: lobby, a flight alone, a host and a wingman (scripts/web-rv.mjs)
 #
 # With NATIVE_HOST=1 the native DOSBox (NATIVE_DOSBOX, default
 # build-native/src/dosbox or src/dosbox) hosts through the same lobby with
@@ -43,6 +44,12 @@ printf '[rooms]\nmax_players_hard = 256\n' > "$OUT/lobby.toml"
 "$LOBBY" --config "$OUT/lobby.toml" --listen-http "127.0.0.1:$LOBBY_PORT" --allowed-origin "http://localhost:$PORT,http://127.0.0.1:$PORT" \
     --public-url "http://127.0.0.1:$LOBBY_PORT" --allow-no-origin > "$OUT/lobby.log" 2>&1 &
 LOBBY_PID=$!
+if [ "${1:-}" = rv ]; then
+    # (the site as deployed: no wc.tar.gz, so a fresh page has no game files at all)
+    export WEB_ROOT="$OUT/rv-dist"
+    rm -rf "$WEB_ROOT" && mkdir -p "$WEB_ROOT"
+    for f in "$ROOT"/web/dist/*; do [ "$(basename "$f")" = wc.tar.gz ] || ln -s "$f" "$WEB_ROOT/"; done
+fi
 python3 "$ROOT/web/serve.py" "$PORT" > "$OUT/http.log" 2>&1 &
 HTTP_PID=$!
 trap 'kill $LOBBY_PID $HTTP_PID 2>/dev/null' EXIT
@@ -54,6 +61,11 @@ if [ "${1:-}" = pad ]; then
 fi
 if [ "${1:-}" = voice ]; then
     PLAYWRIGHT_DIR="$PW" node "$ROOT/scripts/web-voice.mjs" "http://localhost:$PORT/" "http://127.0.0.1:$LOBBY_PORT" 2>&1 | tee "$OUT/voice.log"
+    exit "${PIPESTATUS[0]}"
+fi
+
+if [ "${1:-}" = rv ]; then
+    PLAYWRIGHT_DIR="$PW" SHOT_DIR="$OUT" node "$ROOT/scripts/web-rv.mjs" "http://localhost:$PORT/" "http://127.0.0.1:$LOBBY_PORT" "${2:-30}" 2>&1 | tee "$OUT/rv.log"
     exit "${PIPESTATUS[0]}"
 fi
 

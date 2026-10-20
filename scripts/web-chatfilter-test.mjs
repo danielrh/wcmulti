@@ -113,6 +113,8 @@ check(isLobbyCode("WC-LOBBY") && isLobbyCode("wc-lobby0") && isLobbyCode("WC-LOB
 check(codes("in WC-LOBBY, WC-LOBBY0 or WC-LOBBY12; room WC2-0042", (c) => isLobbyCode(c)) === "WC2-0042", "a lobby's code in a line is not a room: " + codes("in WC-LOBBY, WC-LOBBY0 or WC-LOBBY12; room WC2-0042", (c) => isLobbyCode(c)));
 check(roomTag("WC1-4821") === "WC1" && roomTag("so2-1") === "SO2" && roomTag("WC-1234") === "WC" && roomTag("FALCON-7") === null, "roomTag");
 check(normalizeCode("wc1-AbCd") === "WC1-AbCd" && normalizeCode("Falcon-7") === "Falcon-7", "normalizeCode");
+check(roomTag("rv-4821") === "RV" && normalizeCode("rv-4821") === "RV-4821" && retagRoomCode("WC-4821", "RV") === "RV-4821"
+  && retagRoomCode("RV-4821", "WC1") === "WC1-4821" && splitCodes("join RV-4821 now").some((p) => p.code === "RV-4821" && p.tag === "RV"), "RetroVega's codes");
 check(retagRoomCode("WC-4821", "WC2") === "WC2-4821" && retagRoomCode("WC1-4821", "") === "WC-4821" && retagRoomCode("FALCON-7", "WC2") === "FALCON-7" && retagRoomCode("WC-FALCON", "WC2") === "WC-FALCON", "retagRoomCode");
 for (let i = 0; i < 20000; i++) {
   const c = newRoomCode(["WC1", "WC2", "SM2", "SO1", "SO2", "SO3", "", "junk"][i % 8]);
@@ -124,7 +126,7 @@ check(newRoomCode("junk").startsWith("WC-") && newRoomCode("SO1").startsWith("SO
 // the lobby takes, for every mission of every game in the registry.
 {
   const { GAMES } = await import("../web/gamefiles.js");
-  check(GAMES.filter((g) => g.multiplayer).map((g) => g.tag).sort().join() === "SM2,SO1,SO2,SO3,WC1,WC2", "the registry's tags: " + GAMES.map((g) => g.tag));
+  check(GAMES.filter((g) => g.multiplayer).map((g) => g.tag).sort().join() === "RV,SM2,SO1,SO2,SO3,WC1,WC2", "the registry's tags: " + GAMES.map((g) => g.tag));
   for (const g of GAMES) {
     for (const s of (g.campaign ? g.campaign.series : [])) {
       const n = Array.isArray(s.missions) ? s.missions.length : s.missions;

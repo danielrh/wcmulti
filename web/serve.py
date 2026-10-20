@@ -14,7 +14,8 @@ mimetypes.add_type("application/wasm", ".wasm")
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("application/gzip", ".gz")
 
-root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist")
+# (WEB_ROOT: another directory, e.g. a copy of dist without wc.tar.gz)
+root = os.environ.get("WEB_ROOT") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist")
 port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 
 class Handler(http.server.SimpleHTTPRequestHandler):

@@ -27,10 +27,12 @@ export const MAX_NAME = 16;
 // A room's code starts with the game it is for, so that a code said in the
 // lobby tells who can join: WC1 (Wing Commander and The Secret Missions),
 // SM2 (The Secret Missions 2), WC2, SO1 and SO2 (Wing Commander II and its
-// Special Operations).  "WC" alone is a code made before any game files
-// were loaded, or an older one: it says nothing.
-export const GAME_TAGS = ["WC1", "WC2", "SM2", "SO1", "SO2", "SO3"];
-const CODE_IN_TEXT = /(^|[^A-Za-z0-9_-])((WC[12]?|SM2|SO[123])-[A-Za-z0-9_-]{1,60})/gi;
+// Special Operations), RV (RetroVega, built into the page).  "WC" alone is
+// a code made before any game files were loaded, or an older one: it says
+// nothing.
+export const GAME_TAGS = ["WC1", "WC2", "SM2", "SO1", "SO2", "SO3", "RV"];
+const PREFIX = "WC[12]?|SM2|SO[123]|RV";
+const CODE_IN_TEXT = new RegExp(`(^|[^A-Za-z0-9_-])((${PREFIX})-[A-Za-z0-9_-]{1,60})`, "gi");
 
 // The public lobby's own codes are not rooms to fly in: WC-LOBBY, and
 // WC-LOBBY0, WC-LOBBY1, ... where pilots land when the ones before are full
@@ -43,13 +45,13 @@ export function isLobbyCode(code, base = LOBBY_CODE) {
 }
 
 export function roomTag(code) {
-  const m = /^(WC[12]?|SM2|SO[123])-/i.exec(String(code || ""));
+  const m = new RegExp(`^(${PREFIX})-`, "i").exec(String(code || ""));
   return m ? m[1].toUpperCase() : null;
 }
 // The prefix is written in capitals whoever typed it, so that the same code
 // is the same room for everybody (the lobby server tells cases apart).
 export function normalizeCode(code) {
-  const m = /^(WC[12]?|SM2|SO[123])-(.*)$/i.exec(String(code || ""));
+  const m = new RegExp(`^(${PREFIX})-(.*)$`, "i").exec(String(code || ""));
   return m ? m[1].toUpperCase() + "-" + m[2] : String(code || "");
 }
 // Four digits and nothing else: no letters, so no words.  (1488 is a number
@@ -62,7 +64,7 @@ export function newRoomCode(tag, random = Math.random) {
 // The same four digits under another game's prefix, when the code is still
 // one of ours ("WC-4821" -> "WC2-4821"); any other code is left alone.
 export function retagRoomCode(code, tag) {
-  const m = /^(WC[12]?|SM2|SO[123])-(\d{4})$/.exec(String(code || ""));
+  const m = new RegExp(`^(${PREFIX})-(\\d{4})$`).exec(String(code || ""));
   return m ? `${GAME_TAGS.includes(tag) ? tag : "WC"}-${m[2]}` : code;
 }
 // [{ text }] and [{ code, tag }] in order, for a line of chat.  Whatever

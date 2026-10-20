@@ -40,15 +40,22 @@
 // game for both (web/wc.js, steeringPointer).  Fixed figures {x, y, rx, ry}
 // are the other form, for a game the hooks know nothing about.
 // `firstName`: the game's people use the pilot's first name, and the page
-// asks for one.
+// asks for one.  `help`: the line under the game for a game with no
+// campaign to pick from.
 // `dosbox`: what the game's own setup expects of the machine, as the text of
 // a DOSBox configuration file.
 // `build`: how the hooks tell the executable they know from another of the
 // same name (kGames in src/cpu/wcnet_game.cpp, whose figures these are): a
 // string at an offset of the program's data segment, the segment given in
-// paragraphs from the start of the image.  The page asks the file the same
-// question (knownBuild): only a pilot whose game the hooks will fly is let
-// into the public lobby.
+// paragraphs from the start of the image (or, `rvhook`, read from the
+// image's own RVHOOK header, as RetroVega has it).  The page asks the file
+// the same question (knownBuild): only a pilot whose game the hooks will fly
+// is let into the public lobby.
+// `noFlight`: no missions to pick and nothing to fly yet (the page hides
+// its mission and flight options).
+// `builtin`: a game the site itself serves (ours to give away), as a
+// .tar.gz beside the page: it is in every browser's "Play" menu with no
+// files dropped, fetched when it is flown.
 
 // Wing Commander's Vega campaign: series 1.. and mission 0.. within the
 // series (what the MIS / SERIES environment of the hooks takes).  The system
@@ -218,6 +225,18 @@ export const GAMES = [
     pointer: { fromGame: true },
     dosbox: "[sblaster]\nirq=5\n",
     campaign: { series: SO3_SERIES, missionArgs: wc2Mission, hints: WC2_HINTS } },
+  // RetroVega (retrovega/ in dosbox3d): our own game in the Vega Strike
+  // universe, open data, built into the page.  It wants 32 MB of XMS, VESA
+  // 640x400 and the Sound Blaster's OPL3.  Its saved games are the eight
+  // bunks.  No flight yet: in a room everyone walks the carrier on their own.
+  { id: "rv", tag: "RV", title: "RetroVega", detect: ["RV.EXE"], run: "rv", multiplayer: true,
+    builtin: "retrovega.tar.gz", noFlight: true,
+    build: { rvhook: true, off: 0x0400, text: "Loading RETROVEGA" },
+    saves: ["BUNK01.SAV", "BUNK02.SAV", "BUNK03.SAV", "BUNK04.SAV", "BUNK05.SAV", "BUNK06.SAV", "BUNK07.SAV", "BUNK08.SAV"],
+    cycles: 20000,
+    pointer: { x: 0.5, y: 0.5, rx: 0.5, ry: 0.5 },
+    help: "RetroVega has no flight yet: everyone starts in their own quarters on the TCS Clydesdale and walks the ship, bar, briefing room and deck, saving in the bunk. The host's Fly starts everybody's game. Arrow keys steer the pointer, Tab jumps between the things you can use, Enter uses one.",
+    dosbox: "[dosbox]\nmemsize=40\n[dos]\nxms=true\nems=false\numb=true\n[sblaster]\nsbtype=sb16\noplmode=opl3\n" },
 ];
 
 // The registry entry of a game id, or null (a game picked by its executable).
@@ -242,7 +261,14 @@ export function knownBuild(game, files) {
   const exe = files.find((f) => !f.path.includes("/") && game.detect.includes(f.path.toUpperCase()));
   const d = exe && exe.data;
   if (!d || d.length < 28 || d[0] !== 0x4d || d[1] !== 0x5a) return false;
-  const at = ((d[8] | (d[9] << 8)) + sig.para) * 16 + sig.off;
+  const image = (d[8] | (d[9] << 8)) * 16;
+  let para = sig.para;
+  if (sig.rvhook) {
+    // "RVHOOK" opens the image, and its word at 8 is the data segment's paragraph
+    if (image + 10 > d.length || String.fromCharCode(...d.subarray(image, image + 6)) !== "RVHOOK") return false;
+    para = d[image + 8] | (d[image + 9] << 8);
+  }
+  const at = image + para * 16 + sig.off;
   if (at + sig.text.length > d.length) return false;
   for (let i = 0; i < sig.text.length; i++) if (d[at + i] !== sig.text.charCodeAt(i)) return false;
   return true;

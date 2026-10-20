@@ -18,6 +18,8 @@
 #   CONFIGURE_FLAGS  extra ./configure flags
 #   SKIP_INNOEXTRACT=1  do not build innoextract for the browser (the page
 #              then only accepts .zip files, not GOG installers)
+#   SKIP_RETROVEGA=1    do not build RetroVega (retrovega/build.sh: Open Watcom
+#              and the art venv); the page then has no built-in game
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -184,6 +186,15 @@ if [ -f "$DEPS/inno-build/innoextract.js" ]; then
     cp "$DEPS/inno-build/innoextract.js" "$DEPS/inno-build/innoextract.wasm" "$OUT/"
 else
     echo "note: no innoextract build; the page will only accept .zip game folders" >&2
+fi
+
+# RetroVega (retrovega/), our own game: built into the page, fetched when
+# flown (the registry's `builtin` in web/gamefiles.js)
+if [ -z "${SKIP_RETROVEGA:-}" ]; then
+    say "building RetroVega"
+    "$ROOT/retrovega/build.sh" > "$BUILD/retrovega.log" 2>&1 || { tail -20 "$BUILD/retrovega.log"; exit 1; }
+    (cd "$ROOT/retrovega/build/dos" && tar --format=ustar -czf "$OUT/retrovega.tar.gz" \
+        RV.EXE RV.DAT RVGAME.DAT RVOPL.BNK BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID)
 fi
 
 if [ -d "$WCDIR" ]; then
