@@ -60,10 +60,8 @@ TICK = 50          # ms per frame of the launch
 LAUNCH = {'spool_ms': 600, 'lift_ms': 400, 'lift_px': 4, 'run_ms': 900}
 # the landing sleds, in screen pixels: the least strut showing under a ship's
 # lowest point, their parts' sizes (a painted sled is scaled to the foot's
-# width), where they stand along the hull that shows (front always, rear too
-# past two_from pixels)
-SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66,
-        'front': [0.72], 'rear': [0.2], 'two_from': 300}
+# width), the least gap between two sleds
+SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66, 'apart': 60}
 RENDER = 1280      # the size the fighters are rendered at before scaling down
 
 
@@ -199,7 +197,7 @@ def lit(img, light):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA')
 
 
-def fighter(ship, cfg, frame, cache, cover, parts, rerender=False):
+def fighter(ship, cfg, frame, cache, parts, rerender=False):
     """A fighter on the pad: sprite, position, under layer, engine points, and
     the sleds it stands on."""
     above, below, info = render_views(ship, cfg, cache, rerender)
@@ -217,51 +215,28 @@ def fighter(ship, cfg, frame, cache, cover, parts, rerender=False):
     engines = nozzles(sprite, [(ey - bb[1]) * s for _ex, ey, _r in info['engines']])
     under, ux, uy = under_layer(below, s, x, size[0], cx, cy, deck, cfg['light'])
     return {'sprite': sprite, 'x': x, 'y': y, 'under': under, 'ux': ux, 'uy': uy, 'engines': engines,
-            'sleds': sled_spots(sprite, x, y, deck, cover)}
+            'sleds': sled_spots(sprite, x, y, [frame.xy(sx, 0)[0] for sx in cfg['sleds']])}
 
 
-def covered(cover, x, y, h, w):
-    """Which pixels of an h x w picture at (x, y) nobody sees: off the screen,
-    or behind the front layer."""
-    out = np.ones((h, w), bool)
-    win = window(cover, x, y, h, w)
-    if win:
-        d, s = win
-        out[s] = cover[d]
-    return out
-
-
-def sled_spots(sprite, x, y, deck, cover):
-    """Where a fighter's sleds stand: one under the front of the longest
-    stretch of belly that shows, one under its rear too when that stretch is
-    long enough.  Each is
-    [x of its middle, y of its top]; its top meets the belly, the lowest point
-    under the saddle, and its foot stands on the deck."""
+def sled_spots(sprite, x, y, want):
+    """Where a fighter's sleds stand: at the room's sled spots (screen x),
+    each moved towards the nose until there is hull above its saddle, a sled
+    that ends up too near another left out.  Each is [x of its middle, y of
+    its top]; its top meets the belly, the lowest point over the saddle."""
     a = np.asarray(sprite)[..., 3] > 0
     h, w = a.shape
-    hid = covered(cover, x, y, h, w)
     has = a.any(axis=0)
     belly = np.where(has, h - 1 - np.argmax(a[::-1], axis=0), -1)
-    shows = np.array([has[c] and not hid[belly[c], c] for c in range(w)])
-    # the belly that shows: the longest run of such columns, small gaps closed
-    runs, start = [], None
-    shows = ndimage.binary_closing(np.pad(shows, 8), np.ones(9, bool))[8:-8] & has
-    for c in range(w + 1):
-        if c < w and shows[c]:
-            start = c if start is None else start
-        elif start is not None:
-            runs.append((start, c - 1))
-            start = None
-    if not runs:
-        return []
-    left, right = max(runs, key=lambda r: r[1] - r[0])
-    spots = []
     half = SLED['saddle'] // 2
-    for f in SLED['front'] if right - left < SLED['two_from'] else SLED['front'] + SLED['rear']:
-        c = int(left + f * (right - left))
-        band = [i for i in range(c - half, c + half + 1) if 0 <= i < w and shows[i]]
-        if band:
-            spots.append([int(x + c), int(y + max(belly[i] for i in band) + 1)])
+    spots = []
+    for sx in want:
+        c = max(int(round(sx)) - x, half)
+        while c + half < w and not has[c - half:c + half + 1].all():
+            c += 1
+        if c + half >= w or any(abs(x + c - q[0]) < SLED['apart'] for q in spots):
+            continue
+        band = belly[c - half:c + half + 1]
+        spots.append([int(x + c), int(y + band.max() + 1)])
     return spots
 
 
@@ -535,13 +510,8 @@ def build(key, cfg, out, cache, rerender=False, log=print):
                             'sled': {'foot': 'sled-foot.png', 'strut': 'sled-strut.png',
                                      'saddle': 'sled-saddle.png', 'seat': seat(parts)}}
         place['launch'] = dict(LAUNCH)
-        # where the front layer hides what is behind it, in every frame
-        cover = np.asarray(front)[..., 3] > 0
-        for pics, _ms in clips.values():
-            for pic in pics:
-                cover[rect[1]:rect[3], rect[0]:rect[2]] &= np.asarray(pic)[..., 3] > 0
         for ship in deck_ships(fc['ships']):
-            sh = fighter(ship, fc, frame, cache, cover, parts, rerender)
+            sh = fighter(ship, fc, frame, cache, parts, rerender)
             sh['parts'], sh['deck'] = parts, place['fighter']['deck']
             ships[ship] = sh
             sh['sprite'].save(os.path.join(od, 'ship-%s.png' % ship))

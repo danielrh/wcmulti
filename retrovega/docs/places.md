@@ -70,10 +70,11 @@ landing sleds.
 - **Shape:** a sled is a foot on the deck, a strut repeated up to the
   height it needs, and a saddle under the hull (`sled-foot.png`,
   `sled-strut.png`, `sled-saddle.png`). The engine stacks them.
-- **Where they go:** one stands under the front of the longest stretch of
-  belly that can be seen, and one under its rear when that stretch is over
-  300 px. Each reaches from the deck to the lowest point of the hull above
-  its saddle.
+- **Where they go:** at the deck's two sled spots (`sleds`, source x): one
+  under the middle of the deck, one behind the cart, where it is mostly
+  hidden. A spot with no hull over it moves towards the nose until there
+  is; a sled that would end up within 60 px of the other is left out. Each
+  reaches from the deck to the lowest point of the hull above its saddle.
 - **The art:** a painted sled, `art/places/src/deck/sled.png` (the prompt
   below), sliced by the tool: the strut is the longest run of rows at its
   narrowest width, the foot is below it and the saddle above. The saddle
