@@ -26,10 +26,11 @@ Everything is cropped to 16:10 (crop, in source pixels) and scaled to
     place.json           where all of it goes, in screen pixels; the clips'
                          frame times; the launch's timings; the script
 
-Draw order: back, under, sleds, ship, front with the current frame's patch
-pasted in (a copy, transparent pixels included).  A sled is its foot on the
-deck, the strut repeated up to the saddle, the saddle under the hull
-(sled-*.png; place.json gives each ship's sleds as their middle and top).
+Draw order: back, under, legs, ship, front with the current frame's patch
+pasted in (a copy, transparent pixels included).  A landing leg is its foot
+on the deck, the strut repeated up to the saddle, the saddle under the hull,
+in the ship's style (leg-STYLE-*.png; place.json gives each ship's style
+and its legs' strut x and top).
 
 The fighters are rendered by shipviews.py from the deck's own camera
 (elevation, heading) and lit by the deck's warm lamps (light).  They share
@@ -58,9 +59,9 @@ sys.path.insert(0, HERE)
 SCREEN = (640, 400)
 TICK = 50          # ms per frame of the launch
 LAUNCH = {'spool_ms': 600, 'lift_ms': 400, 'lift_px': 4, 'run_ms': 900}
-# the landing sleds, in screen pixels: the least strut showing under a ship's
-# lowest point, their parts' sizes (a painted sled is scaled to the foot's
-# width), the least gap between two sleds
+# the landing legs, in screen pixels: the least strut showing under a ship's
+# lowest point, the drawn leg's parts (a painted leg is scaled to the foot's
+# width), the least gap between two legs
 SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66, 'apart': 60}
 RENDER = 1280      # the size the fighters are rendered at before scaling down
 
@@ -197,9 +198,9 @@ def lit(img, light):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA')
 
 
-def fighter(ship, cfg, frame, cache, parts, rerender=False):
+def fighter(ship, cfg, frame, cache, legs, rerender=False):
     """A fighter on the pad: sprite, position, under layer, engine points, and
-    the sleds it stands on."""
+    the legs it stands on (a style from leg_styles)."""
     above, below, info = render_views(ship, cfg, cache, rerender)
     bb = above.getbbox()
     s = cfg['metre'] * frame.k * info['metres']
@@ -207,47 +208,65 @@ def fighter(ship, cfg, frame, cache, parts, rerender=False):
     sprite = hard(lit(premul_resize(above.crop(bb), size), cfg['light']))
     nose, deck = frame.xy(cfg['nose_x'], cfg['bottom'])
     deck = round(deck)
-    # every ship rides on sleds: its lowest point clears the shortest sled
-    clearance = parts[0].size[1] + parts[2].size[1] - seat(parts) + SLED['strut_min']
+    # every ship stands on its legs: its lowest point clears the shortest leg
+    foot, _strut, saddle = legs['parts']
+    clearance = foot.size[1] + saddle.size[1] - legs['seat'] + SLED['strut_min']
     x, y = round(nose - size[0]), round(deck - clearance - size[1])
     # the ship's centre on the screen: the renders are centred on it
     cx, cy = x + (RENDER / 2 - bb[0]) * s, y + (RENDER / 2 - bb[1]) * s
     engines = nozzles(sprite, [(ey - bb[1]) * s for _ex, ey, _r in info['engines']])
     under, ux, uy = under_layer(below, s, x, size[0], cx, cy, deck, cfg['light'])
     return {'sprite': sprite, 'x': x, 'y': y, 'under': under, 'ux': ux, 'uy': uy, 'engines': engines,
-            'sleds': sled_spots(sprite, x, y, [frame.xy(sx, 0)[0] for sx in cfg['sleds']])}
+            'sleds': sled_spots(sprite, x, y, [frame.xy(sx, 0)[0] for sx in cfg['sleds']], legs)}
 
 
-def sled_spots(sprite, x, y, want):
-    """Where a fighter's sleds stand: at the room's sled spots (screen x),
-    each moved towards the nose until there is hull above its saddle, a sled
-    that ends up too near another left out.  Each is [x of its middle, y of
-    its top]; its top meets the belly, the lowest point over the saddle."""
+def sled_spots(sprite, x, y, want, legs):
+    """Where a fighter's legs stand: at the room's spots (screen x), each
+    moved towards the nose until there is hull over its whole top, a leg that
+    ends up too near another left out.  Each is [x of its strut, y of its
+    top]; its top meets the belly, the lowest point over it."""
     a = np.asarray(sprite)[..., 3] > 0
     h, w = a.shape
     has = a.any(axis=0)
     belly = np.where(has, h - 1 - np.argmax(a[::-1], axis=0), -1)
-    half = SLED['saddle'] // 2
+    lo, hi = legs['top']
     spots = []
     for sx in want:
-        c = max(int(round(sx)) - x, half)
-        while c + half < w and not has[c - half:c + half + 1].all():
+        c = max(int(round(sx)) - x, -lo)
+        while c + hi < w and not has[c + lo:c + hi + 1].all():
             c += 1
-        if c + half >= w or any(abs(x + c - q[0]) < SLED['apart'] for q in spots):
+        if c + hi >= w or any(abs(x + c - q[0]) < SLED['apart'] for q in spots):
             continue
-        band = belly[c - half:c + half + 1]
-        spots.append([int(x + c), int(y + band.max() + 1)])
+        spots.append([int(x + c), int(y + belly[c + lo:c + hi + 1].max() + 1)])
     return spots
 
 
-def sled_parts(light, src=None):
-    """The standard landing sled, in three parts the engine stacks: the foot
-    on the deck, the strut repeated to the height it needs, the saddle under
-    the hull.  From painted art (SRC/sled.png, side on, transparent or white
-    around it) when there is some, else a drawn placeholder."""
-    path = os.path.join(src, 'sled.png') if src else None
-    if path and os.path.exists(path):
-        return painted_sled(path, light)
+def leg_styles(light, src):
+    """The landing legs, by style: each painted one in SRC/legs/STYLE.png
+    (side on, transparent or white around it), or a drawn placeholder,
+    'drawn', when there are none.  A style is its three parts the engine
+    stacks (the foot on the deck, the strut repeated to the height it needs,
+    the saddle under the hull, all the same width), where the strut's middle
+    is (axis), how far down the saddle the hull rests (seat) and the span of
+    the saddle's top about the axis (top)."""
+    folder = os.path.join(src, 'legs')
+    names = sorted(f[:-4] for f in os.listdir(folder) if f.endswith('.png')) if os.path.isdir(folder) else []
+    styles = {}
+    for name in names or ['drawn']:
+        parts = painted_leg(os.path.join(folder, name + '.png')) if names else drawn_leg()
+        parts = [hard(lit(p, [c / max(light) for c in light])) for p in parts]
+        strut = np.nonzero(np.asarray(parts[1])[0, :, 3])[0]
+        axis = int(round((strut[0] + strut[-1]) / 2))
+        sa = np.asarray(parts[2])[..., 3] > 0
+        top = np.nonzero(sa[:3].any(axis=0))[0]
+        styles[name] = {'parts': parts, 'axis': axis, 'seat': seat(sa, axis),
+                        'top': (int(top[0]) - axis, int(top[-1]) - axis)}
+    return styles
+
+
+def drawn_leg():
+    """A placeholder leg: a gunmetal foot with a hazard band, a polished
+    ram, a padded olive saddle."""
     def shade(w, h, lo, hi, axis):
         t = np.linspace(0, 1, w if axis == 1 else h, dtype=np.float32)
         ramp = np.clip(1 - np.abs(t - 0.32) / 0.68, 0, 1) ** 0.8          # a highlight left of middle
@@ -260,40 +279,36 @@ def sled_parts(light, src=None):
         rgba[edge, :3] = (24, 22, 20)
         return rgba
 
-    ink = (24, 22, 20)
-    # the foot: a low wedge of gunmetal with a hazard band
     fw, fh = SLED['foot']
     foot = np.zeros((fh, fw, 4), np.float32)
     rgb = shade(fw, fh, (52, 54, 56), (118, 118, 116), 1)
     yy, xx = np.mgrid[0:fh, 0:fw]
     inset = (fh - 1 - yy) * 0.6
-    inside = (xx >= inset) & (xx <= fw - 1 - inset)
     band = (yy >= fh // 3) & (yy < fh // 3 + 4)
     stripe = ((xx + yy) // 3) % 2 == 0
     rgb[band & stripe] = (206, 160, 40)
     rgb[band & ~stripe] = (30, 28, 26)
-    foot[..., :3], foot[..., 3] = rgb, inside * 255.0
-    foot = outline(foot)
-    # the strut: a polished hydraulic ram, one row high
+    foot[..., :3], foot[..., 3] = rgb, ((xx >= inset) & (xx <= fw - 1 - inset)) * 255.0
     sw = SLED['strut']
-    strut = np.zeros((1, sw, 4), np.float32)
-    strut[..., :3] = shade(sw, 1, (60, 60, 62), (196, 192, 184), 1)
-    strut[..., 3] = 255
-    strut[0, 0, :3] = strut[0, -1, :3] = ink
-    # the saddle: a padded olive cradle
+    strut = np.zeros((1, fw, 4), np.float32)
+    x0 = (fw - sw) // 2
+    strut[0, x0:x0 + sw, :3] = shade(sw, 1, (60, 60, 62), (196, 192, 184), 1)[0]
+    strut[0, x0:x0 + sw, 3] = 255
+    strut[0, x0, :3] = strut[0, x0 + sw - 1, :3] = (24, 22, 20)
     cw, ch = SLED['saddle'], 8
-    saddle = np.zeros((ch, cw, 4), np.float32)
-    saddle[..., :3] = shade(cw, ch, (40, 44, 30), (104, 110, 74), 0)[::-1]
-    yy, xx = np.mgrid[0:ch, 0:cw]
-    saddle[..., 3] = ((xx >= (ch - 1 - yy) * 0.8 * 0) & (np.abs(xx - (cw - 1) / 2) <= (cw / 2 - (yy == ch - 1) * 2))) * 255.0
-    saddle = outline(saddle)
-    return [Image.fromarray(np.clip(lit_arr(p, light), 0, 255).astype(np.uint8), 'RGBA')
-            for p in (foot, strut, saddle)]
+    saddle = np.zeros((ch, fw, 4), np.float32)
+    x0 = (fw - cw) // 2
+    saddle[:, x0:x0 + cw, :3] = shade(cw, ch, (40, 44, 30), (104, 110, 74), 0)[::-1]
+    saddle[:, x0:x0 + cw, 3] = 255
+    saddle[-1, x0:x0 + 2, 3] = saddle[-1, x0 + cw - 2:x0 + cw, 3] = 0
+    return [Image.fromarray(np.clip(p, 0, 255).astype(np.uint8), 'RGBA')
+            for p in (outline(foot), strut, outline(saddle))]
 
 
-def painted_sled(path, light):
-    """Slice a painted sled: the strut is the longest run of rows at its
-    narrowest width; the rows below are the foot, those above the saddle."""
+def painted_leg(path):
+    """Slice a painted leg, scaled so its foot is SLED['foot'] wide: the
+    strut is the longest run of rows at its narrowest width; the rows below
+    are the foot, those above the saddle."""
     img = Image.open(path).convert('RGBA')
     a = np.asarray(img)
     if a[..., 3].min() == 255:                       # no alpha: key out the white around it
@@ -304,8 +319,10 @@ def painted_sled(path, light):
         a[..., 3] = np.where(np.isin(lab, [l for l in edge if l]), 0, 255)
         img = Image.fromarray(a, 'RGBA')
     img = img.crop(img.getbbox())
-    w = SLED['foot'][0]
-    img = premul_resize(img, (w, round(img.size[1] * w / img.size[0])))
+    rows = (np.asarray(img)[..., 3] > 0).sum(axis=1)
+    foot = rows[-max(1, len(rows) // 10):].max()     # the widest row of the bottom tenth
+    k = SLED['foot'][0] / foot
+    img = premul_resize(img, (round(img.size[0] * k), round(img.size[1] * k)))
     a = np.asarray(img)[..., 3] >= 128
     widths = a.sum(axis=1)
     narrow = (widths > 0) & (widths <= widths[widths > 0].min() + 2)
@@ -319,35 +336,26 @@ def painted_sled(path, light):
     top, bottom = max(runs, key=lambda r: r[1] - r[0])
     mid = (top + bottom) // 2
     W, H = img.size
-    parts = [img.crop((0, bottom, W, H)), img.crop((0, mid, W, mid + 1)), img.crop((0, 0, W, top))]
-    return [hard(lit(p, [c / max(light) for c in light])) for p in parts]
+    return [img.crop((0, bottom, W, H)), img.crop((0, mid, W, mid + 1)), img.crop((0, 0, W, top))]
 
 
-def lit_arr(a, light):
-    a = a.copy()
-    a[..., :3] *= np.array(light, np.float32) / max(light)
-    return a
-
-
-def seat(parts):
-    """How far down the saddle the hull rests: the top of its middle.  A
-    cradle's raised ends then hug the hull (or hide behind it)."""
-    a = np.asarray(parts[2])[..., 3] > 0
-    mid = a.shape[1] // 2
-    tops = [np.argmax(a[:, c]) for c in range(mid - 3, mid + 4) if a[:, c].any()]
+def seat(a, axis):
+    """How far down the saddle the hull rests: the top of the saddle over
+    the strut.  A cradle's raised ends then hug the hull (or hide behind it)."""
+    tops = [np.argmax(a[:, c]) for c in range(axis - 3, axis + 4) if 0 <= c < a.shape[1] and a[:, c].any()]
     return int(np.median(tops)) if tops else 0
 
 
-def sled(parts, height):
-    """A sled height pixels tall, foot to the saddle's top, as one picture."""
-    foot, strut, saddle = parts
-    w = max(p.size[0] for p in parts)
+def sled(legs, height):
+    """A leg height pixels tall, foot to the saddle's top, as one picture."""
+    foot, strut, saddle = legs['parts']
+    w = foot.size[0]
     img = Image.new('RGBA', (w, max(height, foot.size[1] + saddle.size[1])), (0, 0, 0, 0))
     H = img.size[1]
     for yy in range(saddle.size[1], H - foot.size[1] + 2):
-        img.alpha_composite(strut, ((w - strut.size[0]) // 2, yy))
-    img.alpha_composite(foot, ((w - foot.size[0]) // 2, H - foot.size[1]))
-    img.alpha_composite(saddle, ((w - saddle.size[0]) // 2, 0))
+        img.alpha_composite(strut, (0, yy))
+    img.alpha_composite(foot, (0, H - foot.size[1]))
+    img.alpha_composite(saddle, (0, 0))
     return img
 
 
@@ -437,9 +445,10 @@ def compose(back, front, rect, patch, ship=None, dx=0.0, dy=0.0, burn=0.0):
         u = np.asarray(ship['under']).astype(np.float32) / 255
         ua = u[..., 3:4] * max(0.0, 1 - lift / 12)
         paste_blend(img, u[..., :3], ua, ship['ux'] + dx, ship['uy'] + lift)
+        legs = ship['legs']
         for sx, top in ship['sleds']:
-            sl = np.asarray(sled(ship['parts'], ship['deck'] - top + seat(ship['parts']))).astype(np.float32) / 255
-            paste_blend(img, sl[..., :3], sl[..., 3:4], sx - sl.shape[1] // 2, ship['deck'] - sl.shape[0])
+            sl = np.asarray(sled(legs, ship['deck'] - top + legs['seat'])).astype(np.float32) / 255
+            paste_blend(img, sl[..., :3], sl[..., 3:4], sx - legs['axis'], ship['deck'] - sl.shape[0])
         if burn > 0:
             h = ship['sprite'].size[1]
             for ex, ey in ship['engines']:
@@ -503,24 +512,29 @@ def build(key, cfg, out, cache, rerender=False, log=print):
     ships = {}
     if 'fighter' in cfg:
         fc = cfg['fighter']
-        parts = sled_parts(fc['light'], src)
-        for name, part in zip(('foot', 'strut', 'saddle'), parts):
-            part.save(os.path.join(od, 'sled-%s.png' % name))
-        place['fighter'] = {'deck': round(frame.xy(0, fc['bottom'])[1]), 'ships': {},
-                            'sled': {'foot': 'sled-foot.png', 'strut': 'sled-strut.png',
-                                     'saddle': 'sled-saddle.png', 'seat': seat(parts)}}
+        styles = leg_styles(fc['light'], src)
+        place['fighter'] = {'deck': round(frame.xy(0, fc['bottom'])[1]), 'ships': {}, 'legs': {}}
+        for name, st in styles.items():
+            files = ['leg-%s-%s.png' % (name, part) for part in ('foot', 'strut', 'saddle')]
+            for fn, part in zip(files, st['parts']):
+                part.save(os.path.join(od, fn))
+            place['fighter']['legs'][name] = dict(zip(('foot', 'strut', 'saddle'), files),
+                                                  axis=st['axis'], seat=st['seat'])
         place['launch'] = dict(LAUNCH)
+        pick = fc.get('legs', {})
         for ship in deck_ships(fc['ships']):
-            sh = fighter(ship, fc, frame, cache, parts, rerender)
-            sh['parts'], sh['deck'] = parts, place['fighter']['deck']
+            style = pick.get(ship, pick.get('default'))
+            style = style if style in styles else next(iter(styles))
+            sh = fighter(ship, fc, frame, cache, styles[style], rerender)
+            sh['legs'], sh['style'], sh['deck'] = styles[style], style, place['fighter']['deck']
             ships[ship] = sh
             sh['sprite'].save(os.path.join(od, 'ship-%s.png' % ship))
             sh['under'].save(os.path.join(od, 'ship-%s-under.png' % ship))
             place['fighter']['ships'][ship] = {
                 'sprite': 'ship-%s.png' % ship, 'x': sh['x'], 'y': sh['y'],
                 'under': 'ship-%s-under.png' % ship, 'ux': sh['ux'], 'uy': sh['uy'],
-                'engines': sh['engines'], 'sleds': sh['sleds']}
-            log('  %s %dx%d at %d,%d' % (ship, *sh['sprite'].size, sh['x'], sh['y']))
+                'engines': sh['engines'], 'legs': sh['style'], 'sleds': sh['sleds']}
+            log('  %s %dx%d at %d,%d on %s legs' % (ship, *sh['sprite'].size, sh['x'], sh['y'], style))
     with open(os.path.join(od, 'place.json'), 'w') as f:
         json.dump(place, f, indent=1)
     return back, front, rect, clips, ships, place

@@ -35,7 +35,7 @@ The source canvas is 1536x1024. It is cropped to 1536x960 (32 pixels off
 the top and the bottom) and scaled to 640x400.
 
 **Draw order:** the room, then the fighter's under layer (its shadow and
-its reflection in the polished deck), then its sleds, its exhaust, the
+its reflection in the polished deck), then its landing legs, its exhaust, the
 fighter itself, and last the front layer with the current frame's patch
 copied in. The copy includes transparent pixels: the patch replaces that
 rectangle of the front layer. The tool checks that no frame changes the
@@ -64,27 +64,37 @@ front outside the patch.
 **Placement:** the nose is at `nose_x`. The rest runs behind Kit and off
 the left. A heavy fighter shows only its front and goes off the top.
 
-**The landing sleds:** every ship rides above the deck on standard
-landing sleds.
+**The landing legs:** every ship stands on two landing legs of one
+style, chosen per ship (`legs` in data/places.json; `default` for the
+rest).
 
-- **Shape:** a sled is a foot on the deck, a strut repeated up to the
-  height it needs, and a saddle under the hull (`sled-foot.png`,
-  `sled-strut.png`, `sled-saddle.png`). The engine stacks them.
-- **Where they go:** at the deck's two sled spots (`sleds`, source x): one
-  under the middle of the deck, one behind the cart, where it is mostly
-  hidden. A spot with no hull over it moves towards the nose until there
-  is; a sled that would end up within 60 px of the other is left out. Each
-  reaches from the deck to the lowest point of the hull above its saddle.
-- **The art:** a painted sled, `art/places/src/deck/sled.png` (the prompt
-  below), sliced by the tool: the strut is the longest run of rows at its
-  narrowest width, the foot is below it and the saddle above. The saddle
-  is a padded cradle, as the prompt asked. The hull rests in the middle of
-  its dip (`seat` in place.json), so the raised ends hug the hull or hide
-  behind it. Without the file, the tool draws placeholder parts.
-- **Height:** every ship's lowest point clears the shortest sled: the foot,
-  the saddle and 4 rows of strut.
+| style | what | ships so far |
+|---|---|---|
+| `retract` | a gear leg, its door swung out towards the nose | the default: Redeemer, Schroedinger, Pacifier |
+| `forwardretract` | a gear leg, its door folded across the front | Gawain, Lancelot |
+| `sled` | a deck sled: a hazard-striped foot and a padded cradle | Franklin |
 
-**The launch:** after the ready nod, the fighter launches and the sleds
+- **Art:** each style is a painted picture, `art/places/src/deck/legs/STYLE.png`
+  (the user's image synthesis, side on, on white). The tool slices each
+  one and scales it so its foot is 84 px wide.
+- **Slicing:** the strut is the longest run of rows at its narrowest width
+  (the polished ram), the foot is everything below it, the saddle
+  everything above. The engine stacks them, repeating the strut row to the
+  height it needs (`leg-STYLE-foot/strut/saddle.png`). place.json gives
+  each style's `axis` (the strut's middle) and `seat` (how far down the
+  saddle the hull rests: the cradle's dip; 0 for the gear legs' flat
+  plates).
+- **Where they go:** at the deck's two spots (`sleds`, source x): one under
+  the middle of the deck, one behind the cart, where it is mostly hidden.
+  A spot with no hull over the leg's whole top moves towards the nose until
+  there is; a leg that would end up within 60 px of the other is left out.
+  Each reaches from the deck to the lowest point of the hull above it.
+- **Height:** every ship's lowest point clears its style's shortest leg:
+  the foot, the saddle and 4 rows of strut. On the gear legs that is about
+  65 px, some 3 m.
+- **Placeholder:** without any painted legs the tool draws one, `drawn`.
+
+**The launch:** after the ready nod, the fighter launches and the legs
 stay on the deck.
 
 1. The engines spool up (600 ms).
@@ -101,16 +111,16 @@ Everything the engine needs, in screen pixels:
 - **back** and **front**.
 - **actor:** the patch rectangle, and each clip's atlas (8 frames to a
   row) and frame times.
-- **fighter:** the deck's line, the sled parts, and per ship:
+- **fighter:** the deck's line, the leg styles' parts, and per ship:
   - **sprite:** the picture and its corner;
   - **under:** the under layer (RGBA: colour, and how much of it to blend
     over the room) and its corner;
   - **engines:** the nozzles, relative to the sprite;
-  - **sleds:** each sled's middle and top.
+  - **legs** (its style) and **sleds:** each leg's strut x and its top.
 - **launch** timings.
 - **script:** the order the clips and the launch play in.
 
-## Painted sled prompt
+## Painted leg prompt (the first, the cradle sled)
 
 Send with the style block of [location-prompts.md](location-prompts.md):
 

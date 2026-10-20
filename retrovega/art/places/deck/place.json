@@ -160,7 +160,7 @@
    "SCHROED": {
     "sprite": "ship-SCHROED.png",
     "x": -68,
-    "y": -196,
+    "y": -237,
     "under": "ship-SCHROED-under.png",
     "ux": -54,
     "uy": 263,
@@ -170,14 +170,15 @@
       258
      ]
     ],
+    "legs": "retract",
     "sleds": [
      [
       329,
-      251
+      207
      ],
      [
       110,
-      132
+      91
      ]
     ]
    },
@@ -202,6 +203,7 @@
       145
      ]
     ],
+    "legs": "sled",
     "sleds": [
      [
       329,
@@ -209,16 +211,16 @@
      ],
      [
       110,
-      197
+      196
      ]
     ]
    },
    "GAWAIN": {
     "sprite": "ship-GAWAIN.png",
     "x": 20,
-    "y": 70,
+    "y": 33,
     "under": "ship-GAWAIN-under.png",
-    "ux": 31,
+    "ux": 32,
     "uy": 267,
     "engines": [
      [
@@ -230,23 +232,24 @@
       128
      ]
     ],
+    "legs": "forwardretract",
     "sleds": [
      [
       329,
-      256
+      219
      ],
      [
       110,
-      267
+      229
      ]
     ]
    },
    "REDEEMR": {
     "sprite": "ship-REDEEMR.png",
     "x": 199,
-    "y": 187,
+    "y": 146,
     "under": "ship-REDEEMR-under.png",
-    "ux": 199,
+    "ux": 206,
     "uy": 274,
     "engines": [
      [
@@ -254,21 +257,22 @@
       53
      ]
     ],
+    "legs": "retract",
     "sleds": [
      [
       329,
-      267
+      226
      ],
      [
-      232,
-      266
+      225,
+      225
      ]
     ]
    },
    "PACIFER": {
     "sprite": "ship-PACIFER.png",
     "x": -247,
-    "y": -384,
+    "y": -425,
     "under": "ship-PACIFER-under.png",
     "ux": -228,
     "uy": 256,
@@ -318,21 +322,22 @@
       452
      ]
     ],
+    "legs": "retract",
     "sleds": [
      [
       329,
-      157
+      116
      ],
      [
       110,
-      157
+      113
      ]
     ]
    },
    "LANCELT": {
     "sprite": "ship-LANCELT.png",
     "x": -19,
-    "y": -99,
+    "y": -136,
     "under": "ship-LANCELT-under.png",
     "ux": -6,
     "uy": 265,
@@ -370,23 +375,41 @@
       173
      ]
     ],
+    "legs": "forwardretract",
     "sleds": [
      [
       329,
-      144
+      107
      ],
      [
       110,
-      267
+      229
      ]
     ]
    }
   },
-  "sled": {
-   "foot": "sled-foot.png",
-   "strut": "sled-strut.png",
-   "saddle": "sled-saddle.png",
-   "seat": 6
+  "legs": {
+   "forwardretract": {
+    "foot": "leg-forwardretract-foot.png",
+    "strut": "leg-forwardretract-strut.png",
+    "saddle": "leg-forwardretract-saddle.png",
+    "axis": 41,
+    "seat": 0
+   },
+   "retract": {
+    "foot": "leg-retract-foot.png",
+    "strut": "leg-retract-strut.png",
+    "saddle": "leg-retract-saddle.png",
+    "axis": 41,
+    "seat": 0
+   },
+   "sled": {
+    "foot": "leg-sled-foot.png",
+    "strut": "leg-sled-strut.png",
+    "saddle": "leg-sled-saddle.png",
+    "axis": 42,
+    "seat": 6
+   }
   }
  },
  "launch": {
