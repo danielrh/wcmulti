@@ -108,15 +108,20 @@ void in_warp(int x, int y)
     }
 }
 
+/* a keystroke from the BIOS, or KEY_NONE: the enhanced functions (10h, 11h),
+ * which also give the grey keys and F11/F12; the zero flag says "none" (it
+ * is in REGPACK's flags: REGS's cflag is the carry flag alone) */
 static int bios_key(int *ch)
 {
-    union REGS r;
-    r.h.ah = 1;
-    int86(0x16, &r, &r);
-    if (r.x.cflag & INTR_ZF)
+    union REGPACK r;
+    memset(&r, 0, sizeof r);
+    r.h.ah = 0x11;
+    intr(0x16, &r);
+    if (r.x.flags & INTR_ZF)
         return KEY_NONE;
-    r.h.ah = 0;
-    int86(0x16, &r, &r);
+    memset(&r, 0, sizeof r);
+    r.h.ah = 0x10;
+    intr(0x16, &r);
     *ch = r.h.al;
     switch (r.h.ah) {
     case 0x4B: return KEY_LEFT;
@@ -124,9 +129,10 @@ static int bios_key(int *ch)
     case 0x48: return KEY_UP;
     case 0x50: return KEY_DOWN;
     case 0x1C: return KEY_ENTER;
+    case 0xE0: return *ch == 0x0D ? KEY_ENTER : KEY_NONE;     /* the keypad's Enter */
     case 0x01: return KEY_ESC;
     case 0x0E: return KEY_BACKSPACE;
-    case 0x58: return KEY_F12;
+    case 0x86: return KEY_F12;
     case 0x0F: return *ch == 9 ? KEY_TAB : KEY_BACKTAB;
     }
     return *ch >= 32 && *ch < 127 ? KEY_CHAR : KEY_NONE;
@@ -248,6 +254,8 @@ static int steer(void)
     long dt = (long)(now - g_steer_at), speed, step;
     g_steer_at = now;
     if (!dx && !dy) {
+        if (g_held)
+            rv_log("keys: steered to %d,%d", g_x, g_y);
         g_held = 0;
         return 0;
     }
