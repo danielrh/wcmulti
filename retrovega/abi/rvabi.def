@@ -124,6 +124,9 @@ TABLE fieldTable                0x14  7 # type, position, radius
 END 0x8000                               # C data (_DATA, CONST, _BSS) and the stack follow
 
 # --- RVHOOK: code at paragraph 0 of the image -------------------------------
+# Header (0x00-0x1F): "RVHOOK", 2 zero bytes, then words: +8 DGROUP's segment
+# (relocated by DOS at load: the layer takes DS from here), +10 ABI version,
+# +12 thunk count, +14 site count.
 # Thunks: `jmp far impl` at 0x20 + 5*n.  The hook layer hooks the thunk (the
 # callers' far call lands there with [ret ip, ret cs, args...] on the stack)
 # and calls game code through it.  Every in-game caller goes through the
@@ -156,6 +159,15 @@ FUNC  despawnQuietly              1 -   # (slot): gone without explosion, debris
 FUNC  setController               2 -   # (slot, rvController value): also stops or starts its AI
 FUNC  playScene                   2 -   # (scene, arg): an in-flight cut-scene
 FUNC  rvFrameDone                 0 -   # probe: the frame is drawn and flipped
+# The base and campaign (docs/engine.md), appended so no thunk above moves.
+FUNC  roomEntered                 1 -   # (room): a room is on screen
+FUNC  campaignNode                2 -   # (node, mission): the campaign picked the next mission
+FUNC  missionLoaded               1 -   # (mission): its ships are in missionShipTable / navPointTable
+FUNC  missionResolved             1 -   # (result): 1 won, 0 lost (first slice: a random roll)
+FUNC  gameSaved                   1 -   # (bunk)
+FUNC  gameLoaded                  1 -   # (bunk)
+FUNC  baseChanged                 1 -   # (base): the player's home ship changed
+FUNC  uiMode                      1 -   # (on): 1 entering screens without flight, 0 leaving them
 
 # Sites: instructions in RVHOOK's hand-written flight loop (rvhook.asm) at
 # fixed offsets, with the same instruction and register contract as the
