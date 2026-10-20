@@ -1,0 +1,128 @@
+{
+ "key": "PRIME",
+ "name": "Julian Mercer",
+ "callsign": "Prime",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  99,
+  149,
+  156,
+  195
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.0,
+   "score": 0.966
+  },
+  "mouth_2": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.969
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.0,
+   "score": 0.979
+  },
+  "mouth_4": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": -0.0,
+   "score": 0.972
+  },
+  "mouth_5": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.94
+  },
+  "mouth_6": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.1,
+   "score": 0.959
+  },
+  "mouth_7": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.4,
+   "score": 0.933
+  },
+  "mouth_8": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.958
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.2,
+   "score": 0.961
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.3,
+   "score": 0.926
+  },
+  "comm": {
+   "scale": 0.9953,
+   "dx": 5.3,
+   "dy": 127.2,
+   "score": 0.813
+  }
+ },
+ "source": {
+  "files": {
+   "base": "m2/chat-image-012.png",
+   "mouth_1": "m2/chat-image-008.png",
+   "mouth_2": "m2/chat-image-006.png",
+   "mouth_3": "m2/chat-image-009.png",
+   "mouth_4": "m2/chat-image-007.png",
+   "mouth_5": "m2/chat-image-010.png",
+   "mouth_6": "m2/chat-image-001.png",
+   "mouth_7": "m2/chat-image-002.png",
+   "mouth_8": "m2/chat-image-003.png",
+   "eyes_1": "m2/chat-image-004.png",
+   "eyes_2": "m2/chat-image-005.png",
+   "comm": "m2/chat-image-011.png"
+  },
+  "eye_box": [
+   405,
+   510,
+   828,
+   646
+  ],
+  "mouth_box": [
+   484,
+   761,
+   743,
+   966
+  ],
+  "eyes": [
+   [
+    522,
+    591
+   ],
+   [
+    711,
+    587
+   ]
+  ],
+  "fix": [
+   "olive"
+  ]
+ }
+}

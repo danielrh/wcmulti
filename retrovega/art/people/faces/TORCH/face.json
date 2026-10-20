@@ -1,0 +1,119 @@
+{
+ "key": "TORCH",
+ "name": "Rafael Ortega",
+ "callsign": "Torch",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  96,
+  143,
+  157,
+  197
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.972
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.0,
+   "dy": -0.0,
+   "score": 0.986
+  },
+  "mouth_3": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": -0.3,
+   "score": 0.959
+  },
+  "mouth_4": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.968
+  },
+  "mouth_5": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": 0.2,
+   "score": 0.932
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.96
+  },
+  "mouth_7": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.0,
+   "score": 0.944
+  },
+  "mouth_8": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.1,
+   "score": 0.938
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.2,
+   "score": 0.971
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.958
+  }
+ },
+ "source": {
+  "files": {
+   "base": "torch/chat-image-001.png",
+   "mouth_1": "torch/chat-image-002.png",
+   "mouth_2": "torch/chat-image-003.png",
+   "mouth_3": "torch/chat-image-004.png",
+   "mouth_4": "torch/chat-image-005.png",
+   "mouth_5": "torch/chat-image-006.png",
+   "mouth_6": "torch/chat-image-007.png",
+   "mouth_7": "torch/chat-image-009.png",
+   "mouth_8": "torch/chat-image-008.png",
+   "eyes_1": "torch/chat-image-010.png",
+   "eyes_2": "torch/chat-image-011.png"
+  },
+  "eye_box": [
+   414,
+   506,
+   815,
+   635
+  ],
+  "mouth_box": [
+   477,
+   717,
+   741,
+   949
+  ],
+  "eyes": [
+   [
+    525,
+    586
+   ],
+   [
+    704,
+    577
+   ]
+  ],
+  "fix": []
+ }
+}

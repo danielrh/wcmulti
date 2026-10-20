@@ -1,0 +1,119 @@
+{
+ "key": "TECH",
+ "name": "Chief Ana Kowalski",
+ "callsign": "Kit",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  88,
+  141,
+  155,
+  189
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.1761,
+   "dx": -2.5,
+   "dy": -154.1,
+   "score": 0.733
+  },
+  "mouth_2": {
+   "scale": 1.1761,
+   "dx": -2.8,
+   "dy": -153.7,
+   "score": 0.725
+  },
+  "mouth_3": {
+   "scale": 1.1761,
+   "dx": -2.7,
+   "dy": -153.9,
+   "score": 0.723
+  },
+  "mouth_4": {
+   "scale": 1.1761,
+   "dx": -2.7,
+   "dy": -153.7,
+   "score": 0.723
+  },
+  "mouth_5": {
+   "scale": 1.173,
+   "dx": -2.7,
+   "dy": -154.0,
+   "score": 0.704
+  },
+  "mouth_6": {
+   "scale": 1.1761,
+   "dx": -2.8,
+   "dy": -153.7,
+   "score": 0.718
+  },
+  "mouth_7": {
+   "scale": 1.173,
+   "dx": -2.7,
+   "dy": -154.1,
+   "score": 0.705
+  },
+  "mouth_8": {
+   "scale": 1.1737,
+   "dx": -2.7,
+   "dy": -154.2,
+   "score": 0.701
+  },
+  "eyes_1": {
+   "scale": 1.1808,
+   "dx": -2.6,
+   "dy": -153.3,
+   "score": 0.697
+  },
+  "eyes_2": {
+   "scale": 1.1808,
+   "dx": -2.5,
+   "dy": -153.1,
+   "score": 0.66
+  }
+ },
+ "source": {
+  "files": {
+   "base": "kit/chat-image-011.png",
+   "mouth_1": "kit/chat-image-008.png",
+   "mouth_2": "kit/chat-image-006.png",
+   "mouth_3": "kit/chat-image-009.png",
+   "mouth_4": "kit/chat-image-010.png",
+   "mouth_5": "kit/chat-image-007.png",
+   "mouth_6": "kit/chat-image-001.png",
+   "mouth_7": "kit/chat-image-002.png",
+   "mouth_8": "kit/chat-image-003.png",
+   "eyes_1": "kit/chat-image-004.png",
+   "eyes_2": "kit/chat-image-005.png"
+  },
+  "eye_box": [
+   372,
+   373,
+   882,
+   537
+  ],
+  "mouth_box": [
+   407,
+   628,
+   775,
+   890
+  ],
+  "eyes": [
+   [
+    513,
+    473
+   ],
+   [
+    741,
+    464
+   ]
+  ],
+  "fix": []
+ }
+}

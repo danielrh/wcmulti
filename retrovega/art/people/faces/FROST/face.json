@@ -1,0 +1,126 @@
+{
+ "key": "FROST",
+ "name": "Lin Mei",
+ "callsign": "Frost",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  97,
+  150,
+  163,
+  202
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": 0.0,
+   "score": 0.985
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.3,
+   "dy": -0.1,
+   "score": 0.987
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.0,
+   "score": 0.971
+  },
+  "mouth_4": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": 0.0,
+   "score": 0.984
+  },
+  "mouth_5": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.947
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.2,
+   "score": 0.966
+  },
+  "mouth_7": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.951
+  },
+  "mouth_8": {
+   "scale": 0.998,
+   "dx": -0.4,
+   "dy": -0.1,
+   "score": 0.967
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.2,
+   "score": 0.939
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.2,
+   "score": 0.923
+  },
+  "comm": {
+   "scale": 0.9068,
+   "dx": 9.7,
+   "dy": 154.3,
+   "score": 0.818
+  }
+ },
+ "source": {
+  "files": {
+   "base": "frost/chat-image-012.png",
+   "mouth_1": "frost/chat-image-010.png",
+   "mouth_2": "frost/chat-image-007.png",
+   "mouth_3": "frost/chat-image-008.png",
+   "mouth_4": "frost/chat-image-009.png",
+   "mouth_5": "frost/chat-image-006.png",
+   "mouth_6": "frost/chat-image-001.png",
+   "mouth_7": "frost/chat-image-002.png",
+   "mouth_8": "frost/chat-image-003.png",
+   "eyes_1": "frost/chat-image-004.png",
+   "eyes_2": "frost/chat-image-005.png",
+   "comm": "frost/chat-image-011.png"
+  },
+  "eye_box": [
+   420,
+   523,
+   824,
+   652
+  ],
+  "mouth_box": [
+   486,
+   764,
+   774,
+   991
+  ],
+  "eyes": [
+   [
+    532,
+    599
+   ],
+   [
+    712,
+    598
+   ]
+  ],
+  "fix": []
+ }
+}

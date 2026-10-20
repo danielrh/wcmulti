@@ -1,0 +1,126 @@
+{
+ "key": "HERO_F",
+ "name": "Wildcard (female)",
+ "callsign": "Wildcard",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  92,
+  145,
+  164,
+  195
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.1,
+   "score": 0.986
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.0,
+   "score": 0.987
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.975
+  },
+  "mouth_4": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.0,
+   "score": 0.983
+  },
+  "mouth_5": {
+   "scale": 0.998,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.935
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.968
+  },
+  "mouth_7": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": 0.1,
+   "score": 0.956
+  },
+  "mouth_8": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.1,
+   "score": 0.97
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.2,
+   "score": 0.962
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.931
+  },
+  "comm": {
+   "scale": 0.9105,
+   "dx": 0.2,
+   "dy": 158.2,
+   "score": 0.743
+  }
+ },
+ "source": {
+  "files": {
+   "base": "main-char-w/chat-image-008.png",
+   "mouth_1": "main-char-w/chat-image-007.png",
+   "mouth_2": "main-char-w/chat-image-009.png",
+   "mouth_3": "main-char-w/chat-image-010.png",
+   "mouth_4": "main-char-w/chat-image-006.png",
+   "mouth_5": "main-char-w/chat-image-001.png",
+   "mouth_6": "main-char-w/chat-image-002.png",
+   "mouth_7": "main-char-w/chat-image-003.png",
+   "mouth_8": "main-char-w/chat-image-004.png",
+   "eyes_1": "main-char-w/eyes_1.webp",
+   "eyes_2": "main-char-w/chat-image-005.png",
+   "comm": "main-char-w/chat-image-011.png"
+  },
+  "eye_box": [
+   413,
+   541,
+   817,
+   671
+  ],
+  "mouth_box": [
+   458,
+   760,
+   771,
+   978
+  ],
+  "eyes": [
+   [
+    525,
+    621
+   ],
+   [
+    705,
+    613
+   ]
+  ],
+  "fix": []
+ }
+}

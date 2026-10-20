@@ -1,0 +1,126 @@
+{
+ "key": "ECHO",
+ "name": "Kasia Wren",
+ "callsign": "Echo",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  91,
+  144,
+  161,
+  206
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.002,
+   "dx": -0.0,
+   "dy": 0.3,
+   "score": 0.97
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": 0.0,
+   "score": 0.986
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.1,
+   "score": 0.975
+  },
+  "mouth_4": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.981
+  },
+  "mouth_5": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.0,
+   "score": 0.916
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.0,
+   "score": 0.967
+  },
+  "mouth_7": {
+   "scale": 0.998,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.948
+  },
+  "mouth_8": {
+   "scale": 1.0,
+   "dx": -0.3,
+   "dy": -0.0,
+   "score": 0.965
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.1,
+   "score": 0.958
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.94
+  },
+  "comm": {
+   "scale": 0.8714,
+   "dx": 13.2,
+   "dy": 107.5,
+   "score": 0.612
+  }
+ },
+ "source": {
+  "files": {
+   "base": "w2/chat-image-012.png",
+   "mouth_1": "w2/chat-image-006.png",
+   "mouth_2": "w2/chat-image-007.png",
+   "mouth_3": "w2/chat-image-008.png",
+   "mouth_4": "w2/chat-image-009.png",
+   "mouth_5": "w2/chat-image-010.png",
+   "mouth_6": "w2/chat-image-001.png",
+   "mouth_7": "w2/chat-image-002.png",
+   "mouth_8": "w2/chat-image-003.png",
+   "eyes_1": "w2/chat-image-004.png",
+   "eyes_2": "w2/chat-image-005.png",
+   "comm": "w2/chat-image-011.png"
+  },
+  "eye_box": [
+   416,
+   490,
+   838,
+   625
+  ],
+  "mouth_box": [
+   458,
+   713,
+   776,
+   997
+  ],
+  "eyes": [
+   [
+    533,
+    572
+   ],
+   [
+    721,
+    566
+   ]
+  ],
+  "fix": []
+ }
+}

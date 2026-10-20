@@ -1,0 +1,121 @@
+{
+ "key": "COMET",
+ "name": "Adaeze Nwosu",
+ "callsign": "Comet",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  93,
+  148,
+  166,
+  191
+ ],
+ "missing": [
+  "mouth_1"
+ ],
+ "fits": {
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.0,
+   "dy": 0.1,
+   "score": 0.971
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": 0.1,
+   "dy": 0.1,
+   "score": 0.966
+  },
+  "mouth_4": {
+   "scale": 1.0,
+   "dx": 0.1,
+   "dy": 0.1,
+   "score": 0.957
+  },
+  "mouth_5": {
+   "scale": 1.0,
+   "dx": -0.0,
+   "dy": 0.1,
+   "score": 0.923
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": 0.1,
+   "dy": -0.1,
+   "score": 0.946
+  },
+  "mouth_7": {
+   "scale": 1.0,
+   "dx": 0.1,
+   "dy": -0.1,
+   "score": 0.951
+  },
+  "mouth_8": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.3,
+   "score": 0.965
+  },
+  "eyes_1": {
+   "scale": 0.998,
+   "dx": -0.1,
+   "dy": -0.2,
+   "score": 0.949
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": 0.1,
+   "dy": -0.2,
+   "score": 0.913
+  },
+  "comm": {
+   "scale": 0.8919,
+   "dx": 8.2,
+   "dy": 111.3,
+   "score": 0.657
+  }
+ },
+ "source": {
+  "files": {
+   "base": "w3/chat-image-012.png",
+   "mouth_2": "w3/chat-image-009.png",
+   "mouth_3": "w3/chat-image-006.png",
+   "mouth_4": "w3/chat-image-008.png",
+   "mouth_5": "w3/chat-image-010.png",
+   "mouth_6": "w3/chat-image-001.png",
+   "mouth_7": "w3/chat-image-002.png",
+   "mouth_8": "w3/chat-image-003.png",
+   "eyes_1": "w3/chat-image-004.png",
+   "eyes_2": "w3/chat-image-005.png",
+   "comm": "w3/chat-image-011.png"
+  },
+  "eye_box": [
+   401,
+   509,
+   827,
+   646
+  ],
+  "mouth_box": [
+   456,
+   754,
+   788,
+   952
+  ],
+  "eyes": [
+   [
+    519,
+    587
+   ],
+   [
+    709,
+    591
+   ]
+  ],
+  "fix": []
+ }
+}

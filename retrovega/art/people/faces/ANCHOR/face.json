@@ -1,0 +1,128 @@
+{
+ "key": "ANCHOR",
+ "name": "Julius Mercer",
+ "callsign": "Anchor",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  126
+ ],
+ "mouth_box": [
+  100,
+  148,
+  156,
+  198
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": -0.1,
+   "score": 0.979
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.3,
+   "dy": -0.1,
+   "score": 0.974
+  },
+  "mouth_3": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.1,
+   "score": 0.964
+  },
+  "mouth_4": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": 0.1,
+   "score": 0.961
+  },
+  "mouth_5": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.938
+  },
+  "mouth_6": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": 0.0,
+   "score": 0.952
+  },
+  "mouth_7": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": 0.0,
+   "score": 0.953
+  },
+  "mouth_8": {
+   "scale": 0.998,
+   "dx": -0.4,
+   "dy": -0.1,
+   "score": 0.956
+  },
+  "eyes_1": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": -0.2,
+   "score": 0.947
+  },
+  "eyes_2": {
+   "scale": 0.998,
+   "dx": -0.4,
+   "dy": -0.2,
+   "score": 0.914
+  },
+  "comm": {
+   "scale": 0.9153,
+   "dx": 5.7,
+   "dy": 172.0,
+   "score": 0.742
+  }
+ },
+ "source": {
+  "files": {
+   "base": "twin/chat-image-002 (1).png",
+   "mouth_1": "twin/chat-image-003 (1).png",
+   "mouth_2": "twin/chat-image-004 (1).png",
+   "mouth_3": "twin/chat-image-005 (1).png",
+   "mouth_4": "twin/chat-image-006 (1).png",
+   "mouth_5": "twin/chat-image-007 (1).png",
+   "mouth_6": "twin/chat-image-008 (1).png",
+   "mouth_7": "twin/chat-image-009 (1).png",
+   "mouth_8": "twin/chat-image-010 (1).png",
+   "eyes_1": "twin/eyes_1.webp",
+   "eyes_2": "twin/eyes_2.webp",
+   "comm": "twin/chat-image-001 (1).png"
+  },
+  "eye_box": [
+   395,
+   513,
+   836,
+   655
+  ],
+  "mouth_box": [
+   485,
+   767,
+   746,
+   1002
+  ],
+  "eyes": [
+   [
+    517,
+    596
+   ],
+   [
+    714,
+    595
+   ]
+  ],
+  "fix": [
+   "olive"
+  ]
+ }
+}

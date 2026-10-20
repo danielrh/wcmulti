@@ -103,17 +103,41 @@ pass.
 A blink comes every 2.5 to 5 seconds: half closed, closed, closed, half
 closed, one frame each.
 
-## tools/faces.py
+## tools/portraits.py
 
-`tools/faces.py` paints placeholder faces from the same table: a
-height-field face lit in software. They are not the art; the user found
-them too much like a game console's avatars. They remain useful as stand-ins
-until the portraits arrive, and as a layout guide for a local model's
-img2img or ControlNet, since their eyes and mouth sit where the frame boxes
-expect.
+`tools/portraits.py` turns the generated art into the frames above. The
+sources sit in `art/people/src/` (one folder per chat export, kept out of
+git) and `art/people/manifest.csv` says which file is which frame.
+
+1. **Fit.** Every frame is its own generation: some are framed differently
+   (the original portrait is often zoomed), and all are redrawn a little.
+   Each frame is scaled and shifted onto the base by matching the edges of
+   the whole bust, coarse to fine.
+2. **Boxes.** The eye box comes from where the blink frames differ from the
+   base (the two eye centres also set the framing). The mouth box covers
+   what the mouth frames change, below the eyes.
+3. **Blend.** Each box frame is the base with the edit blended in towards
+   the middle, tone-matched to the base, so its border is the base's own
+   pixels and no seam shows when the engine pastes it.
+4. **Frame.** Everyone is scaled and placed the same way: the eyes 16% of
+   the width apart, at 44% of the height.
+5. **Fixes.** `olive` recolours a slate-blue hero suit and its gold patch
+   to the pilots' olive drab and orange (the Mercer twins began as hero
+   portraits).
+
+For each character `art/people/faces/KEY/` (in git, about 200 KB each)
+holds `base.png` (RGBA), `mouth_0..8.png`, `eyes_0..2.png`, `comm.png` (the
+headset look, where there is one) and `face.json` (the boxes, the fits, the
+sources); `build/people/KEY.gif` is the character saying their line.
+`--gallery docs/people.png` draws the cast sheet and `build/people/cast.gif`,
+everyone talking.
+
+`tools/faces.py`, the procedural painter from before the art arrived, is
+kept as a placeholder generator; its boxes follow the same rules.
 
 ## Still to do
 
-- **An alignment tool:** align the generated portraits and edits, cut the boxes, and build the frames and preview GIFs.
+- **HERO_M's mouth and blink frames** (Cal Brody has only his portrait; he doesn't move yet).
 - **A face palette:** in flight a comm face shares the flight palette (spec §9). In the bar and briefing rooms the scene palette is free.
-- **Small sizes:** 128 and 64 px versions for the cockpit's comm VDU.
+- **Small sizes:** 128 and 64 px versions for the cockpit's comm VDU (`--size`).
+- **The headset set:** only the portraits so far (`comm.png`), no talking frames.

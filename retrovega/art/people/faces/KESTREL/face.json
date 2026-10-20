@@ -1,0 +1,126 @@
+{
+ "key": "KESTREL",
+ "name": "Kenji Arai",
+ "callsign": "Kestrel",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  126
+ ],
+ "mouth_box": [
+  98,
+  147,
+  156,
+  194
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": 0.1,
+   "score": 0.982
+  },
+  "mouth_2": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": 0.2,
+   "score": 0.976
+  },
+  "mouth_3": {
+   "scale": 0.998,
+   "dx": -0.6,
+   "dy": 0.1,
+   "score": 0.97
+  },
+  "mouth_4": {
+   "scale": 0.998,
+   "dx": -0.2,
+   "dy": 0.2,
+   "score": 0.973
+  },
+  "mouth_5": {
+   "scale": 0.9993,
+   "dx": -0.2,
+   "dy": 0.1,
+   "score": 0.948
+  },
+  "mouth_6": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.0,
+   "score": 0.961
+  },
+  "mouth_7": {
+   "scale": 0.9973,
+   "dx": -0.3,
+   "dy": 0.1,
+   "score": 0.952
+  },
+  "mouth_8": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": 0.1,
+   "score": 0.962
+  },
+  "eyes_1": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.2,
+   "score": 0.947
+  },
+  "eyes_2": {
+   "scale": 0.998,
+   "dx": -0.3,
+   "dy": -0.1,
+   "score": 0.923
+  },
+  "comm": {
+   "scale": 0.9276,
+   "dx": 6.5,
+   "dy": 198.2,
+   "score": 0.749
+  }
+ },
+ "source": {
+  "files": {
+   "base": "kestrel/chat-image-012.png",
+   "mouth_1": "kestrel/chat-image-010.png",
+   "mouth_2": "kestrel/chat-image-008.png",
+   "mouth_3": "kestrel/chat-image-006.png",
+   "mouth_4": "kestrel/chat-image-007.png",
+   "mouth_5": "kestrel/chat-image-009.png",
+   "mouth_6": "kestrel/chat-image-001.png",
+   "mouth_7": "kestrel/chat-image-002.png",
+   "mouth_8": "kestrel/chat-image-003.png",
+   "eyes_1": "kestrel/chat-image-004.png",
+   "eyes_2": "kestrel/chat-image-005.png",
+   "comm": "kestrel/chat-image-011.png"
+  },
+  "eye_box": [
+   422,
+   554,
+   830,
+   685
+  ],
+  "mouth_box": [
+   493,
+   786,
+   750,
+   988
+  ],
+  "eyes": [
+   [
+    535,
+    632
+   ],
+   [
+    717,
+    628
+   ]
+  ],
+  "fix": []
+ }
+}

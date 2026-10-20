@@ -1,0 +1,119 @@
+{
+ "key": "XO",
+ "name": "Cmdr. Mira Solberg",
+ "callsign": "",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  90,
+  150,
+  169,
+  211
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.2151,
+   "dx": -15.1,
+   "dy": -204.0,
+   "score": 0.646
+  },
+  "mouth_2": {
+   "scale": 1.2175,
+   "dx": -14.8,
+   "dy": -203.8,
+   "score": 0.638
+  },
+  "mouth_3": {
+   "scale": 1.2151,
+   "dx": -15.0,
+   "dy": -204.0,
+   "score": 0.636
+  },
+  "mouth_4": {
+   "scale": 1.2127,
+   "dx": -15.1,
+   "dy": -204.0,
+   "score": 0.635
+  },
+  "mouth_5": {
+   "scale": 1.2175,
+   "dx": -14.8,
+   "dy": -203.8,
+   "score": 0.629
+  },
+  "mouth_6": {
+   "scale": 1.2151,
+   "dx": -15.0,
+   "dy": -203.9,
+   "score": 0.635
+  },
+  "mouth_7": {
+   "scale": 1.2127,
+   "dx": -15.2,
+   "dy": -204.3,
+   "score": 0.629
+  },
+  "mouth_8": {
+   "scale": 1.2127,
+   "dx": -15.3,
+   "dy": -204.4,
+   "score": 0.634
+  },
+  "eyes_1": {
+   "scale": 1.2199,
+   "dx": -14.7,
+   "dy": -204.4,
+   "score": 0.611
+  },
+  "eyes_2": {
+   "scale": 1.2199,
+   "dx": -14.8,
+   "dy": -203.6,
+   "score": 0.594
+  }
+ },
+ "source": {
+  "files": {
+   "base": "xo/chat-image-011.png",
+   "mouth_1": "xo/chat-image-010.png",
+   "mouth_2": "xo/chat-image-006.png",
+   "mouth_3": "xo/chat-image-007.png",
+   "mouth_4": "xo/chat-image-008.png",
+   "mouth_5": "xo/chat-image-009.png",
+   "mouth_6": "xo/chat-image-001.png",
+   "mouth_7": "xo/chat-image-002.png",
+   "mouth_8": "xo/chat-image-003.png",
+   "eyes_1": "xo/chat-image-004.png",
+   "eyes_2": "xo/chat-image-005.png"
+  },
+  "eye_box": [
+   356,
+   370,
+   862,
+   533
+  ],
+  "mouth_box": [
+   404,
+   675,
+   832,
+   1003
+  ],
+  "eyes": [
+   [
+    496,
+    466
+   ],
+   [
+    722,
+    464
+   ]
+  ],
+  "fix": []
+ }
+}

@@ -1,0 +1,126 @@
+{
+ "key": "DRIFTER",
+ "name": "Owen Price",
+ "callsign": "Drifter",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  101,
+  147,
+  155,
+  196
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.974
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.0,
+   "dy": 0.1,
+   "score": 0.976
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.95
+  },
+  "mouth_4": {
+   "scale": 0.998,
+   "dx": -0.0,
+   "dy": 0.4,
+   "score": 0.959
+  },
+  "mouth_5": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.0,
+   "score": 0.915
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.942
+  },
+  "mouth_7": {
+   "scale": 1.0,
+   "dx": -0.0,
+   "dy": 0.1,
+   "score": 0.93
+  },
+  "mouth_8": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.94
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.2,
+   "score": 0.967
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": 0.2,
+   "dy": 0.5,
+   "score": 0.956
+  },
+  "comm": {
+   "scale": 0.9431,
+   "dx": -1.7,
+   "dy": 141.1,
+   "score": 0.618
+  }
+ },
+ "source": {
+  "files": {
+   "base": "m4/chat-image-002.png",
+   "mouth_1": "m4/chat-image-003.png",
+   "mouth_2": "m4/chat-image-004.png",
+   "mouth_3": "m4/chat-image-005.png",
+   "mouth_4": "m4/chat-image-006.png",
+   "mouth_5": "m4/chat-image-007.png",
+   "mouth_6": "m4/chat-image-008.png",
+   "mouth_7": "m4/chat-image-009.png",
+   "mouth_8": "m4/chat-image-010.png",
+   "eyes_1": "m4/chat-image-011.png",
+   "eyes_2": "m4/chat-image-012.png",
+   "comm": "m4/chat-image-001.png"
+  },
+  "eye_box": [
+   390,
+   470,
+   806,
+   604
+  ],
+  "mouth_box": [
+   477,
+   705,
+   719,
+   924
+  ],
+  "eyes": [
+   [
+    505,
+    557
+   ],
+   [
+    691,
+    540
+   ]
+  ],
+  "fix": []
+ }
+}

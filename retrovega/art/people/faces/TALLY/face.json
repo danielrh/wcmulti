@@ -1,0 +1,119 @@
+{
+ "key": "TALLY",
+ "name": "Wendell Greer",
+ "callsign": "Tally",
+ "size": 256,
+ "eye_box": [
+  82,
+  95,
+  174,
+  125
+ ],
+ "mouth_box": [
+  101,
+  141,
+  156,
+  190
+ ],
+ "missing": [],
+ "fits": {
+  "mouth_1": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.3,
+   "score": 0.949
+  },
+  "mouth_2": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": 0.1,
+   "score": 0.957
+  },
+  "mouth_3": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.2,
+   "score": 0.939
+  },
+  "mouth_4": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": 0.1,
+   "score": 0.942
+  },
+  "mouth_5": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.2,
+   "score": 0.911
+  },
+  "mouth_6": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.929
+  },
+  "mouth_7": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.3,
+   "score": 0.927
+  },
+  "mouth_8": {
+   "scale": 1.0,
+   "dx": -0.3,
+   "dy": -0.3,
+   "score": 0.921
+  },
+  "eyes_1": {
+   "scale": 1.0,
+   "dx": -0.2,
+   "dy": -0.2,
+   "score": 0.963
+  },
+  "eyes_2": {
+   "scale": 1.0,
+   "dx": -0.1,
+   "dy": -0.1,
+   "score": 0.952
+  }
+ },
+ "source": {
+  "files": {
+   "base": "tally/chat-image-000.png",
+   "mouth_1": "tally/chat-image-008.png",
+   "mouth_2": "tally/chat-image-009.png",
+   "mouth_3": "tally/chat-image-006.png",
+   "mouth_4": "tally/chat-image-007.png",
+   "mouth_5": "tally/chat-image-010.png",
+   "mouth_6": "tally/chat-image-001.png",
+   "mouth_7": "tally/chat-image-002.png",
+   "mouth_8": "tally/chat-image-003.png",
+   "eyes_1": "tally/chat-image-004.png",
+   "eyes_2": "tally/chat-image-005.png"
+  },
+  "eye_box": [
+   385,
+   419,
+   841,
+   566
+  ],
+  "mouth_box": [
+   480,
+   649,
+   751,
+   890
+  ],
+  "eyes": [
+   [
+    511,
+    512
+   ],
+   [
+    715,
+    498
+   ]
+  ],
+  "fix": []
+ }
+}

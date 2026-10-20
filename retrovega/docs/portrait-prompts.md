@@ -344,20 +344,24 @@ everything else identical."
 
 ## 5. Where the results go
 
-```
-retrovega/art/people/TALLY/base.png
-retrovega/art/people/TALLY/mouth_1.png ... mouth_8.png
-retrovega/art/people/TALLY/eyes_1.png, eyes_2.png
-... the same for COMET, FROST, ECHO, TORCH, KESTREL, DRIFTER, PRIME, ANCHOR, HERO_M, HERO_F, XO, TECH
-```
-
-`base.png` is the portrait and doubles as `mouth_0` and `eyes_0`; every
-file is the full 1024 square. The keys are those of data/people.csv.
-
-The headset look, where there is one, goes in a `comm/` folder beside it
-with the same file names:
+Drop each character's chat export, as it comes, into its own folder under
+`retrovega/art/people/src/` (for example `src/frost/chat-image-001.png
+...`). The file names don't matter. `art/people/manifest.csv` says which file
+is which frame:
 
 ```
-retrovega/art/people/FROST/base.png ...        the lounge (no headset)
-retrovega/art/people/FROST/comm/base.png ...   in flight (headset)
+key,frame,file,fix
+FROST,base,frost/chat-image-012.png,
+FROST,mouth_1,frost/chat-image-010.png,
+...
+FROST,comm,frost/chat-image-011.png,
 ```
+
+`frame` is `base`, `mouth_1` to `mouth_8`, `eyes_1`, `eyes_2`, or `comm` (the
+headset look). The keys are those of data/people.csv. A frame left out
+borrows its nearest shape, and `fix` on the base row names a correction (for
+example `olive` recolours a hero suit as a pilot's).
+
+Then `tools/portraits.py` lines everything up and builds the frames (see
+docs/people.md). `src/` stays out of git (about 220 MB); the manifest and
+the built frames are what the repository keeps.
