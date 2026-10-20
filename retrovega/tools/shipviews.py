@@ -584,6 +584,29 @@ def environment(ctx, assets, name, size=256):
     return tex
 
 
+def ship_mesh(row, assets):
+    """A ship's mesh as the views are drawn from it: its parts, stretched
+    (data/art.csv), its engine lights, the centre the views turn about and
+    the radius they are framed by."""
+    art = table_row('art.csv', row['key']) or {}
+    stretch = np.array([float(v) for v in (art.get('stretch') or '1 1 1').split()])
+    if row['mesh'].startswith('hull:'):
+        base_lights = unit_lights(assets, hulls.RECIPES[row['mesh'][5:]][0].split('/')[0])
+        parts, raw_lights, _base = hulls.build(row['mesh'][5:], assets, base_lights)
+    else:
+        parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
+        raw_lights = unit_lights(assets, row['vs_unit'])
+    for m in parts:
+        m.positions = m.positions * stretch
+        n = m.normals / stretch
+        m.normals = n / np.maximum(np.linalg.norm(n, axis=1), 1e-9)[:, None]
+    allpos = np.concatenate([m.positions for m in parts])
+    center = (allpos.min(0) + allpos.max(0)) / 2
+    radius = float(np.max(np.linalg.norm(allpos - center, axis=1))) * 1.04
+    lights = [(np.array(l[0] if len(l) == 2 else l[:3]) * stretch, l[-1]) for l in raw_lights]
+    return parts, lights, center, radius
+
+
 def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix='',
            env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None, views=None):
     """views: (elevation, heading) pairs to render instead of the sprite set,
@@ -593,26 +616,11 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     livery = table_row('liveries.csv', livery_name, 'name')
     if livery is None:
         sys.exit('no livery %r in data/liveries.csv' % livery_name)
-    stretch = np.array([float(v) for v in (art.get('stretch') or '1 1 1').split()])
-    views_wanted = VIEWS
-    if row['mesh'].startswith('hull:'):
-        base_lights = unit_lights(assets, hulls.RECIPES[row['mesh'][5:]][0].split('/')[0])
-        parts, raw_lights, _base = hulls.build(row['mesh'][5:], assets, base_lights)
-        if hulls.asymmetric(row['mesh'][5:]):
-            views_wanted = VIEWS_ASYM
-    else:
-        parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
-        raw_lights = unit_lights(assets, row['vs_unit'])
+    views_wanted = VIEWS_ASYM if row['mesh'].startswith('hull:') and hulls.asymmetric(row['mesh'][5:]) else VIEWS
     if views:
         views_wanted = views
-    for m in parts:
-        m.positions = m.positions * stretch
-        n = m.normals / stretch
-        m.normals = n / np.maximum(np.linalg.norm(n, axis=1), 1e-9)[:, None]
+    parts, lights, center, radius = ship_mesh(row, assets)
     allpos = np.concatenate([m.positions for m in parts])
-    center = (allpos.min(0) + allpos.max(0)) / 2
-    radius = float(np.max(np.linalg.norm(allpos - center, axis=1))) * 1.04
-    lights = [(np.array(l[0] if len(l) == 2 else l[:3]) * stretch, l[-1]) for l in raw_lights]
 
     ctx = moderngl.create_standalone_context(backend='egl')
     prog = ctx.program(vertex_shader=VS, fragment_shader=FS)

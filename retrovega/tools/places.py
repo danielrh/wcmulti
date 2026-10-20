@@ -49,7 +49,7 @@ import os
 import sys
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 from scipy import ndimage
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -61,9 +61,11 @@ TICK = 50          # ms per frame of the launch
 LAUNCH = {'spool_ms': 600, 'lift_ms': 400, 'lift_px': 4, 'run_ms': 900}
 # the landing legs, in screen pixels: the least strut showing under a ship's
 # lowest point, the drawn leg's parts (a painted leg is scaled to the foot's
-# width), the least gap between two legs
-SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66, 'apart': 60}
+# width), the least gap between two legs, how far a leg may move from its spot
+# to find the body
+SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66, 'apart': 60, 'reach': 90}
 RENDER = 1280      # the size the fighters are rendered at before scaling down
+BODY = 0.22        # a ship's body: its hull within this much of its half-span of the centre line
 
 
 def places():
@@ -179,6 +181,26 @@ def render_views(ship, cfg, cache, rerender=False):
     return above, below, info
 
 
+def body_view(ship, elev, head):
+    """The ship's body alone (the fuselage, not the wings), as a view from
+    (elev, head) sees it, at RENDER size: the triangles whose middles lie
+    within BODY of the half-span of the centre line, filled in."""
+    import shipviews
+    parts, _lights, center, radius = shipviews.ship_mesh(shipviews.ship_row(ship),
+                                                         os.path.expanduser('~/dev/vegastrike-assets'))
+    span = max(float(np.max(np.abs(m.positions[:, 0] - center[0]))) for m in parts)
+    rot = shipviews.view_matrix(elev, head)
+    img = Image.new('L', (RENDER, RENDER), 0)
+    draw = ImageDraw.Draw(img)
+    for m in parts:
+        tri = m.positions[np.asarray(m.tri_index).reshape(-1, 3)]
+        keep = np.abs(tri[..., 0].mean(axis=1) - center[0]) < BODY * span
+        v = (tri[keep] - center) @ rot.T / radius
+        for xs, ys in zip((v[..., 0] + 1) * RENDER / 2, (1 - v[..., 1]) * RENDER / 2):
+            draw.polygon(list(zip(xs.tolist(), ys.tolist())), fill=255)
+    return img
+
+
 _SCALES = {}
 
 
@@ -217,25 +239,46 @@ def fighter(ship, cfg, frame, cache, legs, rerender=False):
     engines = nozzles(sprite, [(ey - bb[1]) * s for _ex, ey, _r in info['engines']])
     under, ux, uy = under_layer(below, s, x, size[0], cx, cy, deck, cfg['light'])
     return {'sprite': sprite, 'x': x, 'y': y, 'under': under, 'ux': ux, 'uy': uy, 'engines': engines,
-            'sleds': sled_spots(sprite, x, y, [frame.xy(sx, 0)[0] for sx in cfg['sleds']], legs)}
+            'sleds': sled_spots(sprite, body(ship, cfg, bb, size), x, y,
+                                [frame.xy(sx, 0)[0] for sx in cfg['sleds']], legs)}
 
 
-def sled_spots(sprite, x, y, want, legs):
-    """Where a fighter's legs stand: at the room's spots (screen x), each
-    moved towards the nose until there is hull over its whole top, a leg that
-    ends up too near another left out.  Each is [x of its strut, y of its
-    top]; its top meets the belly, the lowest point over it."""
-    a = np.asarray(sprite)[..., 3] > 0
-    h, w = a.shape
-    has = a.any(axis=0)
-    belly = np.where(has, h - 1 - np.argmax(a[::-1], axis=0), -1)
+def body(ship, cfg, bb, size):
+    """The body mask (body_view) over the sprite's pixels."""
+    img = body_view(ship, cfg['elevation'], cfg['heading']).crop(bb).resize(size, Image.BOX)
+    return np.asarray(img) >= 128
+
+
+def sled_spots(sprite, body, x, y, want, legs):
+    """Where a fighter's legs stand: each at the nearest place to the room's
+    spot (screen x) where the body covers the leg's whole top and nothing
+    hangs lower there (a leg behind a wing looks fixed to the wing); failing
+    that, towards the nose under the body anyway.  A leg that ends up too
+    near another is left out.  Each is [x of its strut, y of its top]; its
+    top meets the body's belly, the lowest point of the body over it."""
+    def bellies(a):
+        has = a.any(axis=0)
+        return has, np.where(has, a.shape[0] - 1 - np.argmax(a[::-1], axis=0), -1)
+    w = sprite.size[0]
+    _, low = bellies(np.asarray(sprite)[..., 3] > 0)
+    has, belly = bellies(body)
     lo, hi = legs['top']
+    covered = np.array([c + lo >= 0 and c + hi < w and has[c + lo:c + hi + 1].all() for c in range(w)])
+    lowest = np.array([covered[c] and (low[c + lo:c + hi + 1] - belly[c + lo:c + hi + 1]).max() <= 2
+                       for c in range(w)])
     spots = []
     for sx in want:
-        c = max(int(round(sx)) - x, -lo)
-        while c + hi < w and not has[c + lo:c + hi + 1].all():
-            c += 1
-        if c + hi >= w or any(abs(x + c - q[0]) < SLED['apart'] for q in spots):
+        c0 = int(round(sx)) - x
+        good = np.nonzero(lowest)[0]
+        near = good[np.abs(good - c0) <= SLED['reach']] if len(good) else good
+        if len(near):
+            c = int(near[np.argmin(np.abs(near - c0))])
+        else:
+            later = np.nonzero(covered[max(c0, 0):])[0]
+            if not len(later):
+                continue
+            c = int(later[0]) + max(c0, 0)
+        if any(abs(x + c - q[0]) < SLED['apart'] for q in spots):
             continue
         spots.append([int(x + c), int(y + belly[c + lo:c + hi + 1].max() + 1)])
     return spots

@@ -84,11 +84,16 @@ rest).
   each style's `axis` (the strut's middle) and `seat` (how far down the
   saddle the hull rests: the cradle's dip; 0 for the gear legs' flat
   plates).
-- **Where they go:** at the deck's two spots (`sleds`, source x): one under
-  the middle of the deck, one behind the cart, where it is mostly hidden.
-  A spot with no hull over the leg's whole top moves towards the nose until
-  there is; a leg that would end up within 60 px of the other is left out.
-  Each reaches from the deck to the lowest point of the hull above it.
+- **Where they go:** on the body, never a wing. The tool finds each ship's
+  body from its mesh: the triangles whose middles lie within 22% of the
+  half-span of the centre line. Each leg goes to the place nearest its
+  spot (`sleds`, source x: one mid-deck, one behind the cart, where it is
+  mostly hidden) where the body covers the leg's whole top and nothing
+  hangs lower. A leg behind a wing would look fixed to the wing. It may
+  move up to 90 px for that. Its top meets the body's belly. Where a wing
+  hangs below the body all along, as on the Schroedinger's front half, the
+  leg still goes to the body and rises behind the wing. A leg that would
+  end up within 60 px of the other is left out.
 - **Height:** every ship's lowest point clears its style's shortest leg:
   the foot, the saddle and 4 rows of strut. On the gear legs that is about
   65 px, some 3 m.
