@@ -475,13 +475,16 @@ the rate, and the mean N over the second half is logged:
 | `-od` (no optimisation), the row loop calling `vid_row` | 38 | 11.3 M |
 | `-od`, the row pointer stepped | 46 | 13.7 M |
 | `-ox` (now the default; `DEBUG=1` builds `-od -d2`) | 68 | 20.2 M |
+| the same in the deployed page (20,000 cycles, headless Chrome on a 2-core box) | 25 | 7.4 M |
 
 At `cycles=40000` (tests/rv.conf) that is about two emulated cycles a
 pixel, the XMS fetch of each sprite's rows and the per-row call into
 `rv_blit_row` (lowlevel.asm: a span is one `rep movsd`) included, with
 the rest of the frame (the restore, the instruments, the flip, the
-simulation) already paid for. The browser build runs 20,000 cycles, so
-expect half: some 30 fighter-sized sprites a frame. The number is live in
+simulation) already paid for. The browser's row was measured by driving
+the live page through the rooms with Tab and Enter (the deck's launch
+hotspot sits at 478,176) and reading RVLOG.TXT; a desktop browser on a
+faster machine will sit between the two. The number is live in
 `rvBenchCount` while the flight runs.
 
 ### Pre-rendering: what the numbers allow
