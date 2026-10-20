@@ -237,7 +237,10 @@ mission lands in the briefing room for the debrief.
 - **Arrow keys:** they steer the pointer like a mouse, slowly at first
   (150 pixels a second) and faster the longer they are held (up to 700),
   diagonally with two. The game hooks int 9 to know which keys are down,
-  and chains to the BIOS, which still queues the keystrokes.
+  and chains to the BIOS, which still queues the keystrokes; those are read
+  with the enhanced functions of int 16h (11h to look, 10h to take: the
+  grey keys and F12 too), and "no key" is the zero flag, which Watcom
+  gives in `REGPACK`'s flags (`REGS` has only the carry).
 - **Tab and Shift+Tab:** the pointer jumps to the next hotspot to the
   right (or left), round to the first again; Enter acts on it. Menus
   that take the arrows (the bunks, name entry) turn the steering off.
@@ -256,9 +259,11 @@ Built (src/music.c, src/opl.c):
 
 - **Songs:** Standard MIDI Files (type 0 or 1), one per cue beside RV.EXE
   (`BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID`). They are
-  read at start-up, their tracks merged and timed through their tempo maps
-  in ticks of the music clock, and kept in XMS (resident). Each loops,
-  padded to a whole bar.
+  read at start-up, each track into a block of its own (so a track may be
+  up to 64 KB and a song as long as its tracks allow), the tracks merged
+  as they are read and timed through their tempo maps in ticks of the
+  music clock, and written to XMS (resident) 256 events at a time. Each
+  loops, padded to a whole bar.
 - **Streaming:** the interrupt plays from a ring of 1024 events in
   conventional memory (some 40 s of the busiest song), which the main loop
   (`music_poll`) tops up from XMS; the next song's ring is filled by
@@ -291,14 +296,25 @@ Built (src/music.c, src/opl.c):
 - **Cues:** the game cues the quarters (and the locker), the bar and
   lounge, the briefing, the launch, and a win or a loss at the debrief.
   All use 250 ms.
-- **The songs** (`tools/songs.py`, ours, CC0): *Bunk Light* for the
-  quarters (68 a minute in D major: an electric piano turning over in
-  eighths under a wide pad, upright bass, the vibraphone with the tune and
-  a flute answering it); *Off-Watch* for the bar (100 a minute, swung, in
-  F: jazz guitar over electric-piano comping, a walking bass, ride and
-  cross-stick; the vibraphone takes the second chorus); *Ready Room* for
-  the briefing (72 a minute in D minor: a harp ostinato, strings, a horn
-  line, a clarinet against it, timpani rolls, a far celesta ping).
+- **The songs** (`tools/songs.py`, ours, CC0). The user asked for the
+  quarters and the bar to be five times as long as their first versions,
+  so that they do not repeat: *Bunk Light* for the quarters runs 9.5
+  minutes at 68 a minute in five sections (D major: an electric piano
+  turning over in eighths, a wide pad, upright bass, the vibraphone's tune
+  and a flute answering it; B minor; F major; A major, two instruments
+  trading phrases; D major again, thinning out into the start).
+  *Off-Watch* for the bar runs 12.5 minutes at 100 a minute, swung, in
+  five (F: jazz guitar over electric-piano comping, walking bass, ride and
+  cross-stick; B flat; an E flat bossa nova in straight eighths; a G minor
+  blues with three solo choruses; F again, trading fours into the top).
+  *Ready Room* for the briefing stays 110 s (72 a minute in D minor: a
+  harp ostinato, strings, a horn line, a clarinet against it, timpani
+  rolls, a far celesta ping). The first section of each and the briefing
+  are written out note by note; the later sections are written by
+  `tools/compose.py` from their chords: rootless voicings that move as
+  little as they can, a bass on the chord, and a seeded melody writer that
+  works phrase by phrase (chord tones on the strong beats, scale steps
+  between, an arch, fall or rise, answers in the question's rhythm).
   LAUNCH, WIN and LOSE are still `tools/midi.py`'s short placeholders.
 - **Hearing it without a sound card:** `tools/oplrender.sh` builds
   `build/oplrender`, which runs `src/opl.c` on the host through DOSBox's

@@ -30,7 +30,6 @@
 #define PIT_HZ 1193182UL
 #define DIVISOR ((unsigned)(PIT_HZ / TICK_HZ))
 #define MAX_SONGS 8
-#define MAX_EVENTS 5000U               /* a song's events, while it is read (12 bytes each) */
 #define MPU_DATA 0x330
 #define MPU_STAT 0x331
 #define OPL_PORT 0x388
@@ -386,168 +385,165 @@ static unsigned long varlen(const unsigned char __far **pp)
     return v;
 }
 
-/* a file's event while it is read: a channel message, or (st 0xFF) a tempo in d1 d2 d3 */
-typedef struct { unsigned long tick; unsigned char st, d1, d2, d3; } Raw;
+/* Reading a song: every track in a block of its own (up to 64 KB each, so
+ * a song may be as long as its tracks allow), the tracks merged as they
+ * are read (each is in order: the earliest next event goes first, the
+ * first track's on a tie), timed through the tempo map in music ticks, and
+ * written to XMS a chunk at a time.  Twice: once to count, once to write. */
 #define MAX_TRACKS 24
-static Raw __far *g_raw;                /* MAX_EVENTS, while music_init reads the songs */
+#define CHUNK_EV 256U
+static Ev __far *g_chunk;               /* CHUNK_EV events, while music_init reads the songs */
 
-/* the file's events, the tracks merged, in music ticks */
+typedef struct {
+    const unsigned char __far *p, __far *end;
+    unsigned long tick;                 /* the next event's */
+    unsigned char running;
+    unsigned char st, d1, d2, d3;       /* the next event: a channel message, or (st 0xFF) a tempo in d1 d2 d3 */
+    int live;
+} Cursor;
+
+/* the track's next channel message or tempo (the rest skipped); 0 at its end */
+static int advance(Cursor *c, unsigned char *beats_bar)
+{
+    while (c->p < c->end) {
+        unsigned char st;
+        c->tick += varlen(&c->p);
+        st = *c->p;
+        if (st & 0x80)
+            c->p++;
+        else
+            st = c->running;
+        if (st == 0xFF) {
+            unsigned char type = *c->p++;
+            unsigned long len = varlen(&c->p);
+            if (type == 0x51 && len == 3) {
+                c->st = 0xFF;
+                c->d1 = c->p[0];
+                c->d2 = c->p[1];
+                c->d3 = c->p[2];
+                c->p += len;
+                return 1;
+            }
+            if (type == 0x58 && len >= 2)
+                *beats_bar = c->p[0];
+            c->p += len;
+            continue;
+        }
+        if (st == 0xF0 || st == 0xF7) {
+            c->p += varlen(&c->p);
+            continue;
+        }
+        c->running = st;
+        c->st = st;
+        c->d1 = *c->p++;
+        c->d2 = (st & 0xF0) != 0xC0 && (st & 0xF0) != 0xD0 ? *c->p++ : 0;
+        return 1;
+    }
+    return 0;
+}
+
 static int load_song(const char *path, Song *song)
 {
+    static unsigned char buf[256];
+    unsigned char hdr[14], hd[8];
+    unsigned char __far *trk[MAX_TRACKS];
+    unsigned long len[MAX_TRACKS];
+    Cursor cur[MAX_TRACKS];
+    unsigned ntrk = 0, t, division, pass;
+    unsigned long nev = 0;
+    int ok = 0;
     FILE *f = fopen(path, "rb");
-    unsigned char hdr[14];
-    unsigned char __far *data;
-    Raw __far *raw = g_raw;
-    Ev __far *ev;
-    unsigned nraw = 0, ntrk, division, t, nev = 0;
-    int ok;
-    unsigned first[MAX_TRACKS], last[MAX_TRACKS];
-    long size;
-    unsigned long tempo = 500000UL;
     if (!f)
         return 0;
-    fseek(f, 0, SEEK_END);
-    size = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (size < 22 || size > 60000L) {
+    if (fread(hdr, 1, 14, f) != 14 || memcmp(hdr, "MThd", 4) != 0 || (be16(hdr + 12) & 0x8000)) {
         fclose(f);
         return 0;
     }
-    data = (unsigned char __far *)_fmalloc((size_t)size);
-    if (!data) {
-        rv_log("music: no memory to read %s", path);
-        fclose(f);
-        return 0;
-    }
-    {
-        long k;
-        static unsigned char buf[256];
-        for (k = 0; k < size; k += sizeof buf) {
-            unsigned n = (unsigned)(size - k < (long)sizeof buf ? size - k : sizeof buf);
-            fread(buf, 1, n, f);
-            _fmemcpy(data + k, buf, n);
+    division = be16(hdr + 12);
+    fseek(f, 8 + be32(hdr + 4), SEEK_SET);
+    while (ntrk < MAX_TRACKS && ntrk < be16(hdr + 10) && fread(hd, 1, 8, f) == 8 && !memcmp(hd, "MTrk", 4)) {
+        unsigned long k, n = be32(hd + 4);
+        if (n > 65000UL || !(trk[ntrk] = (unsigned char __far *)_fmalloc((size_t)n + 1))) {
+            rv_log("music: %s: a track of %lu bytes does not fit", path, n);
+            break;
         }
+        for (k = 0; k < n; k += sizeof buf) {
+            unsigned m = (unsigned)(n - k < sizeof buf ? n - k : sizeof buf);
+            fread(buf, 1, m, f);
+            _fmemcpy(trk[ntrk] + k, buf, m);
+        }
+        len[ntrk++] = n;
     }
     fclose(f);
-    _fmemcpy(hdr, data, 14);
-    if (memcmp(hdr, "MThd", 4) != 0 || (be16(hdr + 12) & 0x8000)) {
-        _ffree(data);
-        return 0;
-    }
-    ntrk = be16(hdr + 10);
-    division = be16(hdr + 12);
     song->beats_bar = 4;
-    {
-        const unsigned char __far *p = data + 8 + be32(hdr + 4);
-        for (t = 0; t < ntrk && t < MAX_TRACKS && p + 8 <= data + size; t++) {
-            unsigned char hd[8];
-            const unsigned char __far *end;
-            unsigned long tick = 0;
-            unsigned char running = 0;
-            _fmemcpy(hd, p, 8);
-            if (memcmp(hd, "MTrk", 4) != 0)
-                break;
-            end = p + 8 + be32(hd + 4);
-            p += 8;
-            first[t] = nraw;
-            while (p < end && nraw < MAX_EVENTS) {
-                unsigned char st, d1 = 0, d2 = 0;
-                tick += varlen(&p);
-                st = *p;
-                if (st & 0x80)
-                    p++;
-                else
-                    st = running;
-                if (st == 0xFF) {
-                    unsigned char type = *p++;
-                    unsigned long len = varlen(&p);
-                    if (type == 0x51 && len == 3) {
-                        raw[nraw].tick = tick;
-                        raw[nraw].st = 0xFF;
-                        raw[nraw].d1 = p[0];
-                        raw[nraw].d2 = p[1];
-                        raw[nraw].d3 = p[2];
-                        nraw++;
-                    } else if (type == 0x58 && len >= 2) {
-                        song->beats_bar = p[0];
-                    }
-                    p += len;
-                    continue;
-                }
-                if (st == 0xF0 || st == 0xF7) {
-                    p += varlen(&p);
-                    continue;
-                }
-                running = st;
-                d1 = *p++;
-                if ((st & 0xF0) != 0xC0 && (st & 0xF0) != 0xD0)
-                    d2 = *p++;
-                raw[nraw].tick = tick;
-                raw[nraw].st = st;
-                raw[nraw].d1 = d1;
-                raw[nraw].d2 = d2;
-                nraw++;
-                nev++;
-            }
-            last[t] = nraw;
-            p = end;
-        }
-        ntrk = t;
-    }
-    _ffree(data);
-    if (nraw >= MAX_EVENTS)
-        rv_log("music: %s has more than %u events: cut short", path, MAX_EVENTS);
-    ev = (Ev __far *)_fmalloc(sizeof(Ev) * (nev + 1));     /* until it is in XMS */
-    if (!ev)
-        return 0;
-    /* the tracks merged (each is in order: take the earliest next event, the
-     * first track's on a tie), to music ticks through the tempo map */
-    {
-        unsigned long last_tick = 0;
+    for (pass = 0; pass < 2; pass++) {
+        unsigned long tempo = 500000UL, last_tick = 0, n = 0;
         double us = 0, last_us_out = 0;
-        unsigned n = 0;
         song->beat = (unsigned)((double)tempo * TICK_HZ / 1e6 + 0.5);
+        for (t = 0; t < ntrk; t++) {
+            cur[t].p = trk[t];
+            cur[t].end = trk[t] + len[t];
+            cur[t].tick = 0;
+            cur[t].running = 0;
+            cur[t].live = advance(&cur[t], &song->beats_bar);
+        }
         for (;;) {
-            const Raw __far *r;
+            Cursor *c;
             int best = -1;
             for (t = 0; t < ntrk; t++)
-                if (first[t] < last[t] && (best < 0 || raw[first[t]].tick < raw[first[best]].tick))
+                if (cur[t].live && (best < 0 || cur[t].tick < cur[best].tick))
                     best = t;
             if (best < 0)
                 break;
-            r = &raw[first[best]++];
-            us += (double)(r->tick - last_tick) * tempo / division;
-            last_tick = r->tick;
-            if (r->st == 0xFF) {
-                tempo = ((unsigned long)r->d1 << 16) | ((unsigned)r->d2 << 8) | r->d3;
-                if (r->tick == 0)
+            c = &cur[best];
+            us += (double)(c->tick - last_tick) * tempo / division;
+            last_tick = c->tick;
+            if (c->st == 0xFF) {
+                tempo = ((unsigned long)c->d1 << 16) | ((unsigned)c->d2 << 8) | c->d3;
+                if (c->tick == 0)
                     song->beat = (unsigned)((double)tempo * TICK_HZ / 1e6 + 0.5);
-                continue;
+            } else {
+                if (pass) {
+                    Ev __far *e = &g_chunk[(unsigned)(n % CHUNK_EV)];
+                    e->delta = (unsigned short)((us - last_us_out) * TICK_HZ / 1e6 + 0.5);
+                    last_us_out += (double)e->delta * 1e6 / TICK_HZ;
+                    e->status = c->st;
+                    e->d1 = c->d1;
+                    e->d2 = c->d2;
+                    e->flags = 0;
+                    if (n % CHUNK_EV == CHUNK_EV - 1)
+                        xms_put(song->x, (n + 1 - CHUNK_EV) * sizeof(Ev), g_chunk, CHUNK_EV * sizeof(Ev));
+                }
+                n++;
             }
-            ev[n].delta = (unsigned short)((us - last_us_out) * TICK_HZ / 1e6 + 0.5);
-            last_us_out += (double)ev[n].delta * 1e6 / TICK_HZ;
-            ev[n].status = r->st;
-            ev[n].d1 = r->d1;
-            ev[n].d2 = r->d2;
-            ev[n].flags = 0;
-            n++;
+            c->live = advance(c, &song->beats_bar);
         }
-        /* a rest to the end of the last bar, so the loop keeps time */
-        {
+        if (!pass) {
+            nev = n;
+            song->x = n ? xms_alloc((n + 1) * sizeof(Ev), XMS_RESIDENT) : 0;
+            if (!song->x)
+                break;
+        } else {
+            /* a rest to the end of the last bar, so the loop keeps time */
             unsigned long bar = (unsigned long)song->beat * song->beats_bar;
             unsigned long total = (unsigned long)(last_us_out * TICK_HZ / 1e6 + 0.5);
-            ev[n].delta = (unsigned short)(bar ? (bar - total % bar) % bar : 0);
-            ev[n].status = 0;
-            ev[n].flags = EV_LAST;
+            Ev __far *e = &g_chunk[(unsigned)(n % CHUNK_EV)];
+            e->delta = (unsigned short)(bar ? (bar - total % bar) % bar : 0);
+            e->status = e->d1 = e->d2 = 0;
+            e->flags = EV_LAST;
             n++;
+            ok = xms_put(song->x, (n - 1) / CHUNK_EV * CHUNK_EV * sizeof(Ev), g_chunk,
+                         ((n - 1) % CHUNK_EV + 1) * sizeof(Ev));
+            song->n = ok ? (unsigned)n : 0;
         }
-        song->n = n;
     }
-    song->x = xms_alloc((unsigned long)song->n * sizeof(Ev), XMS_RESIDENT);
-    ok = song->x && xms_put(song->x, 0, ev, (unsigned long)song->n * sizeof(Ev));
-    _ffree(ev);
-    if (!ok)
+    for (t = 0; t < ntrk; t++)
+        _ffree(trk[t]);
+    if (nev >= 65535UL) {
+        rv_log("music: %s has too many events (%lu)", path, nev);
         song->n = 0;
+        ok = 0;
+    }
     return ok;
 }
 
@@ -584,16 +580,16 @@ int music_init(void)
             g_dev = DEV_NONE;
         }
     }
-    g_raw = (Raw __far *)_fmalloc(sizeof(Raw) * MAX_EVENTS);   /* only while reading */
-    for (i = 0; g_raw && i < (int)RV_COUNT(g_files) && i < MAX_SONGS; i++)
+    g_chunk = (Ev __far *)_fmalloc(sizeof(Ev) * CHUNK_EV);    /* only while reading */
+    for (i = 0; g_chunk && i < (int)RV_COUNT(g_files) && i < MAX_SONGS; i++)
         if (load_song(g_files[i], &g_song[i])) {
             loaded++;
             rv_log("music: %s, %u events, beat %u ticks, %u to the bar", g_files[i], g_song[i].n, g_song[i].beat,
                    g_song[i].beats_bar);
         }
-    if (g_raw)
-        _ffree(g_raw);
-    g_raw = 0;
+    if (g_chunk)
+        _ffree(g_chunk);
+    g_chunk = 0;
     g_old8 = _dos_getvect(8);
     atexit(music_shutdown);             /* a stop (rv_fail) gives the timer back too */
     g_installed = 1;
