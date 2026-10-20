@@ -52,9 +52,46 @@ static unsigned rnd(void)
     return (unsigned)(g_camp.seed >> 16) & 0x7FFF;
 }
 
+/* The talk speed, the bunk menu's choice (kept in RVSETUP.CFG): a percentage
+ * of the first pace, lipsync.c's 100 ms a shape.  The user found that pace
+ * too slow to read; "normal" is twice it, and "slow" is it. */
+static const unsigned g_talk_pcts[] = { 100, 200, 300, 400 };
+static const char *g_talk_names[] = { "slow", "normal", "fast", "very fast" };
+static int g_talk_speed = 1;
+#define SETUP_FILE "RVSETUP.CFG"
+
+static void setup_load(void)
+{
+    unsigned char b[8];
+    FILE *f = fopen(SETUP_FILE, "rb");
+    if (!f)
+        return;
+    if (fread(b, 1, 8, f) == 8 && !memcmp(b, "RVCFG1", 6) && b[6] < RV_COUNT(g_talk_pcts))
+        g_talk_speed = b[6];
+    fclose(f);
+}
+
+static void setup_save(void)
+{
+    char b[8];
+    FILE *f = fopen(SETUP_FILE, "wb");
+    memcpy(b, "RVCFG1", 6);
+    b[6] = (char)g_talk_speed;
+    b[7] = 0;
+    if (f) {
+        fwrite(b, 1, 8, f);
+        fclose(f);
+    }
+    rv_log("setup: talk speed %s", g_talk_names[g_talk_speed]);
+}
+
+/* speech runs on the music clock (240 Hz): fine enough for a shape every 25 ms */
+static unsigned long g_speech_t0;
+
 static int speaking_step(void)
 {
-    return (int)((g_now - g_t0) * 55 / LIP_STEP_MS);
+    /* clock ticks x 1000/240 ms x pct/100, in LIP_STEP_MS steps */
+    return (int)((clock240() - g_speech_t0) * g_talk_pcts[g_talk_speed] / (24UL * LIP_STEP_MS));
 }
 
 static void say(int person, const char __far *text)
@@ -62,7 +99,9 @@ static void say(int person, const char __far *text)
     g_speaker = person;
     g_said = text;
     g_nlip = lip_steps(text, g_lip, MAX_STEPS);
-    g_t0 = g_now;
+    g_speech_t0 = clock240();
+    rv_log("talk: %d shapes, %lu ms at %s", g_nlip, (unsigned long)g_nlip * LIP_STEP_MS * 100 / g_talk_pcts[g_talk_speed],
+           g_talk_names[g_talk_speed]);
     g_mouth = g_eyes = g_shown_chars = -1;
     g_gesture = 0;
 }
@@ -104,7 +143,8 @@ static void message(const char *text)
 
 /* --- rooms --- */
 
-static int g_talk_at, g_talk_line = -1;
+static unsigned long g_talk_at;
+static int g_talk_line = -1;
 
 static void talk_overlay(int y0, int y1)
 {
@@ -178,13 +218,14 @@ static void enter_room(int room)
 static void ambient_talk(void)
 {
     int i, room = g_scene.room == RV_R_BAR ? RV_ROOM_BAR : g_scene.room == RV_R_LOUNGE ? RV_ROOM_LOUNGE : -1;
-    if (room < 0 || g_now < (unsigned long)g_talk_at)
+    if (room < 0 || g_now < g_talk_at)
         return;
     for (i = 1; i <= (int)g_m.ntalk; i++) {
         int k = (g_talk_line + i) % (g_m.ntalk ? g_m.ntalk : 1);
         if (g_m.ntalk && g_m.talk[k].room == room) {
             g_talk_line = k;
-            g_talk_at = (int)(g_now + 70);
+            /* a second, then as long as reading it takes at the talk speed (8 letters a second at "slow") */
+            g_talk_at = g_now + 18 + (unsigned long)_fstrlen(g_m.talk[k].text) * 227 / g_talk_pcts[g_talk_speed];
             vid_dirty(SCR_H - LABEL_H - 24, SCR_H - LABEL_H);
             return;
         }
@@ -518,6 +559,30 @@ static RvSave __far g_bunk_info[BUNKS];
 static int g_bunk_full[BUNKS];
 static char g_name[24];
 
+/* the bunk menu's row of talk speeds: where each choice is, for drawing and clicking */
+#define SPEED_Y 292
+#define SPEED_LABEL "TALK SPEED (T)"
+static int speed_x(int i, int *w)
+{
+    int k, x = 110 + gfx_text_width(FONT_BODY, SPEED_LABEL) + 20;
+    for (k = 0; k < i; k++)
+        x += gfx_text_width(FONT_BODY, g_talk_names[k]) + 22;
+    *w = gfx_text_width(FONT_BODY, g_talk_names[i]);
+    return x;
+}
+
+static void talk_speed_row(int y0, int y1)
+{
+    int i;
+    gfx_text(FONT_BODY, 110, SPEED_Y, SPEED_LABEL, RV_TEXT_AMBER, y0, y1);
+    for (i = 0; i < (int)RV_COUNT(g_talk_pcts); i++) {
+        int w, x = speed_x(i, &w);
+        if (i == g_talk_speed)
+            gfx_fill(x - 6, SPEED_Y - 3, w + 12, 20, UI_PANEL_EDGE, y0, y1);
+        gfx_text(FONT_BODY, x, SPEED_Y, g_talk_names[i], i == g_talk_speed ? RV_TEXT_WHITE : RV_TEXT_GREY, y0, y1);
+    }
+}
+
 static void bunk_overlay(int y0, int y1)
 {
     int i;
@@ -535,13 +600,15 @@ static void bunk_overlay(int y0, int y1)
             gfx_fill(100, y - 3, 440, 22, UI_PANEL_EDGE, y0, y1);
         gfx_text(FONT_BODY, 110, y, s, i == g_bunk_sel ? RV_TEXT_WHITE : RV_TEXT_GREY, y0, y1);
     }
-    gfx_text(FONT_BODY, 110, 304, g_bunk_sel < 0 ? "pick a bunk; Esc to close"
+    if (g_mode != MODE_NAME)
+        talk_speed_row(y0, y1);
+    gfx_text(FONT_BODY, 110, 318, g_bunk_sel < 0 ? "pick a bunk; Esc to close"
              : g_mode == MODE_NAME ? "name it, then Enter" : "S save here    L load    Esc back", RV_TEXT_AMBER, y0, y1);
     if (g_mode == MODE_NAME) {
         char s[40];
         sprintf(s, "name: %s_", g_name);
-        gfx_fill(104, 280, 432, 20, UI_BLACK, y0, y1);
-        gfx_text(FONT_BODY, 110, 283, s, RV_TEXT_WHITE, y0, y1);
+        gfx_fill(104, SPEED_Y - 4, 432, 22, UI_BLACK, y0, y1);      /* (in the talk speeds' place) */
+        gfx_text(FONT_BODY, 110, SPEED_Y, s, RV_TEXT_WHITE, y0, y1);
     }
 }
 
@@ -569,6 +636,23 @@ static void bunk_input(const Input *in)
     if (in->key == KEY_ESC) {
         if (g_bunk_sel >= 0) g_bunk_sel = -1; else close_bunks();
         vid_dirty(30, 350);
+        return;
+    }
+    /* the talk speed: T for the next, or a click on one */
+    if ((in->key == KEY_CHAR && (in->ch == 't' || in->ch == 'T')) || (in->clicked && in->y >= SPEED_Y - 4 && in->y < SPEED_Y + 18)) {
+        int i, w, pick = -1;
+        if (!in->clicked)
+            pick = (g_talk_speed + 1) % (int)RV_COUNT(g_talk_pcts);
+        for (i = 0; in->clicked && i < (int)RV_COUNT(g_talk_pcts); i++) {
+            int x = speed_x(i, &w);
+            if (in->x >= x - 8 && in->x < x + w + 8)
+                pick = i;
+        }
+        if (pick >= 0) {
+            g_talk_speed = pick;
+            setup_save();
+            vid_dirty(30, 350);
+        }
         return;
     }
     if (in->key == KEY_UP && g_bunk_sel > 0) g_bunk_sel--, vid_dirty(30, 350);
@@ -762,6 +846,7 @@ int game_run(void)
     Input in;
     SceneAction act;
     g_now = ticks();
+    setup_load();
     camp_new();
     next_mission();
     enter_room(RV_R_QUARTERS);

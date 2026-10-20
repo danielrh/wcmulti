@@ -251,7 +251,16 @@ mission lands in the briefing room for the debrief.
   towards the player. The turning animation is a two-frame dissolve
   (ordered dither) from the talk pose to the face pose, and back when
   the pointer leaves.
-- **Clicking a pilot** opens their talking close-up.
+- **Clicking a pilot** opens their talking close-up. The words appear as
+  the mouth says them (lipsync.c: a shape a step, vowels two, pauses at
+  commas and stops), timed on the 240 Hz music clock. The pace is the
+  bunk menu's *talk speed*: slow (the first pace, 100 ms a step, about 8
+  letters a second), normal (twice that: the default, since the user found
+  the first pace painful to read), fast, very fast (four times). T in the
+  bunk menu steps through them, a click picks one; the choice is kept in
+  `RVSETUP.CFG` (the browser page keeps it with the bunks). The bar's and
+  the lounge's table talk stays up for a second plus its reading time at
+  that pace.
 
 ## Music: interactive MIDI on the OPL3
 
