@@ -765,7 +765,7 @@ int game_run(void)
     camp_new();
     next_mission();
     enter_room(RV_R_QUARTERS);
-    message("Wildcard, welcome aboard the TCS Clydesdale. Your bunk keeps your saves. "
+    message("Wildcard, welcome aboard the TCS Vigilance. Your bunk keeps your saves. "
             "The briefing room is through the hatch in the bar.");
     while (g_mode != MODE_QUIT) {
         g_now = ticks();

@@ -52,8 +52,15 @@ section "More or Less Now"):
 - An Andolian task force sent to defend the Shmrn was surrounded when both neighbouring systems were overrun, and its fate is unknown.
 - The Rlaan will not help in earnest. They fear an Aera victory, but they are happy to see the Confederation bled white, and to expand while it is busy.
 
-The player flies from a Clydesdale-class carrier with the relief group
-pushing toward the Shmrn pocket.
+The player flies from the TCS Vigilance with the relief group pushing toward
+the Shmrn pocket.  In Vega Strike the Vigilance is a Purist-built corvette,
+mass-produced, slow, tough and cheap, of a class "trickling into the frontier
+territories to thwart rampant piracy and Aeran incursions"; it is also the one
+capital ship in Vega Strike's data with an internal docking bay, and on this
+one the bay has been refitted as the wing's flight deck.  The Archimedes, an
+aging battleship still formidable at long range, is the group's heavy hitter;
+the Watson, Vega Strike's mostly automated refuelling and rearming tender, its
+support (and the ship most often in need of an escort).
 
 The Rlaan are the third side throughout (`commAnimInfo` side 2, the "others"
 the AI already knows):
@@ -82,7 +89,7 @@ Possible series:
 |---|---|---|---|
 | fighters | Schroedinger (light, the starter), Gawain (interceptor), Redeemer (militia assault), Pacifier/Osprey (fighter-bomber with a rear gunner seat), Lancelot/Destiny (heavy, if the art budget allows); Progeny/Mongoose rare, mostly escorted | Nicander, Ariston, Areus, Convolution (the aces' asymmetric strike fighter, in the Aera's blue-silver sheen), plus two new hulls built from them (tools/hulls.py): Agis (swarm fighter, gull-winged), Cleomenes (heavy assault, cross-winged) | Shizu (scout), Zhuangzong (line), Taizong (assault bomber), Shizong (disabler), Xuanzong (jammer), Gaozong (probe) |
 | small craft | Franklin, the personnel transport: usually escorted, flown by the player on one or two missions where nothing else can get through; Goddard, the Andolian heavy bomber, escorted to its target from time to time | | |
-| capital ships | Clydesdale (home carrier), Kahan (Andolian destroyer), Hawking (cruiser), Mule and Ox (transports) | Agasicles (destroyer), Anaxidamus (cruiser), Agesipolis (carrier), Charillus (transport), Leonidas (dreadnought) | Ruizong (destroyer), Shundi (cruiser and launch ship), Shenzong (transport) |
+| capital ships | Vigilance (home: a Purist corvette refitted as a light carrier), Kahan (Andolian destroyer), Archimedes (aging battleship), Watson (tender), Clydesdale (Merchant-built workhorse), Mule and Ox (transports) | Agasicles (destroyer), Anaxidamus (cruiser), Agesipolis (carrier), Charillus (transport), Leonidas (dreadnought) | Ruizong (destroyer), Shundi (cruiser and launch ship), Shenzong (transport) |
 
 The factions differ in defence:
 
