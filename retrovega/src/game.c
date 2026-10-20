@@ -25,6 +25,7 @@ static RvMission __far g_m;
 static unsigned long g_now, g_t0;
 static char g_msg[400];
 static int g_won;
+int g_winrate = 80;                         /* percent: a launch's chance, until there is flight */
 
 /* the speech in progress: shapes, when it began, the text */
 #define MAX_STEPS 1600
@@ -774,6 +775,12 @@ int game_run(void)
                             g_mode = MODE_ENDING;
                             music_cue(g_camp.ending == ENDING_GOOD ? RV_MUSIC_WIN : RV_MUSIC_LOSE, 300);
                             vid_dirty(0, SCR_H);
+                            rv_log("ending: %s after %u missions", g_camp.ending == ENDING_GOOD ? "victory" : "loss",
+                                   g_camp.flown);
+                            if (script_active()) {
+                                scene_draw();
+                                shot_save("ENDING");
+                            }
                         } else {
                             next_mission();
                             enter_room(RV_R_BAR);
@@ -802,7 +809,7 @@ int game_run(void)
             break;
         case MODE_FLIGHT:
             if (g_now >= g_t0 + 30) {
-                g_won = rnd() % 100 < 80;
+                g_won = (int)(rnd() % 100) < g_winrate;
                 missionEnded();
                 g_scene.full = 0;
                 g_scene.no_room = 0;

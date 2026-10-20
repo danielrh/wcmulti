@@ -96,19 +96,23 @@ out**: one towards v (`good`), one towards l (`bad`).
          | \   / |           c and e go down, straight or to the middle
          c _ d _ e
             ...
-         c   d   e          layer 6: every node goes to v or l
-          \ | /\ |/ ...
-           v      l
+         c   d   e          layer 6: c reaches v or slides to d,
+          \  |\  |           e reaches l or slides to d,
+           v    l           d reaches either
 ```
 
 - **A node is 4 missions.**
 - **Which way:** after its four missions the node trends towards v (3 or
   4 wins, or 2 with the campaign's running total ahead) or towards l, and
   the engine takes that way out.
-- **Sideways or down:** that depends on where the node sits. The middle
-  of a row of three moves sideways, the outer nodes and the first two
-  layers move down.
-- **Why it is a DAG:** sideways moves only go outwards from the middle.
+- **Sideways or down:** that depends on where the node sits. In layers
+  3-5 the middle of a row of three moves sideways (outwards) and the
+  outer nodes move down; the first two layers move down. In layer 6, as
+  the sketch has it, v is reached only from the left two nodes and l only
+  from the right two: an outer node's other way slides into the middle.
+  So from deep on one side it takes two nodes in a row to swing the end.
+- **Why it is a DAG:** sideways moves go outwards in layers 3-5 and
+  inwards in layer 6, whose middle only goes down.
   The tools check that there is no cycle, that every node is reachable,
   and that a node's two ways out differ.
 - **Size:** 15 nodes, 60 missions.

@@ -1,0 +1,19 @@
+# the keyboard: arrows jump between hotspots, Enter acts; a small mouse move is ignored
+wait 10
+key enter
+wait 3
+shot K01START
+key left
+wait 3
+shot K02LEFT
+key right
+wait 3
+key right
+wait 3
+shot K03RIGHT
+key enter
+wait 12
+shot K04LOUNG
+key left
+wait 6
+shot K05PILOT

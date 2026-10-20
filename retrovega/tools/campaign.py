@@ -16,15 +16,18 @@ victory, l loss), and every node has exactly two ways out: one towards v
        | \   / |             ones go down: straight towards their own
        c _ d _ e             side, diagonally to the middle
           ...
-       v       l           layer 6's nodes go to v (good) or l (bad)
+       c   d   e           layer 6: c reaches v, or slides to d; e reaches l,
+        \  |\  |             or slides to d; d reaches either
+         v    l
 
 Columns are in half steps: -1 and 1 in layer 2, -2, 0, 2 in layers 3-6.
 A node is four missions; after them the engine takes `good` when the node
 trends towards v (3-4 wins, or 2 with the campaign's running total ahead)
 and `bad` otherwise.  Whether that is a move sideways or down a layer
-depends on where the node sits.  Sideways moves only go outwards from the
-middle, so there is no cycle; this tool checks that, and that every node
-has two different ways out.
+depends on where the node sits.  Sideways moves go outwards from the
+middle in layers 3-5 and inwards in layer 6, whose middle only goes down,
+so there is no cycle; this tool checks that, and that every node has two
+different ways out.
 
 Every mission is a placeholder patrol for now: a system, nav points, an
 Aera flight that grows with the layer, the player and a wingman, who sits
@@ -69,7 +72,11 @@ def node_id(layer, col):
 
 def egress(layer, col):
     """(good, bad): this node's two ways out."""
-    if layer == LAYERS:
+    if layer == LAYERS:                              # the sketch's \v/\l/: v from the left two,
+        if col < 0:                                  # l from the right two; the outer nodes'
+            return 'GOOD', node_id(layer, 0)         # other way is sideways into the middle
+        if col > 0:
+            return node_id(layer, 0), 'BAD'
         return 'GOOD', 'BAD'
     nxt = layer + 1
     if layer == 1:

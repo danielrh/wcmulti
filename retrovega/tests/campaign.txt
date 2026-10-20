@@ -1,0 +1,574 @@
+# play the campaign to an ending: from the quarters to the bar, then mission after mission
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 600 200
+shot AFTER4
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 34
+key esc
+wait 8
+wait 10
+quit

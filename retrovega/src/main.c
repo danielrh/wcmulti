@@ -1,6 +1,6 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
- *   RV.EXE [/script FILE]
+ *   RV.EXE [/script FILE] [/winrate PERCENT]
  *
  * Needs RV.DAT and RVGAME.DAT beside it, 32 MB of XMS and VESA mode 100h. */
 #include <stdio.h>
@@ -13,6 +13,7 @@
 #include "game.h"
 
 char g_people_names[16][28];
+extern int g_winrate;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
 void __far __cdecl uiMode_impl(unsigned short on) { (void)on; }
@@ -32,9 +33,12 @@ int main(int argc, char **argv)
 {
     int i, ok;
     rvHello();
-    for (i = 1; i + 1 < argc; i++)
+    for (i = 1; i + 1 < argc; i++) {
         if (!strcmp(argv[i], "/script") || !strcmp(argv[i], "-script"))
             script_open(argv[++i]);
+        else if (!strcmp(argv[i], "/winrate"))          /* tests: how often a launch is won */
+            g_winrate = atoi(argv[++i]);
+    }
     if (!xms_init(32768UL)) {
         printf("RetroVega needs 32 MB of XMS (HIMEM.SYS or DOSBox's xms=true, memsize=40).\n");
         return 1;

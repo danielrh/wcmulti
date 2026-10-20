@@ -129,6 +129,8 @@ static void keyboard_move(int key)
             long dx, dy, along, across;
             if (k == HOVER_SEAT && g_scene.seat[i] == 0xFF)
                 continue;
+            if (k == g_scene.hover_kind && i == g_scene.hover_index)
+                continue;                   /* not the one already under the pointer */
             hot_centre(k, i, &x, &y);
             dx = x - g_scene.px;
             dy = y - g_scene.py;
