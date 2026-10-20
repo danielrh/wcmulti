@@ -29,6 +29,12 @@ const DATA_URL = "wc.tar.gz";
 const GAME_ROOT = "/game";
 const LOBBY_MAGIC = [0x57, 0x43, 0x4c, 0x01]; // "WCL" + version; never a valid protobuf start
 const query = new URLSearchParams(location.search);
+// RetroVega, the registry's built-in game, is a preview for now (the user's
+// call, 2026-10-20): it is in the "Play" menu, and the game of a page with
+// no files, only with ?retrovega (or #retrovega) in the address or a link to
+// an RV- room, and its pilots meet in a lobby of their own (RV-LOBBY).
+// Later it can be every fileless page's game.
+const retrovega = query.has("retrovega") || /retrovega/i.test(location.hash) || /^RV-/i.test(query.get("room") || "");
 
 // The lobby server only introduces the browsers to each other, and any
 // lobbylink server does that: should the public one be down, pilots agree on
@@ -50,6 +56,7 @@ function roomLink(code) {
   const url = new URL(location.href);
   url.search = ""; url.hash = "";
   url.searchParams.set("room", code);
+  if (retrovega) url.searchParams.set("retrovega", "");   // (the friend's page offers it too)
   return withServer(url).toString();
 }
 function showServer() {
@@ -249,8 +256,10 @@ function holderOf(id) {
   if (runs(shelved, id)) return "shelved";
   const copy = saved.find((g) => g.id === id || programsIn(g.files).some((p) => p.id === id));
   if (copy) return copy;
-  return gameById(id) && gameById(id).builtin ? "builtin" : null;
+  return builtins().some((g) => g.id === id) ? "builtin" : null;
 }
+// The games built into the page that this page offers.
+const builtins = () => (retrovega ? GAMES.filter((g) => g.builtin) : []);
 // The game built into the page, picked.
 function useBuiltin(id) {
   const g = gameById(id);
@@ -287,7 +296,7 @@ function renderPrograms() {
   }
   if (shelved) for (const g of shelved.programs || []) add(g);
   for (const copy of saved) for (const g of (gameById(copy.id) ? programsIn(copy.files) : [{ id: copy.id, title: copy.title }])) add(g);
-  for (const g of GAMES) if (g.builtin) add(g);
+  for (const g of builtins()) add(g);
   // (One game with one program needs no heading over it.)
   if (groups.size === 1) { const grp = groups.values().next().value; if (grp.children.length === 1) { sel.appendChild(grp.firstChild); grp.remove(); } }
   if (source) sel.value = source.game.id;
@@ -424,7 +433,7 @@ async function forgetSaved(g) {
   await forgetGame(g.id);
   await refreshSaved();
   if (source && source.savedId === g.id) {
-    const own = GAMES.find((x) => x.builtin);
+    const own = builtins()[0];
     if (own) useBuiltin(own.id); else setSource(null);
   }
   sourceStatus(`Forgot the saved copy of ${g.title}.`);
@@ -453,10 +462,10 @@ async function initSources() {
   // that everybody can fly, and meet in the lobby, with nothing to bring.)
   const wanted = codeGame(lobby.game ? lobby.game.code : $("room").value.trim());
   const fits = wanted && saved.find((g) => programsIn(g.files).includes(wanted));
-  if (wanted && wanted.builtin) useBuiltin(wanted.id);
+  if (wanted && builtins().includes(wanted)) useBuiltin(wanted.id);
   else if (saved.length) useSavedCopy(fits || saved[0]);
   else if (serverCopy) $("useServer").click();
-  else { const own = GAMES.find((g) => g.builtin); if (own) useBuiltin(own.id); }
+  else if (builtins().length) useBuiltin(builtins()[0].id);
 }
 
 // -- save games ----------------------------------------------------------------
@@ -1385,10 +1394,14 @@ function steeringPointer() {
            stepsX: steps(1, 639), stepsY: steps(2, 199), edgeX: M._wc_web_steer(3, 0) / 639, edgeY: M._wc_web_steer(3, 1) / 199, top: M._wc_web_steer(3, 2) };
 }
 
-// The public lobby (web/hall.js): the page's own (its <meta name="lobby">),
-// or ?hall=CODE, another one, for tests.
-const lobbyName = query.get("hall") || (document.querySelector('meta[name="lobby"]') || {}).content || undefined;
+// The public lobby (web/hall.js): RetroVega's preview pilots have their own;
+// ?hall=CODE is another one, for tests.
+const lobbyName = query.get("hall") || (retrovega ? "RV-LOBBY" : undefined);
 if (lobbyName) for (const el of document.querySelectorAll("code.lobbyName")) el.textContent = lobbyName + (el.dataset.n || "");
+if (retrovega) {
+  $("hallNeeds").textContent = "Pick a game under Play (RetroVega is built in) or load Wing Commander or Wing Commander II (step 1) to enter: this page connects to the lobby only with a game to fly.";
+  for (const el of document.querySelectorAll("#dropzone .loaded")) el.firstChild.textContent = "RetroVega is built in (under Play). Wing Commander or Wing Commander II: drop a ";
+}
 const hall = initHall({
   code: lobbyName,
   server: serverUrl,

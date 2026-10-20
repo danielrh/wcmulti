@@ -4,11 +4,6 @@
 <meta charset="utf-8">
 <title>Wing Commander multiplayer in the browser</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<!-- The lobby this page's pilots meet in.  This is the retrovega branch's page,
-     the preview at fireflyk64.github.io/retrovega: its pilots have a lobby of
-     their own until RetroVega is shipped to everyone (the public page's is
-     WC-LOBBY).  ?hall=CODE picks another, for tests. -->
-<meta name="lobby" content="RV-LOBBY">
 <link rel="icon" href="data:,">
 <style>
   /* A cockpit's displays: green on black with amber for what matters, the
@@ -222,7 +217,7 @@
       <h2><b>1</b> Game files</h2>
       <div id="dropzone" tabindex="0">
         <span class="fresh"><strong>Bring your own game.</strong> Drop a <b>.zip</b> of your Wing Commander or Wing Commander II folder, or the GOG installer
-        (<code>setup_wing_commander_*.exe</code>), here, or</span><span class="loaded">RetroVega is built in (under Play). Wing Commander or Wing Commander II: drop a <b>.zip</b> of the game folder or the GOG installer here, or</span>
+        (<code>setup_wing_commander_*.exe</code>), here, or</span><span class="loaded">Another game: drop its <b>.zip</b> or GOG installer here, or</span>
         <label class="pick"><input type="file" id="gamefile" accept=".zip,.exe,application/zip,application/octet-stream"> choose a file</label>.
         <span class="fresh">Nothing is uploaded: the files are unpacked and kept in this browser only.</span>
       </div>
@@ -239,7 +234,7 @@
       <h2><b>&#9670;</b> Lobby <span id="hallState"></span></h2>
       <div id="hallTop">
         <button type="button" class="secondary" id="hallEnter">Enter the lobby</button>
-        <p class="hint" id="hallNote"><span id="hallNeeds">Pick a game under Play (RetroVega is built in) or load Wing Commander or Wing Commander II (step 1) to enter: this page connects to the lobby only with a game to fly.</span> The public chat room (<code class="lobbyName">WC-LOBBY</code>; when it is full, <code class="lobbyName" data-n="0">WC-LOBBY0</code>, <code class="lobbyName" data-n="1">WC-LOBBY1</code> and so on) where pilots find somebody to fly with. It links your browser directly with the other pilots in it, as a game does.</p>
+        <p class="hint" id="hallNote"><span id="hallNeeds">Load Wing Commander or Wing Commander II (step 1) to enter: this page connects to the lobby only with a game to fly.</span> The public chat room (<code class="lobbyName">WC-LOBBY</code>; when it is full, <code class="lobbyName" data-n="0">WC-LOBBY0</code>, <code class="lobbyName" data-n="1">WC-LOBBY1</code> and so on) where pilots find somebody to fly with. It links your browser directly with the other pilots in it, as a game does.</p>
       </div>
       <div id="hallBody" hidden>
         <div id="hallRoster"></div>
@@ -266,7 +261,7 @@
         </div>
       </div>
       <form id="setup">
-        <label title="A code of the page's own making starts with the game it is for (WC1, WC2, SM2, SO1, SO2, SO3, RV)">Room code <input type="text" id="room" placeholder="WC1-4821" pattern="[A-Za-z0-9_\-]{4,64}" required></label>
+        <label title="A code of the page's own making starts with the game it is for (WC1, WC2, SM2, SO1, SO2, SO3)">Room code <input type="text" id="room" placeholder="WC1-4821" pattern="[A-Za-z0-9_\-]{4,64}" required></label>
         <label class="check" title="A room has two seats; tick this when making one to give it a third (in beta; not remembered)"><span class="boxrow"><input type="checkbox" id="threeSeats"><small class="beta">beta</small></span>3 players</label>
         <label>Callsign <input type="text" id="callsign" placeholder="Maverick"></label>
         <label id="firstnameLabel" hidden>First name <input type="text" id="firstname" placeholder="Christopher" maxlength="12"></label>

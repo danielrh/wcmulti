@@ -1,6 +1,10 @@
 // RetroVega in the browser build (headless Chrome pages, a local lobby
-// server), as scripts/web-smoke.sh rv runs it:
+// server), as scripts/web-smoke.sh rv runs it.  RetroVega is a preview: a
+// page offers it only with ?retrovega in its address (or a link to an RV-
+// room), and then:
 //
+//   0. (without ?retrovega, a page with no files offers nothing and stays
+//      out of the lobby, as before)
 //   1. a page with no game files at all (a fresh browser, a site with no
 //      wc.tar.gz) has RetroVega in its "Play" menu, enters the public lobby
 //      by itself, joins a room and flies alone: the game starts, finds the
@@ -50,7 +54,9 @@ async function open(name, query) {
   u.searchParams.set("hall", hallCode);
   for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
   await page.goto(u.toString());
-  await page.waitForFunction(() => document.getElementById("sourceStatus").dataset.state === "ready", null, { timeout: 60000 });
+  if (query.retrovega !== undefined || query.room) {
+    await page.waitForFunction(() => document.getElementById("sourceStatus").dataset.state === "ready", null, { timeout: 60000 });
+  }
   return page;
 }
 const rvlog = (page) => page.evaluate(() => {
@@ -72,9 +78,16 @@ async function keep(name, page) {
   fs.writeFileSync(path.join(shotDir, `rv-${name}-RVLOG.TXT`), await rvlog(page));
 }
 
-// -- 1. no files: RetroVega, the lobby, a flight alone ---------------------------
+// -- 0. without ?retrovega: as before ------------------------------------------
 console.log(`lobby ${hallCode} at ${lobbyUrl}`);
-const solo = await open("solo", { callsign: "SOLO" });
+const plain = await open("plain", { callsign: "PLAIN" });
+await sleep(3);
+check("without ?retrovega a page with no files offers no RetroVega", !(await plain.$$eval("#program option", (os) => os.some((o) => o.value === "rv"))));
+check("and stays out of the lobby", await plain.evaluate(() => !(window.__wcHall && window.__wcHall.inside())));
+await plain.context().close();
+
+// -- 1. no files: RetroVega, the lobby, a flight alone ---------------------------
+const solo = await open("solo", { callsign: "SOLO", retrovega: "" });
 check("with no files the page plays RetroVega", (await solo.$eval("#program", (el) => el.value)) === "rv",
   await solo.$eval("#program", (el) => [...el.options].map((o) => o.textContent).join(", ")));
 await solo.waitForFunction(() => window.__wcHall && window.__wcHall.inside(), null, { timeout: 30000 }).catch(() => {});
@@ -110,9 +123,9 @@ await keep("solo", solo);
 
 // -- 2. a host and a wingman ----------------------------------------------------
 const room = "RV-" + String(Math.floor(Math.random() * 9000) + 1000);
-const host = await open("host", { room, callsign: "HOST" });
+const host = await open("host", { room, callsign: "HOST", retrovega: "" });
 await host.waitForFunction(() => !document.getElementById("lobby").hidden && !document.getElementById("fly").disabled, null, { timeout: 30000 });
-const wing = await open("wing", { room, callsign: "WINGMAN" });
+const wing = await open("wing", { room, callsign: "WINGMAN" });   // (an RV- room's link offers it too)
 await wing.waitForFunction(() => !document.getElementById("lobby").hidden && document.getElementById("roster").children.length > 1, null, { timeout: 30000 });
 await host.waitForFunction(() => document.getElementById("roster").children.length > 1, null, { timeout: 30000 });
 check("both pages play RetroVega in room " + room, (await host.$eval("#program", (el) => el.value)) === "rv" && (await wing.$eval("#program", (el) => el.value)) === "rv");
