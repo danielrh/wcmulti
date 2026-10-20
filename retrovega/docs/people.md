@@ -10,7 +10,7 @@
 
 | key | name | callsign | born | role |
 |---|---|---|---|---|
-| RAY | Augustin "Ray" Reyes | Ironside | Mars (Sol) | the barman, a Redeemer pilot of the Luddite war grounded by a launch accident |
+| TALLY | Wendell Greer | Tally | Mobile (Earth) | the barman, a Redeemer test pilot grounded by a launch accident; still holds the simulator record |
 | COMET | Adaeze Nwosu | Comet | Ndele (Andolian) | pilot, ex-Homeland Security pirate hunter |
 | FROST | Lin Mei | Frost | an Uln-border station | pilot; speaks some Rlaan, a medical-corps dropout |
 | ECHO | Kasia Wren | Echo | Naxos (Purist) | pilot; her colony was lost to the Aera |
