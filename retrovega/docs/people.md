@@ -17,6 +17,7 @@
 | TORCH | Rafael Ortega | Torch | Shmrn border space | pilot; got out of the Shmrn pocket and wants back in |
 | KESTREL | Kenji Arai | Kestrel | Odin (Shaper) | pilot, Shaper-raised, uncanny reflexes |
 | DRIFTER | Owen Price | Drifter | Alliance (Merchant Guild) | pilot, freighter kid, bets on everything |
+| ANCHOR | Evan Price | Anchor | Alliance (Merchant Guild) | pilot, Drifter's clone, the careful one |
 | HERO_M / HERO_F | the player | Wildcard | Earth (Sol) | fresh from the academy |
 | XO | Cmdr. Mira Solberg | | Brahma (Andolian) | the XO; survived the first Aera raids, hard but fair |
 | TECH | Chief Ana Kowalski | Kit | Venture (LIHW) | the flight-deck chief, an ex-racer who kitbashes ships from salvaged parts |
@@ -25,6 +26,22 @@ Everyone wears a short military regulation haircut; facial hair is a
 moustache, a goatee or stubble at most. The portraits have no headsets
 (they are the lounge and briefing faces); a headset set for in-flight comms
 is optional and lives in `art/people/KEY/comm/`.
+
+## The Price twins
+
+Owen and Evan Price pass for identical twins. Their Merchant Guild parents
+insured every cargo twice, so after Owen they had a spare son cloned, and
+Evan was born eleven months later. Both joined up, and both were assigned
+to the same carrier in the same war, so the redundancy came to nothing.
+
+| | Drifter (Owen) | Anchor (Evan) |
+|---|---|---|
+| look | sandy crew cut, stubble, amused | shorter high-and-tight, clean-shaven, a small scar on the chin, serious |
+| manner | bets on everything, improvises, owes everyone | flies by the checklist, pays his debts, gets billed for Owen's |
+| sore point | being "the original" | being "the spare"; the squadron calls him Carbon to needle him |
+
+They are good for mix-ups: swapped seats in the simulator, a debt collected
+from the wrong brother, a betting pool on which one is on the comm.
 
 ## Licence
 

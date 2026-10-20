@@ -1,12 +1,12 @@
 # Portrait prompts: the cast, by image synthesis
 
-These prompts produce the eleven comm portraits (data/people.csv) and their
+These prompts produce the twelve comm portraits (data/people.csv) and their
 talking and blinking frames. Run them on an M1 Mac (Draw Things, ComfyUI,
 DiffusionBee) or in ChatGPT's image tools.
 
 **Three steps:**
 
-1. Generate the 11 portraits: section 2, each with the style block of section 1.
+1. Generate the 12 portraits: section 2, each with the style block of section 1.
 2. For each portrait, make 10 edits: 8 mouth shapes and 2 blink states (section 3). Each edit changes only its region.
 3. Drop the results into `retrovega/art/people/` as section 5 describes. A tool there will align them, cut the mouth and eye boxes, and build the frames the engine uses.
 
@@ -117,6 +117,22 @@ suit with a high zipped collar, orange squadron patch on the left shoulder, pale
 on the chest.
 ```
 
+**ANCHOR: Evan Price, pilot (Drifter's clone)**
+
+Make him from DRIFTER's finished portrait (the one without a headset), not
+from scratch, so the two faces match. Upload it and send:
+
+```
+Using this exact portrait, draw this man's clone brother: the same face, bone structure,
+eye colour and build, close enough that people mix them up, with these differences:
+clean-shaven, no stubble; his sandy-blond hair in a shorter, neater high-and-tight; a
+small pale scar on his chin; a serious, attentive look instead of the amused one. The same
+olive-drab flight suit, patch and name tape, and the same style, lighting, framing and
+background.
+```
+
+Then make his ten edits in a fresh conversation, with his portrait uploaded.
+
 **HERO_M: "Wildcard", the player (male)**
 ```
 A 27-year-old man fighter pilot, a fresh academy graduate. Brown skin, dark-brown
@@ -153,8 +169,8 @@ wry look. Grey work overalls with orange straps over a charcoal t-shirt.
 **Optional: a line-up for checking consistency.** Use this before or after the portraits:
 
 ```
-A character line-up sheet of eleven people in the same style, each a head-and-shoulders
-bust on the same slate background, evenly spaced in two rows: [paste the eleven
+A character line-up sheet of twelve people in the same style, each a head-and-shoulders
+bust on the same slate background, evenly spaced in two rows: [paste the twelve
 descriptions above, one per person].
 ```
 
@@ -321,7 +337,7 @@ everything else identical."
 ## 4. Tips
 
 - **One conversation or seed per character.** In ChatGPT, keep each character's edits in the conversation where its portrait was made. Locally, keep the portrait's seed for its edits.
-- **Do the portraits first, all eleven,** and look at them together before any edits. Re-roll any that break the style or the framing.
+- **Do the portraits first, all twelve,** and look at them together before any edits. Re-roll any that break the style or the framing.
 - **A drifting edit is fine** as long as the mouth (or eyes) came out right. Only its box is used, and the tool tells you if the box moved.
 - **Transparent backgrounds help** (ChatGPT can make them). Otherwise keep the flat slate colour and the tool will key it out.
 - **Locally:** about 25-30 steps for SDXL, 4 for FLUX.1-schnell. Keep 1024×1024 throughout.
@@ -332,7 +348,7 @@ everything else identical."
 retrovega/art/people/RAY/base.png
 retrovega/art/people/RAY/mouth_1.png ... mouth_8.png
 retrovega/art/people/RAY/eyes_1.png, eyes_2.png
-... the same for COMET, FROST, ECHO, TORCH, KESTREL, DRIFTER, HERO_M, HERO_F, XO, TECH
+... the same for COMET, FROST, ECHO, TORCH, KESTREL, DRIFTER, ANCHOR, HERO_M, HERO_F, XO, TECH
 ```
 
 `base.png` is the portrait and doubles as `mouth_0` and `eyes_0`; every
