@@ -54,11 +54,13 @@ const char *dat_base_file(int base);   /* RV.DAT for the carrier, RVBASEn.DAT fo
 const RvAsset __far *dat_asset(unsigned i);
 const RvRoom __far *dat_room(unsigned i);
 const RvPerson __far *dat_person(unsigned i);
+const RvCockpit __far *dat_cockpit(unsigned i);
 const RvDatHeader __far *dat_header(void);
 void dat_read(unsigned long at, void __far *dst, unsigned long n);
 
 /* drawing (gfx.c), every call clipped to the rows y0 .. y1-1 being drawn */
 #define AT_ASSET (-32768)              /* x or y: where the asset says */
+unsigned char __far *gfx_scratch(void);   /* the 32 KB scratch buffer (sprites rows pass through it) */
 void gfx_use_palette(unsigned asset);  /* full palette asset: colours, shade and text tables */
 void gfx_use_part(unsigned asset, int with_text);  /* a palette part (close-ups) */
 void gfx_image(unsigned a, int x, int y, int y0, int y1);
@@ -86,6 +88,8 @@ int in_init(void);
 void in_poll(Input *in);
 void in_warp(int x, int y);
 void in_steer(int on);                 /* the arrows steer the pointer (on unless a menu takes them) */
+int in_arrows(void);                   /* the arrows held: bit 0 left, 1 right, 2 up, 3 down (a script's holds too) */
+int in_key_down(int scan);             /* a key held, by scan code */
 unsigned long ticks(void);             /* BIOS ticks, 18.2 a second */
 int script_open(const char *path);
 int script_active(void);

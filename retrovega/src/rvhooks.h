@@ -120,6 +120,12 @@ typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientat
 #define rvPlayerCount_SIZE             1
 #define rvNetRole                      (*(unsigned char *)0x035C) /* 0 single player, 1 host, 2 client: the engine only reads it */
 #define rvNetRole_SIZE                 1
+#define rvCockpitDamage                (*(unsigned long *)0x035E) /* a bit per cockpit damage layer (tools/cockpits.py BITS): its overlay shows while set */
+#define rvCockpitDamage_SIZE           4
+#define rvBenchCount                   (*(unsigned short *)0x0362) /* the flight benchmark's live sprite count (docs/engine.md, "Flight") */
+#define rvBenchCount_SIZE              2
+#define rvFps                          (*(unsigned short *)0x0364) /* frames a second x 10, as the game measures them */
+#define rvFps_SIZE                     2
 
 /* --- scratch: 0x0400- --- */
 #define aLoadingWingCom                ((unsigned char *)0x0400)  /* 1 x 128 bytes */ /* starts "Loading RETROVEGA" (the layer's signature), then its scratch */

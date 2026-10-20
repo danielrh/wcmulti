@@ -292,6 +292,10 @@ void in_steer(int on)
     g_steer = on;
 }
 
+int in_arrows(void) { return arrows(); }
+
+int in_key_down(int scan) { return g_down[scan & 0x7F] != 0; }
+
 void in_poll(Input *in)
 {
     union REGS r;

@@ -5,8 +5,9 @@
     rvabi.py --header   print rvabi.h for the game (#defines only)
     rvabi.py --c-header print src/rvhooks.h: every place the layer can hook,
                         typed (fixed-block data, thunk prototypes, sites)
-    rvabi.py --asm      print src/rvhook.asm: RVHOOK (header, thunks, sites)
-                        and the fixed block's segment, for NASM -f obj
+    rvabi.py --asm      print src/rvhook.asm: RVHOOK (header, thunks, the flight
+                        loop's sites from src/rvflight.inc) and the fixed
+                        block's segment, for NASM -f obj -i src/
     rvabi.py --layer    print src/cpu/wcnet_rv.h: RV.EXE's hook places for the
                         layer (the RVHOOK header, every thunk's offset, name,
                         arguments and result, the sites)
@@ -167,6 +168,7 @@ def main():
 
 CTYPE = {1: 'unsigned char', 2: 'unsigned short', 4: 'unsigned long'}
 ABI_VERSION = 1
+ASM_BODIES = ('autoAnimation',)        # thunks whose _impl is in src/rvflight.inc (a site inside it)
 SIGNATURE = 'Loading RETROVEGA'
 
 
@@ -251,7 +253,8 @@ def asm(consts, sections, items, funcs, sites):
     p('group DGROUP RVFIXED')
     p()
     for f in funcs:
-        p('        extern _%s_impl' % f['name'])
+        if f['name'] not in ASM_BODIES:
+            p('        extern _%s_impl' % f['name'])
     p()
     p('segment RVHOOK public align=16 class=RVHOOK use16')
     p('rvhook_start:')
@@ -266,8 +269,15 @@ def asm(consts, sections, items, funcs, sites):
         p('_%s:                                   ; 0x%04X' % (f['name'], f['off']))
         p('        jmp far _%s_impl' % f['name'])
     p('        times 0x400 - ($ - rvhook_start) db 0xCC')
-    p('; The flight loop and its sites come at M1; until then the site offsets')
-    p('; hold int3 so a stray jump stops at once.')
+    p('; The flight loop and its sites: hand-written in src/rvflight.inc, each site')
+    p('; at the offset abi/rvabi.def fixes (RV_SITE_*), touching the fixed-block')
+    p('; variables RV_DS_* (nasm -i src/).')
+    byname = {it['name']: it for it in items}
+    for st in sites:
+        p('%%define RV_SITE_%s 0x%04X' % (st['name'], st['off']))
+    for name in ('missionStatus', 'frameCounter'):
+        p('%%define RV_DS_%s 0x%04X' % (name, byname[name]['off']))
+    p('%include "rvflight.inc"')
     end = max([s['off'] for s in sites] + [0x400]) + 0x40
     p('        times 0x%04X - ($ - rvhook_start) db 0xCC' % end)
     p()
@@ -276,7 +286,6 @@ def asm(consts, sections, items, funcs, sites):
     p('        global _rv_fixed_block')
     p('_rv_fixed_block:')
     off = 0
-    byname = {it['name']: it for it in items}
     for it in items:
         if it['off'] > off:
             p('        times 0x%04X - ($ - rvfixed_start) db 0' % it['off'])

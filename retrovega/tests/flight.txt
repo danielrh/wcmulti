@@ -1,0 +1,42 @@
+# the flight benchmark: quarters, bar, briefing, deck, launch, 20 seconds of flight
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+shot F01START
+hold left 30
+wait 10
+key +
+key +
+wait 20
+shot F02LEFT
+move 400 60
+wait 40
+shot F03MOUSE
+key d
+key d
+move 320 120
+wait 60
+shot F04LATE
+wait 220
+shot F05DEBR
+key esc
+wait 16
+log done

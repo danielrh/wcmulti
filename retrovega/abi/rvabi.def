@@ -72,6 +72,9 @@ VAR   navPointState              152    # 8 x 19 bytes: mission tree progress
 VAR   campaignTable                2    # near pointer to the campaign table (spec 4.4)
 VAR   rvPlayerCount                1    # humans in the flight, written by the layer (1 in single player)
 VAR   rvNetRole                    1    # 0 single player, 1 host, 2 client: the engine only reads it
+VAR   rvCockpitDamage              4    # a bit per cockpit damage layer (tools/cockpits.py BITS): its overlay shows while set
+VAR   rvBenchCount                 2    # the flight benchmark's live sprite count (docs/engine.md, "Flight")
+VAR   rvFps                        2    # frames a second x 10, as the game measures them
 
 SECTION scratch 0x0400
 VAR   aLoadingWingCom            128    # starts "Loading RETROVEGA" (the layer's signature), then its scratch

@@ -3,9 +3,10 @@
  * The player walks the carrier's rooms (bar, lounge, quarters, locker),
  * talks to whoever sits there, saves at the bunk, and goes through the
  * bar's hatch to the briefing room for the next mission: the XO speaks
- * over the situation display, then the launch deck, Kit and the fighter.
- * There is no flight yet: a launch is won 80% of the time.  The debrief,
- * the campaign's next move, and at the end "You win" or "You lose". */
+ * over the situation display, then the launch deck, Kit and the fighter,
+ * and the flight (flight.c: for now the drawing benchmark, 20 seconds in the
+ * cockpit; the mission is still won 80% of the time at random).  The
+ * debrief, the campaign's next move, and at the end "You win" or "You lose". */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -15,14 +16,15 @@
 #include "campaign.h"
 #include "lipsync.h"
 #include "music.h"
+#include "flight.h"
 #include "game.h"
 
-enum { MODE_ROOM, MODE_TALK, MODE_BRIEF, MODE_XOCLOSE, MODE_DECK, MODE_FLIGHT, MODE_DEBRIEF, MODE_BUNK,
+enum { MODE_ROOM, MODE_TALK, MODE_BRIEF, MODE_XOCLOSE, MODE_DECK, MODE_DEBRIEF, MODE_BUNK,
        MODE_NAME, MODE_LOG, MODE_MESSAGE, MODE_ENDING, MODE_QUIT };
 
 static int g_mode, g_back_mode;
 static RvMission __far g_m;
-static unsigned long g_now, g_t0;
+static unsigned long g_now;
 static char g_msg[400];
 static int g_won;
 static int g_base;                          /* the ship the player lives on: 0 the carrier */
@@ -41,9 +43,12 @@ static int g_mouth = -1, g_eyes = -1, g_gesture, g_shown_chars = -1;
 
 static const char *ship_name(int type)
 {
-    static const char *names[] = { "Schroedinger", "Franklin", "Gawain", "Redeemer", "Pacifier", "Lancelot",
-                                   "Progeny" };
-    return type >= 0 && type < (int)RV_COUNT(names) ? names[type] : "fighter";
+    static char name[RV_NAME];
+    const RvShipType __far *t = ship_type(type);
+    if (!t)
+        return "fighter";
+    _fstrncpy(name, t->name, sizeof name - 1);
+    return name;
 }
 
 static unsigned rnd(void)
@@ -529,27 +534,20 @@ static void customize(void)
     strncpy(g_scene.label, s, sizeof g_scene.label - 1);
 }
 
-/* --- the flight that is not there yet --- */
-
-static void flight_full(int y0, int y1)
-{
-    gfx_fill(0, 0, SCR_W, SCR_H, UI_BLACK, y0, y1);
-    gfx_text(FONT_TITLE, 240, 170, "LAUNCH", RV_TEXT_AMBER, y0, y1);
-    gfx_text(FONT_BODY, 170, 206, "(flight comes later: a launch is won 4 times in 5)", RV_TEXT_GREY, y0, y1);
-}
+/* --- the flight --- */
 
 static void launch(void)
 {
     mission_load_assets();
     missionStarting();
-    g_scene.full = flight_full;
-    g_scene.no_room = 1;
-    g_mode = MODE_FLIGHT;
-    g_t0 = g_now;
-    vid_fade(0);
-    vid_dirty(0, SCR_H);
-    scene_draw();
-    vid_fade(64);
+    g_scene.label[0] = 0;
+    flight_fly(&g_m);
+    g_won = (int)(rnd() % 100) < g_winrate;        /* until there is combat: the roll */
+    missionEnded();
+    mission_free_assets();
+    rv_log("mission %.16Fs %s", (char __far *)g_m.id, g_won ? "won" : "lost");
+    g_now = ticks();
+    start_briefing(1);
 }
 
 /* --- the bunks --- */
@@ -943,17 +941,6 @@ int game_run(void)
             deck_tick();
             if (act.kind == ACTION_HOT)
                 hot_action(&act);
-            break;
-        case MODE_FLIGHT:
-            if (g_now >= g_t0 + 30) {
-                g_won = (int)(rnd() % 100) < g_winrate;
-                missionEnded();
-                mission_free_assets();
-                g_scene.full = 0;
-                g_scene.no_room = 0;
-                rv_log("mission %.16Fs %s", (char __far *)g_m.id, g_won ? "won" : "lost");
-                start_briefing(1);
-            }
             break;
         case MODE_BUNK:
             bunk_input(&in);

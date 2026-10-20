@@ -17,6 +17,7 @@ static RvDatHeader g_hdr;
 static RvAsset __far *g_dir;
 static RvRoom __far *g_rooms;
 static RvPerson __far *g_people;
+static RvCockpit __far *g_cockpits;
 
 void dat_read(unsigned long at, void __far *dst, unsigned long n)
 {
@@ -57,21 +58,26 @@ int dat_open(const char *path)
     _ffree(buf);
     dat_read(0, &g_hdr, sizeof g_hdr);
     if (memcmp(g_hdr.magic, "RVDAT", 5) != 0 || g_hdr.version != RVDAT_VERSION
-        || g_hdr.room_size != sizeof(RvRoom) || g_hdr.person_size != sizeof(RvPerson)) {
-        rv_log("dat: %s is not this build's RV.DAT (version %u, room %u/%u, person %u/%u)", path, g_hdr.version,
-               g_hdr.room_size, (unsigned)sizeof(RvRoom), g_hdr.person_size, (unsigned)sizeof(RvPerson));
+        || g_hdr.room_size != sizeof(RvRoom) || g_hdr.person_size != sizeof(RvPerson)
+        || (g_hdr.ncockpits && g_hdr.cockpit_size != sizeof(RvCockpit))) {
+        rv_log("dat: %s is not this build's RV.DAT (version %u, room %u/%u, person %u/%u, cockpit %u/%u)", path,
+               g_hdr.version, g_hdr.room_size, (unsigned)sizeof(RvRoom), g_hdr.person_size, (unsigned)sizeof(RvPerson),
+               g_hdr.cockpit_size, (unsigned)sizeof(RvCockpit));
         return 0;
     }
     g_dir = (RvAsset __far *)_fmalloc(sizeof(RvAsset) * g_hdr.nassets);
     g_rooms = (RvRoom __far *)_fmalloc(sizeof(RvRoom) * g_hdr.nrooms);
     g_people = (RvPerson __far *)_fmalloc(sizeof(RvPerson) * g_hdr.npeople);
-    if (!g_dir || !g_rooms || !g_people)
+    g_cockpits = (RvCockpit __far *)_fmalloc(sizeof(RvCockpit) * (g_hdr.ncockpits ? g_hdr.ncockpits : 1));
+    if (!g_dir || !g_rooms || !g_people || !g_cockpits)
         return 0;
     dat_read(g_hdr.dir_at, g_dir, (sizeof(RvAsset) * (unsigned long)g_hdr.nassets + 1) & ~1UL);
     dat_read(g_hdr.rooms_at, g_rooms, (sizeof(RvRoom) * (unsigned long)g_hdr.nrooms + 1) & ~1UL);
     dat_read(g_hdr.people_at, g_people, (sizeof(RvPerson) * (unsigned long)g_hdr.npeople + 1) & ~1UL);
-    rv_log("dat: %s, %lu bytes in XMS, %u assets, %u rooms, %u people", path, size, g_hdr.nassets,
-           g_hdr.nrooms, g_hdr.npeople);
+    if (g_hdr.ncockpits)
+        dat_read(g_hdr.cockpits_at, g_cockpits, sizeof(RvCockpit) * (unsigned long)g_hdr.ncockpits);
+    rv_log("dat: %s, %lu bytes in XMS, %u assets, %u rooms, %u people, %u cockpits", path, size, g_hdr.nassets,
+           g_hdr.nrooms, g_hdr.npeople, g_hdr.ncockpits);
     return 1;
 }
 
@@ -80,10 +86,12 @@ void dat_close(void)
     if (g_dir) _ffree(g_dir);
     if (g_rooms) _ffree(g_rooms);
     if (g_people) _ffree(g_people);
+    if (g_cockpits) _ffree(g_cockpits);
     g_dir = 0;
     g_rooms = 0;
     g_people = 0;
-    g_hdr.nassets = g_hdr.nrooms = g_hdr.npeople = 0;
+    g_cockpits = 0;
+    g_hdr.nassets = g_hdr.nrooms = g_hdr.npeople = g_hdr.ncockpits = 0;
     xms_free_level(XMS_BASE);
     g_blk = 0;
 }
@@ -115,4 +123,10 @@ const RvPerson __far *dat_person(unsigned i)
 {
     RV_CHECK(i, g_hdr.npeople);
     return &g_people[i];
+}
+
+const RvCockpit __far *dat_cockpit(unsigned i)
+{
+    RV_CHECK(i, g_hdr.ncockpits);
+    return &g_cockpits[i];
 }

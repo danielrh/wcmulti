@@ -19,7 +19,6 @@ group DGROUP RVFIXED
         extern _aiShipThink_impl
         extern _aiFighterThink_impl
         extern _showCommMessage_impl
-        extern _autoAnimation_impl
         extern _autopilotFinished_impl
         extern _briefingStarted_impl
         extern _enterBarracks_impl
@@ -161,8 +160,22 @@ _baseChanged:                                   ; 0x00CA
 _uiMode:                                   ; 0x00CF
         jmp far _uiMode_impl
         times 0x400 - ($ - rvhook_start) db 0xCC
-; The flight loop and its sites come at M1; until then the site offsets
-; hold int3 so a stray jump stops at once.
+; The flight loop and its sites: hand-written in src/rvflight.inc, each site
+; at the offset abi/rvabi.def fixes (RV_SITE_*), touching the fixed-block
+; variables RV_DS_* (nasm -i src/).
+%define RV_SITE_mainLoopTop 0x0400
+%define RV_SITE_statusCheckAfterKeys 0x0440
+%define RV_SITE_statusSetByExitKey 0x0438
+%define RV_SITE_statusCheckAfterFrame 0x0480
+%define RV_SITE_skipOrchestra 0x0500
+%define RV_SITE_afterStartup 0x0510
+%define RV_SITE_afterHangarMission 0x0520
+%define RV_SITE_autopilotKey 0x0540
+%define RV_SITE_cockpitPointer 0x0560
+%define RV_SITE_autoAnimationBody 0x0580
+%define RV_DS_missionStatus 0x0100
+%define RV_DS_frameCounter 0x0104
+%include "rvflight.inc"
         times 0x05C0 - ($ - rvhook_start) db 0xCC
 
 segment RVFIXED
@@ -184,12 +197,13 @@ _rv_fixed_block:
         dw 0x011C, 0x011E, 0x0120, 0x0122, 0x0124, 0x0126, 0x0128, 0x012C
         dw 0x0138, 0x0144, 0x014C, 0x014E, 0x0150, 0x0160, 0x01B0, 0x0250
         dw 0x025E, 0x026C, 0x027C, 0x028C, 0x0296, 0x029E, 0x02A0, 0x02AC
-        dw 0x02C0, 0x0358, 0x035A, 0x035C, 0x0400, 0x0480, 0x0600, 0x0700
-        dw 0x0800, 0x0880, 0x0980, 0x0A00, 0x0B00, 0x1100, 0x1700, 0x1D00
-        dw 0x2300, 0x2900, 0x2B00, 0x2D00, 0x2F00, 0x3100, 0x3500, 0x3600
-        dw 0x3680, 0x3700, 0x3780, 0x3800, 0x3900, 0x5280, 0x5300, 0x5400
-        dw 0x5500, 0x5800, 0x5900, 0x5A00, 0x5B00, 0x5B80, 0x5C00, 0x5D00
-        dw 0x5E00, 0x5E80, 0x5F00, 0x6400, 0x68D0, 0x7350
+        dw 0x02C0, 0x0358, 0x035A, 0x035C, 0x035E, 0x0362, 0x0364, 0x0400
+        dw 0x0480, 0x0600, 0x0700, 0x0800, 0x0880, 0x0980, 0x0A00, 0x0B00
+        dw 0x1100, 0x1700, 0x1D00, 0x2300, 0x2900, 0x2B00, 0x2D00, 0x2F00
+        dw 0x3100, 0x3500, 0x3600, 0x3680, 0x3700, 0x3780, 0x3800, 0x3900
+        dw 0x5280, 0x5300, 0x5400, 0x5500, 0x5800, 0x5900, 0x5A00, 0x5B00
+        dw 0x5B80, 0x5C00, 0x5D00, 0x5E00, 0x5E80, 0x5F00, 0x6400, 0x68D0
+        dw 0x7350
         times 0x0100 - ($ - rvfixed_start) db 0
 ; 0x0100 missionStatus
         times 0x0102 - ($ - rvfixed_start) db 0
@@ -278,6 +292,13 @@ _rv_fixed_block:
         times 0x035C - ($ - rvfixed_start) db 0
 ; 0x035C rvNetRole
         times 0x035D - ($ - rvfixed_start) db 0
+        times 0x035E - ($ - rvfixed_start) db 0
+; 0x035E rvCockpitDamage
+        times 0x0362 - ($ - rvfixed_start) db 0
+; 0x0362 rvBenchCount
+        times 0x0364 - ($ - rvfixed_start) db 0
+; 0x0364 rvFps
+        times 0x0366 - ($ - rvfixed_start) db 0
         times 0x0400 - ($ - rvfixed_start) db 0
 ; 0x0400 aLoadingWingCom
         db "Loading RETROVEGA", 0

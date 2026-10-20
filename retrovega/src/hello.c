@@ -56,3 +56,12 @@ int main(void)
     rv_log("%s", ok ? "LAYOUT OK" : "LAYOUT WRONG");
     return ok ? 0 : 1;
 }
+
+/* RVHOOK's flight loop (rvflight.inc) names the engine's flight calls; HELLO
+ * has no flight, so these stand in and are never called */
+void __far __cdecl flight_startup(void) {}
+unsigned short __far __cdecl flight_keys(void) { return 5; }
+void __far __cdecl flight_frame(void) {}
+void __far __cdecl flight_music(void) {}
+void __far __cdecl flight_autopilot(void) {}
+void __far __cdecl autoAnimation_c(unsigned short a, unsigned short b, unsigned short c) { (void)a; (void)b; (void)c; }

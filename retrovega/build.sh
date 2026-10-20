@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build RV.EXE (and the M0 check, HELLO.EXE) with Open Watcom 2 and NASM.
-#   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE
+#   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE (DEBUG=1: unoptimised, -d2)
 # The toolchain lives in ~/opt/watcom (docs/engine.md); WATCOM overrides it.
 set -e
 cd "$(dirname "$0")"
@@ -13,11 +13,16 @@ python3 tools/rvabi.py --asm > src/rvhook.asm
 python3 tools/rvdata.py --out "$OUT/RVGAME.DAT" --header src/rvdata.h
 python3 tools/midi.py --out "$OUT" > /dev/null
 python3 tools/oplbank.py --out "$OUT/RVOPL.BNK" > /dev/null
-CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq -od -d2 -i=src"
-nasm -f obj -o "$OUT/rvhook.obj" src/rvhook.asm
+# optimised (the flight benchmark found -ox worth half again as many sprites a
+# frame as -od); DEBUG=1 builds -od -d2 for the debugger
+if [ -n "${DEBUG:-}" ]; then OPT="-od -d2"; else OPT="-ox -d1"; fi
+CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq $OPT -i=src"
+nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
-ENGINE="util xms video dat gfx input room lipsync opl music campaign game main"
+# the fighters' views (tools/pack.py, copied into art/ships): beside RV.EXE
+cp art/ships/SHIP*.RV "$OUT/" 2>/dev/null || true
+ENGINE="util xms video dat gfx input room lipsync opl music campaign ships cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done

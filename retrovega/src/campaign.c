@@ -16,6 +16,8 @@ RvSave g_camp;
 RvPilot g_pilots[RV_PILOTS];
 RvNode g_nodes[RV_NODES];
 unsigned g_npilots, g_nnodes, g_nmissions;
+RvShipType __far g_shiptypes[RV_SHIPTYPES];
+unsigned g_nshiptypes;
 static RvGameHeader g_head;
 static XmsBlock g_missions;
 
@@ -56,9 +58,26 @@ int camp_load_data(const char *path)
         }
         xms_put(g_missions, (unsigned long)i * sizeof(RvMission), mission, sizeof(RvMission));
     }
+    RV_ASSERT(g_head.nshiptypes <= RV_SHIPTYPES && g_head.shiptype_size == sizeof(RvShipType));
+    g_nshiptypes = g_head.nshiptypes;
+    fseek(f, g_head.shiptypes_at, SEEK_SET);
+    for (i = 0; i < g_nshiptypes; i++) {
+        fread(buf, 1, sizeof(RvShipType), f);
+        _fmemcpy(&g_shiptypes[i], buf, sizeof(RvShipType));
+    }
     fclose(f);
-    rv_log("game data: %u pilots, %u nodes, %u missions", g_npilots, g_nnodes, g_nmissions);
+    rv_log("game data: %u pilots, %u nodes, %u missions, %u ship types", g_npilots, g_nnodes, g_nmissions,
+           g_nshiptypes);
     return 1;
+}
+
+const RvShipType __far *ship_type(unsigned type)
+{
+    unsigned i;
+    for (i = 0; i < g_nshiptypes; i++)
+        if (g_shiptypes[i].type == type)
+            return &g_shiptypes[i];
+    return 0;
 }
 
 void camp_new(void)

@@ -363,16 +363,8 @@ Built (src/music.c, src/opl.c):
 
 **Trading memory for speed in flight.** With 32 MB of XMS and moves that
 cost the emulated CPU almost nothing, the flight renderer can pre-render
-instead of computing:
-
-- **Rotations:** each ship view in its roll steps, decoded at mission load
-  (spec §7 fallback 1 becomes the plan).
-- **Scales:** each view at a ladder of scale steps.
-- **Explosions, shields:** the same.
-
-Drawing a ship is then picking a pre-rendered image and copying its
-spans; nothing is rotated or scaled per frame. A mission loads only the
-types it uses (spec §8's budget had about 11 MB spare).
+instead of computing. What the benchmark says about it, and the plan for
+scales and rolls, is in "Flight" below.
 
 **Optional, in the emulator: a hookless core for screens.** The cores
 test every instruction against the hook bitmap (`wc_net_cpu_hook`, about
@@ -383,6 +375,148 @@ normal core compiled without the hook test, and back on `uiMode(0)`. The
 browser build has no dynamic core, so that copy is its "better core". It
 needs a periodic check so the layer still gets its tick. With the XMS
 flips above it may not be needed: measure first.
+
+## Flight
+
+Built (src/flight.c, cockpit.c, ships.c, rvflight.inc): the flight loop at
+its fixed sites, the eight cockpits, one view of a ship drawn as many
+times as the frame rate allows, and the mission's end. There is no combat
+yet: after 20 seconds the flight lands and the outcome is still the 80%
+roll.
+
+### The loop and its sites
+
+`src/rvflight.inc` is the loop the layer watches, hand-written and
+included by the generated `rvhook.asm` inside RVHOOK, each site at the
+offset `abi/rvabi.def` fixes with the instruction the WC.EXE place of the
+same name has:
+
+| site | what sits there |
+|---|---|
+| `mainLoopTop` 0x0400 | `sti`, then `call far flight_keys` (C): interrupts on, no live registers but SI DI BP |
+| `statusSetByExitKey` 0x0438 | `mov [missionStatus], ax`, reached when the keys set a status |
+| `statusCheckAfterKeys` 0x0440 | `cmp word [missionStatus], 0 / jne leave`, then `call far flight_frame` (C) and the orchestra |
+| `statusCheckAfterFrame` 0x0480 | the same test, then `jmp mainLoopTop` |
+| `skipOrchestra` 0x0500 | `call far flight_music` (music_poll), 5 bytes the layer may step over |
+| `afterStartup` 0x0510 | the return point of `flight_startup`, called from `rv_flight_run` just before it |
+| `afterHangarMission` 0x0520 | the return point of the `runHangarMission` thunk, which `rv_hangar` calls |
+| `autopilotKey` 0x0540 | `call far flight_autopilot`, 5 bytes; stepped over it is a `retf` |
+| `cockpitPointer` 0x0560 | `call far [bp+6]`, 4 bytes: the pointer's drawing function, passed by the caller |
+| `autoAnimationBody` 0x0580 | the `autoAnimation` thunk's body after `push bp / mov bp, sp`; its arguments at [bp+6], [bp+8], [bp+0Ah] |
+
+The game calls `rv_flight_run()`; it returns when `missionStatus` is set:
+1 landed (the 20 seconds are up), 5 exit (Esc), or whatever the layer
+writes. `flight_frame` is one simulation step: `frameCounter++`, then
+`ship_physics` for every slot that holds a ship (the player's steering
+or the stand-in AI's turn, acceleration toward `setSpeed`, velocity =
+front x kps / 20 as spec §6 has it, position += velocity, the frame
+re-orthonormalised), then the picture. The loop is free-running for the
+benchmark; the 20 fps pacing of spec §6 comes with combat.
+
+Three fixed-block scalars were added for it: `rvCockpitDamage` (a bit per
+damage layer), `rvBenchCount` and `rvFps` (so the layer or the page can
+read the benchmark). RVGAME.DAT carries `ships.csv` as `RvShipType`
+records (speeds, turn rates, shields, armour, which have a cockpit), so
+the simulation reads a type's numbers from data.
+
+### The cockpits
+
+The user's eight cockpit kits (Schroedinger, Franklin, Gawain, Redeemer,
+Pacifier, Lancelot, Progeny, Goddard) go through `tools/cockpits.py`
+into `art/cockpits/KEY/` (docs/cockpits.png) and `rvpack.py` into
+RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
+
+- **Palette:** the flight palette (data/palette.json) with the UI's 16
+  colours first and the cockpit's own 47 in 208-254, the mix and shade
+  tables over all of it. The base is error-diffused into those 63 colours
+  (docs/cockpits-packed.png).
+- **The opening:** the base's transparent pixels. Its extent on every row
+  (`extents`, a RAW asset) is what the world is clipped to, and the
+  pixels the base paints inside those extents (struts, a crossbeam) are
+  one small sprite drawn over the world.
+- **Displays:** the two MFDs, the radar's circle, the survival display,
+  speed, fuel, the lock and warning lamps, in one vocabulary whatever the
+  kit called them. The Lancelot kit has no display map: its displays were
+  found inside its damage regions by the glass colour.
+- **Controls:** the throttle and the joystick as sprites at their place.
+  The throttle slides up to 14 pixels with `setSpeed`; the joystick moves
+  4 x 3 pixels to one of eight sides or back to the middle with the
+  steering (the arrows at full rate, else the pointer's distance from the
+  middle of the opening).
+- **Damage:** every overlay is a sprite with a fixed bit
+  (`tools/cockpits.py` BITS: 0 weapons MFD, 1 targeting MFD, 2 radar, ...
+  23 canopy, 26 survival VDU), drawn while its bit of `rvCockpitDamage`
+  is set; a layer attached to the throttle or the joystick moves with it.
+  The benchmark sets one more bit every three seconds; D sets the next by
+  hand, R clears them.
+
+**Drawing a frame.** `cockpit_dirty` marks the opening's rows and the
+radar's every frame and an instrument's rows only when its value moved;
+`cockpit_draw` then paints each dirty band back to front: the base's rows
+restored from XMS (one move a band), the world clipped to the extents,
+the struts, the instruments, the controls, the damage. The back buffer
+and the dirty-row flip already existed, so there is no flashing and no
+damage-rectangle bookkeeping: a band is whole rows, restored and flipped
+by XMS moves that cost the emulated CPU a few instructions. On a real
+486 those moves would be the bottleneck (some 250 KB a frame through the
+bus); in DOSBox the sprites are.
+
+### The benchmark
+
+`tests/run.sh tests/flight.txt` flies the first mission for 20 seconds
+(F01START..F05DEBR.BMP): the biggest band view of the first enemy type
+(the Nicander's view 1, 82 x 121) is drawn N times inside the opening,
+drifting about, with N raised while the frame rate over the last eight
+frames stays above 31 and lowered under 29. N shows on the left MFD with
+the rate, and the mean N over the second half is logged:
+
+| build | sprites of 82 x 121 a frame at 30 fps | sprite pixels a second |
+|---|---|---|
+| `-od` (no optimisation), the row loop calling `vid_row` | 38 | 11.3 M |
+| `-od`, the row pointer stepped | 46 | 13.7 M |
+| `-ox` (now the default; `DEBUG=1` builds `-od -d2`) | 68 | 20.2 M |
+
+At `cycles=40000` (tests/rv.conf) that is about two emulated cycles a
+pixel, the XMS fetch of each sprite's rows and the per-row call into
+`rv_blit_row` (lowlevel.asm: a span is one `rep movsd`) included, with
+the rest of the frame (the restore, the instruments, the flip, the
+simulation) already paid for. The browser build runs 20,000 cycles, so
+expect half: some 30 fighter-sized sprites a frame. The number is live in
+`rvBenchCount` while the flight runs.
+
+### Pre-rendering: what the numbers allow
+
+A mission has 2-4 capital ship types and 4-6 fighter types, known at the
+briefing. Decoded, a fighter's 62 views (the 25 mirrored headings made at
+load, so nothing is flipped when drawn) take 230-260 KB of XMS; a capital
+ship's 37 views at 320-640 pixels 1.5-3 MB. The mission level has about
+21 MB.
+
+- **Scales.** A ladder of 1, 3/4, 1/2, 3/8, 1/4, 3/16, 1/8 adds up to
+  2.07 times the full-size set: 0.5 MB a fighter type, 3-6 MB a capital
+  type, 16 MB for a full mission. That fits. Scaling a view costs about 8
+  cycles an output pixel (nearest neighbour through a column table), so a
+  fighter type's whole ladder is 0.1 s and the six types under a second;
+  a capital type's ladder is 5-6 s, so capitals get their small steps
+  pre-rendered during the briefing and their big ones on demand (a
+  capital ship is slow and seen from one side for a long time).
+- **Rolls.** Sixteen roll steps multiply the ladder by 16: 50 MB a
+  fighter. Not pre-rendered. A roll is rendered when first needed into a
+  cache keyed (type, view, scale, roll) with the mission level's spare
+  memory (some 1,000 fighter-sized entries), at most one or two renders
+  a frame, the nearest cached roll drawn until the exact one is ready.
+  Rotating at blit time instead would cost about 10 cycles a pixel: at
+  20 M pixels a second that is a third of the frame for five sprites.
+- **During the briefing.** Each briefing frame has a few milliseconds
+  spare, enough for one scaled view: the fighters' ladders are done
+  inside the briefing's first seconds, the capitals' small steps in the
+  rest. The loading screen takes what is left.
+- **Explosions, bolts, debris:** pre-rendered frames, under 1 MB.
+
+The views of a type stay run-length rows (gfx.c's format) at every scale,
+so drawing any of them is the same `rv_blit_row` the benchmark measured.
+Measured next: the scaler's real cost, and whether the far scales shimmer
+enough to want a half-size source set (spec §8).
 
 ## Fonts, pointer, driver
 
@@ -416,11 +550,15 @@ flips above it may not be needed: measure first.
 7. The music engine. **Done.**
 8. The layer: RV.EXE recognised, DS from RVHOOK, the new thunks logged.
    **Done** (below).
+9. The flight loop at its sites, the cockpits, the drawing benchmark.
+   **Done** ("Flight" above); next the scale ladder, combat, the 20 fps
+   pacing.
 
 Steps 1-6 are done too: `tests/run.sh` plays `tests/walk.txt` (every room,
 a save, a close-up, the briefing, the deck, a launch and its debrief),
-`tests/campaign.txt` (a whole campaign: `/winrate 20` ends in a loss,
-80 in a victory) and `tests/keys.txt` (the arrow keys) headless in DOSBox,
+`tests/campaign.txt` (a whole campaign with `/flight 1`: `/winrate 20`
+ends in a loss, 80 in a victory), `tests/keys.txt` (the arrow keys) and
+`tests/flight.txt` (the flight benchmark, 20 seconds) headless in DOSBox,
 with screenshots.
 
 ## The layer and RV.EXE today

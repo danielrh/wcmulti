@@ -22,6 +22,7 @@ Confederation against the Aera, with the Rlaan meddling.
   - **Launch deck:** Kit's loops in front of every player fighter, at Vega Strike's own scale, on landing legs.
 
   The pictures are [docs/rooms.png](docs/rooms.png) and [docs/deck.png](docs/deck.png). `tools/roompreview.py` writes a page that plays the rooms.
+- [docs/cockpits.png](docs/cockpits.png): the eight cockpits (the user's kits, cut by `tools/cockpits.py` into art/cockpits/) with their displays outlined; [docs/cockpits-packed.png](docs/cockpits-packed.png) is how the game shows them. The flight that uses them, its loop at the fixed hook sites and the drawing benchmark are in docs/engine.md, "Flight".
 - [docs/art.md](docs/art.md): the sprite renderer. It turns a Vega Strike mesh into WC1's 37 views at twice WC1's resolution, in a livery. [docs/franklin-liveries.png](docs/franklin-liveries.png) shows the Franklin in four liveries.
 
 The art comes from Vega Strike's Assets-Production, copied to

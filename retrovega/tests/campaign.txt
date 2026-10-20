@@ -1,4 +1,4 @@
-# play the campaign to an ending: from the quarters to the bar, then mission after mission
+# play the campaign to an ending (run with /flight 1 /winrate N): the quarters, the bar, then mission after mission
 wait 10
 click
 wait 3

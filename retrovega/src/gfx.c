@@ -31,6 +31,12 @@ static void need_scratch(void)
     }
 }
 
+unsigned char __far *gfx_scratch(void)
+{
+    need_scratch();
+    return g_scratch;
+}
+
 void gfx_use_palette(unsigned a)
 {
     const RvAsset __far *as = dat_asset(a);

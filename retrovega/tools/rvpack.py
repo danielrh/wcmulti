@@ -440,7 +440,7 @@ def pack_cockpits(pack, ships_csv):
         layers = [(e, Image.open(os.path.join(d, e['file'])).convert('RGBA')) for e in cj['damage']]
         # the cockpit's colours: median cut over everything it draws, into 208-254
         part = make_palette([base] + list(controls.values()) + [im for _e, im in layers], len(CP_FREE), CP_FREE[0])
-        pal = Palette(flight[:CP_FREE[0]] + part + flight[CP_FREE[-1] + 1:])
+        pal = Palette(UI + flight[16:CP_FREE[0]] + part + flight[CP_FREE[-1] + 1:])   # the UI's 16 first, as every palette
         allowed = list(range(16)) + CP_FREE
         over_black = Image.alpha_composite(Image.new('RGBA', SCREEN, (0, 0, 0, 255)), base)
         idx = pal.index_dither(over_black, allowed)

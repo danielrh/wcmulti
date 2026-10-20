@@ -38,6 +38,9 @@ extern RvSave g_camp;
 extern RvPilot g_pilots[RV_PILOTS];
 extern RvNode g_nodes[RV_NODES];
 extern unsigned g_npilots, g_nnodes, g_nmissions;
+extern RvShipType __far g_shiptypes[RV_SHIPTYPES];
+extern unsigned g_nshiptypes;
+const RvShipType __far *ship_type(unsigned type);   /* data/ships.csv's row for a type, or NULL */
 
 int camp_load_data(const char *path);
 void camp_new(void);
