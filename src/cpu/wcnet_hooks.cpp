@@ -1612,7 +1612,17 @@ static void rv_check_hooks() {
         g_watchReady = true;
         wclog(1, "RV.EXE: watching its %u thunks (DS %04X)", (unsigned)(sizeof(kRvThunks) / sizeof(kRvThunks[0])), DS);
     }
-    wc_net_countdown = 0x7fffffff;  // no periodic work: only the watched places call in
+    // No periodic work, only the watched places call in; but a test's
+    // WCNET_KEYSCRIPT (with WCNET_KEYSCRIPT_FROM=boot) presses its keys.
+    static int scripted = -1;
+    if (scripted < 0) {
+        const char *env = getenv("WCNET_KEYSCRIPT");
+        scripted = env && env[0] ? 1 : 0;
+    }
+    if (scripted) {
+        key_script();
+    }
+    wc_net_countdown = scripted ? 999 : 0x7fffffff;
     if (SegValue(cs) != g_loadSeg) {
         return;
     }

@@ -362,3 +362,7 @@ void wc_net_program_loaded(const char *path, Bit16u loadSeg, Bit16u psp) {
 void wc_net_program_ended(Bit16u psp) {
     wc::game_program_ended(psp);
 }
+
+// The hint about the comms key (sdlmain.cpp) is for the Wing Commanders:
+// RetroVega has no comms.
+bool wc_net_comms_hint() { return wc::g_build != wc::BUILD_RV; }

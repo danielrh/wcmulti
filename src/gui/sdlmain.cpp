@@ -1634,6 +1634,7 @@ void uninit_network();
 extern bool within_briefed_mission;
 extern bool in_space();
 extern bool wc_net_overlay_chat();
+extern bool wc_net_comms_hint();
 std::string outgoing_prefix = "[Transmit Comms] ";
 size_t last_incoming_text_len = 0;
 std::string incoming_text="";
@@ -1752,7 +1753,7 @@ void GFX_EndUpdate( const Bit16u *changedLines ) {
             }
             const std::string * to_write = &outgoing_text;
             static const std::string noHint;
-            if (in_space() && outgoing_text == kCommsHint) {
+            if ((in_space() || !wc_net_comms_hint()) && outgoing_text == kCommsHint) {
                 to_write = &noHint;  // the hint is for the barracks: in flight it is only in the way
             }
 
