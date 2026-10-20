@@ -481,6 +481,7 @@ the rate, and the mean N over the second half is logged:
 | `-ox` (now the default; `DEBUG=1` builds `-od -d2`) | 68 | 20.2 M |
 | the same in the deployed page (20,000 cycles, headless Chrome on a 2-core box) | 25 | 7.4 M |
 | `-ox`, one band buffer (video.c: 192 KB of conventional memory freed) | 74 | 22.0 M |
+| `-ox`, the three real ships drawn scaled and turned beside the copies (native / the page) | 54 / 16 | 16 M / 4.8 M |
 
 `RV.EXE /bench N` fixes the count (0: none, so `tests/ships.txt` can look
 at the real ships, logged every 100 frames as `lightfield: frame ...`).
@@ -533,6 +534,7 @@ Measured on the Nicander's 82 x 121 view at `cycles=40000`:
 | copy (`rv_blit_row`) | 24,100 | 1.7 |
 | scaled to 3/4 (C `lf_scale_row` / asm `rv_scale_row`) | 1,930 / 2,550 | 21 / 16 |
 | turned 45 degrees at 3/4 (C / asm) | 940 / 2,570 | 43 / 16 |
+| the deployed page (20,000 cycles): copy / scaled / turned | 12,050 / 1,275 / 1,285 | the same ratio |
 
 In DOSBox an instruction costs about a cycle whatever it is, so the
 scaled and turned draws cost what their inner loops count: nine times a
