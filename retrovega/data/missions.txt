@@ -157,8 +157,8 @@ lounge   left=- middle=DRIFTER right=-
 talk     bar ANCHOR KESTREL "Quiet out there lately."
 talk     bar KESTREL ANCHOR "Too quiet."
 
-mission  L2c0_m1
-node     L2c0
+mission  L2p1_m1
+node     L2p1
 title    Patrol: Defiance
 type     patrol
 music    briefing
@@ -174,8 +174,8 @@ ship     NICANDR 1 nav2 count=2
 bar      left=- middle=KESTREL right=-
 lounge   left=- middle=- right=ANCHOR
 
-mission  L2c0_m2
-node     L2c0
+mission  L2p1_m2
+node     L2p1
 title    Patrol: the Sol frontier
 type     patrol
 music    briefing
@@ -191,8 +191,8 @@ ship     NICANDR 1 nav2 count=3
 bar      left=- middle=- right=-
 lounge   left=- middle=ECHO right=-
 
-mission  L2c0_m3
-node     L2c0
+mission  L2p1_m3
+node     L2p1
 title    Patrol: Ataraxia
 type     patrol
 music    briefing
@@ -210,8 +210,8 @@ lounge   left=- middle=- right=-
 talk     bar PRIME TORCH "Quiet out there lately."
 talk     bar TORCH PRIME "Too quiet."
 
-mission  L2c0_m4
-node     L2c0
+mission  L2p1_m4
+node     L2p1
 title    Patrol: Ataraxia
 type     patrol
 music    briefing
@@ -229,8 +229,8 @@ lounge   left=- middle=DRIFTER right=ANCHOR
 talk     lounge DRIFTER ANCHOR "Ten credits says you come back first."
 talk     lounge ANCHOR DRIFTER "You'd bet on your own funeral."
 
-mission  L2p1_m1
-node     L2p1
+mission  L3m2_m1
+node     L3m2
 title    Patrol: Ataraxia
 type     patrol
 music    briefing
@@ -241,15 +241,15 @@ nav      1 516 0 1013
 nav      2 2455 0 4097
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=FROST
-ship     AGIS 1 nav1 count=2
-ship     AGIS 1 nav2 count=2
+ship     ARISTON 1 nav1 count=2
+ship     ARISTON 1 nav2 count=3
 bar      left=- middle=- right=ANCHOR
 lounge   left=KESTREL middle=TORCH right=-
 talk     lounge TORCH KESTREL "Quiet out there lately."
 talk     lounge KESTREL TORCH "Too quiet."
 
-mission  L2p1_m2
-node     L2p1
+mission  L3m2_m2
+node     L3m2
 title    Patrol: Vega Prime
 type     patrol
 music    briefing
@@ -260,15 +260,15 @@ nav      1 -628 0 1345
 nav      2 2525 0 2894
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     AGIS 1 nav1 count=3
-ship     AGIS 1 nav2 count=3
+ship     ARISTON 1 nav1 count=3
+ship     ARISTON 1 nav2 count=3
 bar      left=TORCH middle=KESTREL right=DRIFTER
 lounge   left=- middle=- right=FROST
 talk     bar DRIFTER TORCH "Quiet out there lately."
 talk     bar TORCH DRIFTER "Too quiet."
 
-mission  L2p1_m3
-node     L2p1
+mission  L3m2_m3
+node     L3m2
 title    Patrol: the Enigma shipyards
 type     patrol
 music    briefing
@@ -279,15 +279,15 @@ nav      1 -403 0 2354
 nav      2 -279 0 4958
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=FROST
-ship     AGIS 1 nav1 count=2
-ship     AGIS 1 nav2 count=2
+ship     ARISTON 1 nav1 count=3
+ship     ARISTON 1 nav2 count=3
 bar      left=- middle=ECHO right=COMET
 lounge   left=- middle=- right=PRIME
 talk     bar COMET ECHO "Quiet out there lately."
 talk     bar ECHO COMET "Too quiet."
 
-mission  L2p1_m4
-node     L2p1
+mission  L3m2_m4
+node     L3m2
 title    Patrol: the Rigel relay
 type     patrol
 music    briefing
@@ -298,7 +298,7 @@ nav      1 -1201 0 1578
 nav      2 -1794 0 3012
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     AGIS 1 nav1 count=3
+ship     ARISTON 1 nav1 count=3
 ship     NICANDR 1 nav2 count=3
 bar      left=TORCH middle=- right=COMET
 lounge   left=- middle=DRIFTER right=ANCHOR
@@ -307,8 +307,8 @@ talk     bar COMET TORCH "Count the kills, not the misses."
 talk     lounge ANCHOR DRIFTER "Ten credits says you come back first."
 talk     lounge DRIFTER ANCHOR "You'd bet on your own funeral."
 
-mission  L3m2_m1
-node     L3m2
+mission  L3c0_m1
+node     L3c0
 title    Patrol: Cephid Gate
 type     patrol
 music    briefing
@@ -328,8 +328,8 @@ talk     bar KESTREL FROST "Always."
 talk     lounge COMET TORCH "You missed again, I counted."
 talk     lounge TORCH COMET "Count the kills, not the misses."
 
-mission  L3m2_m2
-node     L3m2
+mission  L3c0_m2
+node     L3c0
 title    Patrol: the Sol frontier
 type     patrol
 music    briefing
@@ -349,8 +349,8 @@ talk     bar FROST ANCHOR "Too quiet."
 talk     lounge COMET DRIFTER "Quiet out there lately."
 talk     lounge DRIFTER COMET "Too quiet."
 
-mission  L3m2_m3
-node     L3m2
+mission  L3c0_m3
+node     L3c0
 title    Patrol: Vega Prime
 type     patrol
 music    briefing
@@ -368,8 +368,8 @@ lounge   left=- middle=TORCH right=PRIME
 talk     lounge TORCH PRIME "Quiet out there lately."
 talk     lounge PRIME TORCH "Too quiet."
 
-mission  L3m2_m4
-node     L3m2
+mission  L3c0_m4
+node     L3c0
 title    Patrol: Cephid Gate
 type     patrol
 music    briefing
@@ -389,8 +389,8 @@ talk     bar TORCH KESTREL "Too quiet."
 talk     lounge COMET ECHO "Quiet out there lately."
 talk     lounge ECHO COMET "Too quiet."
 
-mission  L3m1_m1
-node     L3m1
+mission  L3p2_m1
+node     L3p2
 title    Patrol: the Rigel relay
 type     patrol
 music    briefing
@@ -410,8 +410,8 @@ talk     bar ECHO ANCHOR "Too quiet."
 talk     lounge KESTREL PRIME "Quiet out there lately."
 talk     lounge PRIME KESTREL "Too quiet."
 
-mission  L3m1_m2
-node     L3m1
+mission  L3p2_m2
+node     L3p2
 title    Patrol: the Enigma shipyards
 type     patrol
 music    briefing
@@ -431,8 +431,8 @@ talk     bar FROST ANCHOR "Too quiet."
 talk     lounge KESTREL DRIFTER "Ten credits says you come back first."
 talk     lounge DRIFTER KESTREL "You'd bet on your own funeral."
 
-mission  L3m1_m3
-node     L3m1
+mission  L3p2_m3
+node     L3p2
 title    Patrol: Shelton
 type     patrol
 music    briefing
@@ -452,8 +452,8 @@ talk     bar ANCHOR FROST "Too quiet."
 talk     lounge COMET ECHO "Quiet out there lately."
 talk     lounge ECHO COMET "Too quiet."
 
-mission  L3m1_m4
-node     L3m1
+mission  L3p2_m4
+node     L3p2
 title    Patrol: Vega Prime
 type     patrol
 music    briefing
@@ -473,8 +473,8 @@ talk     bar FROST PRIME "Too quiet."
 talk     lounge KESTREL DRIFTER "Ten credits says you come back first."
 talk     lounge DRIFTER KESTREL "You'd bet on your own funeral."
 
-mission  L3c0_m1
-node     L3c0
+mission  L4m2_m1
+node     L4m2
 title    Patrol: Vega Prime
 type     patrol
 music    briefing
@@ -485,8 +485,8 @@ nav      1 1313 0 1780
 nav      2 -1157 0 4188
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=ANCHOR
-ship     ARISTON 1 nav1 count=3
-ship     ARISTON 1 nav2 count=2
+ship     AREUS 1 nav1 count=4
+ship     AREUS 1 nav2 count=3
 bar      left=FROST middle=PRIME right=-
 lounge   left=COMET middle=DRIFTER right=-
 talk     bar FROST PRIME "Quiet out there lately."
@@ -494,8 +494,8 @@ talk     bar PRIME FROST "Too quiet."
 talk     lounge DRIFTER COMET "Quiet out there lately."
 talk     lounge COMET DRIFTER "Too quiet."
 
-mission  L3c0_m2
-node     L3c0
+mission  L4m2_m2
+node     L4m2
 title    Patrol: Defiance
 type     patrol
 music    briefing
@@ -506,15 +506,15 @@ nav      1 -996 0 2041
 nav      2 1210 0 4839
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=TORCH
-ship     ARISTON 1 nav1 count=2
-ship     NICANDR 1 nav2 count=3
+ship     AREUS 1 nav1 count=3
+ship     ARISTON 1 nav2 count=3
 bar      left=- middle=KESTREL right=DRIFTER
 lounge   left=- middle=- right=-
 talk     bar DRIFTER KESTREL "Ten credits says you come back first."
 talk     bar KESTREL DRIFTER "You'd bet on your own funeral."
 
-mission  L3c0_m3
-node     L3c0
+mission  L4m2_m3
+node     L4m2
 title    Patrol: the Lixis beacon
 type     patrol
 music    briefing
@@ -525,15 +525,15 @@ nav      1 729 0 2294
 nav      2 -2667 0 4647
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=COMET
-ship     NICANDR 1 nav1 count=3
-ship     ARISTON 1 nav2 count=2
+ship     ARISTON 1 nav1 count=4
+ship     AREUS 1 nav2 count=3
 bar      left=TORCH middle=PRIME right=-
 lounge   left=KESTREL middle=- right=-
 talk     bar TORCH PRIME "Quiet out there lately."
 talk     bar PRIME TORCH "Too quiet."
 
-mission  L3c0_m4
-node     L3c0
+mission  L4m2_m4
+node     L4m2
 title    Patrol: the Sol frontier
 type     patrol
 music    briefing
@@ -544,13 +544,13 @@ nav      1 -167 0 1697
 nav      2 -1966 0 4498
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=COMET
-ship     NICANDR 1 nav1 count=3
-ship     NICANDR 1 nav2 count=3
+ship     ARISTON 1 nav1 count=3
+ship     ARISTON 1 nav2 count=4
 bar      left=- middle=- right=DRIFTER
 lounge   left=- middle=- right=PRIME
 
-mission  L3p1_m1
-node     L3p1
+mission  L4c0_m1
+node     L4c0
 title    Patrol: Shelton
 type     patrol
 music    briefing
@@ -561,8 +561,8 @@ nav      1 791 0 808
 nav      2 -1445 0 4664
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     ARISTON 1 nav1 count=2
-ship     NICANDR 1 nav2 count=3
+ship     AREUS 1 nav1 count=3
+ship     ARISTON 1 nav2 count=4
 bar      left=- middle=KESTREL right=ANCHOR
 lounge   left=COMET middle=TORCH right=FROST
 talk     bar KESTREL ANCHOR "Quiet out there lately."
@@ -570,8 +570,8 @@ talk     bar ANCHOR KESTREL "Too quiet."
 talk     lounge TORCH FROST "Quiet out there lately."
 talk     lounge FROST TORCH "Too quiet."
 
-mission  L3p1_m2
-node     L3p1
+mission  L4c0_m2
+node     L4c0
 title    Patrol: Ataraxia
 type     patrol
 music    briefing
@@ -582,8 +582,8 @@ nav      1 1299 0 1714
 nav      2 -1624 0 4733
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=KESTREL
-ship     ARISTON 1 nav1 count=3
-ship     ARISTON 1 nav2 count=2
+ship     AREUS 1 nav1 count=3
+ship     AREUS 1 nav2 count=3
 bar      left=FROST middle=- right=COMET
 lounge   left=- middle=ECHO right=ANCHOR
 talk     bar COMET FROST "Watch my six out there."
@@ -591,8 +591,8 @@ talk     bar FROST COMET "Always."
 talk     lounge ANCHOR ECHO "Quiet out there lately."
 talk     lounge ECHO ANCHOR "Too quiet."
 
-mission  L3p1_m3
-node     L3p1
+mission  L4c0_m3
+node     L4c0
 title    Patrol: Cephid Gate
 type     patrol
 music    briefing
@@ -603,15 +603,15 @@ nav      1 845 0 2449
 nav      2 -451 0 4290
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=DRIFTER
-ship     ARISTON 1 nav1 count=2
-ship     ARISTON 1 nav2 count=2
+ship     AREUS 1 nav1 count=3
+ship     AREUS 1 nav2 count=3
 bar      left=TORCH middle=- right=ANCHOR
 lounge   left=COMET middle=- right=-
 talk     bar ANCHOR TORCH "Quiet out there lately."
 talk     bar TORCH ANCHOR "Too quiet."
 
-mission  L3p1_m4
-node     L3p1
+mission  L4c0_m4
+node     L4c0
 title    Patrol: the Sol frontier
 type     patrol
 music    briefing
@@ -622,15 +622,15 @@ nav      1 -665 0 1940
 nav      2 -2969 0 3637
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     NICANDR 1 nav1 count=3
-ship     ARISTON 1 nav2 count=3
+ship     ARISTON 1 nav1 count=4
+ship     AREUS 1 nav2 count=4
 bar      left=TORCH middle=ECHO right=COMET
 lounge   left=- middle=- right=-
 talk     bar ECHO TORCH "Watch my six out there."
 talk     bar TORCH ECHO "Always."
 
-mission  L3p2_m1
-node     L3p2
+mission  L4p2_m1
+node     L4p2
 title    Patrol: Ataraxia
 type     patrol
 music    briefing
@@ -641,15 +641,15 @@ nav      1 159 0 1488
 nav      2 2092 0 4893
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     NICANDR 1 nav1 count=3
-ship     ARISTON 1 nav2 count=2
+ship     ARISTON 1 nav1 count=4
+ship     AREUS 1 nav2 count=3
 bar      left=TORCH middle=KESTREL right=-
 lounge   left=- middle=ECHO right=-
 talk     bar KESTREL TORCH "Quiet out there lately."
 talk     bar TORCH KESTREL "Too quiet."
 
-mission  L3p2_m2
-node     L3p2
+mission  L4p2_m2
+node     L4p2
 title    Patrol: the Crucible picket
 type     patrol
 music    briefing
@@ -660,8 +660,8 @@ nav      1 1305 0 1914
 nav      2 -513 0 3122
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     ARISTON 1 nav1 count=3
-ship     ARISTON 1 nav2 count=2
+ship     AREUS 1 nav1 count=3
+ship     AREUS 1 nav2 count=3
 bar      left=TORCH middle=- right=ANCHOR
 lounge   left=KESTREL middle=DRIFTER right=-
 talk     bar TORCH ANCHOR "Quiet out there lately."
@@ -669,8 +669,8 @@ talk     bar ANCHOR TORCH "Too quiet."
 talk     lounge DRIFTER KESTREL "Ten credits says you come back first."
 talk     lounge KESTREL DRIFTER "You'd bet on your own funeral."
 
-mission  L3p2_m3
-node     L3p2
+mission  L4p2_m3
+node     L4p2
 title    Patrol: the Enigma shipyards
 type     patrol
 music    briefing
@@ -681,15 +681,15 @@ nav      1 1328 0 990
 nav      2 292 0 3629
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=COMET
-ship     ARISTON 1 nav1 count=3
-ship     NICANDR 1 nav2 count=2
+ship     AREUS 1 nav1 count=4
+ship     ARISTON 1 nav2 count=3
 bar      left=FROST middle=ECHO right=ANCHOR
 lounge   left=- middle=DRIFTER right=-
 talk     bar FROST ANCHOR "Quiet out there lately."
 talk     bar ANCHOR FROST "Too quiet."
 
-mission  L3p2_m4
-node     L3p2
+mission  L4p2_m4
+node     L4p2
 title    Patrol: the Lixis beacon
 type     patrol
 music    briefing
@@ -700,15 +700,15 @@ nav      1 -810 0 1408
 nav      2 2349 0 4778
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=ECHO
-ship     ARISTON 1 nav1 count=3
-ship     ARISTON 1 nav2 count=3
+ship     AREUS 1 nav1 count=4
+ship     AREUS 1 nav2 count=4
 bar      left=FROST middle=- right=-
 lounge   left=KESTREL middle=- right=PRIME
 talk     lounge PRIME KESTREL "Quiet out there lately."
 talk     lounge KESTREL PRIME "Too quiet."
 
-mission  L4m2_m1
-node     L4m2
+mission  L5m2_m1
+node     L5m2
 title    Patrol: the Crucible picket
 type     patrol
 music    briefing
@@ -719,15 +719,15 @@ nav      1 1206 0 862
 nav      2 2099 0 4149
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=FROST
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
+ship     CLEOMEN 1 nav1 count=3
+ship     CLEOMEN 1 nav2 count=4
 bar      left=- middle=PRIME right=COMET
 lounge   left=- middle=DRIFTER right=-
 talk     bar COMET PRIME "Quiet out there lately."
 talk     bar PRIME COMET "Too quiet."
 
-mission  L4m2_m2
-node     L4m2
+mission  L5m2_m2
+node     L5m2
 title    Patrol: the Lixis beacon
 type     patrol
 music    briefing
@@ -738,15 +738,15 @@ nav      1 -933 0 2394
 nav      2 -1869 0 4305
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=COMET
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
+ship     CLEOMEN 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=3
 bar      left=FROST middle=KESTREL right=ANCHOR
 lounge   left=- middle=- right=PRIME
 talk     bar FROST ANCHOR "Quiet out there lately."
 talk     bar ANCHOR FROST "Too quiet."
 
-mission  L4m2_m3
-node     L4m2
+mission  L5m2_m3
+node     L5m2
 title    Patrol: Defiance
 type     patrol
 music    briefing
@@ -762,8 +762,8 @@ ship     ARISTON 1 nav2 count=3
 bar      left=- middle=- right=ANCHOR
 lounge   left=- middle=DRIFTER right=-
 
-mission  L4m2_m4
-node     L4m2
+mission  L5m2_m4
+node     L5m2
 title    Patrol: Ataraxia
 type     patrol
 music    briefing
@@ -774,15 +774,15 @@ nav      1 -1110 0 1254
 nav      2 274 0 3455
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=COMET
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
+ship     CLEOMEN 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=3
 bar      left=FROST middle=KESTREL right=ANCHOR
 lounge   left=- middle=- right=PRIME
 talk     bar KESTREL ANCHOR "Quiet out there lately."
 talk     bar ANCHOR KESTREL "Too quiet."
 
-mission  L4m1_m1
-node     L4m1
+mission  L5c0_m1
+node     L5c0
 title    Patrol: Vega Prime
 type     patrol
 music    briefing
@@ -794,14 +794,14 @@ nav      2 -1249 0 2822
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=ANCHOR
 ship     ARISTON 1 nav1 count=3
-ship     ARISTON 1 nav2 count=3
+ship     ARISTON 1 nav2 count=4
 bar      left=TORCH middle=- right=-
 lounge   left=KESTREL middle=- right=FROST
 talk     lounge KESTREL FROST "Watch my six out there."
 talk     lounge FROST KESTREL "Always."
 
-mission  L4m1_m2
-node     L4m1
+mission  L5c0_m2
+node     L5c0
 title    Patrol: the Rigel relay
 type     patrol
 music    briefing
@@ -812,1049 +812,355 @@ nav      1 -906 0 2161
 nav      2 1444 0 2733
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=FROST middle=- right=COMET
-lounge   left=KESTREL middle=- right=ANCHOR
-talk     bar FROST COMET "Watch my six out there."
-talk     bar COMET FROST "Always."
-talk     lounge KESTREL ANCHOR "Quiet out there lately."
-talk     lounge ANCHOR KESTREL "Too quiet."
-
-mission  L4m1_m3
-node     L4m1
-title    Patrol: Defiance
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Defiance. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Defiance. Good flying.
-lose     We lost Defiance. Get some rest; we go again tomorrow.
-nav      1 -357 0 2206
-nav      2 -1428 0 4333
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     AREUS 1 nav1 count=4
-ship     AREUS 1 nav2 count=3
-bar      left=TORCH middle=KESTREL right=-
-lounge   left=- middle=- right=ANCHOR
-talk     bar TORCH KESTREL "Quiet out there lately."
-talk     bar KESTREL TORCH "Too quiet."
-
-mission  L4m1_m4
-node     L4m1
-title    Patrol: Vega Prime
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Vega Prime. Good flying.
-lose     We lost Vega Prime. Get some rest; we go again tomorrow.
-nav      1 704 0 1208
-nav      2 2829 0 4697
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=PRIME
-ship     AREUS 1 nav1 count=4
-ship     ARISTON 1 nav2 count=3
-bar      left=- middle=- right=ANCHOR
-lounge   left=KESTREL middle=ECHO right=FROST
-talk     lounge KESTREL FROST "Watch my six out there."
-talk     lounge FROST KESTREL "Always."
-
-mission  L4c0_m1
-node     L4c0
-title    Patrol: the Sol frontier
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 -1284 0 2104
-nav      2 -2253 0 4600
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ECHO
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=FROST middle=KESTREL right=DRIFTER
-lounge   left=COMET middle=- right=ANCHOR
-talk     bar KESTREL FROST "Watch my six out there."
-talk     bar FROST KESTREL "Always."
-talk     lounge ANCHOR COMET "Quiet out there lately."
-talk     lounge COMET ANCHOR "Too quiet."
-
-mission  L4c0_m2
-node     L4c0
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 -1149 0 1418
-nav      2 -2720 0 4073
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     ARISTON 1 nav1 count=3
-ship     AREUS 1 nav2 count=4
-bar      left=FROST middle=ECHO right=-
-lounge   left=KESTREL middle=- right=-
-talk     bar FROST ECHO "Quiet out there lately."
-talk     bar ECHO FROST "Too quiet."
-
-mission  L4c0_m3
-node     L4c0
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Frost will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 -148 0 1493
-nav      2 1172 0 4101
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=FROST
-ship     AREUS 1 nav1 count=3
-ship     ARISTON 1 nav2 count=4
-bar      left=TORCH middle=PRIME right=ANCHOR
-lounge   left=KESTREL middle=DRIFTER right=-
-talk     bar ANCHOR TORCH "Quiet out there lately."
-talk     bar TORCH ANCHOR "Too quiet."
-talk     lounge DRIFTER KESTREL "Ten credits says you come back first."
-talk     lounge KESTREL DRIFTER "You'd bet on your own funeral."
-
-mission  L4c0_m4
-node     L4c0
-title    Patrol: the Sol frontier
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 -983 0 1977
-nav      2 -2469 0 2678
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=TORCH middle=ECHO right=ANCHOR
-lounge   left=- middle=- right=FROST
-talk     bar ECHO TORCH "Watch my six out there."
-talk     bar TORCH ECHO "Always."
-
-mission  L4p1_m1
-node     L4p1
-title    Patrol: Vega Prime
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Vega Prime. Good flying.
-lose     We lost Vega Prime. Get some rest; we go again tomorrow.
-nav      1 -159 0 1973
-nav      2 -2437 0 4350
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=- middle=- right=-
-lounge   left=- middle=ECHO right=FROST
-talk     lounge ECHO FROST "Quiet out there lately."
-talk     lounge FROST ECHO "Too quiet."
-
-mission  L4p1_m2
-node     L4p1
-title    Patrol: Ataraxia
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Ataraxia. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Ataraxia. Good flying.
-lose     We lost Ataraxia. Get some rest; we go again tomorrow.
-nav      1 -495 0 2239
-nav      2 1700 0 3887
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=KESTREL
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=TORCH middle=ECHO right=COMET
-lounge   left=- middle=- right=FROST
-talk     bar TORCH COMET "You missed again, I counted."
-talk     bar COMET TORCH "Count the kills, not the misses."
-
-mission  L4p1_m3
-node     L4p1
-title    Patrol: Cephid Gate
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Cephid Gate. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Cephid Gate. Good flying.
-lose     We lost Cephid Gate. Get some rest; we go again tomorrow.
-nav      1 183 0 2290
-nav      2 2076 0 2705
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     ARISTON 1 nav1 count=4
-ship     AREUS 1 nav2 count=3
-bar      left=- middle=PRIME right=DRIFTER
-lounge   left=- middle=- right=ANCHOR
-talk     bar PRIME DRIFTER "Ten credits says you come back first."
-talk     bar DRIFTER PRIME "You'd bet on your own funeral."
-
-mission  L4p1_m4
-node     L4p1
-title    Patrol: Ataraxia
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Ataraxia. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Ataraxia. Good flying.
-lose     We lost Ataraxia. Get some rest; we go again tomorrow.
-nav      1 493 0 2254
-nav      2 -676 0 3400
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     ARISTON 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=TORCH middle=ECHO right=COMET
-lounge   left=- middle=- right=FROST
-talk     bar ECHO TORCH "Watch my six out there."
-talk     bar TORCH ECHO "Always."
-
-mission  L4p2_m1
-node     L4p2
-title    Patrol: the Rigel relay
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Rigel relay. Good flying.
-lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
-nav      1 606 0 1797
-nav      2 -2375 0 4153
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=PRIME
-ship     AREUS 1 nav1 count=3
-ship     ARISTON 1 nav2 count=3
-bar      left=FROST middle=KESTREL right=ANCHOR
+ship     CONVOLN 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=3
+bar      left=FROST middle=- right=ANCHOR
 lounge   left=- middle=ECHO right=-
-talk     bar ANCHOR FROST "Quiet out there lately."
-talk     bar FROST ANCHOR "Too quiet."
-
-mission  L4p2_m2
-node     L4p2
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 724 0 2121
-nav      2 1685 0 4758
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     AREUS 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=TORCH middle=ECHO right=-
-lounge   left=- middle=- right=FROST
-talk     bar ECHO TORCH "Watch my six out there."
-talk     bar TORCH ECHO "Always."
-
-mission  L4p2_m3
-node     L4p2
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 -465 0 2103
-nav      2 -2922 0 4237
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     ARISTON 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=TORCH middle=PRIME right=DRIFTER
-lounge   left=- middle=- right=-
-talk     bar TORCH DRIFTER "Quiet out there lately."
-talk     bar DRIFTER TORCH "Too quiet."
-
-mission  L4p2_m4
-node     L4p2
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 1104 0 2334
-nav      2 943 0 3878
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     AREUS 1 nav1 count=3
-ship     AREUS 1 nav2 count=3
-bar      left=TORCH middle=KESTREL right=-
-lounge   left=- middle=- right=PRIME
-talk     bar TORCH KESTREL "Quiet out there lately."
-talk     bar KESTREL TORCH "Too quiet."
-
-mission  L5m2_m1
-node     L5m2
-title    Patrol: the Enigma shipyards
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Enigma shipyards. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Enigma shipyards. Good flying.
-lose     We lost the Enigma shipyards. Get some rest; we go again tomorrow.
-nav      1 191 0 1328
-nav      2 1208 0 3676
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=KESTREL
-ship     CONVOLN 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=TORCH middle=ECHO right=-
-lounge   left=COMET middle=- right=ANCHOR
-talk     bar TORCH ECHO "Watch my six out there."
-talk     bar ECHO TORCH "Always."
-talk     lounge COMET ANCHOR "Quiet out there lately."
-talk     lounge ANCHOR COMET "Too quiet."
-
-mission  L5m2_m2
-node     L5m2
-title    Patrol: Shelton
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Shelton. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Shelton. Good flying.
-lose     We lost Shelton. Get some rest; we go again tomorrow.
-nav      1 -562 0 2295
-nav      2 -2786 0 2922
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     CLEOMEN 1 nav1 count=4
-ship     ARISTON 1 nav2 count=3
-bar      left=TORCH middle=KESTREL right=DRIFTER
-lounge   left=- middle=ECHO right=FROST
-talk     bar TORCH KESTREL "Quiet out there lately."
-talk     bar KESTREL TORCH "Too quiet."
-talk     lounge FROST ECHO "Quiet out there lately."
-talk     lounge ECHO FROST "Too quiet."
-
-mission  L5m2_m3
-node     L5m2
-title    Patrol: the Rigel relay
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Rigel relay. Good flying.
-lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
-nav      1 764 0 2190
-nav      2 437 0 2985
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=TORCH
-ship     CLEOMEN 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=3
-bar      left=- middle=PRIME right=COMET
-lounge   left=KESTREL middle=- right=-
-talk     bar PRIME COMET "Quiet out there lately."
-talk     bar COMET PRIME "Too quiet."
-
-mission  L5m2_m4
-node     L5m2
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Anchor will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 110 0 1037
-nav      2 1965 0 4462
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ANCHOR
-ship     ARISTON 1 nav1 count=4
-ship     ARISTON 1 nav2 count=4
-bar      left=- middle=ECHO right=-
-lounge   left=- middle=DRIFTER right=-
-
-mission  L5m1_m1
-node     L5m1
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Frost will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 1054 0 1490
-nav      2 981 0 2921
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=FROST
-ship     ARISTON 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=- right=ANCHOR
-lounge   left=KESTREL middle=TORCH right=PRIME
-talk     lounge TORCH KESTREL "Quiet out there lately."
-talk     lounge KESTREL TORCH "Too quiet."
-
-mission  L5m1_m2
-node     L5m1
-title    Patrol: the Sol frontier
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 -967 0 1324
-nav      2 -1401 0 4170
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     CONVOLN 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=3
-bar      left=- middle=KESTREL right=-
-lounge   left=- middle=DRIFTER right=-
-
-mission  L5m1_m3
-node     L5m1
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 512 0 1239
-nav      2 1085 0 4006
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=KESTREL
-ship     CONVOLN 1 nav1 count=3
-ship     CLEOMEN 1 nav2 count=4
-bar      left=FROST middle=- right=-
-lounge   left=- middle=TORCH right=ANCHOR
-talk     lounge ANCHOR TORCH "Quiet out there lately."
-talk     lounge TORCH ANCHOR "Too quiet."
-
-mission  L5m1_m4
-node     L5m1
-title    Patrol: Shelton
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Shelton. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Shelton. Good flying.
-lose     We lost Shelton. Get some rest; we go again tomorrow.
-nav      1 1049 0 1811
-nav      2 935 0 3851
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     ARISTON 1 nav1 count=3
-ship     ARISTON 1 nav2 count=4
-bar      left=TORCH middle=KESTREL right=-
-lounge   left=- middle=ECHO right=FROST
-talk     bar TORCH KESTREL "Quiet out there lately."
-talk     bar KESTREL TORCH "Too quiet."
-talk     lounge ECHO FROST "Quiet out there lately."
-talk     lounge FROST ECHO "Too quiet."
-
-mission  L5c0_m1
-node     L5c0
-title    Patrol: the Sol frontier
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 -1483 0 2384
-nav      2 -2836 0 3750
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     CONVOLN 1 nav1 count=3
-ship     ARISTON 1 nav2 count=4
-bar      left=FROST middle=ECHO right=ANCHOR
-lounge   left=KESTREL middle=- right=PRIME
-talk     bar ECHO ANCHOR "Quiet out there lately."
-talk     bar ANCHOR ECHO "Too quiet."
-talk     lounge PRIME KESTREL "Quiet out there lately."
-talk     lounge KESTREL PRIME "Too quiet."
-
-mission  L5c0_m2
-node     L5c0
-title    Patrol: Cephid Gate
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Cephid Gate. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Cephid Gate. Good flying.
-lose     We lost Cephid Gate. Get some rest; we go again tomorrow.
-nav      1 -914 0 2195
-nav      2 1702 0 2668
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=KESTREL
-ship     CLEOMEN 1 nav1 count=3
-ship     ARISTON 1 nav2 count=4
-bar      left=FROST middle=ECHO right=ANCHOR
-lounge   left=- middle=- right=PRIME
-talk     bar FROST ECHO "Quiet out there lately."
-talk     bar ECHO FROST "Too quiet."
+talk     bar FROST ANCHOR "Quiet out there lately."
+talk     bar ANCHOR FROST "Too quiet."
 
 mission  L5c0_m3
 node     L5c0
 title    Patrol: the Rigel relay
 type     patrol
 music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
 win      We hold the Rigel relay. Good flying.
 lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
-nav      1 -931 0 1617
-nav      2 47 0 3491
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=TORCH
-ship     ARISTON 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=KESTREL right=ANCHOR
-lounge   left=- middle=- right=-
-talk     bar ANCHOR KESTREL "Quiet out there lately."
-talk     bar KESTREL ANCHOR "Too quiet."
-
-mission  L5c0_m4
-node     L5c0
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 -267 0 1249
-nav      2 2183 0 3739
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=PRIME
-ship     CONVOLN 1 nav1 count=3
-ship     ARISTON 1 nav2 count=4
-bar      left=- middle=- right=COMET
-lounge   left=KESTREL middle=TORCH right=-
-talk     lounge TORCH KESTREL "Quiet out there lately."
-talk     lounge KESTREL TORCH "Too quiet."
-
-mission  L5p1_m1
-node     L5p1
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 671 0 1336
-nav      2 876 0 3016
+nav      1 -1019 0 1685
+nav      2 -2255 0 3278
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=KESTREL
-ship     CLEOMEN 1 nav1 count=3
-ship     CONVOLN 1 nav2 count=4
-bar      left=TORCH middle=PRIME right=ANCHOR
-lounge   left=- middle=DRIFTER right=-
-talk     bar ANCHOR TORCH "Quiet out there lately."
-talk     bar TORCH ANCHOR "Too quiet."
-
-mission  L5p1_m2
-node     L5p1
-title    Patrol: the Enigma shipyards
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Enigma shipyards. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Enigma shipyards. Good flying.
-lose     We lost the Enigma shipyards. Get some rest; we go again tomorrow.
-nav      1 -1196 0 1986
-nav      2 -1838 0 3385
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     CLEOMEN 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=FROST middle=KESTREL right=-
-lounge   left=- middle=TORCH right=PRIME
-talk     bar KESTREL FROST "Watch my six out there."
-talk     bar FROST KESTREL "Always."
-talk     lounge PRIME TORCH "Quiet out there lately."
-talk     lounge TORCH PRIME "Too quiet."
-
-mission  L5p1_m3
-node     L5p1
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 1133 0 1071
-nav      2 108 0 4801
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ECHO
-ship     ARISTON 1 nav1 count=3
-ship     CLEOMEN 1 nav2 count=4
-bar      left=- middle=- right=ANCHOR
-lounge   left=COMET middle=- right=-
-
-mission  L5p1_m4
-node     L5p1
-title    Patrol: Ataraxia
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Ataraxia. You and Anchor will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Ataraxia. Good flying.
-lose     We lost Ataraxia. Get some rest; we go again tomorrow.
-nav      1 -1282 0 1003
-nav      2 856 0 2653
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ANCHOR
-ship     CONVOLN 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=3
-bar      left=FROST middle=PRIME right=COMET
-lounge   left=- middle=DRIFTER right=-
-talk     bar COMET PRIME "Quiet out there lately."
-talk     bar PRIME COMET "Too quiet."
-
-mission  L5p2_m1
-node     L5p2
-title    Patrol: Defiance
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Defiance. You and Frost will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Defiance. Good flying.
-lose     We lost Defiance. Get some rest; we go again tomorrow.
-nav      1 1046 0 1291
-nav      2 -2136 0 4803
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=FROST
-ship     CLEOMEN 1 nav1 count=3
-ship     ARISTON 1 nav2 count=3
-bar      left=- middle=ECHO right=-
+ship     ARISTON 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=3
+bar      left=- middle=ECHO right=COMET
 lounge   left=- middle=DRIFTER right=PRIME
+talk     bar COMET ECHO "Quiet out there lately."
+talk     bar ECHO COMET "Too quiet."
 talk     lounge DRIFTER PRIME "Ten credits says you come back first."
 talk     lounge PRIME DRIFTER "You'd bet on your own funeral."
 
-mission  L5p2_m2
-node     L5p2
-title    Patrol: the Sol frontier
+mission  L5c0_m4
+node     L5c0
+title    Patrol: the Rigel relay
 type     patrol
 music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 -31 0 1401
-nav      2 -205 0 4306
+briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Rigel relay. Good flying.
+lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
+nav      1 -68 0 1677
+nav      2 1959 0 4794
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=COMET
+ship     CONVOLN 1 nav1 count=3
+ship     CONVOLN 1 nav2 count=4
+bar      left=- middle=- right=-
+lounge   left=- middle=- right=ANCHOR
+
+mission  L5p2_m1
+node     L5p2
+title    Patrol: the Crucible picket
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Crucible picket. Good flying.
+lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
+nav      1 -470 0 1163
+nav      2 -2209 0 3118
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=TORCH
+ship     ARISTON 1 nav1 count=4
+ship     ARISTON 1 nav2 count=3
+bar      left=FROST middle=PRIME right=-
+lounge   left=COMET middle=ECHO right=-
+talk     bar PRIME FROST "Quiet out there lately."
+talk     bar FROST PRIME "Too quiet."
+talk     lounge COMET ECHO "Quiet out there lately."
+talk     lounge ECHO COMET "Too quiet."
+
+mission  L5p2_m2
+node     L5p2
+title    Patrol: the Enigma shipyards
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near the Enigma shipyards. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Enigma shipyards. Good flying.
+lose     We lost the Enigma shipyards. Get some rest; we go again tomorrow.
+nav      1 1398 0 1713
+nav      2 -2799 0 4648
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=PRIME
-ship     CONVOLN 1 nav1 count=4
+ship     CLEOMEN 1 nav1 count=4
 ship     ARISTON 1 nav2 count=4
-bar      left=- middle=KESTREL right=DRIFTER
-lounge   left=- middle=TORCH right=-
-talk     bar DRIFTER KESTREL "Ten credits says you come back first."
-talk     bar KESTREL DRIFTER "You'd bet on your own funeral."
+bar      left=TORCH middle=- right=ANCHOR
+lounge   left=COMET middle=- right=-
+talk     bar ANCHOR TORCH "Quiet out there lately."
+talk     bar TORCH ANCHOR "Too quiet."
 
 mission  L5p2_m3
 node     L5p2
-title    Patrol: Vega Prime
+title    Patrol: the Crucible picket
 type     patrol
 music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Vega Prime. Good flying.
-lose     We lost Vega Prime. Get some rest; we go again tomorrow.
-nav      1 887 0 844
-nav      2 934 0 3356
+briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Crucible picket. Good flying.
+lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
+nav      1 240 0 1302
+nav      2 1118 0 4782
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=TORCH
-ship     CLEOMEN 1 nav1 count=3
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=KESTREL right=DRIFTER
-lounge   left=COMET middle=- right=-
-talk     bar KESTREL DRIFTER "Ten credits says you come back first."
-talk     bar DRIFTER KESTREL "You'd bet on your own funeral."
+ship     ARISTON 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=4
+bar      left=- middle=- right=DRIFTER
+lounge   left=KESTREL middle=- right=ANCHOR
+talk     lounge ANCHOR KESTREL "Quiet out there lately."
+talk     lounge KESTREL ANCHOR "Too quiet."
 
 mission  L5p2_m4
 node     L5p2
-title    Patrol: Defiance
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Defiance. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Defiance. Good flying.
-lose     We lost Defiance. Get some rest; we go again tomorrow.
-nav      1 517 0 2134
-nav      2 2432 0 3293
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=DRIFTER
-ship     CLEOMEN 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=FROST middle=- right=ANCHOR
-lounge   left=KESTREL middle=- right=-
-talk     bar FROST ANCHOR "Quiet out there lately."
-talk     bar ANCHOR FROST "Too quiet."
-
-mission  L6m2_m1
-node     L6m2
-title    Patrol: Cephid Gate
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Cephid Gate. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Cephid Gate. Good flying.
-lose     We lost Cephid Gate. Get some rest; we go again tomorrow.
-nav      1 1172 0 952
-nav      2 -1502 0 4379
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ECHO
-ship     CLEOMEN 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=FROST middle=KESTREL right=DRIFTER
-lounge   left=COMET middle=- right=-
-talk     bar KESTREL FROST "Watch my six out there."
-talk     bar FROST KESTREL "Always."
-
-mission  L6m2_m2
-node     L6m2
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 -1479 0 1914
-nav      2 -957 0 4232
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=PRIME
-ship     AREUS 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=KESTREL right=DRIFTER
-lounge   left=COMET middle=ECHO right=FROST
-talk     bar KESTREL DRIFTER "Ten credits says you come back first."
-talk     bar DRIFTER KESTREL "You'd bet on your own funeral."
-talk     lounge ECHO COMET "Quiet out there lately."
-talk     lounge COMET ECHO "Too quiet."
-
-mission  L6m2_m3
-node     L6m2
-title    Patrol: the Rigel relay
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Frost will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Rigel relay. Good flying.
-lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
-nav      1 1368 0 1832
-nav      2 2657 0 4698
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=FROST
-ship     AREUS 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=- middle=PRIME right=-
-lounge   left=KESTREL middle=ECHO right=-
-talk     lounge KESTREL ECHO "Quiet out there lately."
-talk     lounge ECHO KESTREL "Too quiet."
-
-mission  L6m2_m4
-node     L6m2
-title    Patrol: the Rigel relay
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Rigel relay. Good flying.
-lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
-nav      1 -223 0 1755
-nav      2 -723 0 4202
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ECHO
-ship     AREUS 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=- right=-
-lounge   left=- middle=- right=FROST
-
-mission  L6m1_m1
-node     L6m1
-title    Patrol: the Sol frontier
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 -678 0 1814
-nav      2 -720 0 3974
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=PRIME
-ship     AREUS 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=FROST middle=- right=ANCHOR
-lounge   left=COMET middle=DRIFTER right=-
-talk     bar ANCHOR FROST "Quiet out there lately."
-talk     bar FROST ANCHOR "Too quiet."
-talk     lounge DRIFTER COMET "Quiet out there lately."
-talk     lounge COMET DRIFTER "Too quiet."
-
-mission  L6m1_m2
-node     L6m1
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Anchor will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 -1445 0 1105
-nav      2 -1933 0 3535
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ANCHOR
-ship     AREUS 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=- middle=KESTREL right=-
-lounge   left=- middle=TORCH right=FROST
-talk     lounge FROST TORCH "Quiet out there lately."
-talk     lounge TORCH FROST "Too quiet."
-
-mission  L6m1_m3
-node     L6m1
 title    Patrol: Shelton
 type     patrol
 music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Shelton. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+briefing Pilots, listen up. Aera fighters have been sighted near Shelton. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
 win      We hold Shelton. Good flying.
 lose     We lost Shelton. Get some rest; we go again tomorrow.
-nav      1 1061 0 958
-nav      2 -1746 0 2735
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=TORCH
-ship     AREUS 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=PRIME right=COMET
-lounge   left=- middle=- right=-
-talk     bar COMET PRIME "Quiet out there lately."
-talk     bar PRIME COMET "Too quiet."
-
-mission  L6m1_m4
-node     L6m1
-title    Patrol: Vega Prime
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Vega Prime. Good flying.
-lose     We lost Vega Prime. Get some rest; we go again tomorrow.
-nav      1 -578 0 1409
-nav      2 2810 0 3089
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     CLEOMEN 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=FROST middle=ECHO right=-
-lounge   left=- middle=- right=PRIME
-talk     bar ECHO FROST "Quiet out there lately."
-talk     bar FROST ECHO "Too quiet."
-
-mission  L6c0_m1
-node     L6c0
-title    Patrol: Defiance
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Defiance. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Defiance. Good flying.
-lose     We lost Defiance. Get some rest; we go again tomorrow.
-nav      1 1032 0 919
-nav      2 -2574 0 3792
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=KESTREL
-ship     AREUS 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=FROST middle=- right=COMET
-lounge   left=- middle=TORCH right=-
-talk     bar FROST COMET "Watch my six out there."
-talk     bar COMET FROST "Always."
-
-mission  L6c0_m2
-node     L6c0
-title    Patrol: the Lixis beacon
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Lixis beacon. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Lixis beacon. Good flying.
-lose     We lost the Lixis beacon. Get some rest; we go again tomorrow.
-nav      1 1433 0 1984
-nav      2 -915 0 2514
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=COMET
-ship     CONVOLN 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=TORCH middle=- right=-
-lounge   left=- middle=ECHO right=FROST
-talk     lounge ECHO FROST "Quiet out there lately."
-talk     lounge FROST ECHO "Too quiet."
-
-mission  L6c0_m3
-node     L6c0
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Prime will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 132 0 1357
-nav      2 1046 0 2900
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=PRIME
-ship     CONVOLN 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=FROST middle=- right=DRIFTER
-lounge   left=COMET middle=- right=-
-talk     bar DRIFTER FROST "Quiet out there lately."
-talk     bar FROST DRIFTER "Too quiet."
-
-mission  L6c0_m4
-node     L6c0
-title    Patrol: Cephid Gate
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Cephid Gate. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Cephid Gate. Good flying.
-lose     We lost Cephid Gate. Get some rest; we go again tomorrow.
-nav      1 1277 0 2328
-nav      2 -2651 0 4231
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=TORCH
-ship     CLEOMEN 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=- middle=KESTREL right=-
-lounge   left=- middle=DRIFTER right=FROST
-talk     lounge DRIFTER FROST "Quiet out there lately."
-talk     lounge FROST DRIFTER "Too quiet."
-
-mission  L6p1_m1
-node     L6p1
-title    Patrol: Ataraxia
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Ataraxia. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Ataraxia. Good flying.
-lose     We lost Ataraxia. Get some rest; we go again tomorrow.
-nav      1 -104 0 906
-nav      2 755 0 2681
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=TORCH
-ship     CONVOLN 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=- middle=PRIME right=DRIFTER
-lounge   left=COMET middle=- right=-
-talk     bar DRIFTER PRIME "Ten credits says you come back first."
-talk     bar PRIME DRIFTER "You'd bet on your own funeral."
-
-mission  L6p1_m2
-node     L6p1
-title    Patrol: the Crucible picket
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Crucible picket. You and Drifter will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Crucible picket. Good flying.
-lose     We lost the Crucible picket. Get some rest; we go again tomorrow.
-nav      1 427 0 900
-nav      2 1523 0 4454
+nav      1 94 0 1867
+nav      2 -344 0 2898
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=DRIFTER
-ship     AREUS 1 nav1 count=4
+ship     CLEOMEN 1 nav1 count=3
 ship     CLEOMEN 1 nav2 count=4
-bar      left=- middle=ECHO right=COMET
-lounge   left=- middle=- right=-
-talk     bar COMET ECHO "Quiet out there lately."
-talk     bar ECHO COMET "Too quiet."
+bar      left=FROST middle=PRIME right=ANCHOR
+lounge   left=COMET middle=- right=-
+talk     bar ANCHOR PRIME "Somebody has to fly the checklist."
+talk     bar PRIME ANCHOR "You only say that because I am the spare."
 
-mission  L6p1_m3
-node     L6p1
-title    Patrol: the Sol frontier
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold the Sol frontier. Good flying.
-lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
-nav      1 857 0 1991
-nav      2 -2071 0 2651
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ECHO
-ship     CONVOLN 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=TORCH middle=- right=ANCHOR
-lounge   left=- middle=- right=-
-talk     bar TORCH ANCHOR "Quiet out there lately."
-talk     bar ANCHOR TORCH "Too quiet."
-
-mission  L6p1_m4
-node     L6p1
-title    Patrol: Cephid Gate
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Cephid Gate. You and Anchor will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Cephid Gate. Good flying.
-lose     We lost Cephid Gate. Get some rest; we go again tomorrow.
-nav      1 -130 0 1824
-nav      2 1457 0 2513
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ANCHOR
-ship     AREUS 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=FROST middle=KESTREL right=DRIFTER
-lounge   left=- middle=- right=PRIME
-talk     bar KESTREL DRIFTER "Ten credits says you come back first."
-talk     bar DRIFTER KESTREL "You'd bet on your own funeral."
-
-mission  L6p2_m1
-node     L6p2
+mission  L6m2_m1
+node     L6m2
 title    Patrol: Vega Prime
 type     patrol
 music    briefing
 briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
 win      We hold Vega Prime. Good flying.
 lose     We lost Vega Prime. Get some rest; we go again tomorrow.
-nav      1 993 0 1554
-nav      2 -2692 0 2759
+nav      1 -168 0 2333
+nav      2 1260 0 4552
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=KESTREL
-ship     CONVOLN 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=FROST middle=- right=ANCHOR
-lounge   left=- middle=DRIFTER right=PRIME
-talk     bar ANCHOR FROST "Quiet out there lately."
-talk     bar FROST ANCHOR "Too quiet."
-talk     lounge DRIFTER PRIME "Ten credits says you come back first."
-talk     lounge PRIME DRIFTER "You'd bet on your own funeral."
+ship     AREUS 1 nav1 count=4
+ship     CONVOLN 1 nav2 count=4
+bar      left=TORCH middle=ECHO right=ANCHOR
+lounge   left=COMET middle=DRIFTER right=-
+talk     bar ANCHOR TORCH "Quiet out there lately."
+talk     bar TORCH ANCHOR "Too quiet."
+talk     lounge DRIFTER COMET "Quiet out there lately."
+talk     lounge COMET DRIFTER "Too quiet."
 
-mission  L6p2_m2
-node     L6p2
-title    Patrol: Cephid Gate
+mission  L6m2_m2
+node     L6m2
+title    Patrol: the Sol frontier
 type     patrol
 music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Cephid Gate. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Cephid Gate. Good flying.
-lose     We lost Cephid Gate. Get some rest; we go again tomorrow.
-nav      1 1456 0 1783
-nav      2 -2615 0 4597
+briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Sol frontier. Good flying.
+lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
+nav      1 871 0 2441
+nav      2 -2541 0 3051
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=TORCH
+ship     AREUS 1 nav1 count=4
+ship     CONVOLN 1 nav2 count=4
+bar      left=- middle=KESTREL right=ANCHOR
+lounge   left=COMET middle=DRIFTER right=-
+talk     bar ANCHOR KESTREL "Quiet out there lately."
+talk     bar KESTREL ANCHOR "Too quiet."
+talk     lounge DRIFTER COMET "Quiet out there lately."
+talk     lounge COMET DRIFTER "Too quiet."
+
+mission  L6m2_m3
+node     L6m2
+title    Patrol: the Rigel relay
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Rigel relay. Good flying.
+lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
+nav      1 -476 0 2207
+nav      2 -1189 0 4805
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=COMET
+ship     AREUS 1 nav1 count=4
+ship     AREUS 1 nav2 count=4
+bar      left=- middle=PRIME right=DRIFTER
+lounge   left=KESTREL middle=- right=ANCHOR
+talk     bar DRIFTER PRIME "Ten credits says you come back first."
+talk     bar PRIME DRIFTER "You'd bet on your own funeral."
+talk     lounge KESTREL ANCHOR "Quiet out there lately."
+talk     lounge ANCHOR KESTREL "Too quiet."
+
+mission  L6m2_m4
+node     L6m2
+title    Patrol: Shelton
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near Shelton. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold Shelton. Good flying.
+lose     We lost Shelton. Get some rest; we go again tomorrow.
+nav      1 595 0 1684
+nav      2 -2822 0 4918
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=COMET
+ship     CLEOMEN 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=4
+bar      left=FROST middle=KESTREL right=-
+lounge   left=- middle=DRIFTER right=-
+talk     bar FROST KESTREL "Watch my six out there."
+talk     bar KESTREL FROST "Always."
+
+mission  L6c0_m1
+node     L6c0
+title    Patrol: Defiance
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near Defiance. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold Defiance. Good flying.
+lose     We lost Defiance. Get some rest; we go again tomorrow.
+nav      1 -450 0 1634
+nav      2 -1351 0 2533
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=TORCH
+ship     CONVOLN 1 nav1 count=4
+ship     CONVOLN 1 nav2 count=4
+bar      left=- middle=PRIME right=-
+lounge   left=- middle=- right=ANCHOR
+
+mission  L6c0_m2
+node     L6c0
+title    Patrol: Vega Prime
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Anchor will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold Vega Prime. Good flying.
+lose     We lost Vega Prime. Get some rest; we go again tomorrow.
+nav      1 -1474 0 1188
+nav      2 -548 0 2522
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=ANCHOR
+ship     CONVOLN 1 nav1 count=4
+ship     AREUS 1 nav2 count=4
+bar      left=- middle=ECHO right=-
+lounge   left=- middle=- right=-
+
+mission  L6c0_m3
+node     L6c0
+title    Patrol: Ataraxia
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near Ataraxia. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold Ataraxia. Good flying.
+lose     We lost Ataraxia. Get some rest; we go again tomorrow.
+nav      1 353 0 1418
+nav      2 -1928 0 4573
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=KESTREL
 ship     CLEOMEN 1 nav1 count=4
-ship     AREUS 1 nav2 count=4
-bar      left=- middle=ECHO right=ANCHOR
+ship     CONVOLN 1 nav2 count=4
+bar      left=TORCH middle=PRIME right=ANCHOR
+lounge   left=COMET middle=ECHO right=-
+talk     bar PRIME ANCHOR "Somebody has to fly the checklist."
+talk     bar ANCHOR PRIME "You only say that because I am the spare."
+talk     lounge COMET ECHO "Quiet out there lately."
+talk     lounge ECHO COMET "Too quiet."
+
+mission  L6c0_m4
+node     L6c0
+title    Patrol: the Sol frontier
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Kestrel will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Sol frontier. Good flying.
+lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
+nav      1 402 0 1356
+nav      2 52 0 4471
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=KESTREL
+ship     CLEOMEN 1 nav1 count=4
+ship     CLEOMEN 1 nav2 count=4
+bar      left=TORCH middle=ECHO right=COMET
 lounge   left=- middle=- right=PRIME
-talk     bar ANCHOR ECHO "Quiet out there lately."
-talk     bar ECHO ANCHOR "Too quiet."
+talk     bar ECHO TORCH "Watch my six out there."
+talk     bar TORCH ECHO "Always."
+
+mission  L6p2_m1
+node     L6p2
+title    Patrol: Vega Prime
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near Vega Prime. You and Comet will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold Vega Prime. Good flying.
+lose     We lost Vega Prime. Get some rest; we go again tomorrow.
+nav      1 914 0 2410
+nav      2 -648 0 4191
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=COMET
+ship     CLEOMEN 1 nav1 count=4
+ship     CONVOLN 1 nav2 count=4
+bar      left=TORCH middle=ECHO right=-
+lounge   left=KESTREL middle=- right=-
+talk     bar ECHO TORCH "Watch my six out there."
+talk     bar TORCH ECHO "Always."
+
+mission  L6p2_m2
+node     L6p2
+title    Patrol: the Sol frontier
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near the Sol frontier. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold the Sol frontier. Good flying.
+lose     We lost the Sol frontier. Get some rest; we go again tomorrow.
+nav      1 -1237 0 1065
+nav      2 -1312 0 3112
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=TORCH
+ship     AREUS 1 nav1 count=4
+ship     CONVOLN 1 nav2 count=4
+bar      left=- middle=KESTREL right=-
+lounge   left=- middle=- right=FROST
 
 mission  L6p2_m3
 node     L6p2
 title    Patrol: the Rigel relay
 type     patrol
 music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+briefing Pilots, listen up. Aera fighters have been sighted near the Rigel relay. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
 win      We hold the Rigel relay. Good flying.
 lose     We lost the Rigel relay. Get some rest; we go again tomorrow.
-nav      1 -208 0 1655
-nav      2 -1659 0 4781
-ship     player 0 nav0
-ship     wingman 0 nav0 pilot=ECHO
-ship     AREUS 1 nav1 count=4
-ship     CONVOLN 1 nav2 count=4
-bar      left=- middle=- right=COMET
-lounge   left=KESTREL middle=TORCH right=ANCHOR
-talk     lounge ANCHOR KESTREL "Quiet out there lately."
-talk     lounge KESTREL ANCHOR "Too quiet."
-
-mission  L6p2_m4
-node     L6p2
-title    Patrol: Ataraxia
-type     patrol
-music    briefing
-briefing Pilots, listen up. Aera fighters have been sighted near Ataraxia. You and Torch will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
-win      We hold Ataraxia. Good flying.
-lose     We lost Ataraxia. Get some rest; we go again tomorrow.
-nav      1 1455 0 1345
-nav      2 754 0 3304
+nav      1 251 0 2053
+nav      2 -2584 0 4751
 ship     player 0 nav0
 ship     wingman 0 nav0 pilot=TORCH
 ship     AREUS 1 nav1 count=4
-ship     CLEOMEN 1 nav2 count=4
-bar      left=- middle=ECHO right=COMET
-lounge   left=- middle=- right=FROST
-talk     bar ECHO COMET "Quiet out there lately."
-talk     bar COMET ECHO "Too quiet."
+ship     CONVOLN 1 nav2 count=4
+bar      left=FROST middle=PRIME right=-
+lounge   left=- middle=DRIFTER right=-
+talk     bar FROST PRIME "Quiet out there lately."
+talk     bar PRIME FROST "Too quiet."
+
+mission  L6p2_m4
+node     L6p2
+title    Patrol: Defiance
+type     patrol
+music    briefing
+briefing Pilots, listen up. Aera fighters have been sighted near Defiance. You and Echo will sweep Nav 1 and Nav 2, then return to the carrier. Stay in formation and keep the chatter down.
+win      We hold Defiance. Good flying.
+lose     We lost Defiance. Get some rest; we go again tomorrow.
+nav      1 -623 0 2186
+nav      2 2277 0 2857
+ship     player 0 nav0
+ship     wingman 0 nav0 pilot=ECHO
+ship     CLEOMEN 1 nav1 count=4
+ship     AREUS 1 nav2 count=4
+bar      left=TORCH middle=- right=-
+lounge   left=KESTREL middle=- right=ANCHOR
+talk     lounge KESTREL ANCHOR "Quiet out there lately."
+talk     lounge ANCHOR KESTREL "Too quiet."

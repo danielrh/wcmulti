@@ -37,7 +37,7 @@ LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'N
           'SEATS': 3, 'TALKS': 4}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
         'NAME': 24, 'NODE_ID': 8}
-NONE, GOOD, BAD, END = 0xFF, 0xFE, 0xFD, 0xFC        # node edges
+NONE, GOOD, BAD = 0xFF, 0xFE, 0xFD                   # node edges: a node index, or an ending
 SHIP_PLAYER, SHIP_WINGMAN = 0xFF, 0xFE               # mission ship types chosen at run time
 ROOMS = ['bar', 'lounge']
 SEAT_NAMES = ['left', 'middle', 'right']
@@ -58,8 +58,7 @@ PILOT = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'callsign[RV_CAL
          ('unsigned char', 'pad', 'B')]
 NODE = [('char', 'id[RV_NODE_ID]', '%ds' % TEXT['NODE_ID']), ('unsigned char', 'layer', 'B'),
         ('signed char', 'col', 'b'), ('unsigned short', 'missions[RV_MISSIONS_PER_NODE]', '4H'),
-        ('unsigned char', 'down_good', 'B'), ('unsigned char', 'down_bad', 'B'), ('unsigned char', 'down', 'B'),
-        ('unsigned char', 'side_good', 'B'), ('unsigned char', 'side_bad', 'B'), ('unsigned char', 'pad[3]', '3s')]
+        ('unsigned char', 'good', 'B'), ('unsigned char', 'bad', 'B'), ('unsigned char', 'pad[2]', '2s')]
 NAV = [('unsigned char', 'id', 'B'), ('unsigned char', 'pad', 'B'), ('short', 'x', 'h'), ('short', 'y', 'h'),
        ('short', 'z', 'h')]
 SHIP = [('unsigned char', 'type', 'B'), ('unsigned char', 'side', 'B'), ('unsigned char', 'nav', 'B'),
@@ -154,10 +153,8 @@ def compile_all():
         raise Fail('missions.txt: %d missions (at most %d), ids must be unique' % (len(missions), LIMITS['MISSIONS']))
 
     def edge(v, where):
-        if not v:
-            return NONE
-        if v in ('GOOD', 'BAD', 'END'):
-            return {'GOOD': GOOD, 'BAD': BAD, 'END': END}[v]
+        if v in ('GOOD', 'BAD'):
+            return {'GOOD': GOOD, 'BAD': BAD}[v]
         if v not in node_index:
             raise Fail('%s: edge to unknown node %s' % (where, v))
         return node_index[v]
@@ -175,8 +172,9 @@ def compile_all():
                 raise Fail('%s: mission %s says it belongs to %s' % (where, m, missions[mission_index[m]].get('node')))
         out_nodes.append(struct.pack(fmt(NODE), text(n['node'], TEXT['NODE_ID'], where), int(n['layer']),
                                      int(n['col']), *[mission_index[m] for m in ms],
-                                     edge(n['down_good'], where), edge(n['down_bad'], where), edge(n['down'], where),
-                                     edge(n['side_good'], where), edge(n['side_bad'], where), b''))
+                                     edge(n['good'], where), edge(n['bad'], where), b''))
+        if n['good'] == n['bad']:
+            raise Fail('%s: both ways out go to %s' % (where, n['good']))
     check_dag(nodes)
 
     out_missions = []
@@ -270,8 +268,7 @@ def compile_all():
 
 
 def check_dag(nodes):
-    edges = {n['node']: [n[k] for k in ('down_good', 'down_bad', 'down', 'side_good', 'side_bad')
-                         if n[k] and n[k] not in ('GOOD', 'BAD', 'END')] for n in nodes}
+    edges = {n['node']: [n[k] for k in ('good', 'bad') if n[k] not in ('GOOD', 'BAD')] for n in nodes}
     state = {}
 
     def visit(v):
@@ -307,7 +304,7 @@ def header_text(sizes):
     for k, v in TEXT.items():
         out.append('#define RV_%s %d' % (k, v))
     out += ['', '/* node edges */', '#define RV_NODE_NONE 0x%02X' % NONE, '#define RV_NODE_GOOD 0x%02X' % GOOD,
-            '#define RV_NODE_BAD 0x%02X' % BAD, '#define RV_NODE_END 0x%02X  /* the ending the trend points at */' % END,
+            '#define RV_NODE_BAD 0x%02X' % BAD,
             '', '/* mission ship types picked at run time */',
             '#define RV_SHIP_PLAYER 0x%02X' % SHIP_PLAYER, '#define RV_SHIP_WINGMAN 0x%02X' % SHIP_WINGMAN,
             '#define RV_PILOT_NONE 0xFF', '']

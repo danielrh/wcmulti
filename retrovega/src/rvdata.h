@@ -28,7 +28,6 @@
 #define RV_NODE_NONE 0xFF
 #define RV_NODE_GOOD 0xFE
 #define RV_NODE_BAD 0xFD
-#define RV_NODE_END 0xFC  /* the ending the trend points at */
 
 /* mission ship types picked at run time */
 #define RV_SHIP_PLAYER 0xFF
@@ -78,12 +77,9 @@ typedef struct {
     unsigned char layer;
     signed char col;
     unsigned short missions[RV_MISSIONS_PER_NODE];
-    unsigned char down_good;
-    unsigned char down_bad;
-    unsigned char down;
-    unsigned char side_good;
-    unsigned char side_bad;
-    unsigned char pad[3];
+    unsigned char good;
+    unsigned char bad;
+    unsigned char pad[2];
 } RvNode;
 typedef struct {
     unsigned char id;
@@ -130,7 +126,7 @@ typedef struct {
 
 #define RV_HEADER_SIZE 68
 #define RV_PILOT_SIZE 48
-#define RV_NODE_SIZE 26
+#define RV_NODE_SIZE 22
 #define RV_MISSION_SIZE 1392
 
 #endif

@@ -1,25 +1,30 @@
 #!/usr/bin/env python3
-"""The campaign DAG and its placeholder missions (docs/engine.md).
+r"""The campaign DAG and its placeholder missions (docs/engine.md).
 
     campaign.py            write data/campaign.csv and data/missions.txt
 
-The campaign: a start node, six layers of nodes, then the two endings GOOD
-and BAD.  Layer 1 is the start (column 0), layer 2 has columns -1..1,
-layers 3-6 have -2..2; negative columns lean towards GOOD.  A node is four
-missions.  Each node has up to four edges, and the engine picks one after
-the node's four missions:
+The campaign is a triangular lattice, the user's sketch (s start, v
+victory, l loss), and every node has exactly two ways out: one towards v
+(`good`), one towards l (`bad`).
 
-    down_good, down_bad    the next layer, one column towards that end
-                           (from layer 6: the ending itself)
-    side_good, side_bad    the same layer, one column towards that end,
-                           only where that moves away from the centre
-    down                   the next layer, the same column (from layer 6:
-                           END, the ending the trend points at)
+           s               layer 1: the start, out to both nodes of layer 2
+          / \
+         a   b             layer 2: two nodes, down into layer 3
+        / \ / \
+       c _ d _ e           layers 3-6: three nodes; the middle one moves
+       |\     /|             sideways (outwards) both ways, the outer
+       | \   / |             ones go down: straight towards their own
+       c _ d _ e             side, diagonally to the middle
+          ...
+       v       l           layer 6's nodes go to v (good) or l (bad)
 
-The engine's rule: 3-4 wins trend GOOD, 0-1 BAD, 2 follow the campaign's
-running total; 4 or 0 wins go down towards the trend, a mixed result goes
-sideways towards it if there is such a side edge, else straight down.  Side edges only ever move outwards,
-so there is no cycle; this tool checks that anyway.
+Columns are in half steps: -1 and 1 in layer 2, -2, 0, 2 in layers 3-6.
+A node is four missions; after them the engine takes `good` when the node
+trends towards v (3-4 wins, or 2 with the campaign's running total ahead)
+and `bad` otherwise.  Whether that is a move sideways or down a layer
+depends on where the node sits.  Sideways moves only go outwards from the
+middle, so there is no cycle; this tool checks that, and that every node
+has two different ways out.
 
 Every mission is a placeholder patrol for now: a system, nav points, an
 Aera flight that grows with the layer, the player and a wingman, who sits
@@ -36,7 +41,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, '..', 'data')
 LAYERS = 6
-WIDTH = {1: 0, 2: 1}            # half-width per layer, 2 beyond
+ROW = {1: [0], 2: [-1, 1], 3: [-2, 0, 2], 4: [-2, 0, 2], 5: [-2, 0, 2], 6: [-2, 0, 2]}   # columns, half steps
 MISSIONS_PER_NODE = 4
 
 # who may sit where (docs/places.md: the seat art); Kit is always at the deck
@@ -58,39 +63,44 @@ TALK = {
 }
 
 
-def width(layer):
-    return WIDTH.get(layer, 2)
-
-
 def node_id(layer, col):
     return 'L%d%s%d' % (layer, 'm' if col < 0 else 'p' if col > 0 else 'c', abs(col))
+
+
+def egress(layer, col):
+    """(good, bad): this node's two ways out."""
+    if layer == LAYERS:
+        return 'GOOD', 'BAD'
+    nxt = layer + 1
+    if layer == 1:
+        return node_id(2, -1), node_id(2, 1)
+    if layer == 2:                                   # into the row of three
+        return node_id(nxt, col - 1), node_id(nxt, col + 1)
+    if col == 0:                                     # the middle: sideways, outwards
+        return node_id(layer, -2), node_id(layer, 2)
+    if col < 0:                                      # the left: straight down, or in
+        return node_id(nxt, -2), node_id(nxt, 0)
+    return node_id(nxt, 0), node_id(nxt, 2)          # the right: in, or straight down
 
 
 def build_nodes():
     nodes = []
     for layer in range(1, LAYERS + 1):
-        w = width(layer)
-        for col in range(-w, w + 1):
-            n = {'node': node_id(layer, col), 'layer': layer, 'col': col}
-            if layer == LAYERS:
-                n['down_good'], n['down_bad'], n['down'] = 'GOOD', 'BAD', 'END'
-            else:
-                nw = width(layer + 1)
-                n['down_good'] = node_id(layer + 1, max(col - 1, -nw))
-                n['down_bad'] = node_id(layer + 1, min(col + 1, nw))
-                n['down'] = node_id(layer + 1, col)
-            n['side_good'] = node_id(layer, col - 1) if col <= 0 and col - 1 >= -w else ''
-            n['side_bad'] = node_id(layer, col + 1) if col >= 0 and col + 1 <= w else ''
-            n['missions'] = ' '.join('%s_m%d' % (n['node'], k + 1) for k in range(MISSIONS_PER_NODE))
-            nodes.append(n)
+        for col in ROW[layer]:
+            good, bad = egress(layer, col)
+            nodes.append({'node': node_id(layer, col), 'layer': layer, 'col': col, 'good': good, 'bad': bad,
+                          'missions': ' '.join('%s_m%d' % (node_id(layer, col), k + 1)
+                                               for k in range(MISSIONS_PER_NODE))})
     return nodes
 
 
 def check_dag(nodes):
     """No cycles, every node reachable from the start, both endings reachable."""
     by = {n['node']: n for n in nodes}
-    edges = {n['node']: [n[k] for k in ('down_good', 'down_bad', 'down', 'side_good', 'side_bad')
-                         if n[k] and n[k] != 'END'] for n in nodes}
+    edges = {n['node']: [n['good'], n['bad']] for n in nodes}
+    for v, out in edges.items():
+        if out[0] == out[1]:
+            sys.exit('%s: both ways out go to %s' % (v, out[0]))
     state = {}
 
     def visit(v, path):
@@ -182,8 +192,7 @@ def main():
     nodes = build_nodes()
     check_dag(nodes)
     with open(os.path.join(DATA, 'campaign.csv'), 'w', newline='') as f:
-        w = csv.DictWriter(f, fieldnames=['node', 'layer', 'col', 'missions', 'down_good', 'down_bad', 'down',
-                                          'side_good', 'side_bad'], lineterminator='\n')
+        w = csv.DictWriter(f, fieldnames=['node', 'layer', 'col', 'missions', 'good', 'bad'], lineterminator='\n')
         w.writeheader()
         w.writerows(nodes)
     rel = relations()
