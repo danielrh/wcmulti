@@ -1,0 +1,15 @@
+# load bunk 2, which lives on base 1: the carrier's rooms are unloaded, base 1's loaded
+wait 10
+click
+wait 3
+move 118 213
+click
+wait 4
+move 300 118
+click
+wait 2
+key l
+wait 16
+shot B01BASE
+click
+wait 4

@@ -25,6 +25,10 @@ static RvMission __far g_m;
 static unsigned long g_now, g_t0;
 static char g_msg[400];
 static int g_won;
+static int g_base;                          /* the ship the player lives on: 0 the carrier */
+static int change_base(int base);
+static void mission_load_assets(void);
+static void mission_free_assets(void);
 int g_winrate = 80;                         /* percent: a launch's chance, until there is flight */
 
 /* the speech in progress: shapes, when it began, the text */
@@ -488,6 +492,7 @@ static void flight_full(int y0, int y1)
 
 static void launch(void)
 {
+    mission_load_assets();
     missionStarting();
     g_scene.full = flight_full;
     g_scene.no_room = 1;
@@ -575,6 +580,8 @@ static void bunk_input(const Input *in)
         vid_dirty(30, 350);
     } else if (in->key == KEY_CHAR && (in->ch == 'l' || in->ch == 'L') && g_bunk_full[g_bunk_sel]) {
         if (save_load(g_bunk_sel)) {
+            if (g_camp.base != g_base)
+                change_base(g_camp.base);
             camp_mission(camp_mission_index(), &g_m);
             camp_load_units(&g_m);
             close_bunks();
@@ -661,6 +668,42 @@ static void ending_full(int y0, int y1)
              g_camp.ending == ENDING_GOOD ? RV_TEXT_AMBER : RV_TEXT_WHITE, y0, y1);
     sprintf(s, "%u missions flown.  Press a key.", g_camp.flown);
     gfx_text(FONT_BODY, 210, 200, s, RV_TEXT_GREY, y0, y1);
+}
+
+/* --- bases: the ship the player lives on --- */
+
+/* unload this base's rooms and load another's (the music plays on) */
+static int change_base(int base)
+{
+    rv_log("base %d -> %d: %s", g_base, base, dat_base_file(base));
+    vid_fade(0);
+    dat_close();
+    if (!dat_open(dat_base_file(base))) {
+        rv_log("base %d: no %s, back to the carrier", base, dat_base_file(base));
+        base = 0;
+        if (!dat_open(dat_base_file(0)))
+            rv_fail(__FILE__, __LINE__, "no RV.DAT", 0, 0);
+    }
+    gfx_font_load();
+    g_base = base;
+    g_camp.base = (unsigned char)base;
+    baseChanged(base);
+    return base;
+}
+
+/* --- missions: their own XMS level, freed when they end --- */
+
+static void mission_load_assets(void)
+{
+    /* the mission's ships, sounds and cockpit come here with flight; the level
+     * is taken and given back already, so loading order is right from the start */
+    xms_free_level(XMS_MISSION);
+    rv_log("mission assets: %lu KB of XMS free", xms_free_kb());
+}
+
+static void mission_free_assets(void)
+{
+    xms_free_level(XMS_MISSION);
 }
 
 /* --- the next mission --- */
@@ -811,6 +854,7 @@ int game_run(void)
             if (g_now >= g_t0 + 30) {
                 g_won = (int)(rnd() % 100) < g_winrate;
                 missionEnded();
+                mission_free_assets();
                 g_scene.full = 0;
                 g_scene.no_room = 0;
                 rv_log("mission %.16Fs %s", (char __far *)g_m.id, g_won ? "won" : "lost");

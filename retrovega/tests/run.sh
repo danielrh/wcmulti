@@ -6,7 +6,8 @@ set -e
 cd "$(dirname "$0")/.."
 ./build.sh > /dev/null
 cp "${1:-tests/walk.txt}" build/dos/WALK.TXT
-rm -f build/dos/*.BMP build/dos/RVLOG.TXT build/dos/BUNK*.SAV
+rm -f build/dos/*.BMP build/dos/RVLOG.TXT
+[ -n "$KEEP_SAVES" ] || rm -f build/dos/BUNK*.SAV
 mkdir -p build/dosrun
 shift 2>/dev/null || true
 sed -e 's#mount c ../dos#mount c '"$PWD"'/build/dos#' -e "s#RV.EXE /script WALK.TXT#RV.EXE /script WALK.TXT $*#" \

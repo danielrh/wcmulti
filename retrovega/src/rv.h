@@ -49,6 +49,8 @@ void vid_wait_retrace(void);
 /* the archive (dat.c): RV.DAT, all of it in XMS */
 #include "rvasset.h"
 int dat_open(const char *path);
+void dat_close(void);                  /* frees the archive's XMS (the base level) and its tables */
+const char *dat_base_file(int base);   /* RV.DAT for the carrier, RVBASEn.DAT for base n */
 const RvAsset __far *dat_asset(unsigned i);
 const RvRoom __far *dat_room(unsigned i);
 const RvPerson __far *dat_person(unsigned i);

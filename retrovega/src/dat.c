@@ -1,6 +1,10 @@
-/* dat.c: RV.DAT, read whole into XMS (the base level); its directory, rooms
- * and people kept in conventional memory.  An asset's bytes stay in XMS at
- * their file offset and are moved out as they are drawn. */
+/* dat.c: a base's archive, read whole into XMS (the base level); its
+ * directory, rooms and people kept in conventional memory.  An asset's bytes
+ * stay in XMS at their file offset and are moved out as they are drawn.
+ *
+ * A base is a ship the player lives on (docs/engine.md): base 0, the
+ * carrier, is RV.DAT; base N is RVBASEN.DAT, the same rooms with its own
+ * pictures.  dat_close gives back everything the archive took. */
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
@@ -69,6 +73,28 @@ int dat_open(const char *path)
     rv_log("dat: %s, %lu bytes in XMS, %u assets, %u rooms, %u people", path, size, g_hdr.nassets,
            g_hdr.nrooms, g_hdr.npeople);
     return 1;
+}
+
+void dat_close(void)
+{
+    if (g_dir) _ffree(g_dir);
+    if (g_rooms) _ffree(g_rooms);
+    if (g_people) _ffree(g_people);
+    g_dir = 0;
+    g_rooms = 0;
+    g_people = 0;
+    g_hdr.nassets = g_hdr.nrooms = g_hdr.npeople = 0;
+    xms_free_level(XMS_BASE);
+    g_blk = 0;
+}
+
+const char *dat_base_file(int base)
+{
+    static char name[16];
+    if (base == 0)
+        return "RV.DAT";
+    sprintf(name, "RVBASE%d.DAT", base);
+    return name;
 }
 
 const RvDatHeader __far *dat_header(void) { return &g_hdr; }

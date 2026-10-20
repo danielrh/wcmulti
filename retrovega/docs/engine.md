@@ -205,6 +205,18 @@ later. It is a set of rooms with the same layout and its own pictures.
 
 Music is resident and keeps playing across every load.
 
+Built so far:
+
+- **The base archive:** base 0 is `RV.DAT`, base n is `RVBASEn.DAT`, with
+  the same room records and its own pictures. The save keeps the base.
+- **Changing base:** loading a save from another base unloads the archive
+  (`dat_close`: its XMS level, tables and fonts), loads the other, and
+  calls `baseChanged`. `tests/base.txt` checks it with a copy of the
+  carrier as base 1.
+- **The mission level:** a launch takes the mission level and the end
+  of the flight gives it back. It is empty until flight brings ships and
+  sounds; with the carrier loaded about 23 MB of XMS are free for it.
+
 **Getting around.** Every room has a door hotspot to its neighbours:
 
 | from | to |

@@ -244,7 +244,10 @@ int gfx_font_load(void)
     ids[1] = hd->font_title;
     for (i = 0; i < 2; i++) {
         const RvAsset __far *as = dat_asset(ids[i]);
-        unsigned char __far *p = (unsigned char __far *)_fmalloc((size_t)as->size + 1);
+        unsigned char __far *p;
+        if (g_font[i].table)
+            _ffree(g_font[i].table - 4);       /* a new base brings its own */
+        p = (unsigned char __far *)_fmalloc((size_t)as->size + 1);
         RV_ASSERT(p != 0 && as->kind == RV_KIND_FONT);
         dat_read(as->at, p, as->size);
         g_font[i].height = p[0];
