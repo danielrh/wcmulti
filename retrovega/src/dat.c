@@ -47,9 +47,8 @@ int dat_open(const char *path)
         unsigned k;
         for (k = 0; k < n; k += 1024) {
             unsigned part = n - k < 1024 ? n - k : 1024;
-            static unsigned char tmp[1024];
-            fread(tmp, 1, part, f);
-            _fmemcpy(buf + k, tmp, part);
+            fread(rv_filebuf, 1, part, f);
+            _fmemcpy(buf + k, rv_filebuf, part);
         }
         xms_put(g_blk, at, buf, (n + 1) & ~1U);
         at += n;

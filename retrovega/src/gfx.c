@@ -13,7 +13,7 @@
 #define SCRATCH 32768U
 static unsigned char __far *g_scratch;
 static unsigned char g_shade[256];
-static unsigned char g_mix[3][3][256];
+static unsigned char __far g_mix[3][3][256];   /* (far: DGROUP is nearly full) */
 static const unsigned char g_text_colour[3] = { UI_WHITE, UI_AMBER4, UI_GREY5 };
 
 typedef struct {

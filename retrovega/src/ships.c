@@ -227,10 +227,9 @@ int ships_load(unsigned type)
         /* the view's bytes into the scratch, 1 KB at a time (fread wants a near buffer) */
         fseek(f, tab0[v], SEEK_SET);
         for (k = 0; k < len; k += 1024) {
-            static unsigned char tmp[1024];
             unsigned part = len - k < 1024 ? (unsigned)(len - k) : 1024;
-            fread(tmp, 1, part, f);
-            _fmemcpy(raw + k, tmp, part);
+            fread(rv_filebuf, 1, part, f);
+            _fmemcpy(raw + k, rv_filebuf, part);
         }
         _fmemcpy(hdr, raw, 8);          /* x2, x1, y1, y2 */
         w = hdr[1] + hdr[0] + 2;

@@ -24,7 +24,7 @@ static XmsBlock g_missions;
 int camp_load_data(const char *path)
 {
     FILE *f = fopen(path, "rb");
-    static unsigned char buf[512];
+    unsigned char *buf = rv_filebuf;
     static unsigned char __far mission[sizeof(RvMission) + 2];
     unsigned i;
     if (!f)
@@ -51,8 +51,8 @@ int camp_load_data(const char *path)
     fseek(f, g_head.missions_at, SEEK_SET);
     for (i = 0; i < g_nmissions; i++) {
         unsigned k;
-        for (k = 0; k < sizeof(RvMission); k += sizeof buf) {
-            unsigned part = sizeof(RvMission) - k < sizeof buf ? sizeof(RvMission) - k : sizeof buf;
+        for (k = 0; k < sizeof(RvMission); k += sizeof rv_filebuf) {
+            unsigned part = sizeof(RvMission) - k < sizeof rv_filebuf ? sizeof(RvMission) - k : sizeof rv_filebuf;
             fread(buf, 1, part, f);
             _fmemcpy(mission + k, buf, part);
         }

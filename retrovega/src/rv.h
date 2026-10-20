@@ -13,6 +13,7 @@ void rv_fail(const char *file, int line, const char *what, long value, long limi
 #define RV_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 
 void rv_log(const char *fmt, ...);
+extern unsigned char rv_filebuf[1024];  /* the one near buffer file reads land in (fread wants near; DGROUP is nearly full) */
 
 /* 32-bit registers for the calls int86 cannot make (lowlevel.asm) */
 typedef struct { unsigned long eax, ebx, ecx, edx; unsigned short si; } RvRegs;

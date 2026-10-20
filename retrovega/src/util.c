@@ -5,6 +5,7 @@
 #include "rv.h"
 
 static int g_log_started;
+unsigned char rv_filebuf[1024];
 
 /* a line in RVLOG.TXT; the file is closed after each (DOSBox writes a file
  * out to its host only on a close: the browser page reads it while the game
