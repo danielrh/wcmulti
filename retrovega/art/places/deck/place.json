@@ -160,7 +160,7 @@
    "SCHROED": {
     "sprite": "ship-SCHROED.png",
     "x": -68,
-    "y": -237,
+    "y": -238,
     "under": "ship-SCHROED-under.png",
     "ux": -54,
     "uy": 263,
@@ -174,18 +174,18 @@
     "sleds": [
      [
       329,
-      82
+      81
      ],
      [
       110,
-      83
+      82
      ]
     ]
    },
    "FRANKLN": {
     "sprite": "ship-FRANKLN.png",
     "x": -315,
-    "y": -51,
+    "y": -48,
     "under": "ship-FRANKLN-under.png",
     "ux": -316,
     "uy": 253,
@@ -207,11 +207,11 @@
     "sleds": [
      [
       329,
-      182
+      185
      ],
      [
       110,
-      197
+      200
      ]
     ]
    },
@@ -247,9 +247,9 @@
    "REDEEMR": {
     "sprite": "ship-REDEEMR.png",
     "x": 199,
-    "y": 146,
+    "y": 177,
     "under": "ship-REDEEMR-under.png",
-    "ux": 206,
+    "ux": 199,
     "uy": 274,
     "engines": [
      [
@@ -257,26 +257,26 @@
       53
      ]
     ],
-    "legs": "retract",
+    "legs": "retract-62",
     "sleds": [
      [
-      344,
-      223
+      337,
+      254
      ],
      [
-      241,
-      208
+      234,
+      238
      ],
      [
       508,
-      220
+      251
      ]
     ]
    },
    "PACIFER": {
     "sprite": "ship-PACIFER.png",
     "x": -247,
-    "y": -425,
+    "y": -426,
     "under": "ship-PACIFER-under.png",
     "ux": -228,
     "uy": 256,
@@ -330,11 +330,11 @@
     "sleds": [
      [
       329,
-      116
+      115
      ],
      [
       110,
-      114
+      113
      ]
     ]
    },
@@ -413,6 +413,13 @@
     "saddle": "leg-sled-saddle.png",
     "axis": 42,
     "seat": 6
+   },
+   "retract-62": {
+    "foot": "leg-retract-62-foot.png",
+    "strut": "leg-retract-62-strut.png",
+    "saddle": "leg-retract-62-saddle.png",
+    "axis": 30,
+    "seat": 0
    }
   }
  },

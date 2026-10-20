@@ -77,7 +77,7 @@ rest).
 - **Art:** each style is a painted picture, `art/places/src/deck/legs/STYLE.png`
   (the user's image synthesis, side on, on white). The tool slices each
   one and scales it so its foot is 84 px wide.
-- **Slicing:** the strut is the longest run of rows at its narrowest width
+- **Slicing:** the strut is the longest run of rows at its narrowest extent
   (the polished ram), the foot is everything below it, the saddle
   everything above. The engine stacks them, repeating the strut row to the
   height it needs (`leg-STYLE-foot/strut/saddle.png`). place.json gives
@@ -95,7 +95,10 @@ rest).
   hangs below the body all along, as on the Schroedinger's front half, the
   leg still goes to the body and rises behind the wing. A leg that would
   end up within 60 px of the other is left out.
-- **Height:** every ship's lowest point clears its style's shortest leg:
+- **Size:** legs are full size under ships of 24 m and more; a shorter
+  ship gets them smaller in proportion, down to 60% (the Redeemer, 18 m:
+  74%, saved as `retract-62`, its foot 62 px wide).
+- **Height:** every ship's lowest point clears its legs' shortest leg:
   the foot, the saddle and 4 rows of strut. On the gear legs that is about
   65 px, some 3 m.
 - **Placeholder:** without any painted legs the tool draws one, `drawn`.

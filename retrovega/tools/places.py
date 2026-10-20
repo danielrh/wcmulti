@@ -62,8 +62,10 @@ LAUNCH = {'spool_ms': 600, 'lift_ms': 400, 'lift_px': 4, 'run_ms': 900}
 # the landing legs, in screen pixels: the least strut showing under a ship's
 # lowest point, the drawn leg's parts (a painted leg is scaled to the foot's
 # width), the least gap between two legs, how far a leg may move from its spot
-# to find the body
-SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66, 'apart': 60, 'reach': 90}
+# to find the body, the ship length (metres) from which legs are full size
+# (shorter ships get smaller legs, down to 60%)
+SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66, 'apart': 60, 'reach': 90,
+        'full_at': 24.0}
 RENDER = 1280      # the size the fighters are rendered at before scaling down
 BODY = 0.22        # a ship's body: its hull within this much of its half-span of the centre line
 
@@ -220,11 +222,14 @@ def lit(img, light):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA')
 
 
-def fighter(ship, cfg, frame, cache, legs, rerender=False):
+def fighter(ship, cfg, frame, cache, legs_at, rerender=False):
     """A fighter on the pad: sprite, position, under layer, engine points, and
-    the legs it stands on (a style from leg_styles)."""
+    the legs it stands on: legs_at(foot width) gives its style at that size."""
     above, below, info = render_views(ship, cfg, cache, rerender)
     bb = above.getbbox()
+    length = (bb[2] - bb[0]) * info['metres']
+    leg_width = round(SLED['foot'][0] * min(1.0, max(0.6, length / SLED['full_at'])))
+    legs = legs_at(leg_width)
     s = cfg['metre'] * frame.k * info['metres']
     size = (round((bb[2] - bb[0]) * s), round((bb[3] - bb[1]) * s))
     sprite = hard(lit(premul_resize(above.crop(bb), size), cfg['light']))
@@ -239,6 +244,7 @@ def fighter(ship, cfg, frame, cache, legs, rerender=False):
     engines = nozzles(sprite, [(ey - bb[1]) * s for _ex, ey, _r in info['engines']])
     under, ux, uy = under_layer(below, s, x, size[0], cx, cy, deck, cfg['light'])
     return {'sprite': sprite, 'x': x, 'y': y, 'under': under, 'ux': ux, 'uy': uy, 'engines': engines,
+            'legs': legs, 'leg_width': leg_width,
             'sleds': sled_spots(sprite, body(ship, cfg, bb, size), x, y,
                                 [frame.xy(sx, 0)[0] for sx in cfg['sleds'] + cfg.get('more_sleds', {}).get(ship, [])],
                                 legs)}
@@ -285,24 +291,30 @@ def sled_spots(sprite, body, x, y, want, legs):
     return spots
 
 
-def leg_styles(light, src):
+def leg_styles(light, src, width=SLED['foot'][0]):
     """The landing legs, by style: each painted one in SRC/legs/STYLE.png
     (side on, transparent or white around it), or a drawn placeholder,
     'drawn', when there are none.  A style is its three parts the engine
     stacks (the foot on the deck, the strut repeated to the height it needs,
     the saddle under the hull, all the same width), where the strut's middle
     is (axis), how far down the saddle the hull rests (seat) and the span of
-    the saddle's top about the axis (top)."""
+    the saddle's top about the axis (top).  width is the foot's."""
     folder = os.path.join(src, 'legs')
     names = sorted(f[:-4] for f in os.listdir(folder) if f.endswith('.png')) if os.path.isdir(folder) else []
     styles = {}
     for name in names or ['drawn']:
-        parts = painted_leg(os.path.join(folder, name + '.png')) if names else drawn_leg()
+        if names:
+            parts = painted_leg(os.path.join(folder, name + '.png'), width)
+        else:
+            k = width / SLED['foot'][0]
+            parts = [premul_resize(p, (max(1, round(p.size[0] * k)), max(1, round(p.size[1] * k))))
+                     for p in drawn_leg()]
         parts = [hard(lit(p, [c / max(light) for c in light])) for p in parts]
         strut = np.nonzero(np.asarray(parts[1])[0, :, 3])[0]
         axis = int(round((strut[0] + strut[-1]) / 2))
         sa = np.asarray(parts[2])[..., 3] > 0
-        top = np.nonzero(sa[:3].any(axis=0))[0]
+        first = int(np.argmax(sa.any(axis=1)))
+        top = np.nonzero(sa[first:first + 3].any(axis=0))[0]
         styles[name] = {'parts': parts, 'axis': axis, 'seat': seat(sa, axis),
                         'top': (int(top[0]) - axis, int(top[-1]) - axis)}
     return styles
@@ -349,8 +361,8 @@ def drawn_leg():
             for p in (outline(foot), strut, outline(saddle))]
 
 
-def painted_leg(path):
-    """Slice a painted leg, scaled so its foot is SLED['foot'] wide: the
+def painted_leg(path, width):
+    """Slice a painted leg, scaled so its foot is width pixels wide: the
     strut is the longest run of rows at its narrowest width; the rows below
     are the foot, those above the saddle."""
     img = Image.open(path).convert('RGBA')
@@ -365,11 +377,14 @@ def painted_leg(path):
     img = img.crop(img.getbbox())
     rows = (np.asarray(img)[..., 3] > 0).sum(axis=1)
     foot = rows[-max(1, len(rows) // 10):].max()     # the widest row of the bottom tenth
-    k = SLED['foot'][0] / foot
+    k = width / foot
     img = premul_resize(img, (round(img.size[0] * k), round(img.size[1] * k)))
     a = np.asarray(img)[..., 3] >= 128
-    widths = a.sum(axis=1)
-    narrow = (widths > 0) & (widths <= widths[widths > 0].min() + 2)
+    # each row's extent, edge to edge (a cradle's top, two end blocks, is wide)
+    has = a.any(axis=1)
+    widths = np.where(has, a.shape[1] - np.argmax(a[:, ::-1], axis=1) - np.argmax(a, axis=1), 0)
+    narrow = has & (widths <= widths[has].min() + 2)
+    narrow[0] = narrow[-1] = False
     runs, start = [], None
     for y in range(len(narrow) + 1):
         if y < len(narrow) and narrow[y]:
@@ -556,21 +571,37 @@ def build(key, cfg, out, cache, rerender=False, log=print):
     ships = {}
     if 'fighter' in cfg:
         fc = cfg['fighter']
-        styles = leg_styles(fc['light'], src)
+        sizes = {}
+
+        def legs_at(width):
+            if width not in sizes:
+                sizes[width] = leg_styles(fc['light'], src, width)
+            return sizes[width]
+
         place['fighter'] = {'deck': round(frame.xy(0, fc['bottom'])[1]), 'ships': {}, 'legs': {}}
-        for name, st in styles.items():
+
+        def save_legs(name, st):
+            if name in place['fighter']['legs']:
+                return
             files = ['leg-%s-%s.png' % (name, part) for part in ('foot', 'strut', 'saddle')]
             for fn, part in zip(files, st['parts']):
                 part.save(os.path.join(od, fn))
             place['fighter']['legs'][name] = dict(zip(('foot', 'strut', 'saddle'), files),
                                                   axis=st['axis'], seat=st['seat'])
+
+        styles = legs_at(SLED['foot'][0])
+        for name, st in styles.items():
+            save_legs(name, st)
         place['launch'] = dict(LAUNCH)
         pick = fc.get('legs', {})
         for ship in deck_ships(fc['ships']):
             style = pick.get(ship, pick.get('default'))
             style = style if style in styles else next(iter(styles))
-            sh = fighter(ship, fc, frame, cache, styles[style], rerender)
-            sh['legs'], sh['style'], sh['deck'] = styles[style], style, place['fighter']['deck']
+            sh = fighter(ship, fc, frame, cache, lambda w, style=style: legs_at(w)[style], rerender)
+            # a smaller ship's legs: the style at its size, e.g. retract-58
+            sh['style'] = style if sh['leg_width'] == SLED['foot'][0] else '%s-%d' % (style, sh['leg_width'])
+            save_legs(sh['style'], sh['legs'])
+            sh['deck'] = place['fighter']['deck']
             ships[ship] = sh
             sh['sprite'].save(os.path.join(od, 'ship-%s.png' % ship))
             sh['under'].save(os.path.join(od, 'ship-%s-under.png' % ship))
