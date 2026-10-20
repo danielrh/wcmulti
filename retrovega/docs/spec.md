@@ -468,7 +468,8 @@ run-length code, so `scripts/wc2data.py` (`encode_sprite`,
 **Asymmetric ships** cannot be mirrored. They carry 62 views: the 37
 above, then headings 210, 240, 270, 300 and 330 of each band, in band
 order (37..61). A flag in the ship's record tells the engine to use them
-instead of mirroring. Archidamus is the first.
+instead of mirroring. The Convolution, Vega Strike's own asymmetric Aera
+fighter, is the first.
 
 Our order inside each band is the one above. WC1's own files use the same
 37 slots but do not run every band front to back. If we ever want sprites
@@ -631,8 +632,8 @@ in every livery.
 the targeting VDU and briefing/ship-select art. They are posterised into
 the palette and touched up by hand: 96 px in high resolution, 48 px in low.
 
-**New Aera hulls** (Agis, Cleomenes, Archidamus) are mesh edits of
-Nicander, Areus and Ariston, rendered by the same path. The Charillus'
+**New Aera hulls** (Agis, Cleomenes) are mesh edits of Nicander and
+Areus, rendered by the same path. The Charillus'
 tan hull takes an Aera livery. The Leonidas' VDU is only a silhouette, so
 its art comes from the mesh.
 

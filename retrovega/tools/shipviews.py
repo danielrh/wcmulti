@@ -148,6 +148,7 @@ uniform float whiten;
 uniform float hull_gain;  // the hull's diffuse brightened before paint (detail kept)
 uniform float paint_scale; // the livery colours' brightness (canon ships: darker, under their brighter exposure)
 uniform vec3 tint;        // the whole hull's colour multiplied in, luminance kept (1 1 1: none)
+uniform vec3 sheen;       // the same for its metal's reflection (canon ships), luminance kept
 uniform float detail_k;   // how much of the texture's fine detail shows
 uniform float bump_k;     // how much that detail bends the light (bevels)
 uniform float shine;      // the hull's least specular strength
@@ -324,7 +325,7 @@ void main() {
     albedo = mix(albedo, glass_col, g);
     vec3 specc = lin(texture(spec_map, v_uv).rgb);
     // (paint on a canon ship is semi-matte: it keeps 40% of the metal's gloss)
-    if (vs_mode > 0.5) specc *= 1.0 - 0.6 * max(p1, p2);
+    if (vs_mode > 0.5) specc *= (1.0 - 0.6 * max(p1, p2)) * sheen;
     if (vs_mode > 0.5) {
         vec3 kdir = normalize(key_pos - v_view);
         vec4 glw = texture(glow_map, v_uv);
@@ -584,6 +585,25 @@ def environment(ctx, assets, name, size=256):
     return tex
 
 
+ASYM = 0.02   # a mesh is asymmetric when its mirror image misses it by this much of its radius
+
+
+def asymmetric(row, parts):
+    """Whether a ship needs all its headings drawn: a recipe that says so, or a
+    mesh whose left-right mirror image lies off it (the median distance from
+    a mirrored vertex to the nearest vertex, over the radius).  Every canon
+    ship is under 0.005; the Convolution is 0.15."""
+    if row['mesh'].startswith('hull:'):
+        return hulls.asymmetric(row['mesh'][5:])
+    from scipy.spatial import cKDTree
+    p = np.concatenate([m.positions for m in parts])
+    c = (p.min(0) + p.max(0)) / 2
+    m = p.copy()
+    m[:, 0] = 2 * c[0] - m[:, 0]
+    d, _ = cKDTree(p).query(m)
+    return float(np.median(d)) > ASYM * float(np.linalg.norm(p - c, axis=1).max())
+
+
 def ship_mesh(row, assets):
     """A ship's mesh as the views are drawn from it: its parts, stretched
     (data/art.csv), its engine lights, the centre the views turn about and
@@ -616,10 +636,10 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     livery = table_row('liveries.csv', livery_name, 'name')
     if livery is None:
         sys.exit('no livery %r in data/liveries.csv' % livery_name)
-    views_wanted = VIEWS_ASYM if row['mesh'].startswith('hull:') and hulls.asymmetric(row['mesh'][5:]) else VIEWS
+    parts, lights, center, radius = ship_mesh(row, assets)
+    views_wanted = VIEWS_ASYM if asymmetric(row, parts) else VIEWS
     if views:
         views_wanted = views
-    parts, lights, center, radius = ship_mesh(row, assets)
     allpos = np.concatenate([m.positions for m in parts])
 
     ctx = moderngl.create_standalone_context(backend='egl')
@@ -639,6 +659,9 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     t = [(float(v) / 255.0) ** 2.2 for v in (art.get('tint') or '255 255 255').split()]
     lum = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
     prog['tint'].value = tuple(c / lum for c in t)
+    t = [(float(v) / 255.0) ** 2.2 for v in (art.get('sheen') or '255 255 255').split()]
+    lum = 0.2126 * t[0] + 0.7152 * t[1] + 0.0722 * t[2]
+    prog['sheen'].value = tuple(c / lum for c in t)
     prog['hull_gain'].value = float(art.get('gain') or 1.0)
     prog['paint_scale'].value = VS_PAINT if (art.get('mode') or 'vs') == 'vs' else 1.0
     prog['detail_k'].value = float(art.get('detail') or 0.6)
@@ -833,8 +856,7 @@ def main():
     views = [tuple(float(v) for v in pair.split(',')) for pair in args.views.split(';')] if args.views else None
     r = render(row, args.outdir, size, args.assets, args.livery, key, args.ambient, args.shine, args.tag,
                args.env, args.env_gain, args.key_power, args.exposure, args.reflect, views)
-    asym = row['mesh'].startswith('hull:') and hulls.asymmetric(row['mesh'][5:])
-    count = len(views) if views else 62 if asym else 37
+    count = len(views) if views else 62 if asymmetric(row, ship_mesh(row, args.assets)[0]) else 37
     print('%s: %d views at %d px, radius %.2f' % (row['name'], count, size, r))
 
 

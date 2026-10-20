@@ -70,6 +70,8 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | `toon` | key-light bands (3 gives a cel look; 0 is smooth) |
 | `mode` | `vs` or `retro` (above) |
 | `tint` | r g b: the whole hull's colour multiplied in, its brightness kept |
+| `sheen` | r g b: the same for the metal's reflection (canon ships), its brightness kept: the Aera's blue-silver on the Convolution |
+| `reflect` | how strongly the metal mirrors the sky (canon ships). Default 1. |
 | `whiten` | 0..1: how far the hull goes toward light grey |
 | `detail` | 0..1: how much of the texture's fine detail (panel lines, vents, grime) shows on top of the whitened hull and the paint. Default 0.6. |
 | `bump` | how much that detail bends the light, so panel edges catch it like bevels and greebles. Default 1. |
@@ -154,7 +156,7 @@ exhaust points) and applies these operations:
 | `cut` | removes a box of triangles |
 | `graft` | copies a box of triangles from any Vega Strike mesh, scaled, placed, rolled about the nose axis and optionally mirrored |
 
-Normals follow each deformation through its Jacobian. The three new Aera
+Normals follow each deformation through its Jacobian. The new Aera
 fighters, compared with their bases in
 [aera-new.png](aera-new.png):
 
@@ -162,11 +164,22 @@ fighters, compared with their bases in
 |---|---|
 | Agis | Nicander cut short, its wings swept forward into a gull W: a swarm fighter |
 | Cleomenes | Areus with a copy of its own wing upright above and below: a cross seen from the front |
-| Archidamus | Ariston rebuilt asymmetric: its big rear wing, half again as large, on the right only, and two small front wings angled up and down on the left. The aces' ship. `ARCHIDM_CLAW`, the first forward-swept version, is kept as an alternative. |
+| Archidamus | Ariston rebuilt asymmetric: its big rear wing, half again as large, on the right only, and two small front wings angled up and down on the left. **Retired from the roster**: the user chose Vega Strike's own asymmetric Aera fighter, the Convolution, for the aces. The recipe (and `ARCHIDM_CLAW`, its first forward-swept version) stays in hulls.py. |
 
-An asymmetric recipe cannot use WC1's mirrored headings. It renders 62
+An asymmetric ship cannot use WC1's mirrored headings. It renders 62
 views: WC1's 37, then headings 210, 240, 270, 300 and 330 of each band
-(37..61).
+(37..61). A recipe says so (`asym`); a canon mesh is found asymmetric by
+itself when its left-right mirror image misses it: the median distance
+from a mirrored vertex to the nearest vertex over 2% of the radius. Every
+other canon ship is under 0.5%; the Convolution is 15%.
+
+**Sheen** (data/art.csv) is `tint` for the metal's reflection: the
+specular map's colour multiplied by it, luminance kept. The Convolution's
+texture is plain grey with a white specular map over its big wing, which
+mirrored the sky like chrome. With `tint 200 205 225`, `sheen 120 150 240`
+and `reflect 0.6` it takes the blue-silver of the Aera fighters' VDUs.
+(`tint` and `sheen` both `70 160 150` would make it teal, like the Aera
+capital ships.)
 
 ## Facts about the Vega Strike data
 
