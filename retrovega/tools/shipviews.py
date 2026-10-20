@@ -625,8 +625,9 @@ def ship_mesh(row, assets):
         raw_lights = unit_lights(assets, row['vs_unit'])
     lines = []
     if (art.get('smooth') or '').strip():
-        levels, crease = (art['smooth'].split() + ['50'])[:2]
-        done = [smooth.smooth(m, int(levels), float(crease)) for m in parts]
+        # levels, crease angle, bevel width (a fraction of the size), its sharpness in levels
+        levels, crease, width, sharp = (art['smooth'].split() + ['50', '0', 'inf'][len(art['smooth'].split()) - 1:])[:4]
+        done = [smooth.smooth(m, int(levels), float(crease), float(width), float(sharp)) for m in parts]
         parts = [m for m, _l in done]
         lines = [line for _m, ls in done for line in ls]
     elif (art.get('strips') or '').strip():

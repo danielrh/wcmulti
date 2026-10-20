@@ -71,7 +71,7 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | `mode` | `vs` or `retro` (above) |
 | `tint` | r g b: the whole hull's colour multiplied in, its brightness kept |
 | `sheen` | r g b: the same for the metal's reflection (canon ships), its brightness kept |
-| `smooth` | levels and crease angle: Loop subdivision that keeps creases sharp (below) |
+| `smooth` | levels, crease angle, bevel width, bevel sharpness: bevelled creases and Loop subdivision (below) |
 | `skin` | a skin from tools/skins.py and its tile size, projected over the ship's own texture (below) |
 | `strips` | light strips along the long lengthwise creases: least length (fraction of the ship's size) and the largest angle to its length axis (below) |
 | `reflect` | how strongly the metal mirrors the sky (canon ships). Default 1. |
@@ -179,20 +179,34 @@ other canon ship is under 0.5%; the Convolution is 15%.
 ## Making a canon ship over: smooth, skin, strips
 
 Three art.csv columns rework a canon mesh. The Convolution uses all
-three, which makes it an Aera fighter like the Ariston and the Nicander.
-Its own mesh is 192 triangles in its own grey texture.
+three, with `bump`, which makes it an Aera fighter like the Ariston and
+the Nicander. Its own mesh is 192 triangles in its own grey texture; it
+renders from 36,864.
 
-**`smooth` (levels, crease angle),** tools/smooth.py: Loop subdivision
-that keeps the creases. An edge whose faces meet at more than the crease
-angle stays sharp, so flat panels stay flat and wing edges stay crisp,
-while the rest rounds off.
+**`smooth` (levels, crease angle, bevel, sharpness),** tools/smooth.py:
+bevelled edges, then Loop subdivision that keeps creases. An edge whose
+faces meet at more than the crease angle is a crease.
 
+- **Bevel** (a fraction of the ship's size): every crease is cut away by
+  a narrow face, a chamfer, before subdividing, so its edge catches the
+  light as a highlight.
+  - Each vertex on the creases splits, one vertex per wedge of faces
+    between them, moved into its wedge.
+  - The gap along each crease becomes the chamfer.
+  - Where three or more creases meet, the hole is filled.
+- **Sharpness** (levels): how long the chamfer's two edges stay creases
+  (semi-sharp creases): `inf` keeps a flat chamfer, `1` rounds it into a
+  fillet.
+- **Subdivision:** flat panels stay flat, creases stay crisp for their
+  levels, the rest rounds off.
 - **Normals:** they are rebuilt per corner, smooth only across smooth edges.
 - **What it cures:** the Convolution's 98 vertices were shared across its
   sharp creases, so their normals averaged faces meeting at up to 140°.
   That drew its flat wing as crumpled chrome.
-- **Settings:** `2 35` (3072 triangles) keeps its shape. At 50°, the
-  box-section fuselage rounds into a blade and the wing edges bend.
+- **Settings:** `3 35 0.012 1`: creases over 35° (at 50° the box-section
+  fuselage rounds into a blade), bevels 1.2% of its size rounded into
+  fillets, three levels. Its engine block becomes a rounded pod and its
+  wing tips soften.
 
 **`skin` (name, tile),** tools/skins.py: textures the ship by projection.
 Each triangle takes the skin straight along its main axis, `tile` mesh
@@ -202,14 +216,22 @@ units to a repeat. The maps are made once into `build/skins/`.
   (`textures/AeraHull2.bmp`): grey panels ruled in thin lines.
 - **Colour:** tinted to the Aera fighters' warm grey-tan (Ariston's hull
   median), its lines turned their accent blue, its speckle softened.
-- **Specular:** taken from its own shading.
+- **Blue marks:** bars of their bright accent blue painted along 70 of
+  the straight panel-line runs, 36-110 px long and 7 wide in the 1024 px
+  map, as the Ariston and the Nicander carry them.
+- **Specular:** taken from its own shading, halved on the blue paint.
+- **`bump 1.0`** turns its panel lines into engraved grooves that catch
+  the light.
 
 **`strips` (least length, angle),** light strips:
 
 - **Where:** along the mesh's creases, chained into polylines, broken at
   corners and at sharp turns. Only the long ones (a fraction of the ship's
-  size) running within the angle of the ship's length are kept. On the
-  Convolution: the nose spike and the spine.
+  size, 0.35 on the Convolution) running within the angle of the ship's
+  length are kept. On the Convolution: the nose spike and the spine.
+- **On a smoothed mesh:** the original creases, laid onto the smoothed
+  surface (each sample moved to its nearest point), so a strip runs down
+  the middle of its fillet.
 - **How they are drawn:** after the render, each sample tested against the
   depth buffer so the hull hides them, 1.25 px wide whatever the view, in
   the faction's glow colour with a halo on the hull.
