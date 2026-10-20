@@ -235,23 +235,35 @@ mission lands in the briefing room for the debrief.
 
 ## Music: interactive MIDI
 
-- **Songs:** Standard MIDI Files (type 0 or 1) are read once into
-  resident memory.
-- **Sequencer:** ours, run from the timer interrupt (PIT reprogrammed to
-  480 Hz, the old 18.2 Hz tick chained).
-- **Output:** a driver interface: MPU-401 UART first. OPL3 with an open
+Built (src/music.c):
+
+- **Songs:** Standard MIDI Files (type 0 or 1), one per cue beside RV.EXE
+  (`BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID`). They are
+  read at start-up and flattened into one event stream each, timed through
+  their tempo maps in ticks of the music clock, and kept resident. Each
+  loops, padded to a whole bar.
+- **The clock:** the PIT reprogrammed to 240 Hz. The BIOS's 18.2 Hz tick
+  is still chained, so the game's clock keeps counting.
+- **Output:** the MPU-401 in UART mode (port 330h). DOSBox:
+  `[midi] mpu401=uart` (or `intelligent`). An OPL3 driver with an open
   General MIDI patch bank comes later, because the browser build has no
   General MIDI synth.
-- **Fast transitions:** each channel's volume is the song's controller 7
-  times a master fade, re-sent as the fade moves.
-- **Changing song** is `music_play(song, fade_ms, at)`. The current song
-  fades out over `fade_ms` (150-300 ms gives the quick cut-overs), the
-  new one starts and fades in. `at` can wait for the next beat or bar of
-  the old song, so a cut lands on the beat.
-- **Cues** (room, briefing, launch, win, lose) map to songs in
-  `data/music.csv`.
-- **Placeholder songs** are written by `tools/midi.py`: our own short
-  loops, CC0.
+- **Volume:** each channel's volume is the song's controller 7 times a
+  master fade (0..1024).
+- **Changing song:** `music_cue(cue, fade_ms)` fades the playing song out
+  over `fade_ms`, sends all-notes-off and reset-controllers on every
+  channel, starts the cue's song, and fades it in over half the time.
+  `music_cue_at(cue, fade_ms, MUSIC_BEAT or MUSIC_BAR)` starts the fade on
+  the next beat or bar of the old song, so a cut lands in time.
+- **Cues:** the game cues the quarters, the bar and lounge, the briefing,
+  the launch, and a win or a loss at the debrief. All use 250 ms.
+- **Placeholder songs:** `tools/midi.py` writes six 8-bar General MIDI
+  loops, ours and CC0.
+- **Checking it without a synth:** `RV.EXE /midilog` writes every byte
+  sent to the MPU-401, with its tick, to `MIDILOG.BIN`. A walkthrough
+  shows each cut as a 60-tick fade from full to silence, the silence
+  sweep, the next song's instruments, and a 31-tick fade back in; the
+  hi-hats keep their exact tempo.
 
 ## Drawing 640×400 fast
 
@@ -320,5 +332,5 @@ flips above it may not be needed: measure first.
 5. Briefing (the XO speaking, the text), deck (Kit, fighter choice),
    the 80% outcome, debrief, campaign moves, the two endings.
 6. Bunks: save, load, names.
-7. The music engine.
+7. The music engine. **Done.**
 8. The layer: RV.EXE recognised, DS from RVHOOK, the new thunks logged.

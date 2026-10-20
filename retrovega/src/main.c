@@ -6,11 +6,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <dos.h>
 #include "rv.h"
 #include "rvhooks.h"
 #include "room.h"
 #include "campaign.h"
 #include "game.h"
+#include "music.h"
 
 char g_people_names[16][28];
 extern int g_winrate;
@@ -39,6 +41,9 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "/winrate"))          /* tests: how often a launch is won */
             g_winrate = atoi(argv[++i]);
     }
+    for (i = 1; i < argc; i++)
+        if (!strcmp(argv[i], "/midilog"))               /* tests: the bytes sent to the MPU-401 */
+            music_record(1);
     if (!xms_init(32768UL)) {
         printf("RetroVega needs 32 MB of XMS (HIMEM.SYS or DOSBox's xms=true, memsize=40).\n");
         return 1;
@@ -50,6 +55,14 @@ int main(int argc, char **argv)
         return 1;
     }
     names();
+    {
+        union REGS r;
+        r.h.ah = 0x48;
+        r.x.bx = 0xFFFF;
+        int86(0x21, &r, &r);
+        rv_log("conventional memory: %lu KB free", (unsigned long)r.x.bx * 16 / 1024);
+    }
+    music_init();                       /* before the back buffer: its reading needs room */
     if (!vid_init()) {
         printf("RetroVega needs a VESA card with mode 100h (640x400, 256 colours).\n");
         xms_shutdown();
@@ -60,6 +73,7 @@ int main(int argc, char **argv)
     uiMode(1);
     ok = game_run();
     uiMode(0);
+    music_shutdown();
     vid_shutdown();
     xms_shutdown();
     rv_log("bye (%d)", ok);
