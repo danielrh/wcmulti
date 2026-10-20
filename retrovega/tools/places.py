@@ -58,10 +58,11 @@ sys.path.insert(0, HERE)
 SCREEN = (640, 400)
 TICK = 50          # ms per frame of the launch
 LAUNCH = {'spool_ms': 600, 'lift_ms': 400, 'lift_px': 4, 'run_ms': 900}
-# the landing sleds, in screen pixels: how high they hold a ship's lowest
-# point, their parts' sizes, where they stand along the hull that shows (front
-# always, rear too past two_from pixels)
-SLED = {'clearance': 12, 'foot': (56, 14), 'strut': 14, 'saddle': 44,
+# the landing sleds, in screen pixels: the least strut showing under a ship's
+# lowest point, their parts' sizes (a painted sled is scaled to the foot's
+# width), where they stand along the hull that shows (front always, rear too
+# past two_from pixels)
+SLED = {'strut_min': 4, 'foot': (84, 16), 'strut': 14, 'saddle': 66,
         'front': [0.72], 'rear': [0.2], 'two_from': 300}
 RENDER = 1280      # the size the fighters are rendered at before scaling down
 
@@ -198,7 +199,7 @@ def lit(img, light):
     return Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), 'RGBA')
 
 
-def fighter(ship, cfg, frame, cache, cover, rerender=False):
+def fighter(ship, cfg, frame, cache, cover, parts, rerender=False):
     """A fighter on the pad: sprite, position, under layer, engine points, and
     the sleds it stands on."""
     above, below, info = render_views(ship, cfg, cache, rerender)
@@ -208,8 +209,9 @@ def fighter(ship, cfg, frame, cache, cover, rerender=False):
     sprite = hard(lit(premul_resize(above.crop(bb), size), cfg['light']))
     nose, deck = frame.xy(cfg['nose_x'], cfg['bottom'])
     deck = round(deck)
-    # every ship rides on sleds, its lowest point a little above the deck
-    x, y = round(nose - size[0]), round(deck - SLED['clearance'] - size[1])
+    # every ship rides on sleds: its lowest point clears the shortest sled
+    clearance = parts[0].size[1] + parts[2].size[1] - seat(parts) + SLED['strut_min']
+    x, y = round(nose - size[0]), round(deck - clearance - size[1])
     # the ship's centre on the screen: the renders are centred on it
     cx, cy = x + (RENDER / 2 - bb[0]) * s, y + (RENDER / 2 - bb[1]) * s
     engines = nozzles(sprite, [(ey - bb[1]) * s for _ex, ey, _r in info['engines']])
@@ -352,8 +354,17 @@ def lit_arr(a, light):
     return a
 
 
+def seat(parts):
+    """How far down the saddle the hull rests: the top of its middle.  A
+    cradle's raised ends then hug the hull (or hide behind it)."""
+    a = np.asarray(parts[2])[..., 3] > 0
+    mid = a.shape[1] // 2
+    tops = [np.argmax(a[:, c]) for c in range(mid - 3, mid + 4) if a[:, c].any()]
+    return int(np.median(tops)) if tops else 0
+
+
 def sled(parts, height):
-    """A sled height pixels tall, foot to saddle, as one picture."""
+    """A sled height pixels tall, foot to the saddle's top, as one picture."""
     foot, strut, saddle = parts
     w = max(p.size[0] for p in parts)
     img = Image.new('RGBA', (w, max(height, foot.size[1] + saddle.size[1])), (0, 0, 0, 0))
@@ -452,7 +463,7 @@ def compose(back, front, rect, patch, ship=None, dx=0.0, dy=0.0, burn=0.0):
         ua = u[..., 3:4] * max(0.0, 1 - lift / 12)
         paste_blend(img, u[..., :3], ua, ship['ux'] + dx, ship['uy'] + lift)
         for sx, top in ship['sleds']:
-            sl = np.asarray(sled(ship['parts'], ship['deck'] - top)).astype(np.float32) / 255
+            sl = np.asarray(sled(ship['parts'], ship['deck'] - top + seat(ship['parts']))).astype(np.float32) / 255
             paste_blend(img, sl[..., :3], sl[..., 3:4], sx - sl.shape[1] // 2, ship['deck'] - sl.shape[0])
         if burn > 0:
             h = ship['sprite'].size[1]
@@ -522,7 +533,7 @@ def build(key, cfg, out, cache, rerender=False, log=print):
             part.save(os.path.join(od, 'sled-%s.png' % name))
         place['fighter'] = {'deck': round(frame.xy(0, fc['bottom'])[1]), 'ships': {},
                             'sled': {'foot': 'sled-foot.png', 'strut': 'sled-strut.png',
-                                     'saddle': 'sled-saddle.png'}}
+                                     'saddle': 'sled-saddle.png', 'seat': seat(parts)}}
         place['launch'] = dict(LAUNCH)
         # where the front layer hides what is behind it, in every frame
         cover = np.asarray(front)[..., 3] > 0
@@ -530,7 +541,7 @@ def build(key, cfg, out, cache, rerender=False, log=print):
             for pic in pics:
                 cover[rect[1]:rect[3], rect[0]:rect[2]] &= np.asarray(pic)[..., 3] > 0
         for ship in deck_ships(fc['ships']):
-            sh = fighter(ship, fc, frame, cache, cover, rerender)
+            sh = fighter(ship, fc, frame, cache, cover, parts, rerender)
             sh['parts'], sh['deck'] = parts, place['fighter']['deck']
             ships[ship] = sh
             sh['sprite'].save(os.path.join(od, 'ship-%s.png' % ship))

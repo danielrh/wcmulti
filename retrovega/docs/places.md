@@ -64,8 +64,8 @@ front outside the patch.
 **Placement:** the nose is at `nose_x`. The rest runs behind Kit and off
 the left. A heavy fighter shows only its front and goes off the top.
 
-**The landing sleds:** every ship's lowest point rides 12 px above the
-deck, on standard landing sleds.
+**The landing sleds:** every ship rides above the deck on standard
+landing sleds.
 
 - **Shape:** a sled is a foot on the deck, a strut repeated up to the
   height it needs, and a saddle under the hull (`sled-foot.png`,
@@ -74,10 +74,14 @@ deck, on standard landing sleds.
   belly that can be seen, and one under its rear when that stretch is over
   300 px. Each reaches from the deck to the lowest point of the hull above
   its saddle.
-- **Placeholder:** the parts are drawn shapes until a painted sled exists.
-  Put one at `art/places/src/deck/sled.png` (prompt below) and re-run; the
-  tool slices it itself. The strut is the longest run of rows at its
-  narrowest width.
+- **The art:** a painted sled, `art/places/src/deck/sled.png` (the prompt
+  below), sliced by the tool: the strut is the longest run of rows at its
+  narrowest width, the foot is below it and the saddle above. The saddle
+  is a padded cradle, as the prompt asked. The hull rests in the middle of
+  its dip (`seat` in place.json), so the raised ends hug the hull or hide
+  behind it. Without the file, the tool draws placeholder parts.
+- **Height:** every ship's lowest point clears the shortest sled: the foot,
+  the saddle and 4 rows of strut.
 
 **The launch:** after the ready nod, the fighter launches and the sleds
 stay on the deck.

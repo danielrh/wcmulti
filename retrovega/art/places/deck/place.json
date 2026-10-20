@@ -160,7 +160,7 @@
    "SCHROED": {
     "sprite": "ship-SCHROED.png",
     "x": -68,
-    "y": -180,
+    "y": -196,
     "under": "ship-SCHROED-under.png",
     "ux": -54,
     "uy": 263,
@@ -172,19 +172,19 @@
     ],
     "sleds": [
      [
-      501,
-      193
+      500,
+      182
      ],
      [
-      319,
-      266
+      317,
+      256
      ]
     ]
    },
    "FRANKLN": {
     "sprite": "ship-FRANKLN.png",
     "x": -315,
-    "y": -35,
+    "y": -51,
     "under": "ship-FRANKLN-under.png",
     "ux": -316,
     "uy": 253,
@@ -204,21 +204,21 @@
     ],
     "sleds": [
      [
-      498,
-      193
+      496,
+      178
      ],
      [
-      311,
-      198
+      307,
+      183
      ]
     ]
    },
    "GAWAIN": {
     "sprite": "ship-GAWAIN.png",
     "x": 20,
-    "y": 86,
+    "y": 70,
     "under": "ship-GAWAIN-under.png",
-    "ux": 28,
+    "ux": 31,
     "uy": 267,
     "engines": [
      [
@@ -233,18 +233,18 @@
     "sleds": [
      [
       501,
-      271
+      255
      ],
      [
       319,
-      272
+      256
      ]
     ]
    },
    "REDEEMR": {
     "sprite": "ship-REDEEMR.png",
     "x": 199,
-    "y": 203,
+    "y": 187,
     "under": "ship-REDEEMR-under.png",
     "ux": 199,
     "uy": 274,
@@ -256,19 +256,19 @@
     ],
     "sleds": [
      [
-      501,
-      277
+      500,
+      261
      ],
      [
-      319,
-      283
+      317,
+      267
      ]
     ]
    },
    "PACIFER": {
     "sprite": "ship-PACIFER.png",
     "x": -247,
-    "y": -368,
+    "y": -384,
     "under": "ship-PACIFER-under.png",
     "ux": -228,
     "uy": 256,
@@ -320,19 +320,19 @@
     ],
     "sleds": [
      [
-      499,
-      158
+      497,
+      146
      ],
      [
-      314,
-      173
+      317,
+      157
      ]
     ]
    },
    "LANCELT": {
     "sprite": "ship-LANCELT.png",
     "x": -19,
-    "y": -83,
+    "y": -99,
     "under": "ship-LANCELT-under.png",
     "ux": -6,
     "uy": 265,
@@ -373,11 +373,11 @@
     "sleds": [
      [
       496,
-      118
+      104
      ],
      [
       306,
-      159
+      144
      ]
     ]
    }
@@ -385,7 +385,8 @@
   "sled": {
    "foot": "sled-foot.png",
    "strut": "sled-strut.png",
-   "saddle": "sled-saddle.png"
+   "saddle": "sled-saddle.png",
+   "seat": 6
   }
  },
  "launch": {
