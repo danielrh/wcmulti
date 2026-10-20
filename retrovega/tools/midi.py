@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Placeholder music: six short General MIDI loops, one per cue (CC0, ours).
+"""The music, one General MIDI loop per cue (CC0, ours).
 
     midi.py [--out build/dos]     BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID
 
-Each is an 8-bar loop in a type 1 Standard MIDI File: a tempo track, then
-a track per instrument.  They exist so the music engine (src/music.c) has
-something to play, fade and cut between until real music is written.
+Each is a loop in a type 1 Standard MIDI File: a tempo track, then a track
+per instrument.  The three room songs are written out in tools/songs.py for
+our OPL3 bank (tools/oplbank.py); LAUNCH, WIN and LOSE are still the short
+placeholders below.
 """
 import argparse
 import os
@@ -92,31 +93,6 @@ def drums(song, bars, kick, snare, hat, vel=80, beats=4):
             song.note(9, b * beats + x, 0.2, 42, vel - 25)
 
 
-def bar_song():
-    s = Song(96)
-    s.program(0, 4, 90)       # electric piano
-    s.program(1, 33, 100)     # fingered bass
-    prog = [('A3', 'm7'), ('D3', '7'), ('G3', 'maj7'), ('C3', 'maj7')] * 2
-    pad(s, 0, prog, 4, 64)
-    bass(s, 1, [r[:-1] + '2' for r, _k in prog], 4, [(0, 1, 0), (1.5, 0.5, 7), (2, 1, 0), (3, 1, 12)])
-    drums(s, 8, [0, 2.5], [1, 3], [x * 0.5 for x in range(8)], 60)
-    return s
-
-
-def brief_song():
-    s = Song(80)
-    s.program(0, 48, 95)      # strings
-    s.program(1, 61, 85)      # brass section
-    s.program(2, 47, 100)     # timpani
-    prog = [('D3', 'min'), ('A#2', 'maj'), ('C3', 'maj'), ('A2', 'min')] * 2
-    pad(s, 0, prog, 4, 72)
-    for i, (root, _k) in enumerate(prog):
-        for x in (0, 1.5, 3):
-            s.note(1, i * 4 + x, 0.5, pitch(root) - 12, 70)
-        s.note(2, i * 4, 1, pitch(root[:-1] + '2'), 90)
-    return s
-
-
 def launch_song():
     s = Song(136)
     s.program(0, 38, 100)     # synth bass
@@ -156,27 +132,15 @@ def lose_song():
     return s
 
 
-def quarters_song():
-    s = Song(72)
-    s.program(0, 89, 85)      # warm pad
-    s.program(1, 8, 70)       # celesta
-    prog = [('F3', 'maj7'), ('E3', 'm7'), ('D3', 'm7'), ('C3', 'maj7')] * 2
-    pad(s, 0, prog, 4, 60)
-    for i, (root, kind) in enumerate(prog):
-        notes = chord(root, kind)
-        for k in range(8):
-            s.note(1, i * 4 + k * 0.5, 0.45, notes[k % len(notes)] + 12, 55)
-    return s
-
-
-SONGS = {'BRIEF.MID': brief_song, 'BAR.MID': bar_song, 'LAUNCH.MID': launch_song, 'WIN.MID': win_song,
-         'LOSE.MID': lose_song, 'QUARTERS.MID': quarters_song}
+SONGS = {'LAUNCH.MID': launch_song, 'WIN.MID': win_song, 'LOSE.MID': lose_song}
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'dos'))
     args = ap.parse_args()
+    import songs                        # (it imports this module: not at the top)
+    SONGS.update(songs.SONGS)
     os.makedirs(args.out, exist_ok=True)
     for name, make in SONGS.items():
         make().write(os.path.join(args.out, name))

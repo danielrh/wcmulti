@@ -764,6 +764,7 @@ int game_run(void)
         g_now = ticks();
         in_steer(g_mode != MODE_BUNK && g_mode != MODE_NAME);     /* those menus take the arrows */
         in_poll(&in);
+        music_poll();
         if (in.key == KEY_F12)
             shot_save("RVSHOT");
         if (in.key == KEY_ESC && (in.ch == 'q' || g_mode == MODE_ROOM || g_mode == MODE_ENDING)) {

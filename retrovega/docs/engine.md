@@ -16,7 +16,7 @@ from the start.
 | Big memory | **XMS, 32 MB** through the XMS 3.0 driver (functions 89h allocate-any, 0Bh move) | DOSBox's own XMS; `memsize=40` leaves 39 MB. EMS is no longer needed. |
 | Video | VESA 100h, 640×400×256, 64 KB banks | as spec §7 |
 | Mouse | int 33h | DOSBox has it built in; on real DOS, CuteMouse (GPL) |
-| Music | Standard MIDI files, our own sequencer, MPU-401 first, OPL3 later | below |
+| Music | Standard MIDI files, our own sequencer, the OPL3 with our own bank (MPU-401 on request) | below |
 
 Toolchain: `~/opt/watcom` (the 2026-10-01 build of Open Watcom 2, unpacked
 from its `ow-snapshot.tar.xz`), with `WATCOM`, `INCLUDE` and `PATH` set by
@@ -250,37 +250,67 @@ mission lands in the briefing room for the debrief.
   the pointer leaves.
 - **Clicking a pilot** opens their talking close-up.
 
-## Music: interactive MIDI
+## Music: interactive MIDI on the OPL3
 
-Built (src/music.c):
+Built (src/music.c, src/opl.c):
 
 - **Songs:** Standard MIDI Files (type 0 or 1), one per cue beside RV.EXE
   (`BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID`). They are
-  read at start-up and flattened into one event stream each, timed through
-  their tempo maps in ticks of the music clock, and kept resident. Each
-  loops, padded to a whole bar.
+  read at start-up, their tracks merged and timed through their tempo maps
+  in ticks of the music clock, and kept in XMS (resident). Each loops,
+  padded to a whole bar.
+- **Streaming:** the interrupt plays from a ring of 1024 events in
+  conventional memory (some 40 s of the busiest song), which the main loop
+  (`music_poll`) tops up from XMS; the next song's ring is filled by
+  `music_cue` before the interrupt switches to it. Six songs cost 14 KB of
+  conventional memory, however long they are.
 - **The clock:** the PIT reprogrammed to 240 Hz. The BIOS's 18.2 Hz tick
   is still chained, so the game's clock keeps counting.
-- **Output:** the MPU-401 in UART mode (port 330h). DOSBox:
-  `[midi] mpu401=uart` (or `intelligent`). An OPL3 driver with an open
-  General MIDI patch bank comes later, because the browser build has no
-  General MIDI synth.
-- **Volume:** each channel's volume is the song's controller 7 times a
-  master fade (0..1024).
+- **Output: the Sound Blaster's OPL3** (port 388h, found by the timer test;
+  an OPL2 is not enough), with our own instrument bank `RVOPL.BNK`
+  (`tools/oplbank.py`, CC0): 38 patches for every General MIDI program
+  (by family where no patch is written) and the drum keys of channel 10.
+  `src/opl.c` plays MIDI channel messages on the chip's 18 two-operator
+  voices: a patch is one or two layers (a wide pad is two, detuned a few
+  cents and put left and right; the electric piano is a soft body under a
+  short metallic tine); velocity, volume (7), expression (11), pan (10)
+  and the sustain pedal (64) are honoured. A note takes a quiet voice
+  first, then one whose sound has died away by itself (the bank says how
+  long each layer is heard), then the oldest releasing, and only then the
+  oldest sounding. `RV.EXE /mpu` sends the same songs to a General MIDI
+  synthesizer on the MPU-401 instead (UART mode, port 330h); with no OPL3
+  that is the fallback. `/nomusic` turns it off.
+- **Volume:** the master fade (0..1024) is attenuation on every sounding
+  voice's carriers (20 log10); on the MPU-401 it scales each channel's
+  controller 7.
 - **Changing song:** `music_cue(cue, fade_ms)` fades the playing song out
-  over `fade_ms`, sends all-notes-off and reset-controllers on every
-  channel, starts the cue's song, and fades it in over half the time.
+  over `fade_ms`, silences every voice (the fastest release), starts the
+  cue's song, and fades it in over half the time.
   `music_cue_at(cue, fade_ms, MUSIC_BEAT or MUSIC_BAR)` starts the fade on
   the next beat or bar of the old song, so a cut lands in time.
-- **Cues:** the game cues the quarters, the bar and lounge, the briefing,
-  the launch, and a win or a loss at the debrief. All use 250 ms.
-- **Placeholder songs:** `tools/midi.py` writes six 8-bar General MIDI
-  loops, ours and CC0.
-- **Checking it without a synth:** `RV.EXE /midilog` writes every byte
-  sent to the MPU-401, with its tick, to `MIDILOG.BIN`. A walkthrough
-  shows each cut as a 60-tick fade from full to silence, the silence
-  sweep, the next song's instruments, and a 31-tick fade back in; the
-  hi-hats keep their exact tempo.
+- **Cues:** the game cues the quarters (and the locker), the bar and
+  lounge, the briefing, the launch, and a win or a loss at the debrief.
+  All use 250 ms.
+- **The songs** (`tools/songs.py`, ours, CC0): *Bunk Light* for the
+  quarters (68 a minute in D major: an electric piano turning over in
+  eighths under a wide pad, upright bass, the vibraphone with the tune and
+  a flute answering it); *Off-Watch* for the bar (100 a minute, swung, in
+  F: jazz guitar over electric-piano comping, a walking bass, ride and
+  cross-stick; the vibraphone takes the second chorus); *Ready Room* for
+  the briefing (72 a minute in D minor: a harp ostinato, strings, a horn
+  line, a clarinet against it, timpani rolls, a far celesta ping).
+  LAUNCH, WIN and LOSE are still `tools/midi.py`'s short placeholders.
+- **Hearing it without a sound card:** `tools/oplrender.sh` builds
+  `build/oplrender`, which runs `src/opl.c` on the host through DOSBox's
+  own OPL3 emulator (dbopl) and writes a WAV: a song
+  (`--bank RVOPL.BNK --mid SONG.MID`, on the game's 240 Hz clock, with the
+  voices stolen and the most sounding at once), or what the game itself
+  wrote (`--log OPLLOG.BIN`). `RV.EXE /midilog` records every OPL3
+  register write (or MPU-401 byte, `MIDILOG.BIN`) with its tick;
+  `tests/music.txt` walks the quarters, the lounge, the bar and the
+  briefing with it on. Played back, each room change is a fade of some
+  25 dB over a quarter second, the silence, and the next song in over an
+  eighth; no note had to take a sounding voice.
 
 ## Drawing 640×400 fast
 

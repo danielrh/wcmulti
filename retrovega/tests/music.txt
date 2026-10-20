@@ -1,0 +1,24 @@
+# the music: each room's song and the fades between them; run with /midilog
+# (OPLLOG.BIN, played back by build/oplrender --log)
+wait 12
+click
+wait 360
+log to the lounge
+move 593 200
+wait 2
+click
+wait 360
+log to the bar
+move 431 170
+wait 2
+click
+wait 90
+log to the briefing
+move 145 152
+wait 2
+click
+wait 450
+log back to the bar
+key esc
+wait 200
+quit

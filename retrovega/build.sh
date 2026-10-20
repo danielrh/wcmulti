@@ -12,11 +12,12 @@ python3 tools/rvabi.py --c-header > src/rvhooks.h
 python3 tools/rvabi.py --asm > src/rvhook.asm
 python3 tools/rvdata.py --out "$OUT/RVGAME.DAT" --header src/rvdata.h
 python3 tools/midi.py --out "$OUT" > /dev/null
+python3 tools/oplbank.py --out "$OUT/RVOPL.BNK" > /dev/null
 CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq -od -d2 -i=src"
 nasm -f obj -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
-ENGINE="util xms video dat gfx input room lipsync music campaign game main"
+ENGINE="util xms video dat gfx input room lipsync opl music campaign game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
