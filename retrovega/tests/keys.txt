@@ -1,19 +1,37 @@
-# the keyboard: arrows jump between hotspots, Enter acts; a small mouse move is ignored
+# the keyboard: the arrows steer the pointer (two at once diagonally),
+# Tab and Shift+Tab step between hotspots, Enter acts; a small mouse move is ignored
 wait 10
 key enter
 wait 3
 shot K01START
-key left
+hold right 9
+wait 12
+shot K02STEER
+hold up 6
+hold left 6
+wait 10
+shot K03DIAG
+key tab
 wait 3
-shot K02LEFT
-key right
+shot K04TAB
+key tab
 wait 3
-key right
+key backtab
 wait 3
-shot K03RIGHT
+key tab
+wait 3
+shot K05TAB
+key tab
+wait 3
+key tab
+wait 3
+shot K06LOCKR
 key enter
 wait 12
-shot K04LOUNG
-key left
+shot K07ROOM
+key tab
 wait 6
-shot K05PILOT
+shot K08TAB
+key backtab
+wait 6
+shot K09BACK

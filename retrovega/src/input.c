@@ -1,16 +1,21 @@
-/* input.c: the mouse (int 33h), the keys (int 16h), and test scripts.
+/* input.c: the mouse (int 33h), the keys (int 16h and int 9), and test scripts.
  *
- * Mouse and keys together (docs/engine.md): an arrow key puts the game in
- * keyboard mode, the game moves the pointer between hotspots, and the mouse
- * driver is pinned to the pointer.  Mouse motion is then ignored until it
- * adds up to more than KEYBOARD_SLACK mickeys, or a button is pressed: then
- * the mouse has the pointer again.
+ * Mouse and keys together (docs/engine.md): the arrow keys steer the
+ * pointer, faster the longer they are held (int 9 says which are down), and
+ * Tab and Shift+Tab put it on the next or the previous hotspot (room.c).
+ * Either puts the game in keyboard mode, and the mouse driver is pinned to
+ * the pointer.  Mouse motion is then ignored until it adds up to more than
+ * KEYBOARD_SLACK mickeys, or a button is pressed: then the mouse has the
+ * pointer again.
  *
  * A test script (RV.EXE /script FILE) replaces both: one command a line,
  *     wait N       N ticks (18.2 a second)
  *     move X Y     the pointer to X, Y (as a mouse move)
  *     click        the left button, at the pointer
- *     key NAME     left right up down enter esc backspace f12, or one letter
+ *     key NAME     left right up down enter esc backspace f12 tab backtab,
+ *                  or one letter
+ *     hold NAME N  an arrow key held down for N ticks (the script goes on:
+ *                  two holds at once steer diagonally)
  *     type TEXT    the characters of TEXT, then enter
  *     shot NAME    the screen as NAME.BMP
  *     log TEXT     a line in RVLOG.TXT
@@ -22,11 +27,26 @@
 #include <ctype.h>
 #include <dos.h>
 #include <i86.h>
+#include <conio.h>
 #include "rv.h"
+#include "music.h"
 
 #define KEYBOARD_SLACK 6
+#define STEER_MIN 150L                  /* pixels a second as an arrow goes down */
+#define STEER_ACC 1000L                 /* ... and more each second it is held */
+#define STEER_MAX 700L
 
 static int g_mouse, g_x = 320, g_y = 200, g_keyboard, g_slack, g_buttons;
+static int g_steer = 1;
+static unsigned long g_steer_at, g_held;    /* clock240: the last step; how long the arrows are held */
+static long g_fx, g_fy;                     /* the pointer while steering, in 1/256 pixel */
+static unsigned long g_hold_until[4];       /* a script's held arrows: until this BIOS tick */
+
+/* int 9: which keys are down, by scan code; the BIOS's handler still runs */
+static void (__interrupt __far *g_old9)(void);
+static volatile unsigned char g_down[128];
+static volatile unsigned char g_e0;
+static const unsigned char g_arrow_scan[4] = { 0x4B, 0x4D, 0x48, 0x50 };   /* left right up down */
 static FILE *g_script;
 static unsigned long g_wake;
 static char g_typed[64];
@@ -38,9 +58,33 @@ unsigned long ticks(void)
     return *(volatile unsigned long __far *)MK_FP(0x40, 0x6C);
 }
 
+static void __interrupt __far key_isr(void)
+{
+    unsigned char sc = inp(0x60);
+    if (sc == 0xE0) {
+        g_e0 = 1;
+    } else {
+        if (!(g_e0 && ((sc & 0x7F) == 0x2A || (sc & 0x7F) == 0x36)))   /* not the shifts faked around grey keys */
+            g_down[sc & 0x7F] = !(sc & 0x80);
+        g_e0 = 0;
+    }
+    _chain_intr(g_old9);
+}
+
+static void in_shutdown(void)
+{
+    if (g_old9) {
+        _dos_setvect(9, g_old9);
+        g_old9 = 0;
+    }
+}
+
 int in_init(void)
 {
     union REGS r;
+    g_old9 = _dos_getvect(9);
+    _dos_setvect(9, key_isr);
+    atexit(in_shutdown);
     r.x.ax = 0;
     int86(0x33, &r, &r);
     g_mouse = r.x.ax == 0xFFFF;
@@ -83,6 +127,7 @@ static int bios_key(int *ch)
     case 0x01: return KEY_ESC;
     case 0x0E: return KEY_BACKSPACE;
     case 0x58: return KEY_F12;
+    case 0x0F: return *ch == 9 ? KEY_TAB : KEY_BACKTAB;
     }
     return *ch >= 32 && *ch < 127 ? KEY_CHAR : KEY_NONE;
 }
@@ -98,7 +143,7 @@ int script_active(void) { return g_script != 0 || g_quit; }
 
 static int key_named(const char *s, int *ch)
 {
-    static const char *names[] = { "", "left", "right", "up", "down", "enter", "esc", "backspace", "f12" };
+    static const char *names[] = { "", "left", "right", "up", "down", "enter", "esc", "backspace", "f12", "tab", "backtab" };
     int i;
     for (i = 1; i < (int)RV_COUNT(names); i++)
         if (!strcmp(s, names[i]))
@@ -153,6 +198,14 @@ static void script_step(Input *in)
         } else if (!strcmp(line, "key")) {
             in->key = key_named(arg, &in->ch);
             return;
+        } else if (!strcmp(line, "hold")) {
+            char name[16];
+            int n, ch, k;
+            if (sscanf(arg, "%15s %d", name, &n) == 2 && (k = key_named(name, &ch)) >= KEY_LEFT && k <= KEY_DOWN)
+                g_hold_until[k - KEY_LEFT] = ticks() + n;
+            else
+                rv_log("script: hold %s?", arg);
+            continue;
         } else if (!strcmp(line, "type")) {
             strncpy(g_typed, arg, sizeof g_typed - 1);
             g_typed_at = 0;
@@ -176,6 +229,61 @@ static void script_step(Input *in)
     g_quit = 1;
 }
 
+/* the arrows held down: bit 0 left, 1 right, 2 up, 3 down */
+static int arrows(void)
+{
+    int i, m = 0;
+    for (i = 0; i < 4; i++)
+        if (g_script ? ticks() < g_hold_until[i] : g_down[g_arrow_scan[i]] != 0)
+            m |= 1 << i;
+    return m;
+}
+
+/* the arrows steer the pointer, faster the longer they are held: 1 when it moved */
+static int steer(void)
+{
+    int m = g_steer ? arrows() : 0, nx, ny;
+    int dx = ((m >> 1) & 1) - (m & 1), dy = ((m >> 3) & 1) - ((m >> 2) & 1);
+    unsigned long now = clock240();
+    long dt = (long)(now - g_steer_at), speed, step;
+    g_steer_at = now;
+    if (!dx && !dy) {
+        g_held = 0;
+        return 0;
+    }
+    if (dt > 24)
+        dt = 24;
+    if (!g_held || (int)(g_fx >> 8) != g_x || (int)(g_fy >> 8) != g_y) {
+        g_fx = ((long)g_x << 8) + 128;      /* from where the pointer is (the mouse may have moved it) */
+        g_fy = ((long)g_y << 8) + 128;
+    }
+    g_held += dt;
+    speed = STEER_MIN + STEER_ACC * (long)g_held / 240;
+    if (speed > STEER_MAX)
+        speed = STEER_MAX;
+    step = speed * dt * 256 / 240;
+    if (dx && dy)
+        step = step * 181 / 256;            /* a diagonal goes no faster */
+    g_fx += dx * step;
+    g_fy += dy * step;
+    if (g_fx < 0) g_fx = 0;
+    if (g_fy < 0) g_fy = 0;
+    if (g_fx > ((long)(SCR_W - 1) << 8)) g_fx = (long)(SCR_W - 1) << 8;
+    if (g_fy > ((long)(SCR_H - 1) << 8)) g_fy = (long)(SCR_H - 1) << 8;
+    nx = (int)(g_fx >> 8);
+    ny = (int)(g_fy >> 8);
+    if (nx == g_x && ny == g_y)
+        return 0;
+    g_x = nx;
+    g_y = ny;
+    return 1;
+}
+
+void in_steer(int on)
+{
+    g_steer = on;
+}
+
 void in_poll(Input *in)
 {
     union REGS r;
@@ -188,8 +296,10 @@ void in_poll(Input *in)
         } else {
             script_step(in);
         }
-        if (in->key >= KEY_LEFT && in->key <= KEY_DOWN)
+        if (in->key == KEY_TAB || in->key == KEY_BACKTAB)
             g_keyboard = 1;
+        if (steer())
+            g_keyboard = in->moved = 1;
         in->x = g_x;
         in->y = g_y;
         in->keyboard = g_keyboard;
@@ -198,7 +308,9 @@ void in_poll(Input *in)
     key = bios_key(&ch);
     in->key = key;
     in->ch = ch;
-    if (key >= KEY_LEFT && key <= KEY_DOWN) {
+    if (key == KEY_TAB || key == KEY_BACKTAB || steer()) {
+        if (key != KEY_TAB && key != KEY_BACKTAB)
+            in->moved = 1;
         g_keyboard = 1;
         g_slack = 0;
     }
@@ -278,5 +390,5 @@ void shot_save(const char *name)
         fwrite(row, 1, SCR_W, f);
     }
     fclose(f);
-    rv_log("shot: %s", path);
+    rv_log("shot: %s, the pointer at %d,%d", path, g_x, g_y);
 }

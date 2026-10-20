@@ -79,11 +79,13 @@ int gfx_font_height(int font);
 int gfx_wrap(int font, int x, int y, int w, const char *s, int colour, int line_gap, int y0, int y1);  /* lines drawn */
 
 /* input (input.c): the mouse and the keys, or a test script's events */
-enum { KEY_NONE, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_BACKSPACE, KEY_F12, KEY_CHAR };
+enum { KEY_NONE, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_BACKSPACE, KEY_F12, KEY_TAB, KEY_BACKTAB,
+       KEY_CHAR };
 typedef struct { int x, y, clicked, key, ch, moved, keyboard; } Input;
 int in_init(void);
 void in_poll(Input *in);
 void in_warp(int x, int y);
+void in_steer(int on);                 /* the arrows steer the pointer (on unless a menu takes them) */
 unsigned long ticks(void);             /* BIOS ticks, 18.2 a second */
 int script_open(const char *path);
 int script_active(void);

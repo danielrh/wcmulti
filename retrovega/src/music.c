@@ -436,3 +436,12 @@ void music_cue_at(int cue, int fade_ms, int at)
 }
 
 void music_cue(int cue, int fade_ms) { music_cue_at(cue, fade_ms, MUSIC_NOW); }
+
+unsigned long clock240(void)
+{
+    unsigned long t;
+    _disable();                         /* two words: not torn by the interrupt */
+    t = g_clock;
+    _enable();
+    return t;
+}

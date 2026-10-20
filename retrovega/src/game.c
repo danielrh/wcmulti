@@ -762,6 +762,7 @@ int game_run(void)
             "The briefing room is through the hatch in the bar.");
     while (g_mode != MODE_QUIT) {
         g_now = ticks();
+        in_steer(g_mode != MODE_BUNK && g_mode != MODE_NAME);     /* those menus take the arrows */
         in_poll(&in);
         if (in.key == KEY_F12)
             shot_save("RVSHOT");

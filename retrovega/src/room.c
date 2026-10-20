@@ -99,7 +99,7 @@ static void set_label(const char __far *s)
     vid_dirty(SCR_H - LABEL_H, SCR_H);
 }
 
-/* the pointer's centre on a hotspot, for the keyboard */
+/* the pointer's centre on a hotspot, for Tab */
 static void hot_centre(int kind, int index, int *x, int *y)
 {
     const RvRoom __far *r = room();
@@ -116,40 +116,41 @@ static void hot_centre(int kind, int index, int *x, int *y)
     }
 }
 
-/* arrow keys: the nearest target in that direction */
-static void keyboard_move(int key)
+/* Tab and Shift+Tab: the next target to the right (or left), wrapping round */
+static void tab_move(int dir)
 {
     const RvRoom __far *r = room();
-    int best = -1, bkind = 0, i, k;
-    long bscore = 0x7fffffffL;
+    int best = -1, bkind = 0, first = -1, fkind = 0, i, k;
+    long bkey = 0, fkey = 0, here;
+    /* targets in order of their centres, left to right, then top to bottom */
+    if (g_scene.hover_kind != HOVER_NONE) {
+        int x, y;
+        hot_centre(g_scene.hover_kind, g_scene.hover_index, &x, &y);
+        here = (long)x * 1024 + y;
+    } else {
+        here = (long)g_scene.px * 1024 + g_scene.py;
+    }
     for (k = HOVER_SEAT; k <= HOVER_HOT; k++) {
         int n = k == HOVER_SEAT ? 3 : k == HOVER_ACTOR ? r->has_actor : r->nhot;
         for (i = 0; i < n; i++) {
             int x, y;
-            long dx, dy, along, across;
+            long key;
             if (k == HOVER_SEAT && g_scene.seat[i] == 0xFF)
                 continue;
-            if (k == g_scene.hover_kind && i == g_scene.hover_index)
-                continue;                   /* not the one already under the pointer */
             hot_centre(k, i, &x, &y);
-            dx = x - g_scene.px;
-            dy = y - g_scene.py;
-            along = key == KEY_LEFT ? -dx : key == KEY_RIGHT ? dx : key == KEY_UP ? -dy : dy;
-            across = key == KEY_LEFT || key == KEY_RIGHT ? dy : dx;
-            if (along <= 4)
-                continue;
-            if (across < 0)
-                across = -across;
-            if (along + 2 * across < bscore) {
-                bscore = along + 2 * across;
-                best = i;
-                bkind = k;
-            }
+            key = ((long)x * 1024 + y) * dir;
+            if (first < 0 || key < fkey)
+                first = i, fkind = k, fkey = key;     /* where the round starts again */
+            if (key > here * dir && (best < 0 || key < bkey))
+                best = i, bkind = k, bkey = key;
         }
     }
+    if (best < 0)
+        best = first, bkind = fkind;
     if (best >= 0) {
         int x, y;
         hot_centre(bkind, best, &x, &y);
+        rv_log("tab: to %d,%d", x, y);
         in_warp(x, y);
         dirty_pointer();
         g_scene.px = x;
@@ -175,8 +176,8 @@ int scene_update(const Input *in, SceneAction *act)
             act->kind = ACTION_HOT, act->index = -1, act->action = RV_ACT_NONE, act->arg = 0;
         return act->kind != ACTION_NONE;
     }
-    if (in->key >= KEY_LEFT && in->key <= KEY_DOWN)
-        keyboard_move(in->key);
+    if (in->key == KEY_TAB || in->key == KEY_BACKTAB)
+        tab_move(in->key == KEY_TAB ? 1 : -1);
     else if (in->x != g_scene.px || in->y != g_scene.py) {
         dirty_pointer();
         g_scene.px = in->x;

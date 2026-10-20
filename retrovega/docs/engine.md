@@ -234,8 +234,13 @@ mission lands in the briefing room for the debrief.
 ## Input: mouse and keys together
 
 - **Mouse:** the pointer moves freely; anything under it lights up.
-- **Arrow keys:** the moment one is pressed, the pointer jumps to the
-  nearest hotspot in that direction, and Enter acts on it.
+- **Arrow keys:** they steer the pointer like a mouse, slowly at first
+  (150 pixels a second) and faster the longer they are held (up to 700),
+  diagonally with two. The game hooks int 9 to know which keys are down,
+  and chains to the BIOS, which still queues the keystrokes.
+- **Tab and Shift+Tab:** the pointer jumps to the next hotspot to the
+  right (or left), round to the first again; Enter acts on it. Menus
+  that take the arrows (the bunks, name entry) turn the steering off.
 - **Switching back:** while in keyboard mode, mouse motion under 6
   mickeys in total is ignored. A click, or more motion than that, gives
   control back to the mouse.
