@@ -339,7 +339,7 @@ def bar_song():
     s.setup(0, 5, 88)       # electric piano, the warm one
     s.setup(1, 33, 104)     # fingered bass
     s.setup(2, 26, 100)     # jazz guitar
-    s.setup(3, 11, 96)      # vibraphone
+    s.setup(3, 11, 74)      # vibraphone (the user: its bell was too far forward; it sits back in the band)
     s.setup(4, 16, 54)      # organ, under the second bridge
     s.setup(5, 4, 86)       # electric piano with the tine, for its solo in IV
     s.setup(6, 24, 92)      # nylon guitar (the bossa nova)
@@ -391,10 +391,11 @@ def bar_song():
             s.play(9, bar, 2, 0.2, 36, 40)
     # the tune: the guitar the first time, the vibraphone the second (the guitar on the bridge)
     for chorus, lead in ((0, 2), (32, 3)):
-        s.tune(lead, chorus, B_TUNE_A, 88)
-        s.tune(lead, chorus + 8, B_TUNE_A2, 88)
+        v = 88 if lead == 2 else 74                 # (the vibraphone struck softer: a mellower bell)
+        s.tune(lead, chorus, B_TUNE_A, v)
+        s.tune(lead, chorus + 8, B_TUNE_A2, v)
         s.tune(2, chorus + 16, B_TUNE_BR if chorus == 0 else B_SOLO_BR, 86)
-        s.tune(lead, chorus + 24, B_TUNE_A3, 88)
+        s.tune(lead, chorus + 24, B_TUNE_A3, v)
     for bar in range(48, 56):                       # the organ under the second bridge
         chords = B_BR[bar - 48].split()
         s.play(4, bar, 0, 4, CH[chords[0]][0].split(), 70, spread=2)
@@ -506,8 +507,8 @@ def later(s, b0, whole, rng):
     head_a1 = t.period(ss, SS_A1, SWING, SWING_END)
     head_a2 = shift(head_a1, 8)[:sum(1 for n in head_a1 if n[0] < ss + 4)] + t.phrase(ss + 12, SS_A2[4:], SWING, SWING_END, shape='fall')
     head_b = t.period(ss + 16, SS_B, SWING, SWING_END)
-    put(s, 3, head_a1 + head_a2 + head_b + shift(head_a2, 16), 86)
-    put(s, 2, Tune(rng, 'Bb', 'major', 60, 79).period(ss + 32, SECOND_SHIFT[32:], SOLO, SOLO_END), 84)
+    put(s, 3, head_a1 + head_a2 + head_b + shift(head_a2, 16), 74)
+    put(s, 2, Tune(rng, 'Bb', 'major', 60, 79).period(ss + 32, SECOND_SHIFT[32:], SOLO, SOLO_END), 74)
     # III, Liberty Port (E flat): a bossa nova, straight eighths
     lp = ss + len(SECOND_SHIFT)
     s.swing = 0.5
@@ -519,7 +520,7 @@ def later(s, b0, whole, rng):
     t = Tune(rng, 'Eb', 'major', 63, 79)
     first = t.period(lp, LIBERTY, BOSSA, BOSSA_END)
     put(s, 7, first, 84)
-    put(s, 3, Tune(rng, 'Eb', 'major', 65, 82).period(lp + 16, LIBERTY, BOSSA, BOSSA_END), 82)
+    put(s, 3, Tune(rng, 'Eb', 'major', 65, 82).period(lp + 16, LIBERTY, BOSSA, BOSSA_END), 72)
     # the flute's tune again, its last phrase bent to the turn into G minor
     put(s, 7, [n for n in shift(first, 32) if n[0] < lp + 44], 82)
     put(s, 7, t.phrase(lp + 44, LIBERTY_PORT[44:], BOSSA, BOSSA_END, shape='fall'), 82)
@@ -537,9 +538,9 @@ def later(s, b0, whole, rng):
     t = Tune(rng, 'G', 'blues', 62, 79)
     head = t.period(cb, BLUES, SWING, SWING_END)
     put(s, 2, head + shift(head, 12), 88)
-    put(s, 3, Tune(rng, 'G', 'blues', 63, 82).period(cb + 24, BLUES, SOLO, SOLO_END), 84)
+    put(s, 3, Tune(rng, 'G', 'blues', 63, 82).period(cb + 24, BLUES, SOLO, SOLO_END), 74)
     put(s, 5, Tune(rng, 'G', 'blues', 60, 79).period(cb + 36, BLUES, SOLO, SOLO_END), 80)
-    put(s, 2, Tune(rng, 'G', 'blues', 60, 81).period(cb + 48, BLUES, SOLO, SOLO_END), 86)
+    put(s, 2, Tune(rng, 'G', 'blues', 60, 81).period(cb + 48, BLUES, SOLO, SOLO_END), 76)
     put(s, 2, [n for n in shift(head, 60) if n[0] < cb + 68], 88)
     put(s, 2, t.phrase(cb + 68, CARGO_BLUES[68:], SWING, SWING_END, shape='fall'), 88)
     # V, Off-Watch's changes again (F): the vibraphone over the organ, the old
@@ -553,13 +554,13 @@ def later(s, b0, whole, rng):
         if i < 32:
             s.play(4, bar, 0, 4, organ.next(chord(syms[0])), 58, spread=2)
     vib = Tune(rng, 'F', 'major', 65, 84)
-    put(s, 3, vib.period(rp, REPRISE[:16], SOLO, SOLO_END) + vib.period(rp + 24, REPRISE[24:32], SOLO, SOLO_END), 84)
+    put(s, 3, vib.period(rp, REPRISE[:16], SOLO, SOLO_END) + vib.period(rp + 24, REPRISE[24:32], SOLO, SOLO_END), 74)
     s.tune(2, rp + 16, B_TUNE_BR, 86)
     gtr = Tune(rng, 'F', 'major', 60, 81)
     for k in range(8):
         part = REPRISE[32 + k * 4: 36 + k * 4]
         tune = gtr if k % 2 == 0 else vib
-        put(s, 2 if k % 2 == 0 else 3, tune.phrase(rp + 32 + k * 4, part, SOLO, SOLO_END), 86 if k % 2 == 0 else 84)
+        put(s, 2 if k % 2 == 0 else 3, tune.phrase(rp + 32 + k * 4, part, SOLO, SOLO_END), 76 if k % 2 == 0 else 74)
 
 
 # --- BRIEF: "Ready Room" ---
