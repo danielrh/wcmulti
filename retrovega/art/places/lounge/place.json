@@ -1,0 +1,145 @@
+{
+ "size": [
+  640,
+  400
+ ],
+ "back": "back.png",
+ "about": "The crew lounge in the pilots' quarters: a table under a desk lamp, bunks on both sides, lockers at the back.",
+ "seats": {
+  "left": {
+   "KESTREL": {
+    "talk": {
+     "file": "seat-KESTREL-talk.png",
+     "x": 167,
+     "y": 144
+    },
+    "face": {
+     "file": "seat-KESTREL-face.png",
+     "x": 167,
+     "y": 143
+    }
+   },
+   "COMET": {
+    "talk": {
+     "file": "seat-COMET-talk.png",
+     "x": 167,
+     "y": 143
+    },
+    "face": {
+     "file": "seat-COMET-face.png",
+     "x": 167,
+     "y": 144
+    }
+   },
+   "TECH": {
+    "talk": {
+     "file": "seat-TECH-talk.png",
+     "x": 167,
+     "y": 141
+    },
+    "face": {
+     "file": "seat-TECH-face.png",
+     "x": 167,
+     "y": 141
+    }
+   }
+  },
+  "middle": {
+   "ECHO": {
+    "talk": {
+     "file": "seat-ECHO-talk.png",
+     "x": 270,
+     "y": 132
+    },
+    "face": {
+     "file": "seat-ECHO-face.png",
+     "x": 267,
+     "y": 132
+    }
+   },
+   "TORCH": {
+    "talk": {
+     "file": "seat-TORCH-talk.png",
+     "x": 265,
+     "y": 132
+    },
+    "face": {
+     "file": "seat-TORCH-face.png",
+     "x": 265,
+     "y": 132
+    }
+   },
+   "DRIFTER": {
+    "talk": {
+     "file": "seat-DRIFTER-talk.png",
+     "x": 266,
+     "y": 132
+    },
+    "face": {
+     "file": "seat-DRIFTER-face.png",
+     "x": 264,
+     "y": 132
+    }
+   }
+  },
+  "right": {
+   "ANCHOR": {
+    "talk": {
+     "file": "seat-ANCHOR-talk.png",
+     "x": 379,
+     "y": 143
+    },
+    "face": {
+     "file": "seat-ANCHOR-face.png",
+     "x": 380,
+     "y": 139
+    }
+   },
+   "FROST": {
+    "talk": {
+     "file": "seat-FROST-talk.png",
+     "x": 377,
+     "y": 144
+    },
+    "face": {
+     "file": "seat-FROST-face.png",
+     "x": 379,
+     "y": 143
+    }
+   },
+   "PRIME": {
+    "talk": {
+     "file": "seat-PRIME-talk.png",
+     "x": 393,
+     "y": 143
+    },
+    "face": {
+     "file": "seat-PRIME-face.png",
+     "x": 393,
+     "y": 143
+    }
+   }
+  }
+ },
+ "hotspots": {
+  "hatch": {
+   "rect": [
+    408,
+    120,
+    47,
+    100
+   ],
+   "does": "exit"
+  },
+  "bunks": {
+   "rect": [
+    0,
+    49,
+    158,
+    250
+   ],
+   "does": "quarters"
+  }
+ },
+ "boards": {}
+}

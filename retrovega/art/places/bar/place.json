@@ -1,0 +1,247 @@
+{
+ "size": [
+  640,
+  400
+ ],
+ "back": "back.png",
+ "about": "The pilots' lounge and bar: Tally behind the counter, a round table with three seats, the simulator, the chalkboard.",
+ "seats": {
+  "left": {
+   "FROST": {
+    "talk": {
+     "file": "seat-FROST-talk.png",
+     "x": 206,
+     "y": 159
+    },
+    "face": {
+     "file": "seat-FROST-face.png",
+     "x": 206,
+     "y": 158
+    }
+   },
+   "TORCH": {
+    "talk": {
+     "file": "seat-TORCH-talk.png",
+     "x": 200,
+     "y": 152
+    },
+    "face": {
+     "file": "seat-TORCH-face.png",
+     "x": 200,
+     "y": 151
+    }
+   },
+   "TECH": {
+    "talk": {
+     "file": "seat-TECH-talk.png",
+     "x": 200,
+     "y": 155
+    },
+    "face": {
+     "file": "seat-TECH-face.png",
+     "x": 200,
+     "y": 153
+    }
+   }
+  },
+  "middle": {
+   "PRIME": {
+    "talk": {
+     "file": "seat-PRIME-talk.png",
+     "x": 264,
+     "y": 157
+    },
+    "face": {
+     "file": "seat-PRIME-face.png",
+     "x": 264,
+     "y": 156
+    }
+   },
+   "KESTREL": {
+    "talk": {
+     "file": "seat-KESTREL-talk.png",
+     "x": 267,
+     "y": 157
+    },
+    "face": {
+     "file": "seat-KESTREL-face.png",
+     "x": 268,
+     "y": 157
+    }
+   },
+   "ECHO": {
+    "talk": {
+     "file": "seat-ECHO-talk.png",
+     "x": 264,
+     "y": 153
+    },
+    "face": {
+     "file": "seat-ECHO-face.png",
+     "x": 260,
+     "y": 153
+    }
+   }
+  },
+  "right": {
+   "DRIFTER": {
+    "talk": {
+     "file": "seat-DRIFTER-talk.png",
+     "x": 322,
+     "y": 155
+    },
+    "face": {
+     "file": "seat-DRIFTER-face.png",
+     "x": 322,
+     "y": 155
+    }
+   },
+   "COMET": {
+    "talk": {
+     "file": "seat-COMET-talk.png",
+     "x": 321,
+     "y": 162
+    },
+    "face": {
+     "file": "seat-COMET-face.png",
+     "x": 321,
+     "y": 162
+    }
+   },
+   "ANCHOR": {
+    "talk": {
+     "file": "seat-ANCHOR-talk.png",
+     "x": 321,
+     "y": 156
+    },
+    "face": {
+     "file": "seat-ANCHOR-face.png",
+     "x": 321,
+     "y": 147
+    }
+   }
+  }
+ },
+ "actors": {
+  "tally": {
+   "person": "TALLY",
+   "rect": [
+    46,
+    106,
+    72,
+    97
+   ],
+   "atlas": "tally.png",
+   "columns": 8,
+   "frames": [
+    "face",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "table",
+    "p6"
+   ],
+   "clips": {
+    "idle": [
+     [
+      "p1",
+      350
+     ],
+     [
+      "p2",
+      350
+     ],
+     [
+      "p3",
+      350
+     ],
+     [
+      "p4",
+      350
+     ],
+     [
+      "p5",
+      350
+     ],
+     [
+      "p6",
+      350
+     ],
+     [
+      "p5",
+      350
+     ],
+     [
+      "p4",
+      350
+     ],
+     [
+      "p3",
+      350
+     ],
+     [
+      "p2",
+      350
+     ]
+    ],
+    "glance": [
+     [
+      "table",
+      1500
+     ]
+    ],
+    "face": [
+     [
+      "face",
+      0
+     ]
+    ]
+   },
+   "hover": "face"
+  }
+ },
+ "hotspots": {
+  "simulator": {
+   "rect": [
+    438,
+    137,
+    188,
+    196
+   ],
+   "does": "simulator"
+  },
+  "chalkboard": {
+   "rect": [
+    180,
+    112,
+    103,
+    61
+   ],
+   "does": "scores"
+  },
+  "hatch": {
+   "rect": [
+    125,
+    112,
+    42,
+    81
+   ],
+   "does": "exit"
+  }
+ },
+ "boards": {
+  "chalkboard": [
+   187,
+   117,
+   90,
+   50
+  ],
+  "simulator_screen": [
+   495,
+   138,
+   78,
+   46
+  ]
+ }
+}

@@ -1,0 +1,63 @@
+{
+ "size": [
+  640,
+  400
+ ],
+ "back": "back.png",
+ "about": "The open locker, close up: the medal case (medals drawn into it), photographs, letters, the helmet and flight jacket.",
+ "hotspots": {
+  "medals": {
+   "rect": [
+    203,
+    80,
+    69,
+    50
+   ],
+   "does": "medals"
+  },
+  "letters": {
+   "rect": [
+    295,
+    106,
+    76,
+    26
+   ],
+   "does": "letters"
+  },
+  "photos": {
+   "rect": [
+    430,
+    52,
+    120,
+    190
+   ],
+   "does": "photos"
+  },
+  "helmet": {
+   "rect": [
+    186,
+    2,
+    119,
+    68
+   ],
+   "does": "kills"
+  },
+  "back": {
+   "rect": [
+    0,
+    -13,
+    117,
+    427
+   ],
+   "does": "exit"
+  }
+ },
+ "boards": {
+  "medal_case": [
+   204,
+   82,
+   67,
+   48
+  ]
+ }
+}

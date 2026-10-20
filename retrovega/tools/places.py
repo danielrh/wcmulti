@@ -681,6 +681,10 @@ def main():
     for key in args.keys or list(table):
         cfg = table[key]
         print(key)
+        if 'fighter' not in cfg:
+            import rooms
+            rooms.build(key, cfg, args.out)
+            continue
         back, front, rect, clips, ships, place = build(key, cfg, args.out, args.cache, args.rerender)
         first = clips[cfg['script'][0][0]][0][0] if cfg.get('script') else None
         if args.still and ships:

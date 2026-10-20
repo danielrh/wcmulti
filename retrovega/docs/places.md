@@ -13,6 +13,132 @@ for the whole GIF, with no dithering, as the game will. `--rerender`
 renders the fighters again; otherwise they are cached in
 `build/places/ships/`.
 
+`tools/roompreview.py` writes `build/places/rooms.html`, one self-contained
+page (9 MB) that plays the rooms with people in them as the game will:
+
+- **Bar and lounge:** pick who sits in each seat; point at a pilot and
+  they turn to you; click them and their talking close-up says their line
+  from data/people.csv.
+- **Tally** polishes on his own.
+- **Briefing:** "Play the briefing" makes the XO speak, a click on her
+  zooms in, and at the end the pilots rise.
+- **Quarters and locker:** the hotspots are named under the picture, and a
+  tick box shows their outlines.
+
+Add `--deck` for the deck as well (5 MB more).
+
+## The rooms with people in them
+
+![bar, lounge, briefing, the XO's close-up, quarters, locker](rooms.png)
+
+`tools/rooms.py` builds these rooms; places.py calls it for every room
+without a fighter.
+
+**Where the art comes from.** Every shot of a room is an image-synthesis
+edit of the same picture, so the shots line up to the pixel (measured: no
+shift, no scale). Each drifts a little in colour, though. A room has an
+empty plate (`background`), and each shot's people are cut out where the
+shot differs from the plate. The tool first matches the shot's tone to the
+plate: it measures the low-frequency colour difference around what
+changed and adds it back. The cut-outs then sit on the plate without a
+seam, and with hard alpha, as the engine draws them.
+
+### Seats (bar and lounge)
+
+Each table has three seats. Each seat has the pilots drawn sitting there,
+in two poses:
+
+- **talk:** turned to the others, the pose they sit in.
+- **face:** turned to the player, shown while the mouse is over them or
+  while they talk to the player.
+
+A mission puts at most one pilot in each seat, and any mix composes. Each
+changed pixel of a shot goes to the seat it is best connected to through
+the changed pixels. A step across a strong colour edge, the painted ink
+line between two people, costs more, so a reaching arm stays with its
+owner. Where two pilots really touch, a few pixels can still go to the
+wrong one.
+
+| room | left | middle | right |
+|---|---|---|---|
+| bar | Frost, Torch, Kit | Prime, Kestrel, Echo | Drifter, Comet, Anchor |
+| lounge | Kestrel, Comet, Kit | Echo, Torch, Drifter | Anchor, Frost, Prime |
+
+The blue-suited pilot is a Mercer twin. Since the twins are identical,
+which seat is Prime's and which Anchor's is only a choice in
+data/places.json. In the bar both can sit at the table at once; in the
+lounge they share the right seat.
+
+### Actors (Tally)
+
+An actor animates on his own, independent of everything else. He is a
+rectangle of the plate replaced by one frame after another: a copy,
+like Kit's patch on the deck. His frames come from the whole shots, each
+feathered into the plate so the rectangle's border is the plate's own
+pixels.
+
+Tally's frames:
+
+- `p1`..`p6`: polishing, looped back and forth at 350 ms.
+- `table`: a glance at the table, now and then.
+- `face`: looking at the player, shown when the mouse is over him.
+
+### The speaker (the XO at the briefing)
+
+- **The sheet:** the XO is drawn from a sheet of 3 gestures (hands
+  together, an open hand, a raised hand) by 3 mouths (closed, open,
+  round). The tool finds the sheet's nine figures by their outlines.
+- **At the lectern:** the tool fits a figure onto where the reference shot
+  has her (scale 0.32) and clips it at the lectern's top.
+- **Talking:** her mouth follows `lipsync.py`, its nine shapes folded onto
+  her three (`mouth_of_viseme`). Her gesture changes with each sentence.
+  place.json carries each line as `[gesture, mouth, ms]` steps.
+- **Close-up:** a click on her draws the same cells large over a blurred,
+  enlarged crop of the stage.
+- **Not used:** the pack's GIF of her talking. Its crossfades won't survive
+  256 colours.
+
+### Stages (the pilots rising)
+
+When the briefing ends, the crowd goes from seated (the plate) to halfway
+to standing, 350 ms a step. Each stage is what changed from the reference
+shot, drawn over the XO.
+
+### Hotspots and boards
+
+**Hotspots** are rectangles to click, each with what it does. People's
+own pixels come first; they are the seat sprites' alpha and the actors'
+rectangles.
+
+| room | hotspots |
+|---|---|
+| bar | simulator, chalkboard (scores), hatch (exit) |
+| lounge | hatch (exit), bunks (to the quarters) |
+| quarters | bunk (save and load), locker, desk (log), door (exit) |
+| locker | medals, letters, photos, helmet (kills), back (exit) |
+| briefing | the XO (close-up) |
+
+**Boards** are rectangles the engine writes or draws on:
+
+- **bar:** the chalkboard (high scores, splash count) and the simulator's
+  screen;
+- **briefing:** the big screen (the mission map);
+- **locker:** the medal case.
+
+### place.json
+
+Everything is in screen pixels.
+
+- **back:** the plate.
+- **seats:** seat → pilot → pose → sprite and its corner.
+- **actors:** each one's rectangle, frame atlas (8 to a row), clips (frame
+  and ms) and hover frame.
+- **speaker:** its atlas (gestures as rows, mouths as columns), its corner,
+  the viseme map, its lines as steps, and its close-up (backdrop and
+  atlas).
+- **stages:** each pose's sprite and corner.
+- **hotspots** and **boards**.
+
 ## The launch deck
 
 ![every player fighter on the pad](deck.png)
@@ -147,5 +273,10 @@ amber hangar light from above. No fighter, no people, no shadow, no text.
 
 - **Palette:** one for each room, shared with the faces and the fighter's
   colours.
-- **The other rooms:** bar, bunks, locker, briefing and debrief, from
-  [location-prompts.md](location-prompts.md).
+- **The debriefing room:** no art yet (prompt in
+  [location-prompts.md](location-prompts.md)).
+- **Unused shots,** kept in the sources: the bar with an enclosed
+  simulator capsule (bar 009), and two wider views of the bunk room
+  (dorm 006 and 007).
+- **Ambient gossip:** the seated pilots trading lines in subtitles, each
+  turning to whoever speaks.

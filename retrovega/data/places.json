@@ -1,9 +1,485 @@
 {
+  "bar": {
+    "about": "The pilots' lounge and bar: Tally behind the counter, a round table with three seats, the simulator, the chalkboard.",
+    "src": "art/places/src/bar",
+    "background": "chat-image-002.png",
+    "crop": [
+      0,
+      32,
+      1536,
+      992
+    ],
+    "table": [
+      460,
+      360,
+      1120,
+      1024
+    ],
+    "seats": {
+      "left": {
+        "x": 570,
+        "pilots": {
+          "FROST": {
+            "talk": "chat-image-003.png",
+            "face": "frost-prime-drifter-face.png"
+          },
+          "TORCH": {
+            "talk": "chat-image-004.png",
+            "face": "chat-image-005.png"
+          },
+          "TECH": {
+            "talk": "chat-image-006.png",
+            "face": "chat-image-007.png"
+          }
+        }
+      },
+      "middle": {
+        "x": 740,
+        "pilots": {
+          "PRIME": {
+            "talk": "chat-image-003.png",
+            "face": "frost-prime-drifter-face.png"
+          },
+          "KESTREL": {
+            "talk": "chat-image-004.png",
+            "face": "chat-image-005.png"
+          },
+          "ECHO": {
+            "talk": "chat-image-006.png",
+            "face": "chat-image-007.png"
+          }
+        }
+      },
+      "right": {
+        "x": 915,
+        "pilots": {
+          "DRIFTER": {
+            "talk": "chat-image-003.png",
+            "face": "frost-prime-drifter-face.png"
+          },
+          "COMET": {
+            "talk": "chat-image-004.png",
+            "face": "chat-image-005.png"
+          },
+          "ANCHOR": {
+            "talk": "chat-image-006.png",
+            "face": "chat-image-007.png"
+          }
+        }
+      }
+    },
+    "actors": {
+      "tally": {
+        "person": "TALLY",
+        "search": [
+          0,
+          150,
+          450,
+          640
+        ],
+        "frames": {
+          "face": "chat-image-001.png",
+          "p1": "chat-image-002.png",
+          "p2": "chat-image-003.png",
+          "p3": "chat-image-004.png",
+          "p4": "chat-image-005.png",
+          "p5": "chat-image-006.png",
+          "table": "chat-image-007.png",
+          "p6": "frost-prime-drifter-face.png"
+        },
+        "clips": {
+          "idle": [
+            [
+              "p1",
+              350
+            ],
+            [
+              "p2",
+              350
+            ],
+            [
+              "p3",
+              350
+            ],
+            [
+              "p4",
+              350
+            ],
+            [
+              "p5",
+              350
+            ],
+            [
+              "p6",
+              350
+            ],
+            [
+              "p5",
+              350
+            ],
+            [
+              "p4",
+              350
+            ],
+            [
+              "p3",
+              350
+            ],
+            [
+              "p2",
+              350
+            ]
+          ],
+          "glance": [
+            [
+              "table",
+              1500
+            ]
+          ],
+          "face": [
+            [
+              "face",
+              0
+            ]
+          ]
+        },
+        "hover": "face"
+      }
+    },
+    "hotspots": {
+      "simulator": {
+        "rect": [
+          1050,
+          360,
+          1500,
+          830
+        ],
+        "does": "simulator"
+      },
+      "chalkboard": {
+        "rect": [
+          433,
+          300,
+          680,
+          447
+        ],
+        "does": "scores"
+      },
+      "hatch": {
+        "rect": [
+          300,
+          300,
+          400,
+          495
+        ],
+        "does": "exit"
+      }
+    },
+    "boards": {
+      "chalkboard": [
+        448,
+        312,
+        665,
+        432
+      ],
+      "simulator_screen": [
+        1187,
+        363,
+        1373,
+        473
+      ]
+    }
+  },
+  "lounge": {
+    "about": "The crew lounge in the pilots' quarters: a table under a desk lamp, bunks on both sides, lockers at the back.",
+    "src": "art/places/src/dorm",
+    "background": "chat-image-005.png",
+    "crop": [
+      0,
+      32,
+      1536,
+      992
+    ],
+    "table": [
+      380,
+      300,
+      1260,
+      1000
+    ],
+    "seats": {
+      "left": {
+        "x": 540,
+        "pilots": {
+          "KESTREL": {
+            "talk": "chat-image-009.png",
+            "face": "chat-image-001.png"
+          },
+          "COMET": {
+            "talk": "chat-image-008.png",
+            "face": "chat-image-002.png"
+          },
+          "TECH": {
+            "talk": "chat-image-003.png",
+            "face": "chat-image-004.png"
+          }
+        }
+      },
+      "middle": {
+        "x": 745,
+        "pilots": {
+          "ECHO": {
+            "talk": "chat-image-009.png",
+            "face": "chat-image-001.png"
+          },
+          "TORCH": {
+            "talk": "chat-image-008.png",
+            "face": "chat-image-002.png"
+          },
+          "DRIFTER": {
+            "talk": "chat-image-003.png",
+            "face": "chat-image-004.png"
+          }
+        }
+      },
+      "right": {
+        "x": 1065,
+        "pilots": {
+          "ANCHOR": {
+            "talk": "chat-image-009.png",
+            "face": "chat-image-001.png"
+          },
+          "FROST": {
+            "talk": "chat-image-008.png",
+            "face": "chat-image-002.png"
+          },
+          "PRIME": {
+            "talk": "chat-image-003.png",
+            "face": "chat-image-004.png"
+          }
+        }
+      }
+    },
+    "hotspots": {
+      "hatch": {
+        "rect": [
+          980,
+          320,
+          1093,
+          560
+        ],
+        "does": "exit"
+      },
+      "bunks": {
+        "rect": [
+          0,
+          150,
+          380,
+          750
+        ],
+        "does": "quarters"
+      }
+    }
+  },
+  "quarters": {
+    "about": "The player's own cabin: the bunk (save and load), the desk, the locker (personal belongings), the door.",
+    "src": "art/places/src/dorm",
+    "background": "chat-image-010.png",
+    "crop": [
+      0,
+      32,
+      1536,
+      992
+    ],
+    "hotspots": {
+      "bunk": {
+        "rect": [
+          80,
+          230,
+          490,
+          860
+        ],
+        "does": "save"
+      },
+      "locker": {
+        "rect": [
+          1007,
+          140,
+          1247,
+          840
+        ],
+        "does": "locker"
+      },
+      "desk": {
+        "rect": [
+          520,
+          373,
+          960,
+          800
+        ],
+        "does": "log"
+      },
+      "door": {
+        "rect": [
+          1313,
+          0,
+          1536,
+          1024
+        ],
+        "does": "exit"
+      }
+    }
+  },
+  "locker": {
+    "about": "The open locker, close up: the medal case (medals drawn into it), photographs, letters, the helmet and flight jacket.",
+    "src": "art/places/src/locker",
+    "background": "Open Locker, Sealed Gunmetal Bulkhead.png",
+    "crop": [
+      0,
+      32,
+      1536,
+      992
+    ],
+    "hotspots": {
+      "medals": {
+        "rect": [
+          487,
+          224,
+          653,
+          344
+        ],
+        "does": "medals"
+      },
+      "letters": {
+        "rect": [
+          707,
+          287,
+          890,
+          349
+        ],
+        "does": "letters"
+      },
+      "photos": {
+        "rect": [
+          1033,
+          157,
+          1320,
+          613
+        ],
+        "does": "photos"
+      },
+      "helmet": {
+        "rect": [
+          447,
+          37,
+          733,
+          200
+        ],
+        "does": "kills"
+      },
+      "back": {
+        "rect": [
+          0,
+          0,
+          280,
+          1024
+        ],
+        "does": "exit"
+      }
+    },
+    "boards": {
+      "medal_case": [
+        490,
+        228,
+        650,
+        344
+      ]
+    }
+  },
+  "briefing": {
+    "about": "The briefing room: rows of pilots seen from behind, the XO at the lectern, the big screen. The XO talks (her mouth follows the text, her gesture changes each sentence); clicking her zooms in; at the end the pilots rise.",
+    "src": "art/places/src/briefing",
+    "background": "Close behind the pilots at briefing.png",
+    "crop": [
+      0,
+      32,
+      1536,
+      992
+    ],
+    "speaker": {
+      "person": "XO",
+      "sheet": "XO officer dialogue and gesture sprites.png",
+      "gestures": [
+        "hands",
+        "open",
+        "raised"
+      ],
+      "mouths": [
+        "closed",
+        "open",
+        "round"
+      ],
+      "reference": "pilots-rise-01-seated.png",
+      "search": [
+        200,
+        230,
+        520,
+        440
+      ],
+      "clip_y": 397,
+      "closeup": {
+        "crop": [
+          130,
+          160,
+          770,
+          560
+        ],
+        "blur": 4,
+        "height": 360,
+        "x": 220
+      },
+      "lines": [
+        "Pilots, listen up. Aera fighters have been sighted near the Rigel relay. Your wing sweeps Nav One, then escorts the convoy home. Stay in formation and keep the chatter down. Dismissed."
+      ]
+    },
+    "stages": {
+      "reference": "pilots-rise-01-seated.png",
+      "poses": {
+        "seated": null,
+        "halfway": "pilots-rise-02-halfway.png",
+        "standing": "Pilots rise before the briefing screen.png"
+      },
+      "ms": 350
+    },
+    "hotspots": {
+      "xo": {
+        "rect": [
+          285,
+          270,
+          420,
+          400
+        ],
+        "does": "closeup"
+      }
+    },
+    "boards": {
+      "screen": [
+        452,
+        144,
+        1084,
+        476
+      ]
+    }
+  },
   "deck": {
     "about": "The launch deck: Kit at her cart in front, the player's fighter on the pad behind her, in side profile, nose right.",
     "src": "art/places/src/deck",
     "background": "background.png",
-    "crop": [0, 32, 1536, 992],
+    "crop": [
+      0,
+      32,
+      1536,
+      992
+    ],
     "front": {
       "file": "foreground-base.png",
       "animations": "animations.json",
@@ -13,22 +489,52 @@
       "nose_x": 1440,
       "bottom": 740,
       "metre": 54,
-      "sleds": [790, 265],
-      "more_sleds": {"REDEEMR": [1220]},
-      "legs": {"default": "retract", "FRANKLN": "sled", "GAWAIN": "forwardretract", "LANCELT": "forwardretract"},
+      "sleds": [
+        790,
+        265
+      ],
+      "more_sleds": {
+        "REDEEMR": [
+          1220
+        ]
+      },
+      "legs": {
+        "default": "retract",
+        "FRANKLN": "sled",
+        "GAWAIN": "forwardretract",
+        "LANCELT": "forwardretract"
+      },
       "elevation": 10,
       "heading": 270,
       "key_light": "0.1,0.95,0.3",
-      "light": [0.85, 0.70, 0.52],
+      "light": [
+        0.85,
+        0.7,
+        0.52
+      ],
       "ships": "player",
       "preview": "REDEEMR"
     },
     "script": [
-      ["idle", 1],
-      ["console-work", 1],
-      ["ready-nod", 1],
-      ["launch"],
-      ["idle", 1]
+      [
+        "idle",
+        1
+      ],
+      [
+        "console-work",
+        1
+      ],
+      [
+        "ready-nod",
+        1
+      ],
+      [
+        "launch"
+      ],
+      [
+        "idle",
+        1
+      ]
     ]
   }
 }

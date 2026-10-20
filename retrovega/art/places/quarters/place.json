@@ -1,0 +1,47 @@
+{
+ "size": [
+  640,
+  400
+ ],
+ "back": "back.png",
+ "about": "The player's own cabin: the bunk (save and load), the desk, the locker (personal belongings), the door.",
+ "hotspots": {
+  "bunk": {
+   "rect": [
+    33,
+    82,
+    171,
+    262
+   ],
+   "does": "save"
+  },
+  "locker": {
+   "rect": [
+    420,
+    45,
+    100,
+    292
+   ],
+   "does": "locker"
+  },
+  "desk": {
+   "rect": [
+    217,
+    142,
+    183,
+    178
+   ],
+   "does": "log"
+  },
+  "door": {
+   "rect": [
+    547,
+    -13,
+    93,
+    427
+   ],
+   "does": "exit"
+  }
+ },
+ "boards": {}
+}
