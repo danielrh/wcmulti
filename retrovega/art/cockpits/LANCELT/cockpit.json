@@ -1,0 +1,260 @@
+{
+ "ship": "LANCELT",
+ "kit": "lancelot-cockpit-kit-v1",
+ "description": "Clean cockpit plate: E/M panel label, empty displays, transparent canopy, no joystick or movable throttle handle.",
+ "regions": {
+  "mfd_left": [
+   37,
+   235,
+   154,
+   87
+  ],
+  "mfd_right": [
+   468,
+   235,
+   140,
+   88
+  ],
+  "survival": [
+   213,
+   235,
+   80,
+   87
+  ],
+  "speed": [
+   153,
+   204,
+   116,
+   22
+  ],
+  "fuel": [
+   476,
+   206,
+   76,
+   21
+  ],
+  "radar": {
+   "cx": 364,
+   "cy": 279,
+   "r": 44
+  }
+ },
+ "controls": {
+  "throttle": {
+   "x": 12,
+   "y": 340,
+   "w": 77,
+   "h": 60,
+   "damage": "propulsion"
+  },
+  "joystick": {
+   "x": 291,
+   "y": 314,
+   "w": 65,
+   "h": 86,
+   "damage": "flight_controls"
+  }
+ },
+ "damage": [
+  {
+   "id": "weapons",
+   "bit": 0,
+   "file": "damage/00-weapons.png",
+   "x": 35,
+   "y": 233,
+   "w": 158,
+   "h": 91,
+   "attach": null
+  },
+  {
+   "id": "targeting",
+   "bit": 1,
+   "file": "damage/01-targeting.png",
+   "x": 466,
+   "y": 233,
+   "w": 144,
+   "h": 92,
+   "attach": null
+  },
+  {
+   "id": "radar",
+   "bit": 2,
+   "file": "damage/02-radar.png",
+   "x": 317,
+   "y": 234,
+   "w": 96,
+   "h": 92,
+   "attach": null
+  },
+  {
+   "id": "shields",
+   "bit": 3,
+   "file": "damage/03-shields.png",
+   "x": 215,
+   "y": 291,
+   "w": 78,
+   "h": 12,
+   "attach": null
+  },
+  {
+   "id": "armor",
+   "bit": 4,
+   "file": "damage/04-armor.png",
+   "x": 215,
+   "y": 304,
+   "w": 78,
+   "h": 8,
+   "attach": null
+  },
+  {
+   "id": "hull",
+   "bit": 5,
+   "file": "damage/05-hull.png",
+   "x": 215,
+   "y": 312,
+   "w": 78,
+   "h": 10,
+   "attach": null
+  },
+  {
+   "id": "speed",
+   "bit": 6,
+   "file": "damage/06-speed.png",
+   "x": 152,
+   "y": 202,
+   "w": 119,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "fuel",
+   "bit": 7,
+   "file": "damage/07-fuel.png",
+   "x": 474,
+   "y": 204,
+   "w": 80,
+   "h": 24,
+   "attach": null
+  },
+  {
+   "id": "propulsion",
+   "bit": 8,
+   "file": "damage/08-propulsion.png",
+   "x": 5,
+   "y": 334,
+   "w": 87,
+   "h": 66,
+   "attach": "throttle"
+  },
+  {
+   "id": "power_distribution",
+   "bit": 9,
+   "file": "damage/09-power_distribution.png",
+   "x": 96,
+   "y": 334,
+   "w": 103,
+   "h": 43,
+   "attach": null
+  },
+  {
+   "id": "em",
+   "bit": 10,
+   "file": "damage/10-em.png",
+   "x": 454,
+   "y": 332,
+   "w": 186,
+   "h": 68,
+   "attach": null
+  },
+  {
+   "id": "navigation",
+   "bit": 12,
+   "file": "damage/12-navigation.png",
+   "x": 103,
+   "y": 378,
+   "w": 25,
+   "h": 22,
+   "attach": null
+  },
+  {
+   "id": "communications",
+   "bit": 13,
+   "file": "damage/13-communications.png",
+   "x": 134,
+   "y": 378,
+   "w": 29,
+   "h": 22,
+   "attach": null
+  },
+  {
+   "id": "iff",
+   "bit": 14,
+   "file": "damage/14-iff.png",
+   "x": 172,
+   "y": 378,
+   "w": 24,
+   "h": 21,
+   "attach": null
+  },
+  {
+   "id": "flight_controls",
+   "bit": 15,
+   "file": "damage/15-flight_controls.png",
+   "x": 291,
+   "y": 314,
+   "w": 65,
+   "h": 86,
+   "attach": "joystick"
+  },
+  {
+   "id": "aux_flight_display",
+   "bit": 16,
+   "file": "damage/16-aux_flight_display.png",
+   "x": 391,
+   "y": 337,
+   "w": 47,
+   "h": 58,
+   "attach": null
+  },
+  {
+   "id": "ejection",
+   "bit": 20,
+   "file": "damage/20-ejection.png",
+   "x": 220,
+   "y": 338,
+   "w": 38,
+   "h": 62,
+   "attach": null
+  },
+  {
+   "id": "warnings",
+   "bit": 21,
+   "file": "damage/21-warnings.png",
+   "x": 287,
+   "y": 204,
+   "w": 78,
+   "h": 24,
+   "attach": null
+  },
+  {
+   "id": "canopy",
+   "bit": 23,
+   "file": "damage/23-canopy.png",
+   "x": 0,
+   "y": 0,
+   "w": 640,
+   "h": 216,
+   "attach": null
+  },
+  {
+   "id": "survival_vdu",
+   "bit": 26,
+   "file": "damage/26-survival_vdu.png",
+   "x": 211,
+   "y": 233,
+   "w": 84,
+   "h": 91,
+   "attach": null
+  }
+ ]
+}

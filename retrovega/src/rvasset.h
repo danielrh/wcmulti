@@ -12,12 +12,45 @@
 #define RV_PEOPLE 16
 #define RV_ACTOR_FRAMES 12
 #define RV_FACE 352
+#define RV_CP_LAYERS 32
+#define RV_CP_FIRST 208
+
+#define RV_CPD_WEAPONS 0
+#define RV_CPD_TARGETING 1
+#define RV_CPD_RADAR 2
+#define RV_CPD_SHIELDS 3
+#define RV_CPD_ARMOR 4
+#define RV_CPD_HULL 5
+#define RV_CPD_SPEED 6
+#define RV_CPD_FUEL 7
+#define RV_CPD_PROPULSION 8
+#define RV_CPD_POWER_DISTRIBUTION 9
+#define RV_CPD_EM 10
+#define RV_CPD_ENGINE_STATUS 11
+#define RV_CPD_NAVIGATION 12
+#define RV_CPD_COMMUNICATIONS 13
+#define RV_CPD_IFF 14
+#define RV_CPD_FLIGHT_CONTROLS 15
+#define RV_CPD_AUX_FLIGHT_DISPLAY 16
+#define RV_CPD_WEAPON_CONTROLS 17
+#define RV_CPD_TARGET_CONTROLS 18
+#define RV_CPD_RADAR_CONTROLS 19
+#define RV_CPD_EJECTION 20
+#define RV_CPD_WARNINGS 21
+#define RV_CPD_LOCK 22
+#define RV_CPD_CANOPY 23
+#define RV_CPD_CANOPY_RIGHT 24
+#define RV_CPD_CANOPY_OVERHEAD 25
+#define RV_CPD_SURVIVAL_VDU 26
+#define RV_CPD_ENGINEERING_VDU 27
+#define RV_CPD_SENSOR_AUX_VDU 28
 
 #define RV_KIND_PAL 1
 #define RV_KIND_PALPART 2
 #define RV_KIND_IMG 3
 #define RV_KIND_SPR 4
 #define RV_KIND_FONT 5
+#define RV_KIND_RAW 6
 #define RV_ACT_NONE 0
 #define RV_ACT_GOTO 1
 #define RV_ACT_BUNK 2
@@ -75,7 +108,10 @@ typedef struct {
     unsigned short room_size, person_size;
     unsigned short font_body, font_title, ptr_arrow, ptr_door;
     unsigned short pal_ui;
-    unsigned char reserved[18];
+    unsigned short ncockpits;
+    unsigned long cockpits_at;
+    unsigned short cockpit_size;
+    unsigned char reserved[10];
 } RvDatHeader;
 typedef struct {
     char name[22];
@@ -138,9 +174,32 @@ typedef struct {
     unsigned short palpart, face, mouth0, eyes0;   /* the face sprite, 9 mouth and 3 eye images */
     short top;                  /* the face's first opaque row */
 } RvPerson;
+typedef struct { short x, y, w, h; } RvRect;
+typedef struct {
+    unsigned short sprite;      /* the healthy control, at x, y */
+    short x, y;
+} RvControl;
+typedef struct {
+    unsigned short sprite;      /* 0xFFFF: this cockpit has no such layer */
+    unsigned char attach, pad;  /* 0 fixed, 1 moves with the throttle, 2 with the joystick */
+} RvDamageLayer;
+typedef struct {
+    char key[8];
+    unsigned char ship_type, nlayers;
+    short open_y0, open_y1;     /* the rows of the canopy opening */
+    unsigned short palette;     /* PAL: the flight palette with this cockpit's colours in RV_CP_FIRST.. */
+    unsigned short base;        /* IMG 640x400, the opening black */
+    unsigned short struts;      /* SPR: what the base paints inside the opening's extents (0xFFFF none) */
+    unsigned short extents;     /* RAW: (first, end) x per row from open_y0 */
+    RvRect mfd[2], survival, speed, fuel, lamp_lock, lamp_warn;   /* w == 0: not on this cockpit */
+    short radar_x, radar_y, radar_r;
+    RvControl throttle, joystick;
+    RvDamageLayer layer[RV_CP_LAYERS];   /* by bit of rvCockpitDamage (RV_CPD_*) */
+} RvCockpit;
 #pragma pack()
 
 #define RV_ROOM_SIZE 562
 #define RV_PERSON_SIZE 20
+#define RV_COCKPIT_SIZE 224
 
 #endif

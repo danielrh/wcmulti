@@ -23,6 +23,12 @@ Takes the built rooms (art/places/KEY/, tools/places.py), the room data
                with what they do, the seat poses, the actor's frames, the
                briefing's speaker and crowd, the deck's fighters and Kit
     people     a record per person: palette part, face, mouths, eyes
+    cockpits   a record per flyable ship: its palette (the flight palette,
+               data/palette.json, with the cockpit's own colours in 208-254),
+               the base picture, the opening's extent on every row, the
+               struts inside it, the displays, the controls and the damage
+               layers by bit (docs/engine.md, "Flight")
+    raw        bytes the engine reads as they are (the extents table)
 
 Things the engine would otherwise compose at run time are composed here:
 the deck as one plate per fighter (shadow, reflection, legs and ship are
@@ -41,6 +47,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
+import cockpits  # noqa: E402
 import places  # noqa: E402
 
 VERSION = 1
@@ -58,7 +65,7 @@ UI = [(0, 0, 0), (28, 28, 30), (60, 60, 64), (100, 100, 104), (140, 140, 144), (
 UI_NAMES = ['BLACK', 'GREY1', 'GREY2', 'GREY3', 'GREY4', 'GREY5', 'GREY6', 'WHITE', 'AMBER1', 'AMBER2',
             'AMBER3', 'AMBER4', 'PANEL', 'PANEL_EDGE', 'HILITE', 'RED']
 TEXT_COLOURS = [7, 11, 5]       # white, amber, grey: the mix tables' order
-KIND = {'PAL': 1, 'PALPART': 2, 'IMG': 3, 'SPR': 4, 'FONT': 5}
+KIND = {'PAL': 1, 'PALPART': 2, 'IMG': 3, 'SPR': 4, 'FONT': 5, 'RAW': 6}
 ACTIONS = ['NONE', 'GOTO', 'BUNK', 'LOG', 'SCORES', 'SIMULATOR', 'CLOSEUP', 'CUSTOMIZE', 'LAUNCH', 'MEDALS',
            'LETTERS', 'PHOTOS', 'KILLS']
 LIMITS = {'HOTS': 8, 'POSES': 12, 'IDLE': 16, 'DECK_SHIPS': 8, 'CLIPS': 3, 'PEOPLE': 16, 'ACTOR_FRAMES': 12}
@@ -125,6 +132,15 @@ class Palette:
         self.img = Image.new('P', (1, 1))
         flat = [c for rgb in colours for c in rgb]
         self.img.putpalette(flat)
+
+    def index_dither(self, im, allowed):
+        """Indices of an image's RGB in the `allowed` colours, error-diffused
+        (for the painterly cockpits: 63 colours would band without it)."""
+        pim = Image.new('P', (1, 1))
+        flat = [c for i in allowed for c in self.colours[i]]
+        pim.putpalette(flat + flat[:3] * (256 - len(allowed)))
+        q = np.asarray(im.convert('RGB').quantize(palette=pim, dither=Image.Dither.FLOYDSTEINBERG))
+        return np.array(allowed + [allowed[0]] * (256 - len(allowed)), np.uint8)[q]
 
     def index(self, im, allowed=None):
         """Indices of an image's RGB in this palette (nearest, no dither)."""
@@ -392,6 +408,102 @@ def pack_deck(pack, place, d, ships_csv):
     return rec, deck
 
 
+# --- cockpits ----------------------------------------------------------------
+
+CP_FREE = list(range(208, 255))         # the flight palette's slots for a cockpit's own colours
+CP_LAYERS = 32
+
+
+def rect4(r):
+    return struct.pack('<4h', *(r if r else (0, 0, 0, 0)))
+
+
+def pack_cockpits(pack, ships_csv):
+    """A record per cockpit (data/cockpits.json): returns (records, previews)."""
+    cfg = json.load(open(os.path.join(ROOT, 'data', 'cockpits.json')))
+    flight = [tuple(c) for c in json.load(open(os.path.join(ROOT, 'data', 'palette.json')))['rgb']]
+    types = {r['key']: int(r['type'], 16) for r in ships_csv}
+    recs, previews = [], []
+    for key in cfg['ships']:
+        d = os.path.join(ROOT, 'art', 'cockpits', key)
+        cj = json.load(open(os.path.join(d, 'cockpit.json')))
+        base = Image.open(os.path.join(d, 'base.png')).convert('RGBA')
+        alpha = np.asarray(base)[..., 3]
+        opening = alpha < 128
+        rows = np.nonzero(opening.any(axis=1))[0]
+        y0, y1 = int(rows[0]), int(rows[-1]) + 1
+        ext = []
+        for y in range(y0, y1):
+            xs = np.nonzero(opening[y])[0]
+            ext.append((int(xs[0]), int(xs[-1]) + 1) if len(xs) else (0, 0))
+        controls = {cid: Image.open(os.path.join(d, cid + '.png')).convert('RGBA') for cid in cj['controls']}
+        layers = [(e, Image.open(os.path.join(d, e['file'])).convert('RGBA')) for e in cj['damage']]
+        # the cockpit's colours: median cut over everything it draws, into 208-254
+        part = make_palette([base] + list(controls.values()) + [im for _e, im in layers], len(CP_FREE), CP_FREE[0])
+        pal = Palette(flight[:CP_FREE[0]] + part + flight[CP_FREE[-1] + 1:])
+        allowed = list(range(16)) + CP_FREE
+        over_black = Image.alpha_composite(Image.new('RGBA', SCREEN, (0, 0, 0, 255)), base)
+        idx = pal.index_dither(over_black, allowed)
+        idx[opening] = 0
+        rec = {'palette': add_palette(pack, 'cpal_' + key, pal, list(range(256))),
+               'base': pack.add('cp_' + key, 'IMG', bytes(idx.reshape(-1)), SCREEN[0], SCREEN[1], 0, 0)}
+        # the struts: what the base paints inside the opening's row extents
+        inside = np.zeros_like(opening)
+        for i, (xa, xb) in enumerate(ext):
+            inside[y0 + i, xa:xb] = True
+        strut = inside & ~opening
+        ys, xs = np.nonzero(strut)
+        if len(ys):
+            sx0, sy0, sx1, sy1 = int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+            rec['struts'] = pack.add('cps_' + key, 'SPR', sprite_payload(idx[sy0:sy1, sx0:sx1], strut[sy0:sy1, sx0:sx1]),
+                                     sx1 - sx0, sy1 - sy0, sx0, sy0)
+        else:
+            rec['struts'] = 0xFFFF
+        rec['extents'] = pack.add('cpx_' + key, 'RAW', struct.pack('<%dh' % (2 * len(ext)), *[v for e in ext for v in e]))
+        ctl = {}
+        for cid, im in controls.items():
+            c = cj['controls'][cid]
+            ctl[cid] = add_sprite(pack, 'cpc_%s_%s' % (key[:7], cid[:3]), im, pal, c['x'], c['y'], allowed)
+        layer = [(0xFFFF, 0)] * CP_LAYERS
+        for e, im in layers:
+            layer[e['bit']] = (add_sprite(pack, 'cpd_%s_%02d' % (key[:7], e['bit']), im, pal, e['x'], e['y'], allowed),
+                               cockpits.ATTACH[e['attach']])
+        R = cj['regions']
+        recs.append(struct.pack('<8sBBhhHHHH', key.encode(), types[key], len(layers), y0, y1, rec['palette'],
+                                rec['base'], rec['struts'], rec['extents'])
+                    + rect4(R['mfd_left']) + rect4(R['mfd_right']) + rect4(R['survival']) + rect4(R['speed'])
+                    + rect4(R['fuel']) + rect4(R.get('lamp_lock')) + rect4(R.get('lamp_warn'))
+                    + struct.pack('<3h', R['radar']['cx'], R['radar']['cy'], R['radar']['r'])
+                    + struct.pack('<Hhh', ctl['throttle'], cj['controls']['throttle']['x'], cj['controls']['throttle']['y'])
+                    + struct.pack('<Hhh', ctl['joystick'], cj['controls']['joystick']['x'], cj['controls']['joystick']['y'])
+                    + b''.join(struct.pack('<HBB', a, att, 0) for a, att in layer))
+        # the preview: the base as the engine will show it, the controls in place
+        shown = idx.copy()
+        for cid, im in controls.items():
+            c = cj['controls'][cid]
+            a = np.asarray(im)
+            sub = shown[c['y']:c['y'] + im.height, c['x']:c['x'] + im.width]
+            on = a[..., 3] >= 128
+            sub[on] = pal.index(im, allowed)[on]
+        pim = Image.fromarray(shown, 'P')
+        pim.putpalette([v for rgb in pal.colours for v in rgb])
+        previews.append((key, pim.convert('RGB'), len(layers)))
+        print('  cockpit %-8s rows %d-%d open, %d damage layers, %d strut pixels' % (key, y0, y1, len(layers), len(ys)))
+    return recs, previews
+
+
+def preview_cockpits(previews, path):
+    cols = 4
+    rows = (len(previews) + cols - 1) // cols
+    img = Image.new('RGB', (cols * 320, rows * 212), (20, 20, 24))
+    dr = ImageDraw.Draw(img)
+    for i, (key, im, n) in enumerate(previews):
+        x, y = (i % cols) * 320, (i // cols) * 212
+        img.paste(im.resize((320, 200), Image.NEAREST), (x, y))
+        dr.text((x + 4, y + 200), '%s as packed (63 colours): %d damage layers' % (key, n), fill=(230, 230, 230))
+    img.save(path)
+
+
 # --- people ------------------------------------------------------------------
 
 def pack_people(pack, keys):
@@ -525,14 +637,17 @@ def main():
                                  rec['closeup_part'], rec['closeup_back'])
                      + hot + poses + rec['actor'] + speaker + deck + boards)
     persons = pack_people(pack, people)
-    # lay out: header, directory, rooms, people, payloads
-    hdr_fmt = '<8sHHLHLHLHHHHHH20s'
+    cockpits_recs, previews = pack_cockpits(pack, ships_csv)
+    preview_cockpits(previews, os.path.join(ROOT, 'docs', 'cockpits-packed.png'))
+    # lay out: header, directory, rooms, people, cockpits, payloads
+    hdr_fmt = '<8sHHLHLHLHHHHHHHHLH10s'
     hsize = struct.calcsize(hdr_fmt)
     dir_at = hsize
     dsize = 40
     rooms_at = dir_at + dsize * len(pack.assets)
     people_at = rooms_at + sum(len(r) for r in rooms)
-    data_at = people_at + sum(len(p) for p in persons)
+    cockpits_at = people_at + sum(len(p) for p in persons)
+    data_at = cockpits_at + sum(len(c) for c in cockpits_recs)
     directory, blobs, at = [], [], data_at
     for name, kind, w, h, x, y, payload in pack.assets:
         directory.append(struct.pack('<22sBBHHhhLL', name.encode(), kind, 0, w, h, x, y, at, len(payload)))
@@ -541,24 +656,30 @@ def main():
         if len(payload) & 1:
             blobs.append(b'\0')
     head = struct.pack(hdr_fmt, b'RVDAT', VERSION, len(pack.assets), dir_at, len(rooms), rooms_at, len(persons),
-                       people_at, len(rooms[0]), len(persons[0]), body, title, arrow, door, ui_i.to_bytes(2, 'little')
-                       + b'\0' * 18)
+                       people_at, len(rooms[0]), len(persons[0]), body, title, arrow, door, ui_i,
+                       len(cockpits_recs), cockpits_at, len(cockpits_recs[0]), b'')
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, 'wb') as f:
-        f.write(head + b''.join(directory) + b''.join(rooms) + b''.join(persons) + b''.join(blobs))
+        f.write(head + b''.join(directory) + b''.join(rooms) + b''.join(persons) + b''.join(cockpits_recs)
+                + b''.join(blobs))
     with open(args.header, 'w') as f:
-        f.write(header(len(rooms[0]), len(persons[0])))
-    print('%s: %d assets, %d rooms (%d bytes each), %d people, %.1f MB'
-          % (args.out, len(pack.assets), len(rooms), len(rooms[0]), len(persons), os.path.getsize(args.out) / 1e6))
+        f.write(header(len(rooms[0]), len(persons[0]), len(cockpits_recs[0])))
+    print('%s: %d assets, %d rooms (%d bytes each), %d people, %d cockpits, %.1f MB'
+          % (args.out, len(pack.assets), len(rooms), len(rooms[0]), len(persons), len(cockpits_recs),
+             os.path.getsize(args.out) / 1e6))
 
 
-def header(room_size, person_size):
+def header(room_size, person_size, cockpit_size):
     L = LIMITS
     lines = ['/* rvasset.h: RV.DAT\'s records.  Generated by tools/rvpack.py: do not edit. */',
              '#ifndef RVASSET_H', '#define RVASSET_H', '', '#define RVDAT_VERSION %d' % VERSION, '']
     for k, v in L.items():
         lines.append('#define RV_%s %d' % (k, v))
-    lines += ['#define RV_FACE %d' % FACE, '']
+    lines += ['#define RV_FACE %d' % FACE, '#define RV_CP_LAYERS %d' % CP_LAYERS,
+              '#define RV_CP_FIRST %d' % CP_FREE[0], '']
+    for bit in sorted(cockpits.BIT_NAMES):
+        lines.append('#define RV_CPD_%s %d' % (cockpits.BIT_NAMES[bit].upper(), bit))
+    lines.append('')
     for k, v in KIND.items():
         lines.append('#define RV_KIND_%s %d' % (k, v))
     for i, a in enumerate(ACTIONS):
@@ -583,7 +704,10 @@ def header(room_size, person_size):
     unsigned short room_size, person_size;
     unsigned short font_body, font_title, ptr_arrow, ptr_door;
     unsigned short pal_ui;
-    unsigned char reserved[18];
+    unsigned short ncockpits;
+    unsigned long cockpits_at;
+    unsigned short cockpit_size;
+    unsigned char reserved[10];
 } RvDatHeader;
 typedef struct {
     char name[22];
@@ -646,7 +770,30 @@ typedef struct {
     unsigned short palpart, face, mouth0, eyes0;   /* the face sprite, 9 mouth and 3 eye images */
     short top;                  /* the face's first opaque row */
 } RvPerson;
-#pragma pack()''', '', '#define RV_ROOM_SIZE %d' % room_size, '#define RV_PERSON_SIZE %d' % person_size, '',
+typedef struct { short x, y, w, h; } RvRect;
+typedef struct {
+    unsigned short sprite;      /* the healthy control, at x, y */
+    short x, y;
+} RvControl;
+typedef struct {
+    unsigned short sprite;      /* 0xFFFF: this cockpit has no such layer */
+    unsigned char attach, pad;  /* 0 fixed, 1 moves with the throttle, 2 with the joystick */
+} RvDamageLayer;
+typedef struct {
+    char key[8];
+    unsigned char ship_type, nlayers;
+    short open_y0, open_y1;     /* the rows of the canopy opening */
+    unsigned short palette;     /* PAL: the flight palette with this cockpit's colours in RV_CP_FIRST.. */
+    unsigned short base;        /* IMG 640x400, the opening black */
+    unsigned short struts;      /* SPR: what the base paints inside the opening's extents (0xFFFF none) */
+    unsigned short extents;     /* RAW: (first, end) x per row from open_y0 */
+    RvRect mfd[2], survival, speed, fuel, lamp_lock, lamp_warn;   /* w == 0: not on this cockpit */
+    short radar_x, radar_y, radar_r;
+    RvControl throttle, joystick;
+    RvDamageLayer layer[RV_CP_LAYERS];   /* by bit of rvCockpitDamage (RV_CPD_*) */
+} RvCockpit;
+#pragma pack()''', '', '#define RV_ROOM_SIZE %d' % room_size, '#define RV_PERSON_SIZE %d' % person_size,
+              '#define RV_COCKPIT_SIZE %d' % cockpit_size, '',
               '#endif', '']
     return '\n'.join(lines)
 

@@ -1,0 +1,280 @@
+{
+ "ship": "GAWAIN",
+ "kit": "gawain-cockpit-kit-v1",
+ "description": "Blue/slate-blue fighter interior with a very high overhead canopy crossbeam, upright MFDs and separate flight controls.",
+ "regions": {
+  "mfd_left": [
+   46,
+   242,
+   142,
+   67
+  ],
+  "mfd_right": [
+   471,
+   242,
+   122,
+   67
+  ],
+  "survival": [
+   226,
+   242,
+   54,
+   35
+  ],
+  "speed": [
+   118,
+   210,
+   93,
+   17
+  ],
+  "fuel": [
+   474,
+   211,
+   74,
+   16
+  ],
+  "radar": {
+   "cx": 362,
+   "cy": 278,
+   "r": 36
+  }
+ },
+ "controls": {
+  "throttle": {
+   "x": 23,
+   "y": 334,
+   "w": 55,
+   "h": 66,
+   "damage": "propulsion"
+  },
+  "joystick": {
+   "x": 295,
+   "y": 319,
+   "w": 55,
+   "h": 81,
+   "damage": "flight_controls"
+  }
+ },
+ "damage": [
+  {
+   "id": "weapons",
+   "bit": 0,
+   "file": "damage/00-weapons.png",
+   "x": 41,
+   "y": 237,
+   "w": 153,
+   "h": 78,
+   "attach": null
+  },
+  {
+   "id": "targeting",
+   "bit": 1,
+   "file": "damage/01-targeting.png",
+   "x": 467,
+   "y": 237,
+   "w": 132,
+   "h": 78,
+   "attach": null
+  },
+  {
+   "id": "radar",
+   "bit": 2,
+   "file": "damage/02-radar.png",
+   "x": 316,
+   "y": 235,
+   "w": 94,
+   "h": 89,
+   "attach": null
+  },
+  {
+   "id": "shields",
+   "bit": 3,
+   "file": "damage/03-shields.png",
+   "x": 225,
+   "y": 286,
+   "w": 58,
+   "h": 8,
+   "attach": null
+  },
+  {
+   "id": "armor",
+   "bit": 4,
+   "file": "damage/04-armor.png",
+   "x": 225,
+   "y": 295,
+   "w": 58,
+   "h": 8,
+   "attach": null
+  },
+  {
+   "id": "hull",
+   "bit": 5,
+   "file": "damage/05-hull.png",
+   "x": 225,
+   "y": 304,
+   "w": 58,
+   "h": 8,
+   "attach": null
+  },
+  {
+   "id": "speed",
+   "bit": 6,
+   "file": "damage/06-speed.png",
+   "x": 116,
+   "y": 203,
+   "w": 154,
+   "h": 28,
+   "attach": null
+  },
+  {
+   "id": "fuel",
+   "bit": 7,
+   "file": "damage/07-fuel.png",
+   "x": 471,
+   "y": 207,
+   "w": 81,
+   "h": 23,
+   "attach": null
+  },
+  {
+   "id": "propulsion",
+   "bit": 8,
+   "file": "damage/08-propulsion.png",
+   "x": 18,
+   "y": 332,
+   "w": 62,
+   "h": 68,
+   "attach": "throttle"
+  },
+  {
+   "id": "power_distribution",
+   "bit": 9,
+   "file": "damage/09-power_distribution.png",
+   "x": 97,
+   "y": 334,
+   "w": 102,
+   "h": 39,
+   "attach": null
+  },
+  {
+   "id": "em",
+   "bit": 10,
+   "file": "damage/10-em.png",
+   "x": 451,
+   "y": 327,
+   "w": 189,
+   "h": 73,
+   "attach": null
+  },
+  {
+   "id": "navigation",
+   "bit": 12,
+   "file": "damage/12-navigation.png",
+   "x": 97,
+   "y": 374,
+   "w": 28,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "communications",
+   "bit": 13,
+   "file": "damage/13-communications.png",
+   "x": 131,
+   "y": 374,
+   "w": 30,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "iff",
+   "bit": 14,
+   "file": "damage/14-iff.png",
+   "x": 171,
+   "y": 374,
+   "w": 27,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "flight_controls",
+   "bit": 15,
+   "file": "damage/15-flight_controls.png",
+   "x": 295,
+   "y": 319,
+   "w": 55,
+   "h": 81,
+   "attach": "joystick"
+  },
+  {
+   "id": "aux_flight_display",
+   "bit": 16,
+   "file": "damage/16-aux_flight_display.png",
+   "x": 392,
+   "y": 331,
+   "w": 43,
+   "h": 58,
+   "attach": null
+  },
+  {
+   "id": "ejection",
+   "bit": 20,
+   "file": "damage/20-ejection.png",
+   "x": 221,
+   "y": 329,
+   "w": 40,
+   "h": 66,
+   "attach": null
+  },
+  {
+   "id": "warnings",
+   "bit": 21,
+   "file": "damage/21-warnings.png",
+   "x": 289,
+   "y": 207,
+   "w": 77,
+   "h": 21,
+   "attach": null
+  },
+  {
+   "id": "canopy",
+   "bit": 23,
+   "file": "damage/23-canopy.png",
+   "x": 0,
+   "y": 0,
+   "w": 640,
+   "h": 217,
+   "attach": null
+  },
+  {
+   "id": "survival_vdu",
+   "bit": 26,
+   "file": "damage/26-survival_vdu.png",
+   "x": 222,
+   "y": 238,
+   "w": 63,
+   "h": 43,
+   "attach": null
+  },
+  {
+   "id": "engineering_vdu",
+   "bit": 27,
+   "file": "damage/27-engineering_vdu.png",
+   "x": 222,
+   "y": 282,
+   "w": 63,
+   "h": 34,
+   "attach": null
+  },
+  {
+   "id": "sensor_aux_vdu",
+   "bit": 28,
+   "file": "damage/28-sensor_aux_vdu.png",
+   "x": 411,
+   "y": 260,
+   "w": 28,
+   "h": 60,
+   "attach": null
+  }
+ ]
+}

@@ -1,0 +1,272 @@
+{
+ "ship": "FRANKLN",
+ "kit": "franklin-cockpit-kit-v1",
+ "description": "Modern, less combat-focused ivory/titanium cockpit with a panoramic windshield, low flight/systems displays, right-hand side-stick, and separate throttle.",
+ "regions": {
+  "mfd_left": [
+   88,
+   247,
+   162,
+   49
+  ],
+  "mfd_right": [
+   391,
+   247,
+   162,
+   49
+  ],
+  "survival": [
+   294,
+   306,
+   54,
+   32
+  ],
+  "speed": [
+   111,
+   315,
+   52,
+   8
+  ],
+  "fuel": [
+   181,
+   315,
+   57,
+   8
+  ],
+  "radar": {
+   "cx": 321,
+   "cy": 272,
+   "r": 26
+  },
+  "lamp_lock": [
+   270,
+   246,
+   8,
+   11
+  ],
+  "lamp_warn": [
+   363,
+   246,
+   8,
+   11
+  ]
+ },
+ "controls": {
+  "throttle": {
+   "x": 17,
+   "y": 318,
+   "w": 55,
+   "h": 72,
+   "damage": "propulsion"
+  },
+  "joystick": {
+   "x": 576,
+   "y": 302,
+   "w": 48,
+   "h": 78,
+   "damage": "flight_controls"
+  }
+ },
+ "damage": [
+  {
+   "id": "flight_vdu",
+   "bit": 0,
+   "file": "damage/00-flight_vdu.png",
+   "x": 85,
+   "y": 244,
+   "w": 169,
+   "h": 55,
+   "attach": null
+  },
+  {
+   "id": "systems_vdu",
+   "bit": 1,
+   "file": "damage/01-systems_vdu.png",
+   "x": 388,
+   "y": 244,
+   "w": 170,
+   "h": 55,
+   "attach": null
+  },
+  {
+   "id": "sensor_scope",
+   "bit": 2,
+   "file": "damage/02-sensor_scope.png",
+   "x": 290,
+   "y": 242,
+   "w": 62,
+   "h": 60,
+   "attach": null
+  },
+  {
+   "id": "shields",
+   "bit": 3,
+   "file": "damage/03-shields.png",
+   "x": 293,
+   "y": 309,
+   "w": 57,
+   "h": 9,
+   "attach": null
+  },
+  {
+   "id": "armor",
+   "bit": 4,
+   "file": "damage/04-armor.png",
+   "x": 293,
+   "y": 319,
+   "w": 57,
+   "h": 9,
+   "attach": null
+  },
+  {
+   "id": "hull",
+   "bit": 5,
+   "file": "damage/05-hull.png",
+   "x": 293,
+   "y": 329,
+   "w": 57,
+   "h": 9,
+   "attach": null
+  },
+  {
+   "id": "speed",
+   "bit": 6,
+   "file": "damage/06-speed.png",
+   "x": 107,
+   "y": 311,
+   "w": 61,
+   "h": 16,
+   "attach": null
+  },
+  {
+   "id": "fuel",
+   "bit": 7,
+   "file": "damage/07-fuel.png",
+   "x": 176,
+   "y": 311,
+   "w": 67,
+   "h": 16,
+   "attach": null
+  },
+  {
+   "id": "propulsion",
+   "bit": 8,
+   "file": "damage/08-propulsion.png",
+   "x": 15,
+   "y": 316,
+   "w": 59,
+   "h": 76,
+   "attach": "throttle"
+  },
+  {
+   "id": "power_distribution",
+   "bit": 9,
+   "file": "damage/09-power_distribution.png",
+   "x": 115,
+   "y": 351,
+   "w": 49,
+   "h": 20,
+   "attach": null
+  },
+  {
+   "id": "automation",
+   "bit": 10,
+   "file": "damage/10-automation.png",
+   "x": 470,
+   "y": 311,
+   "w": 53,
+   "h": 19,
+   "attach": null
+  },
+  {
+   "id": "navigation",
+   "bit": 12,
+   "file": "damage/12-navigation.png",
+   "x": 176,
+   "y": 351,
+   "w": 42,
+   "h": 20,
+   "attach": null
+  },
+  {
+   "id": "communications",
+   "bit": 13,
+   "file": "damage/13-communications.png",
+   "x": 222,
+   "y": 351,
+   "w": 43,
+   "h": 20,
+   "attach": null
+  },
+  {
+   "id": "transponder",
+   "bit": 14,
+   "file": "damage/14-transponder.png",
+   "x": 401,
+   "y": 311,
+   "w": 55,
+   "h": 17,
+   "attach": null
+  },
+  {
+   "id": "flight_controls",
+   "bit": 15,
+   "file": "damage/15-flight_controls.png",
+   "x": 574,
+   "y": 300,
+   "w": 52,
+   "h": 82,
+   "attach": "joystick"
+  },
+  {
+   "id": "defence_control",
+   "bit": 16,
+   "file": "damage/16-defence_control.png",
+   "x": 532,
+   "y": 309,
+   "w": 23,
+   "h": 27,
+   "attach": null
+  },
+  {
+   "id": "ejection",
+   "bit": 20,
+   "file": "damage/20-ejection.png",
+   "x": 296,
+   "y": 353,
+   "w": 49,
+   "h": 28,
+   "attach": null
+  },
+  {
+   "id": "annunciators",
+   "bit": 21,
+   "file": "damage/21-annunciators.png",
+   "x": 268,
+   "y": 242,
+   "w": 106,
+   "h": 46,
+   "attach": null
+  },
+  {
+   "id": "canopy",
+   "bit": 23,
+   "file": "damage/23-canopy.png",
+   "x": 0,
+   "y": 43,
+   "w": 640,
+   "h": 191,
+   "attach": null
+  },
+  {
+   "id": "survival_vdu",
+   "bit": 26,
+   "file": "damage/26-survival_vdu.png",
+   "x": 290,
+   "y": 303,
+   "w": 62,
+   "h": 39,
+   "attach": null
+  }
+ ]
+}

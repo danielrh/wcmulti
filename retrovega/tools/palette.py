@@ -184,6 +184,8 @@ def main():
     open(os.path.join(args.out, 'flight.pal'), 'wb').write((pal >> 2).astype(np.uint8).tobytes())
     meta['rgb'] = pal.tolist()
     json.dump(meta, open(os.path.join(args.out, 'palette.json'), 'w'), indent=1)
+    # the committed copy: rvpack.py builds the cockpits' palettes on it without the renders
+    json.dump(meta, open(os.path.join(HERE, '..', 'data', 'palette.json'), 'w'), indent=1)
     swatch(pal, args.swatch)
     print('palette: %d hull colours, primary shades %s' % (len(HULL), np.round(meta['shades_primary'], 2)))
     print('livery ramps:', {k: (v['primary'], v['secondary']) for k, v in meta['livery_ramps'].items()})

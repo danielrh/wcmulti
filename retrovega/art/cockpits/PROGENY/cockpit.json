@@ -1,0 +1,306 @@
+{
+ "ship": "PROGENY",
+ "kit": "progeny-cockpit-kit-v1",
+ "description": "Tall graphite and dark-green fighter cockpit with near-vertical ribbed side pillars, an elongated forward opening, and separate right sidestick and left throttle.",
+ "regions": {
+  "mfd_left": [
+   137,
+   239,
+   108,
+   74
+  ],
+  "mfd_right": [
+   394,
+   240,
+   109,
+   73
+  ],
+  "survival": [
+   293,
+   299,
+   54,
+   43
+  ],
+  "speed": [
+   527,
+   249,
+   54,
+   11
+  ],
+  "fuel": [
+   365,
+   312,
+   7,
+   5
+  ],
+  "radar": {
+   "cx": 320,
+   "cy": 257,
+   "r": 31
+  },
+  "lamp_lock": [
+   607,
+   284,
+   7,
+   6
+  ]
+ },
+ "controls": {
+  "throttle": {
+   "x": 19,
+   "y": 319,
+   "w": 66,
+   "h": 81,
+   "damage": "propulsion"
+  },
+  "joystick": {
+   "x": 533,
+   "y": 295,
+   "w": 70,
+   "h": 91,
+   "damage": "flight_controls"
+  }
+ },
+ "damage": [
+  {
+   "id": "weapons",
+   "bit": 0,
+   "file": "damage/00-weapons.png",
+   "x": 129,
+   "y": 232,
+   "w": 128,
+   "h": 92,
+   "attach": null
+  },
+  {
+   "id": "targeting",
+   "bit": 1,
+   "file": "damage/01-targeting.png",
+   "x": 386,
+   "y": 233,
+   "w": 129,
+   "h": 92,
+   "attach": null
+  },
+  {
+   "id": "radar",
+   "bit": 2,
+   "file": "damage/02-radar.png",
+   "x": 277,
+   "y": 213,
+   "w": 86,
+   "h": 82,
+   "attach": null
+  },
+  {
+   "id": "shields",
+   "bit": 3,
+   "file": "damage/03-shields.png",
+   "x": 265,
+   "y": 308,
+   "w": 17,
+   "h": 13,
+   "attach": null
+  },
+  {
+   "id": "armor",
+   "bit": 4,
+   "file": "damage/04-armor.png",
+   "x": 265,
+   "y": 326,
+   "w": 17,
+   "h": 13,
+   "attach": null
+  },
+  {
+   "id": "hull",
+   "bit": 5,
+   "file": "damage/05-hull.png",
+   "x": 265,
+   "y": 344,
+   "w": 17,
+   "h": 14,
+   "attach": null
+  },
+  {
+   "id": "speed",
+   "bit": 6,
+   "file": "damage/06-speed.png",
+   "x": 524,
+   "y": 240,
+   "w": 99,
+   "h": 32,
+   "attach": null
+  },
+  {
+   "id": "fuel",
+   "bit": 7,
+   "file": "damage/07-fuel.png",
+   "x": 359,
+   "y": 308,
+   "w": 18,
+   "h": 13,
+   "attach": null
+  },
+  {
+   "id": "propulsion",
+   "bit": 8,
+   "file": "damage/08-propulsion.png",
+   "x": 19,
+   "y": 319,
+   "w": 66,
+   "h": 81,
+   "attach": "throttle"
+  },
+  {
+   "id": "power_distribution",
+   "bit": 9,
+   "file": "damage/09-power_distribution.png",
+   "x": 359,
+   "y": 326,
+   "w": 18,
+   "h": 13,
+   "attach": null
+  },
+  {
+   "id": "engine_status",
+   "bit": 11,
+   "file": "damage/11-engine_status.png",
+   "x": 359,
+   "y": 344,
+   "w": 18,
+   "h": 14,
+   "attach": null
+  },
+  {
+   "id": "em",
+   "bit": 10,
+   "file": "damage/10-em.png",
+   "x": 523,
+   "y": 299,
+   "w": 50,
+   "h": 43,
+   "attach": null
+  },
+  {
+   "id": "navigation",
+   "bit": 12,
+   "file": "damage/12-navigation.png",
+   "x": 64,
+   "y": 274,
+   "w": 21,
+   "h": 29,
+   "attach": null
+  },
+  {
+   "id": "communications",
+   "bit": 13,
+   "file": "damage/13-communications.png",
+   "x": 88,
+   "y": 274,
+   "w": 22,
+   "h": 29,
+   "attach": null
+  },
+  {
+   "id": "iff",
+   "bit": 14,
+   "file": "damage/14-iff.png",
+   "x": 575,
+   "y": 274,
+   "w": 22,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "flight_controls",
+   "bit": 15,
+   "file": "damage/15-flight_controls.png",
+   "x": 533,
+   "y": 295,
+   "w": 70,
+   "h": 91,
+   "attach": "joystick"
+  },
+  {
+   "id": "weapon_controls",
+   "bit": 17,
+   "file": "damage/17-weapon_controls.png",
+   "x": 65,
+   "y": 241,
+   "w": 57,
+   "h": 31,
+   "attach": null
+  },
+  {
+   "id": "ejection",
+   "bit": 20,
+   "file": "damage/20-ejection.png",
+   "x": 577,
+   "y": 301,
+   "w": 42,
+   "h": 44,
+   "attach": null
+  },
+  {
+   "id": "warnings",
+   "bit": 21,
+   "file": "damage/21-warnings.png",
+   "x": 521,
+   "y": 274,
+   "w": 102,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "radar_status",
+   "bit": 28,
+   "file": "damage/28-radar_status.png",
+   "x": 549,
+   "y": 274,
+   "w": 22,
+   "h": 26,
+   "attach": null
+  },
+  {
+   "id": "survival_vdu",
+   "bit": 26,
+   "file": "damage/26-survival_vdu.png",
+   "x": 285,
+   "y": 295,
+   "w": 72,
+   "h": 63,
+   "attach": null
+  },
+  {
+   "id": "canopy_left",
+   "bit": 23,
+   "file": "damage/23-canopy_left.png",
+   "x": 9,
+   "y": 0,
+   "w": 146,
+   "h": 224,
+   "attach": null
+  },
+  {
+   "id": "canopy_right",
+   "bit": 24,
+   "file": "damage/24-canopy_right.png",
+   "x": 485,
+   "y": 0,
+   "w": 127,
+   "h": 217,
+   "attach": null
+  },
+  {
+   "id": "canopy_overhead",
+   "bit": 25,
+   "file": "damage/25-canopy_overhead.png",
+   "x": 155,
+   "y": 0,
+   "w": 330,
+   "h": 30,
+   "attach": null
+  }
+ ]
+}
