@@ -1,0 +1,834 @@
+/* game.c: the first slice of the game (docs/engine.md).
+ *
+ * The player walks the carrier's rooms (bar, lounge, quarters, locker),
+ * talks to whoever sits there, saves at the bunk, and goes through the
+ * bar's hatch to the briefing room for the next mission: the XO speaks
+ * over the situation display, then the launch deck, Kit and the fighter.
+ * There is no flight yet: a launch is won 80% of the time.  The debrief,
+ * the campaign's next move, and at the end "You win" or "You lose". */
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include "rv.h"
+#include "rvhooks.h"
+#include "room.h"
+#include "campaign.h"
+#include "lipsync.h"
+#include "music.h"
+#include "game.h"
+
+enum { MODE_ROOM, MODE_TALK, MODE_BRIEF, MODE_XOCLOSE, MODE_DECK, MODE_FLIGHT, MODE_DEBRIEF, MODE_BUNK,
+       MODE_NAME, MODE_LOG, MODE_MESSAGE, MODE_ENDING, MODE_QUIT };
+
+static int g_mode, g_back_mode;
+static RvMission __far g_m;
+static unsigned long g_now, g_t0;
+static char g_msg[400];
+static int g_won;
+
+/* the speech in progress: shapes, when it began, the text */
+#define MAX_STEPS 1600
+static unsigned char __far g_lip[MAX_STEPS];
+static int g_nlip;
+static const char __far *g_said;
+static int g_speaker;                       /* people.csv row */
+static int g_mouth = -1, g_eyes = -1, g_gesture, g_shown_chars = -1;
+
+static const char *ship_name(int type)
+{
+    static const char *names[] = { "Schroedinger", "Franklin", "Gawain", "Redeemer", "Pacifier", "Lancelot",
+                                   "Progeny" };
+    return type >= 0 && type < (int)RV_COUNT(names) ? names[type] : "fighter";
+}
+
+static unsigned rnd(void)
+{
+    g_camp.seed = g_camp.seed * 1103515245UL + 12345UL;
+    return (unsigned)(g_camp.seed >> 16) & 0x7FFF;
+}
+
+static int speaking_step(void)
+{
+    return (int)((g_now - g_t0) * 55 / LIP_STEP_MS);
+}
+
+static void say(int person, const char __far *text)
+{
+    g_speaker = person;
+    g_said = text;
+    g_nlip = lip_steps(text, g_lip, MAX_STEPS);
+    g_t0 = g_now;
+    g_mouth = g_eyes = g_shown_chars = -1;
+    g_gesture = 0;
+}
+
+static int speech_done(void) { return speaking_step() >= g_nlip; }
+
+static int mouth_now(void)
+{
+    int s = speaking_step();
+    return s < g_nlip ? g_lip[s] : 0;
+}
+
+/* --- panels and messages --- */
+
+static void panel(int x, int y, int w, int h, int y0, int y1)
+{
+    gfx_fill(x, y, w, h, UI_PANEL, y0, y1);
+    gfx_frame(x, y, w, h, UI_PANEL_EDGE, y0, y1);
+    gfx_frame(x + 1, y + 1, w - 2, h - 2, UI_BLACK, y0, y1);
+}
+
+static void message_overlay(int y0, int y1)
+{
+    panel(110, 120, 420, 150, y0, y1);
+    gfx_wrap(FONT_BODY, 126, 134, 388, g_msg, RV_TEXT_WHITE, 4, y0, y1);
+    gfx_text(FONT_BODY, 126, 248, "click to close", RV_TEXT_GREY, y0, y1);
+}
+
+static void room_overlay(int y0, int y1);
+
+static void message(const char *text)
+{
+    strncpy(g_msg, text, sizeof g_msg - 1);
+    g_back_mode = g_mode;
+    g_mode = MODE_MESSAGE;
+    g_scene.overlay = message_overlay;
+    vid_dirty(110, 280);
+}
+
+/* --- rooms --- */
+
+static int g_talk_at, g_talk_line = -1;
+
+static void talk_overlay(int y0, int y1)
+{
+    const RvTalk __far *t;
+    char line[96];
+    if (g_talk_line < 0)
+        return;
+    t = &g_m.talk[g_talk_line];
+    sprintf(line, "%.10s: %.60Fs", g_pilots[t->speaker].callsign, t->text);
+    gfx_text(FONT_BODY, 16, SCR_H - LABEL_H - 22, line, RV_TEXT_WHITE | 0x10, y0, y1);
+}
+
+static void chalkboard(int y0, int y1)
+{
+    const RvRoom __far *r = dat_room(g_scene.room);
+    int b, i, n = 0, order[RV_PILOTS], k;
+    for (b = 0; b < 4; b++) {
+        const RvBoard __far *bd = &r->board[b];
+        if (bd->w == 0 || bd->kind != 0)
+            continue;
+        if (y1 <= bd->y || y0 >= bd->y + bd->h)
+            continue;
+        for (i = 0; i < (int)g_npilots; i++)
+            if (g_pilots[i].role == RV_ROLE_PILOT)
+                order[n++] = i;
+        for (i = 0; i < n; i++)
+            for (k = i + 1; k < n; k++)
+                if (g_camp.pilot[order[k]].kills > g_camp.pilot[order[i]].kills) {
+                    int t = order[i]; order[i] = order[k]; order[k] = t;
+                }
+        gfx_text(FONT_BODY, bd->x + 6, bd->y + 4, "SPLASH COUNT", RV_TEXT_WHITE, y0, y1);
+        for (i = 0; i < 4 && i < n; i++) {
+            char s[24];
+            sprintf(s, "%-8.8s %3u", g_pilots[order[i]].callsign, g_camp.pilot[order[i]].kills);
+            gfx_text(FONT_BODY, bd->x + 6, bd->y + 20 + i * 14, s, RV_TEXT_GREY, y0, y1);
+        }
+    }
+}
+
+static void room_overlay(int y0, int y1)
+{
+    if (g_scene.room == RV_R_BAR)
+        chalkboard(y0, y1);
+    talk_overlay(y0, y1);
+}
+
+static void enter_room(int room)
+{
+    unsigned char seats[3] = { 0xFF, 0xFF, 0xFF };
+    if (room == RV_R_BAR || room == RV_R_LOUNGE)
+        _fmemcpy(seats, g_m.seat[room == RV_R_BAR ? RV_ROOM_BAR : RV_ROOM_LOUNGE], 3);
+    vid_fade(0);
+    scene_enter(room, seats);
+    g_scene.overlay = room_overlay;
+    g_mode = MODE_ROOM;
+    g_talk_line = -1;
+    g_talk_at = 0;
+    music_cue(room == RV_R_QUARTERS || room == RV_R_LOCKER ? RV_MUSIC_QUARTERS : RV_MUSIC_BAR, 250);
+    scene_draw();
+    vid_fade(64);
+}
+
+/* the table talk: this room's lines in turn, as subtitles */
+static void ambient_talk(void)
+{
+    int i, room = g_scene.room == RV_R_BAR ? RV_ROOM_BAR : g_scene.room == RV_R_LOUNGE ? RV_ROOM_LOUNGE : -1;
+    if (room < 0 || g_now < (unsigned long)g_talk_at)
+        return;
+    for (i = 1; i <= (int)g_m.ntalk; i++) {
+        int k = (g_talk_line + i) % (g_m.ntalk ? g_m.ntalk : 1);
+        if (g_m.ntalk && g_m.talk[k].room == room) {
+            g_talk_line = k;
+            g_talk_at = (int)(g_now + 70);
+            vid_dirty(SCR_H - LABEL_H - 24, SCR_H - LABEL_H);
+            return;
+        }
+    }
+}
+
+/* --- close-ups: a person speaking --- */
+
+#define FACE_X 24
+#define FACE_Y 62
+
+static int g_close_room;
+
+static void talk_full(int y0, int y1)
+{
+    const RvRoom __far *r = dat_room(g_close_room);
+    const RvPerson __far *p = dat_person(g_speaker);
+    int mouth = mouth_now(), eyes = ((g_now / 4) % 17 == 0) ? 2 : ((g_now / 4) % 17 == 1 ? 1 : 0);
+    char title[40];
+    gfx_image(r->closeup_back, 0, 0, y0, y1);
+    gfx_sprite(p->face, FACE_X, FACE_Y, y0, y1);
+    gfx_image(p->eyes0 + eyes, FACE_X + dat_asset(p->eyes0)->x, FACE_Y + dat_asset(p->eyes0)->y, y0, y1);
+    gfx_image(p->mouth0 + mouth, FACE_X + dat_asset(p->mouth0)->x, FACE_Y + dat_asset(p->mouth0)->y, y0, y1);
+    sprintf(title, "\"%.10s\"", g_pilots[g_speaker].callsign);
+    gfx_text(FONT_TITLE, 400, 130, title, RV_TEXT_AMBER, y0, y1);
+    gfx_text(FONT_BODY, 400, 160, g_pilots[g_speaker].name, RV_TEXT_WHITE, y0, y1);
+    {
+        static char shown[RV_BRIEFING];
+        int n = _fstrlen(g_said), k = speech_done() ? n : (int)((long)n * speaking_step() / (g_nlip ? g_nlip : 1));
+        _fstrncpy(shown, g_said, k);
+        shown[k] = 0;
+        gfx_wrap(FONT_BODY, 400, 196, 220, shown, RV_TEXT_WHITE, 4, y0, y1);
+    }
+}
+
+static void open_talk(int person, const char __far *line)
+{
+    const RvRoom __far *r = dat_room(g_scene.room);
+    if (r->closeup_part == 0xFFFF)
+        return;
+    g_close_room = g_scene.room;
+    vid_fade(0);
+    gfx_use_part(r->closeup_part, 1);
+    gfx_use_part(dat_person(person)->palpart, 0);
+    say(person, line);
+    g_scene.full = talk_full;
+    g_mode = MODE_TALK;
+    music_cue(RV_MUSIC_BAR, 150);
+    vid_dirty(0, SCR_H);
+    scene_draw();
+    vid_fade(64);
+}
+
+static void close_talk(void)
+{
+    g_scene.full = 0;
+    vid_fade(0);
+    gfx_use_palette(dat_room(g_scene.room)->palette);
+    g_mode = MODE_ROOM;
+    vid_dirty(0, SCR_H);
+    scene_draw();
+    vid_fade(64);
+}
+
+/* a pilot's line: theirs in this room's talk if they have one, else their own */
+static const char __far *line_of(int person)
+{
+    int i;
+    for (i = 0; i < (int)g_m.ntalk; i++)
+        if (g_m.talk[i].speaker == person)
+            return g_m.talk[i].text;
+    return g_pilots[person].line;
+}
+
+/* --- the briefing and the debrief: the XO at the lectern --- */
+
+static int g_stage, g_xo_close;
+static unsigned long g_stage_at;
+
+static void situation_display(int y0, int y1)
+{
+    const RvRoom __far *r = dat_room(RV_R_BRIEFING);
+    const RvBoard __far *b = 0;
+    int i, x0, z0, x1, z1, mx, my, mw, mh;
+    long sx, sz;
+    for (i = 0; i < 4; i++)
+        if (r->board[i].kind == 2 && r->board[i].w)
+            b = &r->board[i];
+    if (!b || y1 <= b->y || y0 >= b->y + b->h)
+        return;
+    gfx_fill(b->x, b->y, b->w, b->h, UI_PANEL, y0, y1);
+    gfx_frame(b->x, b->y, b->w, b->h, UI_HILITE, y0, y1);
+    /* fit the carrier (0, 0), the nav points and the fields */
+    x0 = x1 = z0 = z1 = 0;
+    for (i = 0; i < g_m.nnav; i++) {
+        if (g_m.nav[i].x < x0) x0 = g_m.nav[i].x;
+        if (g_m.nav[i].x > x1) x1 = g_m.nav[i].x;
+        if (g_m.nav[i].z < z0) z0 = g_m.nav[i].z;
+        if (g_m.nav[i].z > z1) z1 = g_m.nav[i].z;
+    }
+    for (i = 0; i < g_m.nfield; i++) {
+        const RvField __far *f = &g_m.field[i];
+        if (f->x - f->radius < x0) x0 = f->x - f->radius;
+        if (f->x + f->radius > x1) x1 = f->x + f->radius;
+        if (f->z - f->radius < z0) z0 = f->z - f->radius;
+        if (f->z + f->radius > z1) z1 = f->z + f->radius;
+    }
+    mx = b->x + 14; my = b->y + 14; mw = b->w - 28; mh = b->h - 28;
+    sx = x1 - x0 + 1; sz = z1 - z0 + 1;
+    if (sx * mh < sz * mw)
+        sx = sz * mw / mh;
+    else
+        sz = sx * mh / mw;
+#define MAPX(v) (mx + (int)(((long)(v) - x0) * mw / sx))
+#define MAPY(v) (my + mh - (int)(((long)(v) - z0) * mh / sz))
+#define MAPR(v) ((int)((long)(v) * mw / sx))
+    for (i = 1; i < 4; i++) {
+        gfx_line(b->x + 1, b->y + i * b->h / 4, b->x + b->w - 2, b->y + i * b->h / 4, UI_PANEL_EDGE, 0, y0, y1);
+        gfx_line(b->x + i * b->w / 4, b->y + 1, b->x + i * b->w / 4, b->y + b->h - 2, UI_PANEL_EDGE, 0, y0, y1);
+    }
+    for (i = 0; i < g_m.nfield; i++) {
+        const RvField __far *f = &g_m.field[i];
+        int c = f->type == RV_FIELD_MINE ? UI_RED : UI_GREY4, rr = MAPR(f->radius);
+        gfx_circle(MAPX(f->x), MAPY(f->z), rr < 3 ? 3 : rr, c, 1, y0, y1);
+        gfx_text(FONT_BODY, MAPX(f->x) - 8, MAPY(f->z) - 6, f->type == RV_FIELD_MINE ? "MINES" : "DEBRIS",
+                 RV_TEXT_GREY, y0, y1);
+    }
+    {
+        int px = MAPX(0), py = MAPY(0);
+        for (i = 0; i <= g_m.nnav; i++) {
+            int nx = i < g_m.nnav ? MAPX(g_m.nav[i].x) : MAPX(0), ny = i < g_m.nnav ? MAPY(g_m.nav[i].z) : MAPY(0);
+            gfx_line(px, py, nx, ny, UI_HILITE, 3, y0, y1);
+            px = nx; py = ny;
+        }
+    }
+    gfx_line(MAPX(0) - 4, MAPY(0) + 3, MAPX(0), MAPY(0) - 4, UI_WHITE, 0, y0, y1);
+    gfx_line(MAPX(0), MAPY(0) - 4, MAPX(0) + 4, MAPY(0) + 3, UI_WHITE, 0, y0, y1);
+    gfx_line(MAPX(0) - 4, MAPY(0) + 3, MAPX(0) + 4, MAPY(0) + 3, UI_WHITE, 0, y0, y1);
+    for (i = 0; i < g_m.nnav; i++) {
+        char s[8];
+        int k, foes = 0;
+        for (k = 0; k < g_m.nship; k++)
+            if (g_m.ship[k].nav == g_m.nav[i].id && g_m.ship[k].side == 1)
+                foes += g_m.ship[k].count;
+        gfx_circle(MAPX(g_m.nav[i].x), MAPY(g_m.nav[i].z), 4, UI_AMBER4, 0, y0, y1);
+        sprintf(s, "NAV %u", g_m.nav[i].id);
+        gfx_text(FONT_BODY, MAPX(g_m.nav[i].x) + 7, MAPY(g_m.nav[i].z) - 7, s, RV_TEXT_AMBER, y0, y1);
+        for (k = 0; k < foes && k < 6; k++)
+            gfx_fill(MAPX(g_m.nav[i].x) + 7 + k * 5, MAPY(g_m.nav[i].z) + 8, 3, 3, UI_RED, y0, y1);
+    }
+#undef MAPX
+#undef MAPY
+#undef MAPR
+}
+
+static void xo_underlay(int y0, int y1)
+{
+    const RvSpeaker __far *s = &dat_room(RV_R_BRIEFING)->speaker;
+    int mouth = s->mouth_of_viseme[mouth_now()];
+    gfx_sprite(s->cell0 + g_gesture * s->nmouths + mouth, 0, 0, y0, y1);
+    if (g_stage > 0 && s->stage[g_stage - 1] != 0xFFFF)
+        gfx_sprite(s->stage[g_stage - 1], 0, 0, y0, y1);
+}
+
+static void brief_overlay(int y0, int y1)
+{
+    static char shown[RV_BRIEFING];
+    char head[80];
+    int n = _fstrlen(g_said), k = speech_done() ? n : (int)((long)n * speaking_step() / (g_nlip ? g_nlip : 1));
+    if (g_mode == MODE_BRIEF)
+        situation_display(y0, y1);
+    sprintf(head, "%s  //  %.40Fs", g_mode == MODE_BRIEF ? "BRIEFING" : g_won ? "DEBRIEF: WON" : "DEBRIEF: LOST",
+            (char __far *)g_m.title);
+    gfx_text(FONT_TITLE, 14, 6, head, RV_TEXT_AMBER | 0x10, y0, y1);
+    if (y1 > 290) {
+        gfx_shade(0, 292, SCR_W, 86, y0, y1);
+        _fstrncpy(shown, g_said, k);
+        shown[k] = 0;
+        gfx_wrap(FONT_BODY, 14, 298, SCR_W - 28, shown, RV_TEXT_WHITE, 3, y0, y1);
+    }
+}
+
+static void xo_close_full(int y0, int y1)
+{
+    const RvSpeaker __far *s = &dat_room(RV_R_BRIEFING)->speaker;
+    int mouth = s->mouth_of_viseme[mouth_now()];
+    gfx_image(s->closeup_back, 0, 0, y0, y1);
+    gfx_sprite(s->big0 + g_gesture * s->nmouths + mouth, 0, 0, y0, y1);
+}
+
+static void start_briefing(int debrief)
+{
+    vid_fade(0);
+    scene_enter(RV_R_BRIEFING, 0);
+    g_scene.underlay = xo_underlay;
+    g_scene.overlay = brief_overlay;
+    g_mode = debrief ? MODE_DEBRIEF : MODE_BRIEF;
+    g_stage = 0;
+    g_xo_close = 0;
+    say(RV_PILOTS, debrief ? (g_won ? g_m.win : g_m.lose) : g_m.briefing);
+    g_speaker = -1;
+    if (!debrief)
+        briefingStarted();
+    music_cue(debrief ? (g_won ? RV_MUSIC_WIN : RV_MUSIC_LOSE) : RV_MUSIC_BRIEFING, 250);
+    scene_draw();
+    vid_fade(64);
+}
+
+/* the gesture changes with each sentence: hands, then open and raised in turn */
+static void brief_tick(void)
+{
+    int step = speaking_step(), chars, i, sentences = 0, g;
+    int n = _fstrlen(g_said);
+    chars = speech_done() ? n : (int)((long)n * step / (g_nlip ? g_nlip : 1));
+    for (i = 0; i < chars; i++)
+        if (g_said[i] == '.' || g_said[i] == '!' || g_said[i] == '?')
+            sentences++;
+    g = sentences == 0 ? 0 : 1 + (sentences - 1) % 2;
+    if (speech_done())
+        g = 0;
+    if (g != g_gesture || mouth_now() != g_mouth) {
+        const RvSpeaker __far *s = &dat_room(RV_R_BRIEFING)->speaker;
+        const RvAsset __far *a = dat_asset(s->cell0);
+        g_gesture = g;
+        g_mouth = mouth_now();
+        if (g_xo_close)
+            vid_dirty(0, SCR_H);
+        else
+            vid_dirty(a->y, a->y + a->h);
+    }
+    if (chars != g_shown_chars) {
+        g_shown_chars = chars;
+        if (!g_xo_close)
+            vid_dirty(292, 378);
+    }
+}
+
+/* --- the deck: Kit and the fighter --- */
+
+static int g_clip, g_clip_frame, g_deck_ship;
+static unsigned long g_clip_at;
+
+static void deck_underlay(int y0, int y1)
+{
+    const RvDeck __far *d = &dat_room(RV_R_DECK)->deck;
+    gfx_image(d->ship[g_deck_ship].plate, 0, 0, y0, y1);
+    gfx_sprite(d->front, 0, 0, y0, y1);
+    gfx_sprite(d->clip_first[g_clip] + g_clip_frame, 0, 0, y0, y1);
+}
+
+static void deck_overlay(int y0, int y1)
+{
+    char s[64];
+    sprintf(s, "%.40Fs  //  your fighter: %s", (char __far *)g_m.title, ship_name(g_camp.player_ship));
+    gfx_text(FONT_BODY, 14, 8, s, RV_TEXT_AMBER | 0x10, y0, y1);
+}
+
+static void enter_deck(void)
+{
+    const RvDeck __far *d = &dat_room(RV_R_DECK)->deck;
+    int i;
+    vid_fade(0);
+    scene_enter(RV_R_DECK, 0);
+    g_deck_ship = 0;
+    for (i = 0; i < d->nships; i++)
+        if (d->ship[i].ship_type == g_camp.player_ship)
+            g_deck_ship = i;
+    g_scene.underlay = deck_underlay;
+    g_scene.overlay = deck_overlay;
+    g_clip = g_clip_frame = 0;
+    g_clip_at = g_now;
+    g_mode = MODE_DECK;
+    music_cue(RV_MUSIC_LAUNCH, 250);
+    scene_draw();
+    vid_fade(64);
+}
+
+static void deck_tick(void)
+{
+    const RvDeck __far *d = &dat_room(RV_R_DECK)->deck;
+    if (g_now < g_clip_at)
+        return;
+    g_clip_at = g_now + d->clip_ticks[g_clip];
+    if (++g_clip_frame >= d->clip_n[g_clip]) {
+        g_clip_frame = 0;
+        g_clip = (g_clip + 1) % RV_CLIPS;
+    }
+    vid_dirty(d->patch_y, d->patch_y + d->patch_h);
+}
+
+static void customize(void)
+{
+    const RvDeck __far *d = &dat_room(RV_R_DECK)->deck;
+    char s[64];
+    g_deck_ship = (g_deck_ship + 1) % d->nships;
+    g_camp.player_ship = d->ship[g_deck_ship].ship_type;
+    g_clip = 2;                           /* the ready nod */
+    g_clip_frame = 0;
+    vid_dirty(0, SCR_H);
+    sprintf(s, "Kit: the %s it is", ship_name(g_camp.player_ship));
+    strncpy(g_scene.label, s, sizeof g_scene.label - 1);
+}
+
+/* --- the flight that is not there yet --- */
+
+static void flight_full(int y0, int y1)
+{
+    gfx_fill(0, 0, SCR_W, SCR_H, UI_BLACK, y0, y1);
+    gfx_text(FONT_TITLE, 240, 170, "LAUNCH", RV_TEXT_AMBER, y0, y1);
+    gfx_text(FONT_BODY, 170, 206, "(flight comes later: a launch is won 4 times in 5)", RV_TEXT_GREY, y0, y1);
+}
+
+static void launch(void)
+{
+    missionStarting();
+    g_scene.full = flight_full;
+    g_scene.no_room = 1;
+    g_mode = MODE_FLIGHT;
+    g_t0 = g_now;
+    vid_fade(0);
+    vid_dirty(0, SCR_H);
+    scene_draw();
+    vid_fade(64);
+}
+
+/* --- the bunks --- */
+
+static int g_bunk_sel = -1;
+static RvSave __far g_bunk_info[BUNKS];
+static int g_bunk_full[BUNKS];
+static char g_name[24];
+
+static void bunk_overlay(int y0, int y1)
+{
+    int i;
+    panel(90, 40, 460, 300, y0, y1);
+    gfx_text(FONT_TITLE, 106, 50, "YOUR BUNK", RV_TEXT_AMBER, y0, y1);
+    for (i = 0; i < BUNKS; i++) {
+        char s[80];
+        int y = 86 + i * 26;
+        if (g_bunk_full[i])
+            sprintf(s, "%d  %.22Fs   layer %u, mission %u", i + 1, (char __far *)g_bunk_info[i].name,
+                    (unsigned)g_nodes[g_bunk_info[i].node].layer, (unsigned)g_bunk_info[i].mission + 1);
+        else
+            sprintf(s, "%d  (empty)", i + 1);
+        if (i == g_bunk_sel)
+            gfx_fill(100, y - 3, 440, 22, UI_PANEL_EDGE, y0, y1);
+        gfx_text(FONT_BODY, 110, y, s, i == g_bunk_sel ? RV_TEXT_WHITE : RV_TEXT_GREY, y0, y1);
+    }
+    gfx_text(FONT_BODY, 110, 304, g_bunk_sel < 0 ? "pick a bunk; Esc to close"
+             : g_mode == MODE_NAME ? "name it, then Enter" : "S save here    L load    Esc back", RV_TEXT_AMBER, y0, y1);
+    if (g_mode == MODE_NAME) {
+        char s[40];
+        sprintf(s, "name: %s_", g_name);
+        gfx_fill(104, 280, 432, 20, UI_BLACK, y0, y1);
+        gfx_text(FONT_BODY, 110, 283, s, RV_TEXT_WHITE, y0, y1);
+    }
+}
+
+static void open_bunks(void)
+{
+    int i;
+    for (i = 0; i < BUNKS; i++)
+        g_bunk_full[i] = save_read(i, &g_bunk_info[i]);
+    g_bunk_sel = -1;
+    g_mode = MODE_BUNK;
+    g_scene.overlay = bunk_overlay;
+    vid_dirty(30, 350);
+}
+
+static void close_bunks(void)
+{
+    g_mode = MODE_ROOM;
+    g_scene.overlay = room_overlay;
+    vid_dirty(30, 350);
+}
+
+static void bunk_input(const Input *in)
+{
+    int row = (in->y - 83) / 26;
+    if (in->key == KEY_ESC) {
+        if (g_bunk_sel >= 0) g_bunk_sel = -1; else close_bunks();
+        vid_dirty(30, 350);
+        return;
+    }
+    if (in->key == KEY_UP && g_bunk_sel > 0) g_bunk_sel--, vid_dirty(30, 350);
+    if (in->key == KEY_DOWN && g_bunk_sel < BUNKS - 1) g_bunk_sel++, vid_dirty(30, 350);
+    if (in->key == KEY_DOWN && g_bunk_sel < 0) g_bunk_sel = 0, vid_dirty(30, 350);
+    if (in->clicked && in->x > 100 && in->x < 540 && row >= 0 && row < BUNKS && in->y >= 83) {
+        g_bunk_sel = row;
+        vid_dirty(30, 350);
+    }
+    if (g_bunk_sel < 0)
+        return;
+    if (in->key == KEY_CHAR && (in->ch == 's' || in->ch == 'S')) {
+        /* an empty bunk starts with no name; a used one offers its own to keep */
+        _fstrcpy(g_name, g_bunk_full[g_bunk_sel] ? g_bunk_info[g_bunk_sel].name : (char __far *)"");
+        g_mode = MODE_NAME;
+        vid_dirty(30, 350);
+    } else if (in->key == KEY_CHAR && (in->ch == 'l' || in->ch == 'L') && g_bunk_full[g_bunk_sel]) {
+        if (save_load(g_bunk_sel)) {
+            camp_mission(camp_mission_index(), &g_m);
+            camp_load_units(&g_m);
+            close_bunks();
+            enter_room(RV_R_QUARTERS);
+            sprintf(g_msg, "Bunk %d loaded: %s. Layer %u, mission %u.", g_bunk_sel + 1, g_camp.name,
+                    g_nodes[g_camp.node].layer, g_camp.mission + 1);
+            message(g_msg);
+        }
+    }
+}
+
+static void name_input(const Input *in)
+{
+    int n = strlen(g_name);
+    if (in->key == KEY_ESC) {
+        g_mode = MODE_BUNK;
+    } else if (in->key == KEY_BACKSPACE && n) {
+        g_name[n - 1] = 0;
+    } else if (in->key == KEY_CHAR && n < (int)sizeof g_name - 1 && in->ch >= 32 && in->ch < 127) {
+        g_name[n] = (char)in->ch;
+        g_name[n + 1] = 0;
+    } else if (in->key == KEY_ENTER) {
+        if (!n)
+            sprintf(g_name, "Bunk %d", g_bunk_sel + 1);
+        save_write(g_bunk_sel, g_name);
+        g_bunk_full[g_bunk_sel] = save_read(g_bunk_sel, &g_bunk_info[g_bunk_sel]);
+        g_mode = MODE_BUNK;
+    } else {
+        return;
+    }
+    vid_dirty(30, 350);
+}
+
+/* --- the campaign log (the desk) --- */
+
+static void log_overlay(int y0, int y1)
+{
+    int i, k;
+    char s[80];
+    panel(40, 30, 560, 330, y0, y1);
+    gfx_text(FONT_TITLE, 56, 40, "CAMPAIGN LOG", RV_TEXT_AMBER, y0, y1);
+    /* the lattice: s at the top, v and l at the bottom */
+    for (i = 0; i < (int)g_nnodes; i++) {
+        int x = 200 + g_nodes[i].col * 40, y = 84 + (g_nodes[i].layer - 1) * 38;
+        int targets[2], t;
+        targets[0] = g_nodes[i].good;
+        targets[1] = g_nodes[i].bad;
+        for (t = 0; t < 2; t++) {
+            int tx, ty;
+            if (targets[t] == RV_NODE_GOOD) { tx = 160; ty = 84 + 6 * 38; }
+            else if (targets[t] == RV_NODE_BAD) { tx = 240; ty = 84 + 6 * 38; }
+            else { tx = 200 + g_nodes[targets[t]].col * 40; ty = 84 + (g_nodes[targets[t]].layer - 1) * 38; }
+            gfx_line(x, y, tx, ty, t ? UI_RED : UI_HILITE, 2, y0, y1);
+        }
+    }
+    for (i = 0; i < (int)g_nnodes; i++) {
+        int x = 200 + g_nodes[i].col * 40, y = 84 + (g_nodes[i].layer - 1) * 38;
+        gfx_fill(x - 4, y - 4, 9, 9, i == g_camp.node ? UI_AMBER4 : UI_GREY3, y0, y1);
+    }
+    gfx_text(FONT_BODY, 152, 84 + 6 * 38 + 6, "V", RV_TEXT_WHITE, y0, y1);
+    gfx_text(FONT_BODY, 234, 84 + 6 * 38 + 6, "L", RV_TEXT_WHITE, y0, y1);
+    sprintf(s, "Layer %u, mission %u of 4.  Flown: %u.  Trend: %+d", g_nodes[g_camp.node].layer,
+            g_camp.mission + 1, g_camp.flown, g_camp.trend);
+    gfx_text(FONT_BODY, 300, 84, s, RV_TEXT_WHITE, y0, y1);
+    gfx_text(FONT_BODY, 300, 110, "SPLASH COUNT", RV_TEXT_AMBER, y0, y1);
+    for (i = 0, k = 0; i < (int)g_npilots; i++) {
+        if (g_pilots[i].role != RV_ROLE_PILOT)
+            continue;
+        sprintf(s, "%-10.10s %3u kills  %2u missions", g_pilots[i].callsign, g_camp.pilot[i].kills,
+                g_camp.pilot[i].missions);
+        gfx_text(FONT_BODY, 300, 130 + k * 18, s, RV_TEXT_GREY, y0, y1);
+        k++;
+    }
+    gfx_text(FONT_BODY, 56, 336, "click to close", RV_TEXT_GREY, y0, y1);
+}
+
+/* --- endings --- */
+
+static void ending_full(int y0, int y1)
+{
+    char s[80];
+    gfx_fill(0, 0, SCR_W, SCR_H, UI_BLACK, y0, y1);
+    gfx_text(FONT_TITLE, 250, 150, g_camp.ending == ENDING_GOOD ? "YOU WIN" : "YOU LOSE",
+             g_camp.ending == ENDING_GOOD ? RV_TEXT_AMBER : RV_TEXT_WHITE, y0, y1);
+    sprintf(s, "%u missions flown.  Press a key.", g_camp.flown);
+    gfx_text(FONT_BODY, 210, 200, s, RV_TEXT_GREY, y0, y1);
+}
+
+/* --- the next mission --- */
+
+static void next_mission(void)
+{
+    camp_mission(camp_mission_index(), &g_m);
+    camp_load_units(&g_m);
+}
+
+static void hot_action(const SceneAction *a)
+{
+    switch (a->action) {
+    case RV_ACT_GOTO:
+        if (a->arg == RV_R_BRIEFING)
+            start_briefing(0);
+        else
+            enter_room(a->arg);
+        break;
+    case RV_ACT_BUNK: open_bunks(); break;
+    case RV_ACT_LOG:
+        g_mode = MODE_LOG;
+        g_scene.overlay = log_overlay;
+        vid_dirty(20, 370);
+        break;
+    case RV_ACT_SCORES: message("The tally board: every pilot's splash count, kept by Tally in chalk."); break;
+    case RV_ACT_SIMULATOR: message("The simulator is down for refit. Tally's record stands, for now."); break;
+    case RV_ACT_MEDALS: message("Your medal case. Medals and ribbons go here as you earn them."); break;
+    case RV_ACT_LETTERS: message("Letters from home, read until the folds wore through."); break;
+    case RV_ACT_PHOTOS: message("Photographs from before the war."); break;
+    case RV_ACT_KILLS: message("Your flight record: kills and missions, one tally mark at a time."); break;
+    case RV_ACT_CLOSEUP:
+        g_xo_close = 1;
+        vid_fade(0);
+        gfx_use_palette(dat_room(RV_R_BRIEFING)->speaker.closeup_pal);
+        g_scene.full = xo_close_full;
+        g_mode = MODE_XOCLOSE;
+        vid_dirty(0, SCR_H);
+        scene_draw();
+        vid_fade(64);
+        break;
+    case RV_ACT_CUSTOMIZE: customize(); break;
+    case RV_ACT_LAUNCH: launch(); break;
+    }
+}
+
+int game_run(void)
+{
+    Input in;
+    SceneAction act;
+    g_now = ticks();
+    camp_new();
+    next_mission();
+    enter_room(RV_R_QUARTERS);
+    message("Wildcard, welcome aboard the TCS Clydesdale. Your bunk keeps your saves. "
+            "The briefing room is through the hatch in the bar.");
+    while (g_mode != MODE_QUIT) {
+        g_now = ticks();
+        in_poll(&in);
+        if (in.key == KEY_F12)
+            shot_save("RVSHOT");
+        if (in.key == KEY_ESC && (in.ch == 'q' || g_mode == MODE_ROOM || g_mode == MODE_ENDING)) {
+            if (g_mode == MODE_ROOM || g_mode == MODE_ENDING || script_active())
+                break;
+        }
+        scene_update(&in, &act);
+        switch (g_mode) {
+        case MODE_ROOM:
+            ambient_talk();
+            if (act.kind == ACTION_HOT)
+                hot_action(&act);
+            else if (act.kind == ACTION_SEAT || act.kind == ACTION_ACTOR)
+                open_talk(act.arg, line_of(act.arg));
+            break;
+        case MODE_MESSAGE:
+            if (in.clicked || in.key == KEY_ENTER || in.key == KEY_ESC) {
+                g_mode = g_back_mode;
+                g_scene.overlay = room_overlay;
+                vid_dirty(110, 280);
+            }
+            break;
+        case MODE_TALK:
+            if (mouth_now() != g_mouth || g_now % 4 == 0) {
+                g_mouth = mouth_now();
+                vid_dirty(FACE_Y, SCR_H);
+                vid_dirty(190, 300);
+            }
+            if (in.clicked || in.key == KEY_ENTER || in.key == KEY_ESC)
+                close_talk();
+            break;
+        case MODE_BRIEF:
+        case MODE_DEBRIEF:
+            brief_tick();
+            if (act.kind == ACTION_HOT && act.action == RV_ACT_CLOSEUP) {
+                hot_action(&act);
+            } else if (speech_done() || in.key == KEY_ESC || (act.kind == ACTION_HOT && act.action == RV_ACT_GOTO)) {
+                if (!g_stage_at)
+                    g_stage_at = g_now + 18;
+                if (g_now >= g_stage_at || in.key == KEY_ESC) {
+                    if (g_mode == MODE_BRIEF && g_stage < 2) {
+                        g_stage++;
+                        g_stage_at = g_now + 7;
+                        vid_dirty(100, SCR_H);
+                    } else {
+                        int brief = g_mode == MODE_BRIEF;
+                        g_stage_at = 0;
+                        if (brief) {
+                            enter_deck();
+                        } else if (camp_resolve(g_won), g_camp.ending) {
+                            g_scene.full = ending_full;
+                            g_scene.no_room = 1;
+                            g_mode = MODE_ENDING;
+                            music_cue(g_camp.ending == ENDING_GOOD ? RV_MUSIC_WIN : RV_MUSIC_LOSE, 300);
+                            vid_dirty(0, SCR_H);
+                        } else {
+                            next_mission();
+                            enter_room(RV_R_BAR);
+                        }
+                    }
+                }
+            }
+            break;
+        case MODE_XOCLOSE:
+            brief_tick();
+            if (in.clicked || in.key == KEY_ENTER || in.key == KEY_ESC) {
+                g_xo_close = 0;
+                g_scene.full = 0;
+                vid_fade(0);
+                gfx_use_palette(dat_room(RV_R_BRIEFING)->palette);
+                g_mode = MODE_BRIEF;
+                vid_dirty(0, SCR_H);
+                scene_draw();
+                vid_fade(64);
+            }
+            break;
+        case MODE_DECK:
+            deck_tick();
+            if (act.kind == ACTION_HOT)
+                hot_action(&act);
+            break;
+        case MODE_FLIGHT:
+            if (g_now >= g_t0 + 30) {
+                g_won = rnd() % 100 < 80;
+                missionEnded();
+                g_scene.full = 0;
+                g_scene.no_room = 0;
+                rv_log("mission %.16Fs %s", (char __far *)g_m.id, g_won ? "won" : "lost");
+                start_briefing(1);
+            }
+            break;
+        case MODE_BUNK:
+            bunk_input(&in);
+            break;
+        case MODE_NAME:
+            name_input(&in);
+            break;
+        case MODE_LOG:
+            if (in.clicked || in.key == KEY_ESC || in.key == KEY_ENTER) {
+                g_mode = MODE_ROOM;
+                g_scene.overlay = room_overlay;
+                vid_dirty(20, 370);
+            }
+            break;
+        case MODE_ENDING:
+            if (in.key != KEY_NONE || in.clicked)
+                g_mode = MODE_QUIT;
+            break;
+        }
+        scene_draw();
+    }
+    return 1;
+}

@@ -147,6 +147,26 @@
       }
     },
     "hotspots": {
+      "hatch": {
+        "rect": [
+          300,
+          300,
+          400,
+          495
+        ],
+        "does": "goto:briefing",
+        "label": "Briefing room"
+      },
+      "lounge": {
+        "rect": [
+          400,
+          900,
+          1136,
+          992
+        ],
+        "does": "goto:lounge",
+        "label": "Crew lounge"
+      },
       "simulator": {
         "rect": [
           1050,
@@ -154,7 +174,8 @@
           1500,
           830
         ],
-        "does": "simulator"
+        "does": "simulator",
+        "label": "Simulator"
       },
       "chalkboard": {
         "rect": [
@@ -163,16 +184,8 @@
           680,
           447
         ],
-        "does": "scores"
-      },
-      "hatch": {
-        "rect": [
-          300,
-          300,
-          400,
-          495
-        ],
-        "does": "exit"
+        "does": "scores",
+        "label": "Tally board"
       }
     },
     "boards": {
@@ -267,7 +280,8 @@
           1093,
           560
         ],
-        "does": "exit"
+        "does": "goto:bar",
+        "label": "Bar"
       },
       "bunks": {
         "rect": [
@@ -276,7 +290,8 @@
           380,
           750
         ],
-        "does": "quarters"
+        "does": "goto:quarters",
+        "label": "Your quarters"
       }
     }
   },
@@ -298,7 +313,8 @@
           490,
           860
         ],
-        "does": "save"
+        "does": "bunk",
+        "label": "Bunk: save or load"
       },
       "locker": {
         "rect": [
@@ -307,7 +323,8 @@
           1247,
           840
         ],
-        "does": "locker"
+        "does": "goto:locker",
+        "label": "Locker"
       },
       "desk": {
         "rect": [
@@ -316,7 +333,8 @@
           960,
           800
         ],
-        "does": "log"
+        "does": "log",
+        "label": "Campaign log"
       },
       "door": {
         "rect": [
@@ -325,7 +343,8 @@
           1536,
           1024
         ],
-        "does": "exit"
+        "does": "goto:lounge",
+        "label": "Crew lounge"
       }
     }
   },
@@ -347,7 +366,8 @@
           653,
           344
         ],
-        "does": "medals"
+        "does": "medals",
+        "label": "Medals"
       },
       "letters": {
         "rect": [
@@ -356,7 +376,8 @@
           890,
           349
         ],
-        "does": "letters"
+        "does": "letters",
+        "label": "Letters"
       },
       "photos": {
         "rect": [
@@ -365,7 +386,8 @@
           1320,
           613
         ],
-        "does": "photos"
+        "does": "photos",
+        "label": "Photographs"
       },
       "helmet": {
         "rect": [
@@ -374,7 +396,8 @@
           733,
           200
         ],
-        "does": "kills"
+        "does": "kills",
+        "label": "Flight record"
       },
       "back": {
         "rect": [
@@ -383,7 +406,8 @@
           280,
           1024
         ],
-        "does": "exit"
+        "does": "goto:quarters",
+        "label": "Back"
       }
     },
     "boards": {
@@ -458,7 +482,18 @@
           420,
           400
         ],
-        "does": "closeup"
+        "does": "closeup",
+        "label": "Cmdr. Solberg"
+      },
+      "out": {
+        "rect": [
+          400,
+          900,
+          1136,
+          992
+        ],
+        "does": "goto:bar",
+        "label": "Bar"
       }
     },
     "boards": {
@@ -535,6 +570,28 @@
         "idle",
         1
       ]
-    ]
+    ],
+    "hotspots": {
+      "kit": {
+        "rect": [
+          320,
+          192,
+          648,
+          700
+        ],
+        "does": "customize",
+        "label": "Kit: your fighter"
+      },
+      "fighter": {
+        "rect": [
+          760,
+          150,
+          1536,
+          760
+        ],
+        "does": "launch",
+        "label": "Launch"
+      }
+    }
   }
 }

@@ -17,8 +17,8 @@ checks every reference and rule (docs/engine.md), and writes:
 missions.txt is one block per mission, a keyword and its value per line,
 '#' comments.  Keywords: mission, node, title, type, music, briefing, win,
 lose, nav (id x y z, km), ship (TYPE|player|wingman side navN [count=N]
-[pilot=KEY]), bar and lounge (seat=PILOT|- ...), talk (room speaker
-listener "text").  briefing, win and lose may repeat: the lines are joined.
+[pilot=KEY]), field (asteroid|mine x z radius, km), bar and lounge
+(seat=PILOT|- ...), talk (room speaker listener "text").  briefing, win and lose may repeat: the lines are joined.
 """
 import argparse
 import csv
@@ -34,9 +34,10 @@ DATA = os.path.join(ROOT, 'data')
 
 VERSION = 1
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
-          'SEATS': 3, 'TALKS': 4}
+          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
-        'NAME': 24, 'NODE_ID': 8}
+        'NAME': 24, 'NODE_ID': 8, 'LINE': 72}
+FIELDS = {'asteroid': 9, 'mine': 10}                 # their EntityType, as fieldTable keeps them
 NONE, GOOD, BAD = 0xFF, 0xFE, 0xFD                   # node edges: a node index, or an ending
 SHIP_PLAYER, SHIP_WINGMAN = 0xFF, 0xFE               # mission ship types chosen at run time
 ROOMS = ['bar', 'lounge']
@@ -55,7 +56,7 @@ HEADER = [('char', 'magic[8]', '8s'), ('unsigned short', 'version', 'H'), ('unsi
           ('unsigned char', 'reserved[30]', '30s')]
 PILOT = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'callsign[RV_CALLSIGN]', '%ds' % TEXT['CALLSIGN']),
          ('char', 'name[RV_NAME]', '%ds' % TEXT['NAME']), ('unsigned char', 'role', 'B'),
-         ('unsigned char', 'pad', 'B')]
+         ('unsigned char', 'pad', 'B'), ('char', 'line[RV_LINE]', '%ds' % TEXT['LINE'])]
 NODE = [('char', 'id[RV_NODE_ID]', '%ds' % TEXT['NODE_ID']), ('unsigned char', 'layer', 'B'),
         ('signed char', 'col', 'b'), ('unsigned short', 'missions[RV_MISSIONS_PER_NODE]', '4H'),
         ('unsigned char', 'good', 'B'), ('unsigned char', 'bad', 'B'), ('unsigned char', 'pad[2]', '2s')]
@@ -63,16 +64,18 @@ NAV = [('unsigned char', 'id', 'B'), ('unsigned char', 'pad', 'B'), ('short', 'x
        ('short', 'z', 'h')]
 SHIP = [('unsigned char', 'type', 'B'), ('unsigned char', 'side', 'B'), ('unsigned char', 'nav', 'B'),
         ('unsigned char', 'count', 'B'), ('unsigned char', 'pilot', 'B'), ('unsigned char', 'pad[3]', '3s')]
+FIELD = [('unsigned char', 'type', 'B'), ('unsigned char', 'pad', 'B'), ('short', 'x', 'h'), ('short', 'z', 'h'),
+         ('short', 'radius', 'h')]
 TALK = [('unsigned char', 'room', 'B'), ('unsigned char', 'speaker', 'B'), ('unsigned char', 'listener', 'B'),
         ('unsigned char', 'pad', 'B'), ('char', 'text[RV_TALK]', '%ds' % TEXT['TALK'])]
 MISSION = [('char', 'id[RV_ID]', '%ds' % TEXT['ID']), ('unsigned char', 'node', 'B'), ('unsigned char', 'type', 'B'),
            ('unsigned char', 'music', 'B'), ('unsigned char', 'nnav', 'B'), ('unsigned char', 'nship', 'B'),
-           ('unsigned char', 'ntalk', 'B'), ('unsigned char', 'pad[2]', '2s'),
+           ('unsigned char', 'ntalk', 'B'), ('unsigned char', 'nfield', 'B'), ('unsigned char', 'pad', 'B'),
            ('char', 'title[RV_TITLE]', '%ds' % TEXT['TITLE']), ('char', 'briefing[RV_BRIEFING]', '%ds' % TEXT['BRIEFING']),
            ('char', 'win[RV_RESULT]', '%ds' % TEXT['RESULT']), ('char', 'lose[RV_RESULT]', '%ds' % TEXT['RESULT']),
            ('RvNav', 'nav[RV_NAVS]', None), ('RvShip', 'ship[RV_SHIPS]', None),
            ('unsigned char', 'seat[RV_ROOMS][RV_SEATS]', '6B'), ('unsigned char', 'pad2[2]', '2s'),
-           ('RvTalk', 'talk[RV_TALKS]', None)]
+           ('RvTalk', 'talk[RV_TALKS]', None), ('RvField', 'field[RV_FIELDS]', None)]
 
 
 def fmt(fields):
@@ -105,7 +108,7 @@ def parse_missions(path):
         val = val.strip()
         where = '%s:%d' % (os.path.basename(path), lineno)
         if key == 'mission':
-            cur = {'id': val, 'where': where, 'nav': [], 'ship': [], 'talk': [], 'seats': {},
+            cur = {'id': val, 'where': where, 'nav': [], 'ship': [], 'talk': [], 'seats': {}, 'field': [],
                    'briefing': [], 'win': [], 'lose': []}
             missions.append(cur)
         elif cur is None:
@@ -118,6 +121,8 @@ def parse_missions(path):
             cur['nav'].append((where, val.split()))
         elif key == 'ship':
             cur['ship'].append((where, val.split()))
+        elif key == 'field':
+            cur['field'].append((where, val.split()))
         elif key in ROOMS:
             cur['seats'][key] = (where, dict(kv.split('=', 1) for kv in val.split()))
         elif key == 'talk':
@@ -249,8 +254,15 @@ def compile_all():
                                      text(line, TEXT['TALK'], where)))
         if len(talks) > LIMITS['TALKS']:
             raise Fail('%s: %d talk lines, at most %d' % (w, len(talks), LIMITS['TALKS']))
-        rec = struct.pack('<%ds6B2s' % TEXT['ID'], text(m['id'], TEXT['ID'], w), node_index[m['node']],
-                          TYPES[m['type']], MUSIC[m['music']], len(navs), len(shipr), len(talks), b'')
+        fields = []
+        for where, f in m['field']:
+            if f[0] not in FIELDS or len(f) != 4:
+                raise Fail('%s: a field is asteroid|mine x z radius' % where)
+            fields.append(struct.pack(fmt(FIELD), FIELDS[f[0]], 0, int(f[1]), int(f[2]), int(f[3])))
+        if len(fields) > LIMITS['FIELDS']:
+            raise Fail('%s: %d fields, at most %d' % (w, len(fields), LIMITS['FIELDS']))
+        rec = struct.pack('<%ds8B' % TEXT['ID'], text(m['id'], TEXT['ID'], w), node_index[m['node']],
+                          TYPES[m['type']], MUSIC[m['music']], len(navs), len(shipr), len(talks), len(fields), 0)
         rec += text(m['title'], TEXT['TITLE'], w).ljust(TEXT['TITLE'], b'\0')
         rec += text(' '.join(m['briefing']), TEXT['BRIEFING'], w).ljust(TEXT['BRIEFING'], b'\0')
         rec += text(' '.join(m['win']), TEXT['RESULT'], w).ljust(TEXT['RESULT'], b'\0')
@@ -259,11 +271,13 @@ def compile_all():
         rec += b''.join(shipr).ljust(LIMITS['SHIPS'] * struct.calcsize(fmt(SHIP)), b'\0')
         rec += struct.pack('<6B2s', *seats, b'')
         rec += b''.join(talks).ljust(LIMITS['TALKS'] * struct.calcsize(fmt(TALK)), b'\0')
+        rec += b''.join(fields).ljust(LIMITS['FIELDS'] * struct.calcsize(fmt(FIELD)), b'\0')
         out_missions.append(rec)
 
     out_pilots = [struct.pack(fmt(PILOT), text(p['key'], TEXT['KEY'], 'people.csv'),
                               text(p['callsign'] or p['key'].title(), TEXT['CALLSIGN'], 'people.csv'),
-                              text(p['name'], TEXT['NAME'], 'people.csv'), ROLES[p['role']], 0) for p in people]
+                              text(p['name'], TEXT['NAME'], 'people.csv'), ROLES[p['role']], 0,
+                              text(p['line'], TEXT['LINE'], 'people.csv %s line' % p['key'])) for p in people]
     return out_pilots, out_nodes, out_missions, node_index[nodes[0]['node']]
 
 
@@ -310,12 +324,15 @@ def header_text(sizes):
             '#define RV_PILOT_NONE 0xFF', '']
     for i, r in enumerate(ROOMS):
         out.append('#define RV_ROOM_%s %d' % (r.upper(), i))
+    for k, v in FIELDS.items():
+        out.append('#define RV_FIELD_%s %d' % (k.upper(), v))
     for k, v in MUSIC.items():
         out.append('#define RV_MUSIC_%s %d' % (k.upper(), v))
     for k, v in ROLES.items():
         out.append('#define RV_ROLE_%s %d' % (k.upper(), v))
     out += ['', '#pragma pack(1)', c_struct('RvGameHeader', HEADER), c_struct('RvPilot', PILOT),
             c_struct('RvNode', NODE), c_struct('RvNav', NAV), c_struct('RvShip', SHIP), c_struct('RvTalk', TALK),
+            c_struct('RvField', FIELD),
             c_struct('RvMission', MISSION), '#pragma pack()', '']
     for k, v in sizes.items():
         out.append('#define RV_%s_SIZE %d' % (k, v))

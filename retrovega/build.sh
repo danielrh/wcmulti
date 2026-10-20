@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build RV.EXE (and the M0 check, HELLO.EXE) with Open Watcom 2 and NASM.
-#   ./build.sh            -> build/dos/RV.EXE, build/dos/HELLO.EXE
+#   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE
 # The toolchain lives in ~/opt/watcom (docs/engine.md); WATCOM overrides it.
 set -e
 cd "$(dirname "$0")"
@@ -14,7 +14,9 @@ python3 tools/rvdata.py --out "$OUT/RVGAME.DAT" --header src/rvdata.h
 CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq -od -d2 -i=src"
 nasm -f obj -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
-for c in util xms hello; do
+~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
+ENGINE="util xms video dat gfx input room lipsync music campaign game main"
+for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
 # RVHOOK first (image paragraph 0), the C code, then DGROUP last as Watcom's
@@ -37,4 +39,5 @@ link() {
         file "$OUT/rvhook.obj" "$@" library "$OUT/rvstubs.lib"
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
-echo "built $OUT/HELLO.EXE"
+link RV.EXE file "$OUT/lowlevel.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
+echo "built $OUT/RV.EXE and $OUT/HELLO.EXE"

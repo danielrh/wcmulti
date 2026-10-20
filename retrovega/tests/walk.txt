@@ -1,0 +1,78 @@
+# a walk through the first slice
+wait 12
+shot S01WELC
+click
+wait 4
+move 118 213
+wait 4
+shot S02QBUNK
+click
+wait 4
+move 300 92
+click
+wait 3
+key s
+wait 2
+type Cal Brody
+wait 4
+shot S03SAVED
+key esc
+wait 2
+key esc
+wait 3
+move 593 200
+wait 2
+click
+wait 12
+shot S04LOUNG
+move 205 190
+wait 14
+shot S05TURN
+click
+wait 30
+shot S06TALK
+click
+wait 8
+move 431 170
+wait 2
+click
+wait 12
+shot S07BAR
+move 75 150
+wait 8
+shot S08TALLY
+move 145 152
+wait 2
+click
+wait 90
+shot S09BRIEF
+move 146 126
+wait 2
+click
+wait 12
+shot S10XO
+click
+wait 6
+key esc
+wait 3
+key esc
+wait 3
+key esc
+wait 14
+shot S11DECK
+move 201 172
+wait 2
+click
+wait 12
+shot S12KIT
+move 478 176
+wait 2
+click
+wait 10
+shot S13LAUN
+wait 40
+shot S14DEBR
+key esc
+wait 16
+shot S15NEXT
+log done

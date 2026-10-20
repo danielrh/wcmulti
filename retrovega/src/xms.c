@@ -5,8 +5,8 @@
  * every block of that level and above.  All copies go through the driver's
  * move (function 0Bh): DOSBox does it as one host-side copy, so even
  * conventional-to-video copies (handle 0 both ends) cost a few emulated
- * instructions.  An odd length is rounded up (the move wants even) by
- * copying one more byte from the source: callers keep their buffers even. */
+ * instructions.  The move wants an even length: xms_get splits an odd one;
+ * xms_put and xms_copy_conv round it up (blocks are 16-byte rounded). */
 #include <dos.h>
 #include <i86.h>
 #include "rv.h"
@@ -136,6 +136,18 @@ int xms_put(XmsBlock b, unsigned long off, const void __far *src, unsigned long 
 int xms_get(XmsBlock b, unsigned long off, void __far *dst, unsigned long n)
 {
     check(b, off, n);
+    if (n & 1) {
+        /* an odd length: never write past the caller's buffer */
+        static unsigned char two[2];
+        unsigned long last = off + n - 1;
+        int ok = n > 1 ? xms_get(b, off, dst, n - 1) : 1;
+        if (last + 2 <= g_block[b].size)
+            ok &= xms_get(b, last, two, 2);
+        else
+            ok &= xms_get(b, last - 1, two, 2), two[0] = two[1];
+        ((unsigned char __far *)dst)[n - 1] = two[0];
+        return ok;
+    }
     g_move.length = n;
     g_move.src_handle = g_handle;
     g_move.src_off = g_block[b].off + off;

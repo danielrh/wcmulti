@@ -13,6 +13,7 @@
 #define RV_SHIPS 12
 #define RV_SEATS 3
 #define RV_TALKS 4
+#define RV_FIELDS 4
 #define RV_ROOMS 2
 #define RV_ID 16
 #define RV_TITLE 48
@@ -23,6 +24,7 @@
 #define RV_CALLSIGN 12
 #define RV_NAME 24
 #define RV_NODE_ID 8
+#define RV_LINE 72
 
 /* node edges */
 #define RV_NODE_NONE 0xFF
@@ -36,6 +38,8 @@
 
 #define RV_ROOM_BAR 0
 #define RV_ROOM_LOUNGE 1
+#define RV_FIELD_ASTEROID 9
+#define RV_FIELD_MINE 10
 #define RV_MUSIC_BRIEFING 0
 #define RV_MUSIC_BAR 1
 #define RV_MUSIC_LAUNCH 2
@@ -71,6 +75,7 @@ typedef struct {
     char name[RV_NAME];
     unsigned char role;
     unsigned char pad;
+    char line[RV_LINE];
 } RvPilot;
 typedef struct {
     char id[RV_NODE_ID];
@@ -104,6 +109,13 @@ typedef struct {
     char text[RV_TALK];
 } RvTalk;
 typedef struct {
+    unsigned char type;
+    unsigned char pad;
+    short x;
+    short z;
+    short radius;
+} RvField;
+typedef struct {
     char id[RV_ID];
     unsigned char node;
     unsigned char type;
@@ -111,7 +123,8 @@ typedef struct {
     unsigned char nnav;
     unsigned char nship;
     unsigned char ntalk;
-    unsigned char pad[2];
+    unsigned char nfield;
+    unsigned char pad;
     char title[RV_TITLE];
     char briefing[RV_BRIEFING];
     char win[RV_RESULT];
@@ -121,12 +134,13 @@ typedef struct {
     unsigned char seat[RV_ROOMS][RV_SEATS];
     unsigned char pad2[2];
     RvTalk talk[RV_TALKS];
+    RvField field[RV_FIELDS];
 } RvMission;
 #pragma pack()
 
 #define RV_HEADER_SIZE 68
-#define RV_PILOT_SIZE 48
+#define RV_PILOT_SIZE 120
 #define RV_NODE_SIZE 22
-#define RV_MISSION_SIZE 1392
+#define RV_MISSION_SIZE 1424
 
 #endif

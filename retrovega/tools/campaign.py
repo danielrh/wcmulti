@@ -170,8 +170,19 @@ def mission_text(rng, n, k, rel):
              'nav      2 %d 0 %d' % (rng.randint(-3000, 3000), rng.randint(2500, 5000)),
              'ship     player 0 nav0',
              'ship     wingman 0 nav0 pilot=%s' % wing]
+    navs = [(int(lines[8].split()[2]), int(lines[8].split()[4])), (int(lines[9].split()[2]), int(lines[9].split()[4]))]
     for nav, foe in zip((1, 2), [rng.choice(foes) for _ in range(2)]):
         lines.append('ship     %s 1 nav%d count=%d' % (foe, nav, min(4, 1 + (layer + rng.randint(0, 2)) // 2)))
+    # hazards the situation display draws: a debris field beside the route now and then, mines later on
+    if rng.random() < 0.5:
+        (x0, z0), (x1, z1) = navs
+        t = rng.uniform(0.3, 0.7)
+        lines.append('field    asteroid %d %d %d' % (x0 + (x1 - x0) * t + rng.randint(-400, 400),
+                                                    z0 + (z1 - z0) * t + rng.randint(-300, 300), rng.randint(250, 600)))
+    if layer >= 3 and rng.random() < 0.4:
+        x, z = rng.choice(navs)
+        lines.append('field    mine %d %d %d' % (x + rng.randint(-700, 700), z + rng.randint(-500, 500),
+                                                rng.randint(180, 350)))
     used = {wing}
     talks = []
     for room in ('bar', 'lounge'):
