@@ -10,6 +10,7 @@ OUT=build/dos
 mkdir -p "$OUT"
 python3 tools/rvabi.py --c-header > src/rvhooks.h
 python3 tools/rvabi.py --asm > src/rvhook.asm
+python3 tools/rvdata.py --out "$OUT/RVGAME.DAT" --header src/rvdata.h
 CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq -od -d2 -i=src"
 nasm -f obj -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm

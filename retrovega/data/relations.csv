@@ -1,0 +1,12 @@
+a,b,relation,talk,why
+PRIME,ANCHOR,twins,yes,"Brothers, one the other's backup: they needle each other and close ranks against everyone else"
+DRIFTER,PRIME,banter,yes,Drifter runs the pool on which Mercer is on the comm and Prime plays to it
+DRIFTER,ANCHOR,banter,yes,Anchor is the one who pays when the pool goes wrong
+ECHO,TORCH,friends,yes,"Both lost their homes to the Aera, and both want to go back"
+FROST,KESTREL,friends,yes,Each grew up among people who are not human: Rlaan traders and a Shaper habitat
+COMET,TORCH,rivals,yes,"The deadliest shot and the loudest voice: they argue tactics, never quite seriously"
+COMET,FROST,friends,yes,Comet's cynicism meets Frost's calm and neither gives ground
+COMET,KESTREL,cold,no,"Comet chased pirates for Homeland Security and trusts no one raised by Shapers"
+ECHO,DRIFTER,cold,no,Echo flies like the war is personal; Drifter bets on it. She will not sit with him
+ECHO,PRIME,cold,no,Echo has no patience for a man who flies like he has a spare
+KESTREL,DRIFTER,banter,yes,Drifter keeps trying to bet against Kestrel's reflexes and keeps losing
