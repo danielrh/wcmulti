@@ -46,6 +46,7 @@
 #define RV_MUSIC_WIN 3
 #define RV_MUSIC_LOSE 4
 #define RV_MUSIC_QUARTERS 5
+#define RV_MUSIC_LOUNGE 6
 #define RV_ROLE_PILOT 0
 #define RV_ROLE_HERO 1
 #define RV_ROLE_BARMAN 2
