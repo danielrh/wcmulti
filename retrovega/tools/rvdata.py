@@ -373,7 +373,8 @@ def header_text(sizes):
     # the quarter sine wave for the simulation's integer trigonometry (flight.c):
     # sin(i / 256 * 90 degrees) * 16384, i = 0..256
     out += ['', '/* sin(i/256 x 90 degrees) x 16384, i = 0..256: the simulation\'s trigonometry (flight.c) */',
-            '#ifdef RV_TABLES', 'static const short __far rv_qsin[257] = {']
+            '#ifdef RV_TABLES', '#ifdef __WATCOMC__', '#define RV_FAR __far', '#else', '#define RV_FAR', '#endif',
+            'static const short RV_FAR rv_qsin[257] = {']
     vals = [int(round(math.sin(i / 256 * math.pi / 2) * 16384)) for i in range(257)]
     for i in range(0, 257, 12):
         out.append('    ' + ', '.join('%d' % v for v in vals[i:i + 12]) + ',')

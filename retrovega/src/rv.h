@@ -32,16 +32,19 @@ int xms_get(XmsBlock b, unsigned long off, void __far *dst, unsigned long n);
 int xms_copy_conv(void __far *dst, const void __far *src, unsigned long n); /* host-speed copy */
 void xms_shutdown(void);
 
-/* the screen (video.c): VESA 100h, 640x400x256, a back buffer in conventional
- * memory as 4 bands of 100 rows; only rows marked dirty are copied out. */
+/* the screen (video.c): VESA 100h, 640x400x256, drawn a run of dirty rows
+ * (at most 100) at a time into one band buffer, each run flipped before the
+ * next; vid_row answers only for the run being drawn. */
 #define SCR_W 640
 #define SCR_H 400
 int vid_init(void);
 void vid_shutdown(void);
 unsigned char __far *vid_row(int y);
+int vid_run(int *y0, int *y1);         /* the run being drawn; 0 between runs */
 void vid_dirty(int y0, int y1);        /* rows y0 .. y1-1 need drawing and copying */
 int vid_dirty_band(int *y0, int *y1);  /* the next dirty run of rows, 0 when none: draw them */
-void vid_flip(void);                   /* copy the drawn dirty rows to the screen */
+void vid_flip(void);                   /* copy the run drawn to the screen */
+void vid_read_row(int y, unsigned char __far *dst);   /* a row as shown (screenshots) */
 void vid_palette(const unsigned char __far *rgb6, int first, int n);
 void vid_fade(int level);              /* 0 black .. 64 full: the current palette scaled */
 void vid_wait_retrace(void);

@@ -1,6 +1,6 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
- *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/mpu | /nomusic] [/midilog]
+ *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/mpu | /nomusic] [/midilog]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -17,7 +17,7 @@
 #include "music.h"
 
 char g_people_names[16][28];
-extern int g_winrate, g_flight_seconds;
+extern int g_winrate, g_flight_seconds, g_bench_wanted;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
 void __far __cdecl uiMode_impl(unsigned short on) { (void)on; }
@@ -53,6 +53,8 @@ int main(int argc, char **argv)
             g_winrate = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/flight"))           /* tests: seconds a flight lasts (20) */
             g_flight_seconds = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/bench"))            /* tests: benchmark copies, fixed (0 none; else adapting) */
+            g_bench_wanted = atoi(argv[++i]);
     }
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "/midilog"))               /* tests: what the music sent, and when */

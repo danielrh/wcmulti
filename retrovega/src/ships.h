@@ -1,10 +1,12 @@
 /* ships.h: ship views for the flight (ships.c): a type's 62 views decoded from
  * SHIPnn.RV into XMS (the mission level) in gfx.c's run-length row format,
- * the mirrored headings made at load, and the blitter that draws one. */
+ * the mirrored headings made at load, and the draw of one as the camera
+ * sees it, through the lightfield module's placement and kernels. */
 #ifndef SHIPS_H
 #define SHIPS_H
 
 #include "rv.h"
+#include "lightfield.h"
 
 #define SHIP_VIEWS 62
 #define SHIP_SETS 8
@@ -27,21 +29,29 @@ int ships_find(unsigned type);          /* -> loaded set index, or -1 */
 const ShipSet __far *ships_set(int i);
 void ships_unload(void);                /* forgets every set (the mission level is freed by the caller) */
 
-/* the view of a ship seen from (vx, vy, vz) in the ship's own frame (right,
- * up, front; any scale): 0 top, 1..35 the bands, 36 bottom, 37..61 the
- * headings past 180 */
-int ships_view_of(long vx, long vy, long vz);
+/* the view the camera projects through: its centre on screen and its focal length */
+void ships_set_camera(int cx, int cy, int focal);
 
-/* draw view v with the ship's origin at (x, y): the rows y0..y1-1, each row
- * clipped to [xa, xb) and, when ext is given, to its row's extent
- * (ext[2 * (row - ext_y0)], ext[.. + 1]) for rows ext_y0 .. ext_y0+ext_rows-1 */
+/* THE draw: the ship of set `set` at rel = ship - camera (positions, 256 = 1
+ * km), with the camera's and the ship's bases, scale256 / 256 of its full
+ * size; into the run y0..y1-1, each row clipped to [xa, xb) and, when ext
+ * is given, to its row's extent (ext[2 * (row - ext_y0)], ext[.. + 1]) for
+ * rows ext_y0 .. ext_y0+ext_rows-1.  Returns the path taken: 0 nothing
+ * drawn, 1 a plain copy of the view, 2 a scaled copy, 3 turned and scaled
+ * through a dense copy. */
+int ships_draw(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
+               int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
+
+/* the plain copy of view v with the ship's origin at (x, y), clipped as above */
 void ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
                 const short __far *ext, int ext_y0, int ext_rows);
 
-/* integer trigonometry (angles: 1024 a turn; 1.0 = 16384) */
-long rv_sin(int a);
-long rv_cos(int a);
-int rv_atan2(long y, long x);           /* 0..1023 */
-unsigned long rv_sqrt(unsigned long v);
+/* the asm kernels checked against lightfield.c's: pixels compared, -1 on a mismatch */
+long ships_selftest(void);
+
+/* the benchmark of the three paths: view v drawn into the run being drawn
+ * again and again, timed; out[k] = output pixels a millisecond of path k+1
+ * (the copy; scaled to 3/4; turned 45 degrees at 3/4) */
+void ships_time_paths(int set, int v, long out[3]);
 
 #endif

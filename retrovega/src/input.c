@@ -398,7 +398,7 @@ void shot_save(const char *name)
     }
     for (y = SCR_H - 1; y >= 0; y--) {
         static unsigned char row[SCR_W];
-        _fmemcpy(row, vid_row(y), SCR_W);
+        vid_read_row(y, row);
         fwrite(row, 1, SCR_W, f);
     }
     fclose(f);

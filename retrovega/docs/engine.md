@@ -350,8 +350,12 @@ Built (src/music.c, src/opl.c):
 
 **Done in the game:**
 
-- **Back buffer:** the scene is composed in a back buffer in
-  conventional memory, 4 segments of 100 rows.
+- **Band buffer:** the screen is drawn a run of dirty rows at a time (at
+  most 100) into one 64,000-byte buffer and flipped before the next run;
+  every run is drawn whole, back to front, so nothing older is needed
+  (screenshots read the screen back through the bank window). The four
+  bands of the first slice cost 256 KB; the flight's dense sprite buffers
+  have the 192 KB this gave back.
 - **Dirty rows only:** only the rows that changed are flipped.
 - **XMS moves:** the flip, and every background restore, is an XMS move,
   not a CPU loop. DOSBox carries out an XMS move as one host-side copy
@@ -476,6 +480,10 @@ the rate, and the mean N over the second half is logged:
 | `-od`, the row pointer stepped | 46 | 13.7 M |
 | `-ox` (now the default; `DEBUG=1` builds `-od -d2`) | 68 | 20.2 M |
 | the same in the deployed page (20,000 cycles, headless Chrome on a 2-core box) | 25 | 7.4 M |
+| `-ox`, one band buffer (video.c: 192 KB of conventional memory freed) | 74 | 22.0 M |
+
+`RV.EXE /bench N` fixes the count (0: none, so `tests/ships.txt` can look
+at the real ships, logged every 100 frames as `lightfield: frame ...`).
 
 At `cycles=40000` (tests/rv.conf) that is about two emulated cycles a
 pixel, the XMS fetch of each sprite's rows and the per-row call into
@@ -486,6 +494,51 @@ the live page through the rooms with Tab and Enter (the deck's launch
 hotspot sits at 478,176) and reading RVLOG.TXT; a desktop browser on a
 faster machine will sit between the two. The number is live in
 `rvBenchCount` while the flight runs.
+
+### The lightfield: one function draws a ship
+
+`ships_draw(set, rel, cam, ship, scale, ...)` is the draw the rest of the
+flight goes through (src/ships.c): rel is the ship's position less the
+camera's, cam and ship their bases (front, right, up), scale the size
+wanted as a fraction of the view's full size. The pure part is
+`src/lightfield.c`, plain C with no DOS in it, which
+`tests/host/run.sh` builds with gcc and checks against reference results
+(the trigonometry against libm, the view for a direction, the place and
+turn on screen for a dozen cases, the scaler on a known picture, the
+rotator on an L, the turned row's inside-span against the checked
+kernel); the DOS build checks its asm kernels against the same C at every
+flight's start (`lightfield: asm kernels agree with the C ones`).
+
+- **Conventions**, fixed here and noted in abi/rvabi.def: the frame is
+  left-handed like the screen (x right, y up, z into it), so the camera's
+  up is up the screen; the renderer's +x is a ship's left (a right-handed
+  mesh with its nose on +z), so the heading is taken toward −right. A band
+  view's turn on screen is the angle of the ship's up seen through the
+  camera; the top and bottom views, which lie nose left, use the nose.
+- **lf_place** gives the screen point, the view (0..61) and the turn
+  (1024 a turn); the flight takes the size from the distance: full size at
+  2,500 km in the ABI's WC-scale units, where a kps is 12.8 units a frame
+  and a dogfight spans thousands of km.
+- **Three paths**, picked by what is wanted: a plain copy when the turn
+  rounds to 0 and the size is full; a scaled copy (each output row expands
+  its source row and maps columns, `rv_scale_row`); or turned and scaled by
+  inverse mapping from a dense copy of the view (`rv_rotate_row`, fed only
+  the row's inside-span so it needs no bounds test). Both kernels are
+  lowlevel.asm with lightfield.c's C as the reference.
+
+Measured on the Nicander's 82 x 121 view at `cycles=40000`:
+
+| path | output pixels a ms | cycles a pixel |
+|---|---|---|
+| copy (`rv_blit_row`) | 24,100 | 1.7 |
+| scaled to 3/4 (C `lf_scale_row` / asm `rv_scale_row`) | 1,930 / 2,550 | 21 / 16 |
+| turned 45 degrees at 3/4 (C / asm) | 940 / 2,570 | 43 / 16 |
+
+In DOSBox an instruction costs about a cycle whatever it is, so the
+scaled and turned draws cost what their inner loops count: nine times a
+copy. That settles the question of scales and rolls below: a sprite drawn
+often must be a copy, so sizes and turns are rendered once (by these same
+kernels) and copied after.
 
 ### Pre-rendering: what the numbers allow
 

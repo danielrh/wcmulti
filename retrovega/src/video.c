@@ -1,11 +1,13 @@
-/* video.c: VESA mode 100h (640x400x256), the back buffer and the flip.
+/* video.c: VESA mode 100h (640x400x256), the band buffer and the flip.
  *
- * The back buffer is four far blocks of 100 rows (64,000 bytes each), so a
- * row never straddles a segment.  Drawing marks rows dirty; vid_flip copies
- * each dirty run to the screen through the 64 KB bank window with XMS moves
- * (handle 0 to handle 0), split where a bank or a band ends.  DOSBox does a
- * move as one host-side copy, so the flip costs the emulated CPU a few
- * instructions per piece (docs/engine.md). */
+ * The screen is drawn a run of dirty rows at a time (at most BAND_ROWS,
+ * vid_dirty_band) into one 64,000-byte buffer; every run is drawn whole,
+ * back to front, so nothing older is needed.  vid_flip copies the run to
+ * the screen through the 64 KB bank window with XMS moves (handle 0 to
+ * handle 0), split where a bank ends.  DOSBox does a move as one host-side
+ * copy, so the flip costs the emulated CPU a few instructions per piece
+ * (docs/engine.md).  One buffer instead of four leaves 192 KB of
+ * conventional memory to the flight's dense sprite buffers. */
 #include <dos.h>
 #include <i86.h>
 #include <conio.h>
@@ -14,9 +16,9 @@
 #include "rv.h"
 
 #define BAND_ROWS 100
-#define BANDS (SCR_H / BAND_ROWS)
 
-static unsigned char __far *g_band[BANDS];
+static unsigned char __far *g_buf;      /* the run being drawn: rows g_run_y0 .. */
+static int g_run_y0, g_run_y1;
 static unsigned char g_dirty[SCR_H];
 static unsigned g_gran_kb = 64;         /* window granularity */
 static unsigned g_win_seg = 0xA000;
@@ -47,15 +49,12 @@ int vid_init(void)
 {
     union REGS r;
     struct SREGS s;
-    int i;
-    for (i = 0; i < BANDS; i++) {
-        g_band[i] = (unsigned char __far *)_fmalloc((size_t)BAND_ROWS * SCR_W);
-        if (!g_band[i]) {
-            rv_log("video: no memory for the back buffer");
-            return 0;
-        }
-        _fmemset(g_band[i], 0, (size_t)BAND_ROWS * SCR_W);
+    g_buf = (unsigned char __far *)_fmalloc((size_t)BAND_ROWS * SCR_W);
+    if (!g_buf) {
+        rv_log("video: no memory for the band buffer");
+        return 0;
     }
+    _fmemset(g_buf, 0, (size_t)BAND_ROWS * SCR_W);
     segread(&s);
     s.es = FP_SEG((void __far *)&g_mode);
     r.x.di = FP_OFF((void __far *)&g_mode);
@@ -91,8 +90,15 @@ void vid_shutdown(void)
 
 unsigned char __far *vid_row(int y)
 {
-    RV_CHECK(y, SCR_H);
-    return g_band[y / BAND_ROWS] + (unsigned)(y % BAND_ROWS) * SCR_W;
+    RV_CHECK(y - g_run_y0, g_run_y1 - g_run_y0);
+    return g_buf + (unsigned)(y - g_run_y0) * SCR_W;
+}
+
+int vid_run(int *y0, int *y1)
+{
+    *y0 = g_run_y0;
+    *y1 = g_run_y1;
+    return g_run_y1 > g_run_y0;
 }
 
 void vid_dirty(int y0, int y1)
@@ -103,7 +109,8 @@ void vid_dirty(int y0, int y1)
         memset(g_dirty + y0, 1, y1 - y0);
 }
 
-/* the next run of dirty rows, no longer than a band: the caller draws them */
+/* the next run of dirty rows, no longer than the buffer: the caller draws
+ * them (vid_row answers for those rows only), then flips before the next */
 int vid_dirty_band(int *y0, int *y1)
 {
     int y = 0, e;
@@ -115,8 +122,8 @@ int vid_dirty_band(int *y0, int *y1)
     while (e < SCR_H && g_dirty[e] == 1 && e - y < BAND_ROWS)
         e++;
     memset(g_dirty + y, 2, e - y);      /* 2: drawn, to be copied */
-    *y0 = y;
-    *y1 = e;
+    g_run_y0 = *y0 = y;
+    g_run_y1 = *y1 = e;
     return 1;
 }
 
@@ -132,41 +139,37 @@ static void bank(int b)
     g_bank = b;
 }
 
+/* the run drawn (rows g_run_y0 .. g_run_y1-1) to the screen, in pieces that
+ * stay within a bank */
 void vid_flip(void)
 {
-    int y = 0;
-    while (y < SCR_H) {
-        int e;
-        unsigned long off;
-        if (g_dirty[y] != 2) {
-            y++;
-            continue;
-        }
-        e = y;
-        while (e < SCR_H && g_dirty[e] == 2 && (e == y || e % BAND_ROWS))
-            e++;
-        memset(g_dirty + y, 0, e - y);
-        /* rows y .. e-1, one band: copy in pieces that stay within a bank */
-        off = (unsigned long)y * SCR_W;
-        while (y < e) {
-            unsigned long end = (unsigned long)e * SCR_W;
-            unsigned long bank_end = (off | 0xFFFFUL) + 1;
-            unsigned long n = (end < bank_end ? end : bank_end) - off;
-            unsigned char __far *src = g_band[y / BAND_ROWS] + (unsigned)(off - (unsigned long)(y / BAND_ROWS) * BAND_ROWS * SCR_W);
-            bank((int)(off >> 16));
-            xms_copy_conv(MK_FP(g_win_seg, (unsigned)(off & 0xFFFF)), src, n);
-            off += n;
-            y = (int)(off / SCR_W);
-            if (off % SCR_W) {
-                /* a row straddles the bank boundary: finish it */
-                unsigned long rest = SCR_W - off % SCR_W;
-                src = g_band[y / BAND_ROWS] + (unsigned)(off - (unsigned long)(y / BAND_ROWS) * BAND_ROWS * SCR_W);
-                bank((int)(off >> 16));
-                xms_copy_conv(MK_FP(g_win_seg, (unsigned)(off & 0xFFFF)), src, rest);
-                off += rest;
-                y++;
-            }
-        }
+    int y = g_run_y0, e = g_run_y1;
+    unsigned long off;
+    if (y >= e)
+        return;
+    memset(g_dirty + y, 0, e - y);
+    off = (unsigned long)y * SCR_W;
+    while (off < (unsigned long)e * SCR_W) {
+        unsigned long end = (unsigned long)e * SCR_W;
+        unsigned long bank_end = (off | 0xFFFFUL) + 1;
+        unsigned long n = (end < bank_end ? end : bank_end) - off;
+        bank((int)(off >> 16));
+        xms_copy_conv(MK_FP(g_win_seg, (unsigned)(off & 0xFFFF)), g_buf + (unsigned)(off - (unsigned long)g_run_y0 * SCR_W), n);
+        off += n;
+    }
+    g_run_y0 = g_run_y1 = 0;
+}
+
+/* a row of the screen as shown (for screenshots), through the bank window */
+void vid_read_row(int y, unsigned char __far *dst)
+{
+    unsigned long off = (unsigned long)y * SCR_W, bank_end = (off | 0xFFFFUL) + 1;
+    unsigned n = bank_end - off < SCR_W ? (unsigned)(bank_end - off) : SCR_W;
+    bank((int)(off >> 16));
+    xms_copy_conv(dst, MK_FP(g_win_seg, (unsigned)(off & 0xFFFF)), n);
+    if (n < SCR_W) {
+        bank((int)((off + n) >> 16));
+        xms_copy_conv(dst + n, MK_FP(g_win_seg, (unsigned)((off + n) & 0xFFFF)), SCR_W - n);
     }
 }
 

@@ -1,0 +1,36 @@
+# the ships as the lightfield draws them (run with /bench 0): the launch, then a slow look round
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+shot G01AHEAD
+hold left 25
+wait 30
+shot G02LEFT
+hold left 25
+wait 30
+shot G03BACK
+hold up 20
+wait 30
+shot G04UP
+wait 200
+key esc
+wait 16
+log done

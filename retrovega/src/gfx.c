@@ -88,11 +88,9 @@ void gfx_image(unsigned a, int x, int y, int y0, int y1)
         return;
     for (r = y0; r < y1;) {
         if (cx0 == 0 && cx1 == SCR_W && w == SCR_W) {
-            /* full width: the rest of this band in one move */
-            int e = r + (100 - r % 100);
-            if (e > y1) e = y1;
-            dat_read(as->at + (unsigned long)(r - y) * w, vid_row(r), (unsigned long)(e - r) * SCR_W);
-            r = e;
+            /* full width: the rest of the run in one move (its rows are contiguous) */
+            dat_read(as->at + (unsigned long)(r - y) * w, vid_row(r), (unsigned long)(y1 - r) * SCR_W);
+            r = y1;
         } else {
             dat_read(as->at + (unsigned long)(r - y) * w + (cx0 - x), vid_row(r) + cx0, cx1 - cx0);
             r++;

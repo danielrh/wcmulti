@@ -26,6 +26,7 @@
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
+int g_bench_wanted = -1;                /* RV.EXE /bench N: that many copies, no adapting; 0 none; -1 adapt */
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
 /* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
 #define SHIELD(s, k) (((unsigned short *)curShield)[(s) * 2 + (k)])
@@ -72,7 +73,7 @@ static unsigned vrnd(void)
 
 static void vec_norm(RvVec3 *v)
 {
-    unsigned long len = rv_sqrt((unsigned long)(v->x * v->x + v->y * v->y + v->z * v->z));
+    unsigned long len = lf_sqrt((unsigned long)(v->x * v->x + v->y * v->y + v->z * v->z));
     if (!len)
         return;
     v->x = v->x * 256 / (long)len;
@@ -92,7 +93,7 @@ static void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b)
 /* a and b turned by angle t in their plane: a' = a cos + b sin, b' = b cos - a sin */
 static void rotate_pair(RvVec3 *a, RvVec3 *b, int t)
 {
-    long c = rv_cos(t), s = rv_sin(t);
+    long c = lf_cos(t), s = lf_sin(t);
     RvVec3 na, nb;
     na.x = (a->x * c + b->x * s) >> 14; na.y = (a->y * c + b->y * s) >> 14; na.z = (a->z * c + b->z * s) >> 14;
     nb.x = (b->x * c - a->x * s) >> 14; nb.y = (b->y * c - a->y * s) >> 14; nb.z = (b->z * c - a->z * s) >> 14;
@@ -146,10 +147,34 @@ static void ship_physics(int s)
     if (rvController[s] == 1) {
         yaw = g_steer_x;
         pitch = g_steer_y;
+    } else if (rvController[s] == 0 && commAnimInfo[s] == 0) {
+        /* a friendly stand-in keeps station off the player's right, 1,000 km out and 2,500 ahead */
+        const RvVec3 *r = &gOrientationRightVector[0], *f = &gOrientationFrontVector[0];
+        gOrientationFrontVector[s] = *f;
+        gOrientationRightVector[s] = *r;
+        gOrientationUpVector[s] = gOrientationUpVector[0];
+        gPositionVector[s].x = gPositionVector[0].x + (r->x * 1000 + f->x * 2500);
+        gPositionVector[s].y = gPositionVector[0].y + (r->y * 1000 + f->y * 2500);
+        gPositionVector[s].z = gPositionVector[0].z + (r->z * 1000 + f->z * 2500);
+        speedLo[s] = speedLo[0];
+        return;
     } else if (rvController[s] == 0) {
-        /* the stand-in AI: a wide turn, now and then the other way */
-        yaw = (int)(((frameCounter / 160 + s) & 1) ? 3 : -3);
-        pitch = (int)(((frameCounter / 90 + s) % 3) - 1);
+        /* an enemy stand-in: turns toward the player while far, passes by when near */
+        RvVec3 d;
+        long dr, du, df, dist;
+        d.x = (gPositionVector[0].x - gPositionVector[s].x) / 256;   /* in km */
+        d.y = (gPositionVector[0].y - gPositionVector[s].y) / 256;
+        d.z = (gPositionVector[0].z - gPositionVector[s].z) / 256;
+        dr = vec_dot(&d, &gOrientationRightVector[s]) / 256;
+        du = vec_dot(&d, &gOrientationUpVector[s]) / 256;
+        df = vec_dot(&d, &gOrientationFrontVector[s]) / 256;
+        dist = (dr < 0 ? -dr : dr) + (du < 0 ? -du : du) + (df < 0 ? -df : df);   /* km, roughly */
+        if (dist > 3000 || df < 0) {
+            yaw = dr > 0 ? 6 : dr < 0 ? -6 : 0;
+            pitch = du > 0 ? -5 : du < 0 ? 5 : 0;
+        } else {
+            yaw = (int)((s & 1) ? 3 : -3);
+        }
     }
     if (yaw)
         rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(t->yaw_dps, yaw));
@@ -248,32 +273,26 @@ static void draw_stars(int y0, int y1)
     }
 }
 
-/* a ship's view and place on screen: 0 when it is behind or off the screen */
-static int project(int s, int *sx, int *sy, int *view)
+/* the camera: the player's own frame; a ship's basis as the lightfield wants it */
+static void basis_of(int s, LfBasis *b)
 {
-    RvVec3 d, *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0], *f = &gOrientationFrontVector[0];
-    long x, y, z, vx, vy, vz;
-    const RvCockpit __far *c = cockpit_record();
-    int cx = SCR_W / 2, cy = c ? (c->open_y0 + c->open_y1) / 2 : SCR_H / 2, focal = 400;
-    d.x = (gPositionVector[s].x - gPositionVector[0].x) / 16;
-    d.y = (gPositionVector[s].y - gPositionVector[0].y) / 16;
-    d.z = (gPositionVector[s].z - gPositionVector[0].z) / 16;
-    x = vec_dot(&d, r) / 256;
-    y = vec_dot(&d, u) / 256;
-    z = vec_dot(&d, f) / 256;
-    if (z < 16)
-        return 0;
-    *sx = cx + (int)(x * focal / z);
-    *sy = cy + (int)(y * focal / z);
-    if (*sx < -200 || *sx > SCR_W + 200 || *sy < -200 || *sy > SCR_H + 200)
-        return 0;
-    /* the viewer's direction in the ship's own frame */
-    d.x = -d.x; d.y = -d.y; d.z = -d.z;
-    vx = vec_dot(&d, &gOrientationRightVector[s]);
-    vy = vec_dot(&d, &gOrientationUpVector[s]);
-    vz = vec_dot(&d, &gOrientationFrontVector[s]);
-    *view = ships_view_of(vx / 256, vy / 256, vz / 256);
-    return 1;
+    b->front = *(const LfVec *)&gOrientationFrontVector[s];
+    b->right = *(const LfVec *)&gOrientationRightVector[s];
+    b->up = *(const LfVec *)&gOrientationUpVector[s];
+}
+
+/* how big a ship shows: full size at 2,500 km, smaller beyond, up to twice
+ * full size closer in.  Nothing physical: the ABI's units are WC's (256 = 1
+ * km, a kps moves 12.8 units a frame, so a fighter crosses 250 km a second),
+ * where a dogfight spans thousands of km and a fighter is drawn big at a
+ * couple of thousand, and that is the scale the flight keeps. */
+#define FULL_SIZE_UNITS (256L * 2500)
+static int scale_of(const LfVec *rel)
+{
+    long d = (long)lf_sqrt((unsigned long)((rel->x / 64) * (rel->x / 64) + (rel->y / 64) * (rel->y / 64)
+                                           + (rel->z / 64) * (rel->z / 64))) * 64;
+    long sc = d ? FULL_SIZE_UNITS * 256 / d : 512;
+    return (int)(sc > 512 ? 512 : sc);
 }
 
 static void draw_world(int y0, int y1)
@@ -281,16 +300,32 @@ static void draw_world(int y0, int y1)
     int ey0, rows, s, i;
     const short __far *ext = cockpit_extents(&ey0, &rows);
     const ShipSet __far *bench = g_set_enemy >= 0 ? ships_set(g_set_enemy) : 0;
+    LfBasis cam, ship;
+    int path;
     draw_stars(y0, y1);
-    /* the ships near the player: their own views, at full size (no scaling yet) */
+    /* the ships near the player: their view for the camera, at the size
+     * their distance gives, turned as they roll (ships_draw: the lightfield) */
+    basis_of(0, &cam);
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
-        int sx, sy, view, set;
+        LfVec rel;
+        int set;
         if (maybeEntityType[s] != 0xC)
             continue;
         set = ships_find(gInstanceShipTypes[s]);
-        if (set < 0 || !project(s, &sx, &sy, &view))
+        if (set < 0)
             continue;
-        ships_blit(ships_set(set), view, sx, sy, y0, y1, 0, SCR_W, ext, ey0, rows);
+        rel.x = gPositionVector[s].x - gPositionVector[0].x;
+        rel.y = gPositionVector[s].y - gPositionVector[0].y;
+        rel.z = gPositionVector[s].z - gPositionVector[0].z;
+        basis_of(s, &ship);
+        path = ships_draw(set, &rel, &cam, &ship, scale_of(&rel), y0, y1, 0, SCR_W, ext, ey0, rows);
+        if (y0 <= ey0 && frameCounter % 100 == 1) {
+            /* now and then, where each ship was put (tests/ships.txt reads it) */
+            LfPlace p;
+            lf_place(&rel, &cam, &ship, SCR_W / 2, (ey0 + rows / 2), 400, &p);
+            rv_log("lightfield: frame %u slot %d type %02X at %ld,%ld,%ld: view %d roll %d scale %d at %d,%d path %d",
+                   frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, scale_of(&rel), p.sx, p.sy, path);
+        }
     }
     /* the benchmark's copies */
     if (bench)
@@ -365,15 +400,15 @@ static void gather(void)
         x = vec_dot(&d, &gOrientationRightVector[0]) / 256;
         y = vec_dot(&d, &gOrientationUpVector[0]) / 256;
         z = vec_dot(&d, &gOrientationFrontVector[0]) / 256;
-        len = (long)rv_sqrt((unsigned long)(x * x + y * y + z * z));
+        len = (long)lf_sqrt((unsigned long)(x * x + y * y + z * z));
         if (!len)
             continue;
         /* the angle off the nose, 0 the middle .. 512 (behind) the rim */
-        ang = rv_atan2((long)rv_sqrt((unsigned long)(x * x + y * y)), z);
+        ang = lf_atan2((long)lf_sqrt((unsigned long)(x * x + y * y)), z);
         rr = (int)(ang * 256 / 512);
-        a = rv_atan2(y, x);
-        g_st.contact[n].x = (short)((rv_cos(a) * rr) >> 14);
-        g_st.contact[n].y = (short)((rv_sin(a) * rr) >> 14);
+        a = lf_atan2(y, x);
+        g_st.contact[n].x = (short)((lf_cos(a) * rr) >> 14);
+        g_st.contact[n].y = (short)(-((lf_sin(a) * rr) >> 14));   /* up is up the screen */
         g_st.contact[n].colour = commAnimInfo[s] == 0 ? UI_HILITE : commAnimInfo[s] == 1 ? UI_RED : UI_AMBER4;
         n++;
     }
@@ -418,10 +453,14 @@ static void bench_step(void)
         g_bench[i].y = (short)y;
     }
     /* the count follows the frame rate: more while it holds, fewer when it falls */
-    if (g_fps10 > FPS_WANT * 10 + 10)
+    if (g_bench_wanted >= 0) {
+        if (g_nbench < g_bench_wanted)
+            bench_add(g_bench_wanted - g_nbench);
+    } else if (g_fps10 > FPS_WANT * 10 + 10) {
         bench_add(g_nbench < 50 ? 4 : 2);
-    else if (g_fps10 < FPS_WANT * 10 - 10 && g_nbench > 0)
+    } else if (g_fps10 < FPS_WANT * 10 - 10 && g_nbench > 0) {
         g_nbench -= g_nbench < 50 ? 2 : 1;
+    }
     rvBenchCount = (unsigned short)g_nbench;
     if (clock240() - g_t0 > FLIGHT_TICKS / 2) {
         g_bench_sum += g_nbench;
@@ -454,7 +493,7 @@ void __far __cdecl flight_startup(void)
     cockpit_load(g_camp.player_ship);
     spawn(0, g_camp.player_ship, 0, 1, 0, 0, 0, 0);
     /* the mission's ships round the player: the wingman alongside, the rest
-     * a few kilometres out, flying their circles */
+     * a few hundred kilometres out ahead, flying their circles */
     for (i = 0; i < m->nship && n <= RV_MAX_SHIP_SLOT; i++) {
         const RvShip __far *sh = &m->ship[i];
         int type = sh->type == RV_SHIP_PLAYER || sh->type == RV_SHIP_WINGMAN ? g_camp.player_ship : sh->type;
@@ -463,10 +502,11 @@ void __far __cdecl flight_startup(void)
         if (sh->side == 1 && enemy_type < 0)
             enemy_type = type;
         for (k = 0; k < sh->count && n <= RV_MAX_SHIP_SLOT; k++, n++) {
-            int a = (int)(vrnd() % 1024);
-            long dist = sh->type == RV_SHIP_WINGMAN ? 256L * 2 : 256L * (6 + (long)(vrnd() % 12));
-            spawn(n, type, sh->side, 0, (rv_sin(a) * dist) >> 14, (long)(vrnd() % 512) - 256,
-                  ((rv_cos(a) * dist) >> 14) + 256L * 4, a + 512);
+            int a = (int)(vrnd() % 342) - 171;             /* within 60 degrees of the nose */
+            /* (sin x distance would overflow a long: the distance goes in as km) */
+            long dist = 256L * (4000 + (long)(vrnd() % 8000)), sx = (lf_sin(a) * (dist >> 8)) >> 6, sz = (lf_cos(a) * (dist >> 8)) >> 6;
+            spawn(n, type, sh->side, 0, sx, (long)(vrnd() % 20000) * 20 - 200000L, sz, sh->type == RV_SHIP_WINGMAN ? 0 : a + 512);
+            rv_log("flight: slot %d type %02X spawned at bearing %d, %ld km: %ld,%ld", n, type, a, dist / 256, sx, sz);
         }
     }
     if (enemy_type < 0)
@@ -475,10 +515,12 @@ void __far __cdecl flight_startup(void)
     g_set_wing = ships_load(g_camp.player_ship);
     for (i = 1; i < n; i++)
         ships_load(gInstanceShipTypes[i]);
+    ships_set_camera(SCR_W / 2, cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2,
+                     400);
     if (g_set_enemy >= 0) {
         /* the benchmark's sprite: the biggest of the type's band views */
         const ShipSet __far *set = ships_set(g_set_enemy);
-        long best = 0;
+        long best = 0, paths[3];
         for (i = 1; i < 36; i++) {
             long area = (long)set->view[i].w * set->view[i].h;
             if (area > best) {
@@ -488,6 +530,14 @@ void __far __cdecl flight_startup(void)
         }
         g_bench_w = set->view[g_bench_view].w;
         g_bench_h = set->view[g_bench_view].h;
+        /* the kernels checked, then the three draw paths timed on it */
+        {
+            long n = ships_selftest();
+            rv_log("lightfield: asm kernels %s the C ones (%ld pixels compared)", n < 0 ? "DISAGREE WITH" : "agree with", n);
+        }
+        ships_time_paths(g_set_enemy, g_bench_view, paths);
+        rv_log("lightfield: view %d (%dx%d): copy %ld px/ms, scaled to 3/4 %ld px/ms, turned 45 degrees at 3/4 %ld px/ms",
+               g_bench_view, g_bench_w, g_bench_h, paths[0], paths[1], paths[2]);
     }
     g_nbench = 0;
     g_bench_sum = 0;

@@ -178,7 +178,12 @@ typedef struct {
 
 /* sin(i/256 x 90 degrees) x 16384, i = 0..256: the simulation's trigonometry (flight.c) */
 #ifdef RV_TABLES
-static const short __far rv_qsin[257] = {
+#ifdef __WATCOMC__
+#define RV_FAR __far
+#else
+#define RV_FAR
+#endif
+static const short RV_FAR rv_qsin[257] = {
     0, 101, 201, 302, 402, 503, 603, 704, 804, 904, 1005, 1105,
     1205, 1306, 1406, 1506, 1606, 1706, 1806, 1906, 2006, 2105, 2205, 2305,
     2404, 2503, 2603, 2702, 2801, 2900, 2999, 3098, 3196, 3295, 3393, 3492,

@@ -298,7 +298,8 @@ static void draw_band(int y0, int y1)
 void scene_draw(void)
 {
     int y0, y1;
-    while (vid_dirty_band(&y0, &y1))
+    while (vid_dirty_band(&y0, &y1)) {
         draw_band(y0, y1);
-    vid_flip();
+        vid_flip();
+    }
 }

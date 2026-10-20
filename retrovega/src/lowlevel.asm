@@ -95,3 +95,111 @@ _rv_blit_row:
         pop si
         pop bp
         retf
+
+; void rv_scale_row(const unsigned char far *line, const unsigned short far *map,
+;                   int xa, int xb, unsigned char far *out)
+; lightfield.c's lf_scale_row: out[x] = line[map[x]] for x in xa .. xb-1 where
+; that is not clear.  The scaled draw's inner loop (ships.c).
+        global _rv_scale_row
+_rv_scale_row:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        push ds
+        mov cx,[bp+16]
+        sub cx,[bp+14]              ; n = xb - xa
+        jle .done
+        mov si,[bp+10]
+        mov ax,[bp+14]
+        shl ax,1
+        add si,ax                   ; map + xa
+        mov fs,[bp+12]
+        mov es,[bp+20]
+        mov di,[bp+18]
+        add di,[bp+14]              ; out + xa
+        mov dx,[bp+6]               ; line's offset
+        mov ds,[bp+8]
+        mov bp,dx                   ; (the frame is done with)
+.loop:
+        mov bx,[fs:si]
+        add bx,bp                   ; line + map[x]
+        mov al,[ds:bx]
+        test al,al
+        jz .skip
+        mov [es:di],al
+.skip:
+        inc di
+        add si,2
+        dec cx
+        jnz .loop
+.done:
+        pop ds
+        pop di
+        pop si
+        pop bp
+        retf
+
+; void rv_rotate_row(const unsigned char far *dense, int w, int h, const LfRot *r,
+;                    int y, int xs, int xe, unsigned char far *out)
+; lightfield.c's lf_rotate_row without the bounds test: the caller passes the
+; span lf_rotate_span found, so every source point is inside the w x h image.
+; u and v run in 16.16 in esi and edi; a pixel's index is v * w + u.
+        global _rv_rotate_row
+_rv_rotate_row:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        sub sp,8                    ; [bp-12] du, [bp-16] dv
+        mov si,[bp+14]              ; r
+        mov eax,[si+16]
+        mov [bp-12],eax
+        mov eax,[si+20]
+        mov [bp-16],eax
+        movsx eax,word [bp+16]      ; y
+        imul eax,[si+24]            ; y * dru
+        add eax,[si+8]              ; + u00
+        movsx edx,word [bp+18]      ; xs
+        imul edx,[si+16]            ; xs * du
+        add eax,edx
+        movsx edx,word [bp+16]
+        imul edx,[si+28]            ; y * drv
+        add edx,[si+12]             ; + v00
+        movsx ecx,word [bp+18]
+        imul ecx,[si+20]            ; xs * dv
+        add edx,ecx
+        mov esi,eax                 ; u
+        mov edi,edx                 ; v
+        mov cx,[bp+20]
+        sub cx,[bp+18]              ; n = xe - xs
+        jle .done
+        mov gs,[bp+8]               ; dense
+        mov es,[bp+24]
+        mov bx,[bp+22]
+        add bx,[bp+18]              ; out + xs
+.loop:
+        mov edx,edi
+        shr edx,16                  ; v
+        imul dx,[bp+10]             ; v * w (the low word is right past 32K too)
+        mov eax,esi
+        shr eax,16                  ; u
+        add dx,ax
+        add dx,[bp+6]               ; + dense's offset
+        movzx edx,dx
+        mov al,[gs:edx]
+        test al,al
+        jz .skip
+        mov [es:bx],al
+.skip:
+        add esi,[bp-12]
+        add edi,[bp-16]
+        inc bx
+        dec cx
+        jnz .loop
+.done:
+        add sp,8
+        pop di
+        pop si
+        pop bp
+        retf

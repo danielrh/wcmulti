@@ -17,9 +17,10 @@
 #   SITE  name offset       an instruction in RVHOOK at a fixed offset
 #
 # Units (as WC.EXE has them, so the hook layer's arithmetic carries over):
-# positions int32, 256 = 1 km; orientation vectors int32, 256 = 1.0, "up"
-# points down the screen; velocity = position change per frame; one frame
-# = one simulation step (20 per second).
+# positions int32, 256 = 1 km; orientation vectors int32, 256 = 1.0 (front,
+# right, up: a left-handed frame like the screen's, x right, y up, z into
+# it, so the camera's up is up the screen); velocity = position change per
+# frame; one frame = one simulation step (20 per second).
 
 SLOTS 128
 MAXSHIPSLOT 9          # bring-up: ships in 1..9 like WC.EXE; 47 once the layer takes it from GameParams

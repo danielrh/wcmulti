@@ -22,7 +22,7 @@ nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
 # the fighters' views (tools/pack.py, copied into art/ships): beside RV.EXE
 cp art/ships/SHIP*.RV "$OUT/" 2>/dev/null || true
-ENGINE="util xms video dat gfx input room lipsync opl music campaign ships cockpit flight game main"
+ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
