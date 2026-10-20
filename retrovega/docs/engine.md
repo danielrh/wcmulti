@@ -258,7 +258,7 @@ mission lands in the briefing room for the debrief.
 Built (src/music.c, src/opl.c):
 
 - **Songs:** Standard MIDI Files (type 0 or 1), one per cue beside RV.EXE
-  (`BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID`). They are
+  (`BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID LOUNGE.MID`). They are
   read at start-up, each track into a block of its own (so a track may be
   up to 64 KB and a song as long as its tracks allow), the tracks merged
   as they are read and timed through their tempo maps in ticks of the
@@ -293,9 +293,9 @@ Built (src/music.c, src/opl.c):
   cue's song, and fades it in over half the time.
   `music_cue_at(cue, fade_ms, MUSIC_BEAT or MUSIC_BAR)` starts the fade on
   the next beat or bar of the old song, so a cut lands in time.
-- **Cues:** the game cues the quarters (and the locker), the bar and
-  lounge, the briefing, the launch, and a win or a loss at the debrief.
-  All use 250 ms.
+- **Cues:** the game cues the quarters (and the locker), the lounge, the
+  bar, the briefing, the launch, and a win or a loss at the debrief. All
+  use 250 ms. A pilot's close-up keeps the room's song.
 - **The songs** (`tools/songs.py`, ours, CC0). The user asked for the
   quarters and the bar to be five times as long as their first versions,
   so that they do not repeat: *Bunk Light* for the quarters runs 9.5
@@ -307,6 +307,15 @@ Built (src/music.c, src/opl.c):
   five (F: jazz guitar over electric-piano comping, walking bass, ride and
   cross-stick; B flat; an E flat bossa nova in straight eighths; a G minor
   blues with three solo choruses; F again, trading fours into the top).
+  *Off Duty* for the crew lounge, where the other pilots sit (the user:
+  less energetic than the bar but not sleepy, "notes of joy, notes of calm
+  reflection", blending between the two), runs 9.2 minutes at 84 a minute
+  in six sections that take turns, joyful (G, C, D: the flute's tune over
+  fingerpicked nylon guitar, a shaker and a soft kick) and reflective
+  (E minor, A minor: the pad up, the percussion gone, clarinet and horn,
+  with a bright major IV and celesta pings in the minor), each turn a
+  two-bar cross-fade of expression; the last section eases from E minor
+  back into G with the celesta remembering the tune.
   *Ready Room* for the briefing stays 110 s (72 a minute in D minor: a
   harp ostinato, strings, a horn line, a clarinet against it, timpani
   rolls, a far celesta ping). The first section of each and the briefing

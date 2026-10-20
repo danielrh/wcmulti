@@ -44,7 +44,7 @@ ROOMS = ['bar', 'lounge']
 SEAT_NAMES = ['left', 'middle', 'right']
 FIXED_PLACES = {'TECH': 'the deck', 'TALLY': 'the bar', 'XO': 'the briefing room'}
 TYPES = {'patrol': 0}
-MUSIC = {'briefing': 0, 'bar': 1, 'launch': 2, 'win': 3, 'lose': 4, 'quarters': 5}
+MUSIC = {'briefing': 0, 'bar': 1, 'launch': 2, 'win': 3, 'lose': 4, 'quarters': 5, 'lounge': 6}
 ROLES = {'pilot': 0, 'hero': 1, 'barman': 2, 'xo': 3, 'tech': 4}
 
 # record layouts: (C type, field, struct format)

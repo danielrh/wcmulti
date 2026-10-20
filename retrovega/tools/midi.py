@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """The music, one General MIDI loop per cue (CC0, ours).
 
-    midi.py [--out build/dos]     BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID
+    midi.py [--out build/dos]     BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID LOUNGE.MID
 
 Each is a loop in a type 1 Standard MIDI File: a tempo track, then a track
-per instrument.  The three room songs are written out in tools/songs.py for
+per instrument.  The four room songs are written out in tools/songs.py for
 our OPL3 bank (tools/oplbank.py); LAUNCH, WIN and LOSE are still the short
 placeholders below.
 """

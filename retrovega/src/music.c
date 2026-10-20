@@ -64,7 +64,8 @@ static Ring g_ring[2];
 static volatile int g_play, g_next_ring;
 static volatile unsigned long g_starved;
 
-static const char *g_files[] = { "BRIEF.MID", "BAR.MID", "LAUNCH.MID", "WIN.MID", "LOSE.MID", "QUARTERS.MID" };
+static const char *g_files[] = { "BRIEF.MID", "BAR.MID", "LAUNCH.MID", "WIN.MID", "LOSE.MID", "QUARTERS.MID",
+                                  "LOUNGE.MID" };
 static Song g_song[MAX_SONGS];
 static int g_dev, g_want = MUSIC_AUTO;
 

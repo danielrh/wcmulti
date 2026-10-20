@@ -13,7 +13,7 @@
                       piano take turns, two bars each;
                   V   Bunk Light again (D major): the flute has the tune, then
                       the vibraphone, then it all thins out into the start.
-    BAR.MID       "Off-Watch": the bar and the lounge.  Warm, moving, still
+    BAR.MID       "Off-Watch": the bar.  Warm, moving, still
                   easy, 100 a minute, some twelve and a half minutes round:
                   I   Off-Watch (F, swung): a jazz guitar with the tune over
                       electric-piano comping, a walking bass, ride and
@@ -28,6 +28,22 @@
                   V   Off-Watch's changes again (F): the vibraphone over the
                       organ, the old bridge on the guitar, then guitar and
                       vibraphone trading four bars at a time, into the top.
+    LOUNGE.MID    "Off Duty": the crew lounge, where the other pilots sit.  Less
+                  energetic than the bar and not sleepy: 84 a minute, some nine
+                  minutes round, joy and calm reflection in turn, blended:
+                  I   Morning Watch (G): the guitar picking, the flute's tune,
+                      a shaker and a soft kick;
+                  II  Window Seat (E minor): the pad comes up, the shaker goes,
+                      a clarinet thinks it over; a bright A major and celesta
+                      pings in the minor;
+                  III Shared Rations (C): the tune again, a fifth down, with
+                      the celesta above it;
+                  IV  Letters Unsent (A minor): the horn;
+                  V   Two Suns (D): the brightest, the flute and the vibraphone;
+                  VI  Home Port (E minor into G): the clarinet, then the band
+                      alone, easing back into the first bar.
+                  Nylon guitar runs through all of it; the turns between
+                  sections are cross-fades (expression ramps) over two bars.
     BRIEF.MID     "Ready Room": the briefing.  Pensive: 72 a minute in D
                   minor, a harp ostinato that never stops, strings, a horn
                   with the long line, a clarinet against it, timpani at the
@@ -79,6 +95,15 @@ class Comp(midi.Song):
         if abs(frac - 0.5) < 1e-6:
             frac = self.swing
         return bar * self.beats + whole + frac
+
+    def cc(self, ch, bar, beat, num, val):
+        self.tracks.setdefault(ch, []).append((int(self.at(bar, beat) * midi.PPQ), bytes((0xB0 | ch, num, val))))
+
+    def ramp(self, ch, bar, bars, v0, v1, num=11):
+        """expression (or another controller) from v0 to v1 over so many bars, a step a beat"""
+        n = max(1, int(bars * self.beats))
+        for k in range(n + 1):
+            self.cc(ch, bar, k, num, round(v0 + (v1 - v0) * k / n))
 
     def setup(self, ch, prog, vol, pan=64):
         self.program(ch, prog, min(127, round(vol * 1.22)))     # (the songs' level: a little louder than written)
@@ -643,4 +668,160 @@ def brief_song():
     return s
 
 
-SONGS = {'QUARTERS.MID': quarters_song, 'BAR.MID': bar_song, 'BRIEF.MID': brief_song}
+# --- LOUNGE: "Off Duty" ---
+
+LILT = [[(0, 1), (1, .5), (1.5, 1), (2.5, .5), (3, 1)], [(0, 1.5), (1.5, .5), (2, 2)],
+        [(0, .5), (.5, .5), (1, 1), (2, 1.5), (3.5, .5)], [(0, 2), (2, 1), (3, 1)],
+        [(.5, 1), (1.5, .5), (2, 1), (3, 1)], [(0, 1), (1, 1), (2, .5), (2.5, 1.5)]]
+LILT_END = [[(0, 3)], [(0, 2), (2, 2)], [(0, 3), (3.5, .5)], [(0, 4)]]
+MUSE = CALM + [[(0, 4)], [(2, 2)], [(0, 3)]]         # the reflections: longer notes, more air
+
+OD_G = (bars_of('Gmaj9 | Em9 | Cmaj9 | D9sus4 D | Gmaj9/B | C6 | Am9 | D9sus4')
+        + bars_of('Gmaj9 | Bm7 | Cmaj9 | Cm6 | Gmaj9/B | Em9 | Am9 | D9sus4')
+        + bars_of('Cmaj9 | D/C | Bm7 | Em9 | Am9 | D9sus4 D | Gmaj9 | F9')
+        + bars_of('Gmaj9 | Em9 | Cmaj9 | D9sus4 D | Bm7 | Em9 | Cmaj9 | B7sus4'))
+OD_EM = (bars_of('Em9 | Cmaj9 | Am9 | Bm7 | Em9 | Cmaj7#11 | A | B7sus4')
+         + bars_of('Em9 | Cmaj9 | Am9 | Bm7 | Gmaj9 | Cmaj7#11 | Am9 | B7sus4')
+         + bars_of('Cmaj9 | Gmaj9/B | Am9 | Em9 | Cmaj9 | D | Em9 | Em9')
+         + bars_of('Em9 | Cmaj9 | A | Am9 | Em9 | Fmaj7#11 | Dm9 | G9sus4'))
+OD_C = (bars_of('Cmaj9 | Am9 | Fmaj9 | G9sus4 G | Cmaj9/E | F6 | Dm9 | G9sus4')
+        + bars_of('Cmaj9 | Em7 | Fmaj9 | Fm6 | Cmaj9/E | Am9 | Dm9 | G9sus4')
+        + bars_of('Fmaj9 | G/F | Em7 | Am9 | Dm9 | G9sus4 G | Cmaj9 | Bb9')
+        + bars_of('Cmaj9 | Am9 | Fmaj9 | G9sus4 G | Em7 | Am9 | Fmaj9 | E7sus4'))
+OD_AM = (bars_of('Am9 | Fmaj9 | Dm9 | Em7 | Am9 | Fmaj7#11 | D | E7sus4')
+         + bars_of('Am9 | Fmaj9 | Dm9 | Em7 | Cmaj9 | Fmaj7#11 | Dm9 | E7sus4')
+         + bars_of('Fmaj9 | Cmaj9/E | Dm9 | Am9 | Fmaj9 | G | Am9 | Am9')
+         + bars_of('Am9 | Fmaj9 | D | Dm9 | Am9 | Fmaj7#11 | Em7 | A9sus4'))
+OD_D = (bars_of('Dmaj9 | Bm9 | Gmaj9 | A9sus4 A | Dmaj9/F# | G6 | Em9 | A9sus4')
+        + bars_of('Dmaj9 | F#m7 | Gmaj9 | Gm6 | Dmaj9/F# | Bm9 | Em9 | A9sus4')
+        + bars_of('Gmaj9 | A/G | F#m7 | Bm9 | Em9 | A9sus4 A | Dmaj9 | C9')
+        + bars_of('Dmaj9 | Bm9 | Gmaj9 | A9sus4 A | F#m7 | Bm9 | Gmaj9 | B7sus4'))
+OD_HOME = (bars_of('Em9 | Cmaj9 | Am9 | Bm7 | Em9 | Cmaj7#11 | A | B7sus4')
+           + bars_of('Em9 | Cmaj9 | Am9 | D9sus4 D | Gmaj9 | Cmaj9 | Am9 | D9sus4')
+           + bars_of('Gmaj9 | Em9 | Cmaj9 | D9sus4 | Gmaj9/B | C6 | Am9 | D9sus4')
+           + bars_of('Gmaj9 | Bm7 | Cmaj9 | Cm6 | Gmaj9/B | Em9 | Am9 | D9sus4'))
+# (section, chords, joyful or reflective)
+OFF_DUTY = [('Morning Watch', OD_G, True), ('Window Seat', OD_EM, False), ('Shared Rations', OD_C, True),
+            ('Letters Unsent', OD_AM, False), ('Two Suns', OD_D, True), ('Home Port', OD_HOME, False)]
+
+
+def transpose(notes, semis):
+    return [(b, beat, dur, q + semis) for b, beat, dur, q in notes]
+
+
+def lounge_song():
+    s = Comp(84, seed=21, swing=0.55)
+    s.setup(0, 5, 70)       # electric piano, the warm one: a bed of chords
+    s.setup(1, 90, 66)      # soft pad: the reflections
+    s.setup(2, 32, 96)      # upright bass
+    s.setup(3, 60, 80)      # horn
+    s.setup(4, 73, 86)      # flute: the joy
+    s.setup(5, 8, 60)       # celesta: sparkle, and pings in the reflections
+    s.setup(6, 24, 88)      # nylon guitar: the thread through all of it
+    s.setup(7, 71, 82)      # clarinet
+    s.setup(8, 11, 66)      # vibraphone, soft (the brightest section only)
+    s.setup(9, 0, 80)       # drums: a shaker, a soft kick, a rim
+    rng = random.Random(1984)
+    keys, pads, gtr, bass = Voicer(55, 72, 4), Voicer(52, 71, 3, 16), Voicer(55, 76, 4, 17), Bass(28, 45)
+    b0 = 0
+    for k, (name, chords, joy) in enumerate(OFF_DUTY):
+        home = name == 'Home Port'
+        for i, syms in enumerate(chords):
+            bar = b0 + i
+            bright = joy or (home and i >= 16)                # Home Port eases back into the joy
+            cs = [chord(x) for x in syms]
+            vs = [gtr.next(c) for c in cs]
+            # the guitar: fingerpicked eighths when bright, quarters when thinking
+            for h, c in enumerate(cs):
+                b = next(q for q in range(40, 53) if q % 12 == c.bass)     # the guitar's own low string
+                span = 4 // len(cs)
+                for e in range(span * 2 if bright else span):
+                    beat = h * 2 + (e * 0.5 if bright else e)
+                    if bright:
+                        idx = [None, 1, 2, 3, None, 2, 1, 3][int(beat * 2) % 8]
+                    else:
+                        idx = [None, 1, 2, 3][int(beat) % 4]
+                    q = b if idx is None else vs[h][idx]
+                    lift = 6 if home and i >= 16 else 0           # (Home Port's band alone: the guitar a little forward)
+                    s.play(6, bar, beat, 1.0 if bright else 1.6, q, ((56 if beat in (0, 2) else 48) if bright else 46) + lift)
+            # the piano's bed, the pad, the bass
+            for h, c in enumerate(cs):
+                v = keys.next(c)
+                s.play(0, bar, h * 2, 3.6 / len(cs), v, 42 if bright else 36, spread=2)
+                s.play(1, bar, h * 2, 4 / len(cs), pads.next(c), 50, spread=2)
+                r = bass.note(c)
+                if bright and len(cs) == 1:
+                    s.play(2, bar, 0, 1.8, r, 70)
+                    s.play(2, bar, 2, 1.4, r + 7 if r + 7 <= 47 else r - 5, 60)
+                    if i % 4 == 3:
+                        s.play(2, bar, 3.5, 0.4, r + 5 if r + 5 <= 47 else r - 7, 52)
+                else:
+                    s.play(2, bar, h * 2, 3.8 / len(cs), r, 64 if bright else 60)
+            # percussion when bright: a shaker's eighths, a soft kick, a rim on the fourth beat
+            if bright:
+                for e in range(8):
+                    s.play(9, bar, e * 0.5, 0.2, 70, 30 if e % 2 == 0 else 24, spread=3)
+                s.play(9, bar, 0, 0.2, 36, 38)
+                s.play(9, bar, 2.5, 0.2, 36, 28)
+                s.play(9, bar, 3, 0.2, 37, 30)
+            # celesta pings in the reflections: a bright note of the chord, high and soft
+            if not bright and i % 4 == 2:
+                c = cs[0]
+                bright_tones = [(c.root + t) % 12 for t in c.tones if t % 12 in (2, 11, 6, 9)] or [c.root]
+                q = max(q for q in range(84, 97) if q % 12 == bright_tones[0])
+                s.play(5, bar, 2, 2, q, 36)
+        b0 += len(chords)
+    # The blends, by expression: into a reflection the pad comes up and the
+    # percussion goes over its last two joyful bars; out of one the pad goes
+    # down over two bars either side of the turn and the percussion comes in
+    # softly over the first four bright bars.  Home Port turns bright halfway.
+    starts = [sum(len(c) for _n, c, _j in OFF_DUTY[:k]) for k in range(len(OFF_DUTY))]
+    turns = []                                          # (bar where it turns, to the joy?)
+    for k, (name, chords, joy) in enumerate(OFF_DUTY):
+        nxt = OFF_DUTY[(k + 1) % len(OFF_DUTY)][2]
+        if name == 'Home Port':
+            turns.append((starts[k] + 16, True))
+        elif joy != nxt:
+            turns.append((starts[k] + len(chords), nxt))
+    s.cc(1, 0, 0, 11, 30)                               # (the loop starts joyful: said at its first tick)
+    s.cc(9, 0, 0, 11, 100)
+    for at, to_joy in turns:
+        if to_joy:
+            s.ramp(1, at - 2, 4, 110, 30)
+            s.ramp(9, at, 4, 20, 100)
+        else:
+            s.ramp(1, at - 2, 2, 30, 110)
+            s.ramp(9, at - 2, 2, 100, 20)
+
+    # the tunes
+    t = Tune(rng, 'G', 'major', 67, 84)
+    theme = t.period(starts[0], OD_G[:16], LILT, LILT_END)              # Morning Watch: the flute's tune
+    put(s, 4, theme, 78)
+    put(s, 4, t.period(starts[0] + 16, OD_G[16:24], LILT, LILT_END), 76)
+    put(s, 4, [n for n in shift(theme, 24) if n[0] < starts[0] + 28], 78)
+    put(s, 4, t.phrase(starts[0] + 28, OD_G[28:32], LILT, LILT_END, shape='fall'), 76)
+    cl = Tune(rng, 'E', 'minor', 57, 74)                                 # Window Seat: the clarinet
+    put(s, 7, cl.period(starts[1], OD_EM[:16], MUSE, CALM_END), 70)
+    put(s, 3, Tune(rng, 'E', 'minor', 52, 67).period(starts[1] + 16, OD_EM[16:24], MUSE, CALM_END, answer=False), 64)
+    put(s, 7, cl.period(starts[1] + 24, OD_EM[24:], MUSE, CALM_END), 68)
+    c_theme = shift(transpose(theme, -7), starts[2] - starts[0])         # Shared Rations: the tune a fifth down
+    put(s, 4, c_theme, 76)
+    put(s, 5, transpose(c_theme, 12), 44)                                # the celesta above it
+    put(s, 4, Tune(rng, 'C', 'major', 62, 79).period(starts[2] + 16, OD_C[16:], LILT, LILT_END), 74)
+    hn = Tune(rng, 'A', 'minor', 55, 72)                                 # Letters Unsent: the horn
+    put(s, 3, hn.period(starts[3], OD_AM[:16], MUSE, CALM_END), 72)
+    put(s, 7, Tune(rng, 'A', 'minor', 57, 74).period(starts[3] + 16, OD_AM[16:24], MUSE, CALM_END), 64)
+    put(s, 3, hn.period(starts[3] + 24, OD_AM[24:], MUSE, CALM_END), 70)
+    d_theme = shift(transpose(theme, -5), starts[4] - starts[0])         # Two Suns: the tune in D, the vibraphone answering
+    put(s, 4, d_theme, 80)
+    bridge = Tune(rng, 'D', 'major', 66, 83).period(starts[4] + 16, OD_D[16:24], LILT, LILT_END)
+    put(s, 4, bridge, 76)
+    put(s, 8, bridge, 56)                                                # the vibraphone under the flute, softly
+    put(s, 4, Tune(rng, 'D', 'major', 62, 79).period(starts[4] + 24, OD_D[24:], LILT, LILT_END), 76)
+    put(s, 7, Tune(rng, 'E', 'minor', 57, 74).period(starts[5], OD_HOME[:16], MUSE, CALM_END), 66)  # Home Port: the clarinet, then the band alone
+    # ... and the celesta remembers the tune's second phrase before it comes round again
+    put(s, 5, transpose(shift([n for n in theme if starts[0] + 8 <= n[0] < starts[0] + 12], starts[5] + 16), 12), 40)
+    return s
+
+
+SONGS = {'QUARTERS.MID': quarters_song, 'BAR.MID': bar_song, 'BRIEF.MID': brief_song, 'LOUNGE.MID': lounge_song}

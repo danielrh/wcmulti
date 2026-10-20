@@ -151,6 +151,13 @@ static void room_overlay(int y0, int y1)
     talk_overlay(y0, y1);
 }
 
+/* each room's song: the quarters and the locker, the lounge, the bar (and the rest) */
+static int room_song(int room)
+{
+    return room == RV_R_QUARTERS || room == RV_R_LOCKER ? RV_MUSIC_QUARTERS
+         : room == RV_R_LOUNGE ? RV_MUSIC_LOUNGE : RV_MUSIC_BAR;
+}
+
 static void enter_room(int room)
 {
     unsigned char seats[3] = { 0xFF, 0xFF, 0xFF };
@@ -162,7 +169,7 @@ static void enter_room(int room)
     g_mode = MODE_ROOM;
     g_talk_line = -1;
     g_talk_at = 0;
-    music_cue(room == RV_R_QUARTERS || room == RV_R_LOCKER ? RV_MUSIC_QUARTERS : RV_MUSIC_BAR, 250);
+    music_cue(room_song(room), 250);
     scene_draw();
     vid_fade(64);
 }
@@ -225,7 +232,7 @@ static void open_talk(int person, const char __far *line)
     say(person, line);
     g_scene.full = talk_full;
     g_mode = MODE_TALK;
-    music_cue(RV_MUSIC_BAR, 150);
+    music_cue(room_song(g_close_room), 150);     /* (the room's own: the same song goes on) */
     vid_dirty(0, SCR_H);
     scene_draw();
     vid_fade(64);
