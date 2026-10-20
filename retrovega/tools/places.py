@@ -188,7 +188,7 @@ def body_view(ship, elev, head):
     (elev, head) sees it, at RENDER size: the triangles whose middles lie
     within BODY of the half-span of the centre line, filled in."""
     import shipviews
-    parts, _lights, center, radius = shipviews.ship_mesh(shipviews.ship_row(ship),
+    parts, _lights, center, radius, _strips = shipviews.ship_mesh(shipviews.ship_row(ship),
                                                          os.path.expanduser('~/dev/vegastrike-assets'))
     span = max(float(np.max(np.abs(m.positions[:, 0] - center[0]))) for m in parts)
     rot = shipviews.view_matrix(elev, head)

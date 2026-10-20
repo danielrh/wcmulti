@@ -41,6 +41,8 @@ sys.path.insert(0, HERE)
 import bfxm  # noqa: E402
 import hulls  # noqa: E402
 import ddscube  # noqa: E402
+import skins  # noqa: E402
+import smooth  # noqa: E402
 
 SS = 4  # supersampling per axis
 
@@ -56,7 +58,7 @@ VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
 ASYM_HEADINGS = (210, 240, 270, 300, 330)
 VIEWS_ASYM = VIEWS + [(e, h) for e in BANDS for h in ASYM_HEADINGS]
 
-GLOW = {'terran': (255, 168, 72), 'aera': (96, 240, 200), 'rlaan': (240, 90, 220)}
+GLOW = {'terran': (255, 168, 72), 'aera': (90, 255, 140), 'rlaan': (240, 90, 220)}
 GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflection
 # The key light, the same for every ship so the sprites match: a point light
 # well off the view axis (mostly from the left, somewhat above, a little in
@@ -604,10 +606,15 @@ def asymmetric(row, parts):
     return float(np.median(d)) > ASYM * float(np.linalg.norm(p - c, axis=1).max())
 
 
+SKIN_CACHE = os.path.join(HERE, '..', 'build', 'skins')
+STRIP_CREASE = 50.0   # degrees: the creases light strips may run along, when the mesh is not smoothed
+
+
 def ship_mesh(row, assets):
-    """A ship's mesh as the views are drawn from it: its parts, stretched
-    (data/art.csv), its engine lights, the centre the views turn about and
-    the radius they are framed by."""
+    """A ship's mesh as the views are drawn from it: its parts, smoothed,
+    re-skinned and stretched as data/art.csv says, its engine lights, the
+    centre the views turn about, the radius they are framed by, and its
+    light strips (polylines along its long creases, art.csv strips)."""
     art = table_row('art.csv', row['key']) or {}
     stretch = np.array([float(v) for v in (art.get('stretch') or '1 1 1').split()])
     if row['mesh'].startswith('hull:'):
@@ -616,6 +623,31 @@ def ship_mesh(row, assets):
     else:
         parts = bfxm.parts(os.path.join(assets, 'units', 'vessels', row['mesh']))
         raw_lights = unit_lights(assets, row['vs_unit'])
+    lines = []
+    if (art.get('smooth') or '').strip():
+        levels, crease = (art['smooth'].split() + ['50'])[:2]
+        done = [smooth.smooth(m, int(levels), float(crease)) for m in parts]
+        parts = [m for m, _l in done]
+        lines = [line for _m, ls in done for line in ls]
+    elif (art.get('strips') or '').strip():
+        for m in parts:
+            t = np.asarray(m.tri_index).reshape(-1, 3)
+            lines += smooth.polylines(m.positions, smooth.creases(m.positions, t, STRIP_CREASE))
+    if (art.get('skin') or '').strip():
+        name, *tile = art['skin'].split()
+        for m in parts:
+            skins.apply(m, name, assets, SKIN_CACHE, float(tile[0]) if tile else None)
+    strips = []
+    if (art.get('strips') or '').strip():
+        allp = np.concatenate([m.positions for m in parts])
+        size = float(np.max(allp.max(0) - allp.min(0)))
+        least, turn = (art['strips'].split() + ['90'])[:2]
+        least = float(least) * size
+        # the long ones that run along the ship (the length axis is z)
+        cos = np.cos(np.radians(float(turn)))
+        strips = [line * stretch for line in lines
+                  if np.linalg.norm(np.diff(line, axis=0), axis=1).sum() >= least
+                  and abs((line[-1] - line[0])[2]) >= cos * np.linalg.norm(line[-1] - line[0])]
     for m in parts:
         m.positions = m.positions * stretch
         n = m.normals / stretch
@@ -624,7 +656,7 @@ def ship_mesh(row, assets):
     center = (allpos.min(0) + allpos.max(0)) / 2
     radius = float(np.max(np.linalg.norm(allpos - center, axis=1))) * 1.04
     lights = [(np.array(l[0] if len(l) == 2 else l[:3]) * stretch, l[-1]) for l in raw_lights]
-    return parts, lights, center, radius
+    return parts, lights, center, radius, strips
 
 
 def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix='',
@@ -636,7 +668,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     livery = table_row('liveries.csv', livery_name, 'name')
     if livery is None:
         sys.exit('no livery %r in data/liveries.csv' % livery_name)
-    parts, lights, center, radius = ship_mesh(row, assets)
+    parts, lights, center, radius, strips = ship_mesh(row, assets)
     views_wanted = VIEWS_ASYM if asymmetric(row, parts) else VIEWS
     if views:
         views_wanted = views
@@ -741,7 +773,8 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
         z = np.frombuffer(depth.read(), dtype=np.float32).reshape(big, big)[::-1]
         facing = (rot @ np.array([0.0, 0.0, -1.0]))[2]
         engines = [(rot @ (pos - center) / radius, sz / radius, facing) for pos, sz in lights]
-        img, pm = post(grab(color), grab(paint), z, size, engines, glow)
+        lit_strips = strip_mask(strips, rot, center, radius, big, z) if strips else None
+        img, pm = post(grab(color), grab(paint), z, size, engines, glow, lit_strips)
         flares.append([[round((q[0] + 1) * size / 2, 1), round((1 - q[1]) * size / 2, 1), round(sz * size / 2, 1)]
                        for q, sz, _f in engines])
         views.append(img)
@@ -771,7 +804,29 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     return radius
 
 
-def post(rgba, paint, z, size, engines, glow):
+def strip_mask(lines, rot, center, radius, big, z, eps=0.01):
+    """Where the light strips show in a supersampled view: each polyline
+    sampled twice a pixel, a sample kept where nothing nearer hides it (its
+    depth against the farthest of the depth buffer's 3x3 around it), drawn
+    a pixel and a quarter wide in the final view."""
+    out = np.zeros((big, big), bool)
+    zfar = ndimage.maximum_filter(z, size=3)
+    for line in lines:
+        q = (line - center) @ rot.T / radius
+        for a, b in zip(q[:-1], q[1:]):
+            n = int(np.hypot(*(b[:2] - a[:2])) * big) + 2
+            s = a + (b - a) * np.linspace(0, 1, n)[:, None]
+            x = ((s[:, 0] + 1) * big / 2).astype(int)
+            y = ((1 - s[:, 1]) * big / 2).astype(int)
+            d = (1 - s[:, 2]) / 2
+            ok = (x >= 0) & (x < big) & (y >= 0) & (y < big)
+            x, y, d = x[ok], y[ok], d[ok]
+            seen = d <= zfar[y, x] + eps
+            out[y[seen], x[seen]] = True
+    return ndimage.binary_dilation(out, iterations=max(1, int(SS * 0.6)))
+
+
+def post(rgba, paint, z, size, engines, glow, strips=None):
     """Supersampled render -> one sprite view (RGBA, hard alpha) and its paint mask."""
     cover = rgba[..., 3] > 0
     zf = np.where(cover, z, 1.0)
@@ -793,6 +848,14 @@ def post(rgba, paint, z, size, engines, glow):
     # a darkened silhouette edge, in the hull's own colour
     edge = solid & ~ndimage.binary_erosion(solid)
     rgb = np.where(edge[..., None], rgb * 0.55, rgb)
+    if strips is not None:
+        # light strips: a hot core in the faction's glow colour, a halo on the hull round it
+        s = down(strips.astype(np.float32))
+        core = np.clip(s * 1.6, 0, 1)[..., None]
+        col = np.array(glow, np.float32) / 255
+        halo = ndimage.gaussian_filter(s, 1.0)[..., None] * solid[..., None]
+        rgb = rgb * (1 - core) + (col * 0.8 + 0.2) * core + halo * col * 0.5
+        solid = solid | (core[..., 0] > 0.5)
     # engine glows where the exhaust faces the viewer and is not hidden
     yy, xx = np.mgrid[0:h, 0:w]
     for q, sz, facing in engines:

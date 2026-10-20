@@ -564,7 +564,7 @@ Lighting:
 
 Afterwards it adds:
 
-- engine glows at Vega Strike's exhaust points, in the faction's colour (orange, cyan, magenta), where the exhaust faces the viewer and is not hidden;
+- engine glows at Vega Strike's exhaust points, in the faction's colour (orange, green, magenta), where the exhaust faces the viewer and is not hidden;
 - a darkened silhouette edge;
 - light depth-based cavity shading.
 
@@ -602,7 +602,7 @@ sheet and a posterised preview.
 | 88-127 | five target ramps for the other liveries' colours, liveries a ship wears first |
 | 128-143 | fire and explosions (cycled) |
 | 144-151 | engine glow, Terran orange |
-| 152-155 | engine glow, Aera cyan |
+| 152-155 | engine glow and light strips, Aera green |
 | 156-159 | engine glow, Rlaan magenta |
 | 208-223 | the scene block: the cockpit in flight, backgrounds elsewhere |
 | 224-239 | stars and nebula |

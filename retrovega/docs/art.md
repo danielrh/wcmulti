@@ -70,7 +70,10 @@ A ship takes about 4 seconds at 160 px. Outputs, with TAG = KEY-LIVERY:
 | `toon` | key-light bands (3 gives a cel look; 0 is smooth) |
 | `mode` | `vs` or `retro` (above) |
 | `tint` | r g b: the whole hull's colour multiplied in, its brightness kept |
-| `sheen` | r g b: the same for the metal's reflection (canon ships), its brightness kept: the Aera's blue-silver on the Convolution |
+| `sheen` | r g b: the same for the metal's reflection (canon ships), its brightness kept |
+| `smooth` | levels and crease angle: Loop subdivision that keeps creases sharp (below) |
+| `skin` | a skin from tools/skins.py and its tile size, projected over the ship's own texture (below) |
+| `strips` | light strips along the long lengthwise creases: least length (fraction of the ship's size) and the largest angle to its length axis (below) |
 | `reflect` | how strongly the metal mirrors the sky (canon ships). Default 1. |
 | `whiten` | 0..1: how far the hull goes toward light grey |
 | `detail` | 0..1: how much of the texture's fine detail (panel lines, vents, grime) shows on top of the whitened hull and the paint. Default 0.6. |
@@ -173,13 +176,51 @@ itself when its left-right mirror image misses it: the median distance
 from a mirrored vertex to the nearest vertex over 2% of the radius. Every
 other canon ship is under 0.5%; the Convolution is 15%.
 
-**Sheen** (data/art.csv) is `tint` for the metal's reflection: the
-specular map's colour multiplied by it, luminance kept. The Convolution's
-texture is plain grey with a white specular map over its big wing, which
-mirrored the sky like chrome. With `tint 200 205 225`, `sheen 120 150 240`
-and `reflect 0.6` it takes the blue-silver of the Aera fighters' VDUs.
-(`tint` and `sheen` both `70 160 150` would make it teal, like the Aera
-capital ships.)
+## Making a canon ship over: smooth, skin, strips
+
+Three art.csv columns rework a canon mesh. The Convolution uses all
+three, which makes it an Aera fighter like the Ariston and the Nicander.
+Its own mesh is 192 triangles in its own grey texture.
+
+**`smooth` (levels, crease angle),** tools/smooth.py: Loop subdivision
+that keeps the creases. An edge whose faces meet at more than the crease
+angle stays sharp, so flat panels stay flat and wing edges stay crisp,
+while the rest rounds off.
+
+- **Normals:** they are rebuilt per corner, smooth only across smooth edges.
+- **What it cures:** the Convolution's 98 vertices were shared across its
+  sharp creases, so their normals averaged faces meeting at up to 140°.
+  That drew its flat wing as crumpled chrome.
+- **Settings:** `2 35` (3072 triangles) keeps its shape. At 50°, the
+  box-section fuselage rounds into a blade and the wing edges bend.
+
+**`skin` (name, tile),** tools/skins.py: textures the ship by projection.
+Each triangle takes the skin straight along its main axis, `tile` mesh
+units to a repeat. The maps are made once into `build/skins/`.
+
+- **`aera`** is the hull map the Aera capital ships tile
+  (`textures/AeraHull2.bmp`): grey panels ruled in thin lines.
+- **Colour:** tinted to the Aera fighters' warm grey-tan (Ariston's hull
+  median), its lines turned their accent blue, its speckle softened.
+- **Specular:** taken from its own shading.
+
+**`strips` (least length, angle),** light strips:
+
+- **Where:** along the mesh's creases, chained into polylines, broken at
+  corners and at sharp turns. Only the long ones (a fraction of the ship's
+  size) running within the angle of the ship's length are kept. On the
+  Convolution: the nose spike and the spine.
+- **How they are drawn:** after the render, each sample tested against the
+  depth buffer so the hull hides them, 1.25 px wide whatever the view, in
+  the faction's glow colour with a halo on the hull.
+- **Without smooth:** the creases are found at 50°.
+
+The Aera glow (engines and strips) is green, as their own glow maps are:
+(90, 255, 140), and palette entries 152-155.
+
+`sheen` tints the metal's reflection, as `tint` does the whole hull. It
+was the Convolution's first look: blue-silver like the Aera fighters' VDUs,
+before the skin replaced it.
 
 ## Facts about the Vega Strike data
 

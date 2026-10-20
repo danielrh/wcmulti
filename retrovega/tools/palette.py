@@ -147,11 +147,11 @@ def build(sprites):
             base_of[c] = nxt
             ramps[role][name] = nxt
             nxt += 8
-    # effects: fire, then engine glows (Terran orange, Aera cyan, Rlaan magenta)
+    # effects: fire, then engine glows (Terran orange, Aera green, Rlaan magenta)
     pal[FIRE:FIRE + 16] = ramp((40, 0, 0), (200, 30, 0), 6) + ramp((230, 90, 0), (255, 220, 60), 6) + \
         ramp((255, 235, 140), (255, 255, 255), 4)
     pal[GLOW:GLOW + 8] = ramp((90, 40, 0), (255, 230, 170), 8)
-    pal[GLOW + 8:GLOW + 12] = ramp((0, 80, 70), (200, 255, 240), 4)
+    pal[GLOW + 8:GLOW + 12] = ramp((0, 90, 40), (200, 255, 215), 4)
     pal[GLOW + 12:GLOW + 16] = ramp((80, 0, 80), (255, 180, 255), 4)
     pal[SCENE:SCENE + 16] = ramp((16, 16, 20), (180, 176, 168), 16)
     pal[STARS:STARS + 16] = ramp((20, 22, 40), (230, 235, 255), 16)
