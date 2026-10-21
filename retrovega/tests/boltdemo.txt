@@ -1,0 +1,24 @@
+# the bolt demo (run with /boltdemo /record 1 /flight 900): quarters, bar, briefing, deck, launch, then the four rounds (the flight lands itself after them)
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 30
+wait 20000
+log done

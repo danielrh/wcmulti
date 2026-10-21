@@ -49,6 +49,14 @@ The image is therefore:
 | 0x0100 | C code |
 | after the code | DGROUP, last as Watcom wants: the fixed 32 KB block first (ordered ahead of Watcom's `_NULL`), then C data, BSS, stack |
 
+DGROUP is full: the fixed block, ~10.5 KB of constant strings, ~12 KB of BSS
+and the 8 KB stack leave a few hundred bytes, and the C runtime's near heap
+(its FILE structures) lives in what is left. With under ~200 bytes free
+RV.EXE cannot open its files ("RV.DAT or RVGAME.DAT is missing", no
+RVLOG.TXT) or prints "Not enough memory to allocate file structures". New
+tables go `__far` (the people's labels moved out on 2026-10-21: 624 bytes
+free since); `grep ^DGROUP build/dos/RV.MAP` gives its size.
+
 DGROUP's paragraph now moves with the code size. RVHOOK's header carries
 `dw seg DGROUP`, which DOS relocates at load, so the layer reads DS from
 loadSeg:0008 instead of adding a fixed `dgroupPara`. That is a one-line
@@ -856,6 +864,25 @@ and length in XMS, and the choosing and fetching. In the frame the twelve
 near bolts take ~0.3-0.5 ms of 33 whatever their shape, and the far ones are
 lines in every design: the near bolts' shape is a matter of looks and of code
 (the polygons need no root table and about half the asm), not of speed.
+
+**The player's own bolts** (`RV.EXE /boltdemo`, the user's question of
+2026-10-21: most near bolts a player sees are their own). Eleven bolts fly
+straight ahead from the eye's depth: one at the eye, one just right of it (a
+10 px gap between the two where they appear), one half a metre left, four
+1.5 m left and right and 1 m up and down, and four at those corners. A metre
+is taken as 32 km of the flight's units (a fighter's 128 px view is full size
+at 2,500 km: 800 km for a 25-30 m hull), so a bolt is 12 cm thick and 37 cm
+long and the near plane is 6 m out. They fly 7.1 km a frame, the eye to the
+line drawing (1,067 km) in five seconds; a round is ten seconds, a shape a
+round, and the flight lands after the four. `tests/boltdemo.txt` with
+`/boltdemo /record 1 /flight 900` saves every frame (`CYCLES=max
+TIMEOUT=1500`, ~6 minutes; the motion is per frame, so the recording is exact
+however slowly it runs). What it shows: own bolts are seen nearly end on,
+so they appear at the near plane 0.9 s out as 8 px blobs (the corners'
+±96, ±64 px from the middle), are 4 px across by 2 s, dots by 3 s and lines
+from 5 s; the shape shows only in that first second or two. The rectangle
+(shape 2) had its ends at the segment's ends, so end on it was a sliver as
+thin as the bolt's 1-3 px of projected length.
 
 **The benchmark.** `RV.EXE /lasers N` flies the first mission's launch into a
 still scene: two big ships 1,500 and 2,100 km ahead, rolling and turning so

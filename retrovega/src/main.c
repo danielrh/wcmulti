@@ -1,7 +1,7 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
- *          [/lasers N [/near N] [/farships N] [/bigships N] [/boltshape N]]
+ *          [/lasers N [/near N] [/farships N] [/bigships N] [/boltshape N]] [/boltdemo]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -18,9 +18,9 @@
 #include "music.h"
 #include "ships.h"
 
-char g_people_names[16][28];
+char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
-extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_shape;
+extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_shape, g_bolt_demo;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -38,11 +38,13 @@ static void log_free(const char *when)
 static void names(void)
 {
     unsigned i;
+    char t[28];
     for (i = 0; i < g_npilots && i < 16; i++) {
         if (g_pilots[i].role == RV_ROLE_PILOT || g_pilots[i].role == RV_ROLE_TECH || g_pilots[i].role == RV_ROLE_BARMAN)
-            sprintf(g_people_names[i], "%.16s \"%.10s\"", g_pilots[i].name, g_pilots[i].callsign);
+            sprintf(t, "%.16s \"%.10s\"", g_pilots[i].name, g_pilots[i].callsign);
         else
-            sprintf(g_people_names[i], "%.26s", g_pilots[i].name);
+            sprintf(t, "%.26s", g_pilots[i].name);
+        _fstrcpy(g_people_names[i], t);
     }
 }
 
@@ -78,6 +80,12 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "/boltshape"))        /* tests: the near bolts' shape (0 capsules, 1 level/upright
                                                            ends, 2 rectangles, 3 hexagons) */
             g_bolt_shape = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/boltdemo")) {       /* tests: the player's own bolts, each shape in turn */
+            g_bolt_demo = 1;
+            g_lasers = 1;
+            g_near_bolts = 0;
+            g_big_ships = g_far_ships = 0;
+        }
     }
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "/midilog"))               /* tests: what the music sent, and when */

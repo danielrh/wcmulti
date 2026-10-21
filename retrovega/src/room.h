@@ -31,7 +31,7 @@ typedef struct {
 } Scene;
 
 extern Scene g_scene;
-extern char g_people_names[16][28];     /* "Name (Callsign)" per people.csv row, for labels */
+extern char __far g_people_names[16][28];     /* "Name (Callsign)" per people.csv row, for labels */
 
 void scene_enter(int room, const unsigned char *seats);
 int scene_update(const Input *in, SceneAction *act);

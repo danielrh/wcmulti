@@ -2,7 +2,7 @@
 # Run RV.EXE headless in the native DOSBox with a test script; screenshots
 # (NAME.BMP) and RVLOG.TXT land in build/dos.
 #   tests/run.sh [script [RV.EXE options]]     default tests/walk.txt
-# NOBUILD=1 skips the build; CYCLES=N runs at N cycles (the page runs 20000).
+# NOBUILD=1 skips the build; CYCLES=N runs at N cycles (the page runs 50000); TIMEOUT=S (300).
 set -e
 cd "$(dirname "$0")/.."
 [ -n "$NOBUILD" ] || ./build.sh > /dev/null
@@ -13,6 +13,6 @@ mkdir -p build/dosrun
 shift 2>/dev/null || true
 sed -e 's#mount c ../dos#mount c '"$PWD"'/build/dos#' -e "s#RV.EXE /script WALK.TXT#RV.EXE /script WALK.TXT $*#" \
     -e "s#^cycles=.*#cycles=${CYCLES:-40000}#" tests/rv.conf > build/dosrun/run.conf
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout 300 ~/dev/dosbox3d/build-native/src/dosbox \
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout ${TIMEOUT:-300} ~/dev/dosbox3d/build-native/src/dosbox \
     -conf build/dosrun/run.conf > build/dosrun/dosbox.log 2>&1 || true
 grep -v "^stub" build/dos/RVLOG.TXT

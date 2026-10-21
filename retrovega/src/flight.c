@@ -44,6 +44,12 @@ int g_near_bolts = 12;                  /* RV.EXE /near N: the bolts kept near t
 int g_far_ships = 16;                   /* RV.EXE /farships N: its small far ships */
 int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
 int g_bolt_shape = 0;                   /* RV.EXE /boltshape N: the near bolts' shape (LZ_SHAPE_*: 0 capsules) */
+int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts, each shape in turn (a test aid) */
+#define DEMO_BOLTS 11
+#define DEMO_FRAMES 300                 /* ten seconds at 30 fps */
+#define DEMO_SPEED 19                   /* positions per sixteenth of a km of half axis: 7.1 km a frame */
+#define DEMO_METRE 32                   /* km a metre */
+static int g_demo_frame;                /* its frames so far */
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
  * at draw time, sixteen cycles a pixel) while their pixels fit this budget
  * a frame and they are big enough for the steps to show; the rest are
@@ -500,7 +506,7 @@ static void __far __cdecl draw_pointer_body(void)
 {
     /* the steering cross where the pointer is, in mouse mode */
     int x = g_scene.px, y = g_scene.py;
-    if (g_keyboard_steer)
+    if (g_keyboard_steer || g_bolt_demo)   /* (the demo's middle bolt is where the cross would be) */
         return;
     gfx_fill(x - 5, y, 11, 1, UI_WHITE, g_ptr_y0, g_ptr_y1);
     gfx_fill(x, y - 5, 1, 11, UI_WHITE, g_ptr_y0, g_ptr_y1);
@@ -577,7 +583,13 @@ static void gather(void)
     }
     g_st.ncontacts = n;
     (void)c;
-    if (g_lasers) {                     /* the laser benchmark's readout */
+    if (g_bolt_demo) {                  /* the demo's readout: the shape, the time in its round, where the bolts are */
+        static const char __far names[4][11] = { "CAPSULES", "LEVEL ENDS", "RECTANGLE", "POINTED" };   /* (far: DGROUP is full) */
+        int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
+        _fstrcpy((char __far *)g_mfd[0][0], names[(g_demo_frame ? g_demo_frame - 1 : 0) / DEMO_FRAMES % 4]);
+        sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
+        sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
+    } else if (g_lasers) {              /* the laser benchmark's readout */
         sprintf(g_mfd[0][0], "BOLTS %d+%d", g_near_bolts, lasers_far());
         sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
         sprintf(g_mfd[0][2], "SHIPS %d+%d", g_big_ships, g_far_ships);
@@ -590,7 +602,12 @@ static void gather(void)
         strcpy(g_mfd[0][1], "Q E ROLL");
         strcpy(g_mfd[0][2], "+ - F S SPD");
     }
-    sprintf(g_mfd[0][3], "T-%lu", (FLIGHT_TICKS - (clock240() - g_t0) + 239) / 240);
+    if (g_bolt_demo) {
+        int lines, fats;
+        bolts_on_screen(&lines, &fats);
+        sprintf(g_mfd[0][3], "%d FAT %d LN", fats, lines);
+    } else
+        sprintf(g_mfd[0][3], "T-%lu", (FLIGHT_TICKS - (clock240() - g_t0) + 239) / 240);
     g_st.mfd_text[0][0] = g_mfd[0][0];
     g_st.mfd_text[0][1] = g_mfd[0][1];
     g_st.mfd_text[0][2] = g_mfd[0][2];
@@ -704,6 +721,53 @@ static void lz_spawn_far(int i)
 
 static int lasers_far(void) { return g_lz_far; }
 
+/* --- the bolt demo (RV.EXE /boltdemo): the player's own shots ---
+ *
+ * The user's question (2026-10-21): most near bolts a player sees are their
+ * own, so what do the shapes look like on bolts fired from round the eye?
+ * Eleven bolts, all flying straight ahead from the eye's depth: one at the
+ * eye, one just right of it (a 10 px gap between the two where they appear),
+ * one half a metre left, four 1.5 m left and right and 1 m up and down, and
+ * four at the corners of those.  A metre is taken as 32 km of the flight's
+ * units: a fighter's view (128 px) is full size at 2,500 km, 800 km for a
+ * 25-30 m hull.  They fly at a constant speed that takes them from the eye to
+ * the line drawing (3/4 px of radius, 1,067 km) in five seconds; each round
+ * is ten seconds, a shape a round (capsules, level ends, rectangles, pointed),
+ * and the flight lands after the four. */
+#define DEMO_GAP_KM ((2 * BOLT_RMAX16 / 16 + 10) * BOLT_ZMIN_KM / 400)   /* centres 18 px apart at the near plane */
+static const signed char __far g_demo_at[DEMO_BOLTS][2] = {   /* across, up: km */
+    { 0, 0 }, { DEMO_GAP_KM, 0 }, { -DEMO_METRE / 2, 0 },
+    { -DEMO_METRE * 3 / 2, 0 }, { DEMO_METRE * 3 / 2, 0 }, { 0, DEMO_METRE }, { 0, -DEMO_METRE },
+    { -DEMO_METRE * 3 / 2, DEMO_METRE }, { DEMO_METRE * 3 / 2, DEMO_METRE },
+    { -DEMO_METRE * 3 / 2, -DEMO_METRE }, { DEMO_METRE * 3 / 2, -DEMO_METRE }
+};
+static void demo_step(void)
+{
+    int i, k = g_demo_frame % DEMO_FRAMES;
+    if (g_lz_cap < DEMO_BOLTS)
+        return;
+    if (!k) {                           /* a round: the next shape, the bolts back at the eye */
+        const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
+        long d = BOLT_HALF16 / 16;      /* (their tails at the eye's depth) */
+        bolts_set_shape(g_demo_frame / DEMO_FRAMES % 4);
+        for (i = 0; i < DEMO_BOLTS; i++) {
+            LzBolt __far *b = bolts_pool() + i;
+            long across = g_demo_at[i][0], up = g_demo_at[i][1];
+            b->x = gPositionVector[0].x + f->x * d + r->x * across + u->x * up;
+            b->y = gPositionVector[0].y + f->y * d + r->y * across + u->y * up;
+            b->z = gPositionVector[0].z + f->z * d + r->z * across + u->z * up;
+            b->hx = (short)(f->x * BOLT_HALF16 / 256);
+            b->hy = (short)(f->y * BOLT_HALF16 / 256);
+            b->hz = (short)(f->z * BOLT_HALF16 / 256);
+        }
+        bolts_set_count(DEMO_BOLTS);
+    } else {
+        bolts_move(DEMO_SPEED);
+    }
+    if (++g_demo_frame >= 4 * DEMO_FRAMES)
+        missionStatus = 1;              /* landed */
+}
+
 static void lasers_setup(int enemy_type)
 {
     int k;
@@ -744,6 +808,7 @@ static void lasers_setup(int enemy_type)
         g_lz_dir[k].z = (short)(z * BOLT_HALF16 / (long)len);
     }
     lz_init();
+    g_demo_frame = 0;
     g_lz_far = g_lasers > 0 ? g_lasers : 64;
     g_lz_n = 0;
     g_lz_sum = 0;
@@ -1117,7 +1182,10 @@ void __far __cdecl flight_frame(void)
     stars_place();
     plan_draws();
     if (g_lasers) {
-        lasers_step();
+        if (g_bolt_demo)
+            demo_step();
+        else
+            lasers_step();
         lasers_place();
     }
     /* the rate over the last FPS_WINDOW frames */
