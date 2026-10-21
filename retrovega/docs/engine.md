@@ -693,7 +693,13 @@ directions over the whole sky (the opening sees about a twentieth): each
 frame `stars_place` puts them through the camera — three products first,
 to drop the sky behind and beside — so they turn with pitch, yaw and roll
 alike, and the ships sit still against them (the old field slid in two
-dimensions against the steering). Test scene: `RV.EXE /sky /stream 8`
+dimensions against the steering). That loop is `rv_stars_place` in
+lowlevel.asm: in C, Watcom's 16-bit code around three 32-bit products a
+star cost 8 ms a frame (160 cycles a star; `lf_sky`'s `lf_atan2` for every
+visible star had made it 15), which halved the drawing benchmark; the
+assembly, 32-bit registers throughout, places the 2,000 in 1.1 ms and
+draws the ~100 on screen in 0.35 (the flight's closing log line reports
+both). Test scene: `RV.EXE /sky /stream 8`
 with tests/sky.txt (three Gawain views painted ahead, high left and low
 right; the player rolls, yaws, pitches): the sky sprites take stream
 slots like any full-size view, so the scene asks for eight; real sky art

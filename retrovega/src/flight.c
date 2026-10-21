@@ -265,10 +265,14 @@ static void spawn(int s, int type, int side, int controller, long x, long y, lon
  * put through the camera (lf_sky), so they turn with every axis of the
  * player's own rotation, as the ships do, and the ships sit still against
  * them */
-static struct { short x, y, z; } __far g_star[STARS];
-static struct { short x, y; } __far g_star_at[STARS];   /* on screen this frame, -1 when off */
+static struct { short x, y, z, c; } __far g_star[STARS];   /* a direction of length 4096, and a colour */
+static struct { short x, y, c; } __far g_star_at[STARS];   /* the ones on screen this frame */
+static int g_star_n;
+int __far __cdecl rv_stars_place(const short __far *stars, int n, const long __far *basis, int cx, int cy, int rows,
+                                 short __far *out);
 static const LfVec g_world_up = { 0, 256, 0 };
 static int g_cam_cy = SCR_H / 2;        /* the camera's centre row: the opening's middle (ships_set_camera's) */
+static unsigned long g_star_place_ticks, g_star_draw_ticks;   /* what the sky costs (logged when the flight ends) */
 
 static void stars_init(void)
 {
@@ -287,50 +291,44 @@ static void stars_init(void)
         g_star[i].x = (short)(x * 4096 / (long)r);
         g_star[i].y = (short)(y * 4096 / (long)r);
         g_star[i].z = (short)(z * 4096 / (long)r);
-        g_star_at[i].x = g_star_at[i].y = -1;
+        g_star[i].c = (i & 3) ? UI_GREY4 : UI_GREY6;
     }
+    g_star_n = 0;
 }
 
 static void basis_of(int s, LfBasis *b);
 
-/* once a frame: where each star shows through the camera */
+/* once a frame: the stars on screen, as a compact list (rv_stars_place,
+ * lowlevel.asm: a star needs no turn, and C around three 32-bit products a
+ * star cost 8 ms a frame) */
 static void stars_place(void)
 {
     LfBasis cam;
-    LfVec dir;
-    LfPlace p;
-    int i;
+    long basis[9];
+    unsigned long t0 = clock240();
     basis_of(0, &cam);
-    for (i = 0; i < STARS; i++) {
-        dir.x = g_star[i].x;
-        dir.y = g_star[i].y;
-        dir.z = g_star[i].z;
-        /* most of the sky is behind or beside the opening: three products tell before the projection does */
-        if (dir.x * cam.front.x + dir.y * cam.front.y + dir.z * cam.front.z < 4096L * 256 * 7 / 10) {
-            g_star_at[i].x = g_star_at[i].y = -1;
-            continue;
-        }
-        lf_sky(&dir, &g_world_up, &cam, SCR_W / 2, g_cam_cy, 400, &p);
-        if (p.on_screen && p.sx >= 0 && p.sx < SCR_W && p.sy >= 0 && p.sy < SCR_H) {
-            g_star_at[i].x = (short)p.sx;
-            g_star_at[i].y = (short)p.sy;
-        } else
-            g_star_at[i].x = g_star_at[i].y = -1;
-    }
+    basis[0] = cam.front.x; basis[1] = cam.front.y; basis[2] = cam.front.z;
+    basis[3] = cam.right.x; basis[4] = cam.right.y; basis[5] = cam.right.z;
+    basis[6] = cam.up.x; basis[7] = cam.up.y; basis[8] = cam.up.z;
+    g_star_n = rv_stars_place((const short __far *)g_star, STARS, (const long __far *)basis, SCR_W / 2, g_cam_cy, SCR_H,
+                              (short __far *)g_star_at);
+    g_star_place_ticks += clock240() - t0;
 }
 
 static void draw_stars(int y0, int y1)
 {
     int i, ey0, rows;
     const short __far *ext = cockpit_extents(&ey0, &rows);
-    for (i = 0; i < STARS; i++) {
+    unsigned long t0 = clock240();
+    for (i = 0; i < g_star_n; i++) {
         int x = g_star_at[i].x, y = g_star_at[i].y, k = y - ey0;
         if (y < y0 || y >= y1)
             continue;
         if (ext && (k < 0 || k >= rows || x < ext[2 * k] || x >= ext[2 * k + 1]))
             continue;
-        vid_row(y)[x] = (i & 3) ? UI_GREY4 : UI_GREY6;
+        vid_row(y)[x] = (unsigned char)g_star_at[i].c;
     }
+    g_star_draw_ticks += clock240() - t0;
 }
 
 /* the camera: the player's own frame; a ship's basis as the lightfield wants it */
@@ -855,6 +853,12 @@ int flight_fly(const RvMission __far *m)
     n = flight_bench_result(&w, &h);
     rv_log("flight: over with status %u after %u frames; benchmark %d sprites of %dx%d a frame at %d fps (%ld pixels a second)",
            status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
+    rv_log("flight: the stars took %lu.%02lu ms a frame to place and %lu.%02lu to draw",
+           g_star_place_ticks * 1000 / 240 / (frameCounter ? frameCounter : 1),
+           (g_star_place_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,
+           g_star_draw_ticks * 1000 / 240 / (frameCounter ? frameCounter : 1),
+           (g_star_draw_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100);
+    g_star_place_ticks = g_star_draw_ticks = 0;
     g_scene.full = 0;
     g_scene.no_room = 0;
     g_scene.hide_pointer = 0;

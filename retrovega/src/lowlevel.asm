@@ -359,3 +359,116 @@ _rv_rotate_row2:
         pop si
         pop bp
         retf
+
+; int rv_stars_place(const short far *stars, int n, const long far *basis, int cx, int cy, int rows,
+;                    short far *out)
+; The sky's stars through the camera: stars are (x, y, z, c) shorts, a
+; direction of length 4096 and a colour; basis the camera's front, right
+; and up (256 = 1.0) as nine longs; out gets (x, y, c) for every star on
+; screen (0 <= x < 640, 0 <= y < rows) and the count is returned.  Three
+; products decide whether a star is near enough to straight ahead (depth
+; over 0.7 of its length) before the other six and the two divisions.
+        global _rv_stars_place
+_rv_stars_place:
+        push bp
+        mov bp,sp
+        sub sp,48
+        push si
+        push di
+        push ds
+        mov ds,[bp+14]              ; the basis to the frame: nine dwords
+        mov si,[bp+12]
+        mov di,bp
+        sub di,36
+        mov cx,9
+.copy:
+        mov eax,[ds:si]
+        mov [ss:di],eax
+        add si,4
+        add di,4
+        dec cx
+        jnz .copy
+        mov ax,[bp+10]
+        mov [bp-38],ax              ; stars left
+        mov ax,[bp+16]
+        mov [bp-40],ax              ; cx
+        mov ax,[bp+18]
+        mov [bp-42],ax              ; cy
+        mov ax,[bp+20]
+        mov [bp-44],ax              ; rows
+        mov word [bp-46],0          ; on screen
+        mov ds,[bp+8]
+        mov si,[bp+6]
+        mov es,[bp+24]
+        mov di,[bp+22]
+        cmp word [bp-38],0
+        jle .done
+.star:
+        movsx eax,word [si]
+        imul eax,dword [bp-36]      ; x fx
+        mov edx,eax
+        movsx eax,word [si+2]
+        imul eax,dword [bp-32]      ; y fy
+        add edx,eax
+        movsx eax,word [si+4]
+        imul eax,dword [bp-28]      ; z fz
+        add edx,eax                 ; the depth: 4096 x 256 straight ahead
+        cmp edx,734003              ; 0.7 of that
+        jl .next
+        mov ecx,edx
+        movsx eax,word [si]
+        imul eax,dword [bp-24]      ; x rx
+        mov ebx,eax
+        movsx eax,word [si+2]
+        imul eax,dword [bp-20]
+        add ebx,eax
+        movsx eax,word [si+4]
+        imul eax,dword [bp-16]
+        add ebx,eax                 ; across
+        mov eax,ebx
+        imul eax,eax,400            ; the focal length
+        cdq
+        idiv ecx
+        add ax,[bp-40]              ; sx
+        cmp ax,0
+        jl .next
+        cmp ax,640
+        jge .next
+        mov bx,ax
+        movsx eax,word [si]
+        imul eax,dword [bp-12]      ; x ux
+        mov edx,eax
+        movsx eax,word [si+2]
+        imul eax,dword [bp-8]
+        add edx,eax
+        movsx eax,word [si+4]
+        imul eax,dword [bp-4]
+        add edx,eax                 ; up
+        mov eax,edx
+        imul eax,eax,400
+        cdq
+        idiv ecx
+        mov dx,[bp-42]
+        sub dx,ax                   ; sy: the camera's up is up the screen
+        cmp dx,0
+        jl .next
+        cmp dx,[bp-44]
+        jge .next
+        mov [es:di],bx
+        mov [es:di+2],dx
+        mov ax,[si+6]
+        mov [es:di+4],ax
+        add di,6
+        inc word [bp-46]
+.next:
+        add si,8
+        dec word [bp-38]
+        jnz .star
+.done:
+        mov ax,[bp-46]
+        pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
