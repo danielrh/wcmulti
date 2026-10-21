@@ -1173,8 +1173,6 @@ void __far __cdecl flight_startup(void)
     {
         /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
         unsigned long free_kb = xms_free_kb(), taken, t0 = clock240();
-        flames_reserve();               /* (the baked flames' room first: the sets take what is left) */
-        free_kb = xms_free_kb();
         taken = ships_load_blocks(free_kb > 1024 ? (free_kb - 1024) * 1024UL : 0);
         rv_log("ships: %lu KB of blocks loaded in %lu ms, %lu KB of XMS left", taken / 1024, (clock240() - t0) * 1000 / 240,
                xms_free_kb());

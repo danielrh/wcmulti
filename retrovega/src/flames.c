@@ -14,8 +14,9 @@
                                            ~1/12 of the ship's length across) ... */
 #define FLAME_LEN_MIN 100               /* ... and at least this (1/1024ths of the half box) */
 
-/* the baked flames (flames_init, once a flight): every look x foreshortening x direction x size x frame, shaded
- * by rv_flame_draw and kept in XMS as run-length sprites (the ships' format), drawn by ships_blit_view */
+/* the baked flames (flames_bake, once when the game starts: the user's wish): every look x foreshortening x
+ * direction x size x frame, shaded by rv_flame_draw and kept in XMS (the resident level) as run-length sprites
+ * (the ships' format), drawn by ships_blit_mix */
 #define BK_RHO 6                        /* foreshortenings: the tail's length on screen over the root's radius */
 #define BK_ANG 9                        /* the tail's way, 0 .. 90 degrees down-right (the rest mirrored, flipped) */
 #define BK_SIZE 6                       /* the root's radius */
@@ -75,16 +76,16 @@ static struct {                         /* this frame's flames */
     unsigned seed;                      /* which rows from which */
     unsigned char flags;
 } __far g_fl[FLAME_MAX];
-static int g_nf;
+static int g_nf, k_ok;
 static unsigned g_frame, g_rand = 1;
 
-/* the palette's entry nearest an sRGB colour (the palette as set: 6-bit) */
-static unsigned char nearest(int r, int g, int b)
+/* the flight palette's entry nearest an sRGB colour (6-bit; below the cockpits' own colours, so the same in
+ * every cockpit) */
+static unsigned char nearest(const unsigned char __far *pal, int r, int g, int b)
 {
-    const unsigned char *pal = shot_palette();
     long best = 0x7FFFFFFFL, d;
     int i, k = 0;
-    for (i = 1; i < 256; i++) {
+    for (i = 1; i < RV_CP_FIRST; i++) {
         int dr = pal[3 * i] * 4 - r, dg = pal[3 * i + 1] * 4 - g, db = pal[3 * i + 2] * 4 - b;
         d = (long)dr * dr * 2 + (long)dg * dg * 4 + (long)db * db * 3;
         if (d < best) {
@@ -96,7 +97,7 @@ static unsigned char nearest(int r, int g, int b)
 }
 
 /* the looks: the profile, each look's stipple from the palette, the noise */
-static int looks(void)
+static int looks(const unsigned char __far *pal)
 {
     unsigned long lin;
     unsigned seed = 12345;
@@ -112,8 +113,8 @@ static int looks(void)
         LzFlameLook __far *lk = &g_look[k];
         for (t = 0; t < 9; t++) {
             const unsigned char __far *c = g_levels[k][t];
-            a[t] = nearest(c[0], c[1], c[2]);
-            b[t] = nearest(c[3], c[4], c[5]);
+            a[t] = nearest(pal, c[0], c[1], c[2]);
+            b[t] = nearest(pal, c[3], c[4], c[5]);
         }
         _fmemcpy(lk->lut, g_flame_lut, 256);
         for (t = 0; t < 256; t++) {
@@ -204,22 +205,34 @@ static int bake_one(int look, int rho, int ang, int size16, int seed, BakedFlame
 void flames_reserve(void)
 {
     g_bk_used = 0;
-    g_bk_rows = xms_alloc(BK_BYTES, XMS_MISSION);
-    g_bk_hdr = g_bk_rows ? xms_alloc((unsigned long)BK_COUNT * sizeof(BakedFlame), XMS_MISSION) : 0;
+    g_bk_rows = xms_alloc(BK_BYTES, XMS_RESIDENT);
+    g_bk_hdr = g_bk_rows ? xms_alloc((unsigned long)BK_COUNT * sizeof(BakedFlame), XMS_RESIDENT) : 0;
     if (!g_bk_hdr)
         g_bk_rows = 0;
 }
 
 void flames_init(void)
 {
+    bolts_tables();                     /* (the roots' table the bake made is the same: the draw needs none) */
+}
+
+void flames_bake(void)
+{
     unsigned long t0 = clock240();
     int look, rho, ang, size, frame, n = 0, lost = 0;
+    const RvCockpit __far *cp = dat_cockpit(0);
+    unsigned char __far *pal = (unsigned char __far *)_fmalloc(768);
     bolts_tables();
-    if (!g_bk_hdr) {
-        rv_log("flames: no XMS for the baked flames");
+    if (!g_bk_hdr || !cp || !pal) {
+        rv_log("flames: no %s for the baked flames", !g_bk_hdr ? "XMS" : !cp ? "cockpit palette" : "memory");
+        g_bk_hdr = g_bk_rows = 0;
+        if (pal) _ffree(pal);
         return;
     }
-    if (!looks()) {
+    dat_read(dat_asset(cp->palette)->at, pal, 768);   /* (the flight palette: any cockpit's below RV_CP_FIRST) */
+    k_ok = looks(pal);
+    _ffree(pal);
+    if (!k_ok) {
         rv_log("flames: no memory for the looks");
         g_bk_hdr = g_bk_rows = 0;
         return;
@@ -241,6 +254,9 @@ void flames_init(void)
                     }
     rv_log("flames: %d baked in %lu ms, %lu KB (%d did not fit)", n, (clock240() - t0) * 1000 / 240, g_bk_used / 1024,
            lost);
+    _ffree(g_look_mem);                 /* (the looks were for the bake) */
+    g_look_mem = 0;
+    g_look = 0;
 }
 
 void flames_frame(void)

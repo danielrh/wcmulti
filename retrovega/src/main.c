@@ -17,6 +17,7 @@
 #include "game.h"
 #include "music.h"
 #include "ships.h"
+#include "flames.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
@@ -112,6 +113,7 @@ int main(int argc, char **argv)
     if (ok) {
         music_init();                   /* before the back buffer: its reading needs room */
         log_free("after the music");
+        flames_reserve();               /* (resident too) */
         ok = dat_open("RV.DAT");
     }
     if (!ok) {
@@ -126,6 +128,7 @@ int main(int argc, char **argv)
         return 1;
     }
     gfx_font_load();
+    flames_bake();                      /* the engines' flames, once */
     log_free("after the screen and the fonts");
     in_init();
     uiMode(1);

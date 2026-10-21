@@ -32,9 +32,11 @@ typedef struct {
 } FlameSet;
 
 
-void flames_reserve(void);              /* at a flight's start, before the ships' sets take the XMS: the flames' room
-                                           (the mission level) */
-void flames_init(void);                 /* then, its palette installed: the looks, and every flame baked there */
+void flames_reserve(void);              /* when the game starts, before RV.DAT takes its XMS: the flames' room (the
+                                           resident level: XMS levels nest) */
+void flames_bake(void);                 /* then, RV.DAT open: every flame baked there, once (the flight palette from
+                                           a cockpit's) */
+void flames_init(void);                 /* at a flight's start: the draw's tables */
 void flames_frame(void);                /* a new frame: no flames yet */
 
 /* a ship's flames as its sprite is drawn: its type, where lf_place put it
