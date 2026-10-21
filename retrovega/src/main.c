@@ -78,7 +78,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "/bigships"))         /* tests: its big near ships (2) */
             g_big_ships = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/boltshape"))        /* tests: the near bolts' shape (0 capsules, 1 level/upright
-                                                           ends, 2 rectangles, 3 hexagons) */
+                                                           ends, 2 rectangles, 3 hexagons, 4 octagons swept along,
+                                                           5 capsules in two colours) */
             g_bolt_shape = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/boltdemo")) {       /* tests: the player's own bolts, each shape in turn */
             g_bolt_demo = 1;

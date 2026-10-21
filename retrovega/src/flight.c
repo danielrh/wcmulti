@@ -47,6 +47,7 @@ int g_bolt_shape = 0;                   /* RV.EXE /boltshape N: the near bolts' 
 int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts, each shape in turn (a test aid) */
 #define DEMO_BOLTS 11
 #define DEMO_FRAMES 300                 /* ten seconds at 30 fps */
+#define DEMO_SHAPES (BOLT_SHAPE_CAPSULE2 + 1)
 #define DEMO_SPEED 19                   /* positions per sixteenth of a km of half axis: 7.1 km a frame */
 #define DEMO_METRE 32                   /* km a metre */
 static int g_demo_frame;                /* its frames so far */
@@ -584,9 +585,11 @@ static void gather(void)
     g_st.ncontacts = n;
     (void)c;
     if (g_bolt_demo) {                  /* the demo's readout: the shape, the time in its round, where the bolts are */
-        static const char __far names[4][11] = { "CAPSULES", "LEVEL ENDS", "RECTANGLE", "POINTED" };   /* (far: DGROUP is full) */
+        static const char __far names[DEMO_SHAPES][11] = { "CAPSULES", "LEVEL ENDS", "RECTANGLE", "POINTED", "OCTAGON",
+                                                             "2-TONE CAP" };
+                                        /* (far: DGROUP is full) */
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
-        _fstrcpy((char __far *)g_mfd[0][0], names[(g_demo_frame ? g_demo_frame - 1 : 0) / DEMO_FRAMES % 4]);
+        _fstrcpy((char __far *)g_mfd[0][0], names[(g_demo_frame ? g_demo_frame - 1 : 0) / DEMO_FRAMES % DEMO_SHAPES]);
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
     } else if (g_lasers) {              /* the laser benchmark's readout */
@@ -732,8 +735,8 @@ static int lasers_far(void) { return g_lz_far; }
  * units: a fighter's view (128 px) is full size at 2,500 km, 800 km for a
  * 25-30 m hull.  They fly at a constant speed that takes them from the eye to
  * the line drawing (3/4 px of radius, 1,067 km) in five seconds; each round
- * is ten seconds, a shape a round (capsules, level ends, rectangles, pointed),
- * and the flight lands after the four. */
+ * is ten seconds, a shape a round (capsules, level ends, rectangles, pointed,
+ * swept octagons, two-colour capsules), and the flight lands after the six. */
 #define DEMO_GAP_KM ((2 * BOLT_RMAX16 / 16 + 10) * BOLT_ZMIN_KM / 400)   /* centres 18 px apart at the near plane */
 static const signed char __far g_demo_at[DEMO_BOLTS][2] = {   /* across, up: km */
     { 0, 0 }, { DEMO_GAP_KM, 0 }, { -DEMO_METRE / 2, 0 },
@@ -749,7 +752,7 @@ static void demo_step(void)
     if (!k) {                           /* a round: the next shape, the bolts back at the eye */
         const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
         long d = BOLT_HALF16 / 16;      /* (their tails at the eye's depth) */
-        bolts_set_shape(g_demo_frame / DEMO_FRAMES % 4);
+        bolts_set_shape(g_demo_frame / DEMO_FRAMES % DEMO_SHAPES);
         for (i = 0; i < DEMO_BOLTS; i++) {
             LzBolt __far *b = bolts_pool() + i;
             long across = g_demo_at[i][0], up = g_demo_at[i][1];
@@ -764,7 +767,7 @@ static void demo_step(void)
     } else {
         bolts_move(DEMO_SPEED);
     }
-    if (++g_demo_frame >= 4 * DEMO_FRAMES)
+    if (++g_demo_frame >= DEMO_SHAPES * DEMO_FRAMES)
         missionStatus = 1;              /* landed */
 }
 

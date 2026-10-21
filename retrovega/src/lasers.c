@@ -390,12 +390,52 @@ static void poly4(LzPoly LZ_FAR *p, int colour, int x0, int y0, int x1, int y1, 
     poly_rows(p);
 }
 
+/* LZ_SHAPE_ROUND: an octagon (flats at w, corners at 1.08 w) swept from a to
+ * b, its sum with the segment.  Octagon edge k, from vertex k to k + 1, faces
+ * (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1), (0,-1), (1,-1): it is the
+ * outline's edge at b where that . (b - a) > 0, else at a; where two edges
+ * in a row take different ends, the long side along the bolt joins them at
+ * the vertex between.  At most ten vertices; end on (b = a), the octagon,
+ * which at a few pixels covers a circle's pixels.  No root, no division. */
+static void round_of(const LzFat LZ_FAR *f, int w, int colour, LzPoly LZ_FAR *p)
+{
+    int s = w * 53 >> 7, k, n = 0, last, side[8];
+    int vx[8], vy[8];
+    long dx = (long)f->bx - f->ax, dy = (long)f->by - f->ay, dot[4];
+    vx[0] = w; vy[0] = -s; vx[1] = w; vy[1] = s; vx[2] = s; vy[2] = w; vx[3] = -s; vy[3] = w;
+    vx[4] = -w; vy[4] = s; vx[5] = -w; vy[5] = -s; vx[6] = -s; vy[6] = -w; vx[7] = s; vy[7] = -w;
+    dot[0] = dx; dot[1] = dx + dy; dot[2] = dy; dot[3] = dy - dx;
+    for (k = 0; k < 4; k++) {
+        side[k] = dot[k] > 0;
+        side[k + 4] = dot[k] < 0;
+    }
+    last = side[7];
+    for (k = 0; k < 8; k++) {
+        if (side[k] != last) {          /* the long side: from the end the last edge took */
+            p->x[n] = (short)((last ? f->bx : f->ax) + vx[k]);
+            p->y[n] = (short)((last ? f->by : f->ay) + vy[k]);
+            n++;
+            last = side[k];
+        }
+        p->x[n] = (short)((last ? f->bx : f->ax) + vx[k]);
+        p->y[n] = (short)((last ? f->by : f->ay) + vy[k]);
+        n++;
+    }
+    p->n = (short)n;
+    p->colour = (short)colour;
+    poly_rows(p);
+}
+
 /* the bolt's outline at half width w (x16) */
 static void slab_of(const LzFat LZ_FAR *f, int shape, int w, int colour, LzPoly LZ_FAR *p)
 {
     int ax = f->ax, ay = f->ay, bx = f->bx, by = f->by;
     long dx = (long)bx - ax, dy = (long)by - ay, adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
     long len = adx > ady ? adx + ady * 3 / 8 : ady + adx * 3 / 8;   /* the length within 7 %: no root */
+    if (shape == LZ_SHAPE_ROUND) {
+        round_of(f, w, colour, p);
+        return;
+    }
     if (shape == LZ_SHAPE_AXIS || len < 16) {
         /* ends level for a steep bolt, upright for a shallow one, each pushed out by w along the bolt so a
          * bolt end on is a square 2w across */
@@ -437,6 +477,14 @@ int lz_slab_setup(const LzFat LZ_FAR *f, int shape, const LzStyle *st, LzPoly LZ
         slab_of(f, shape, f->r / 2, st->core, &poly[1]);
         *nlines = 0;
         return 2;
+    }
+    if (shape == LZ_SHAPE_ROUND) {
+        /* narrower: the outline and a white core line, as the capsules have under 2 px (end on, a red dot round a
+         * white pixel; three lines side by side would be a dash) */
+        slab_of(f, shape, f->r, st->body, &poly[0]);
+        lz_line_of(f->ax, f->ay, f->bx, f->by, &lines[0]);
+        *nlines = 1;
+        return 1;
     }
     {
         /* three lines a pixel apart across the bolt: red, white (the middle, lines[1]), red */

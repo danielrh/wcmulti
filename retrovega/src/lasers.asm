@@ -1019,6 +1019,9 @@ isqrt32:
         jmp .loop
 .done:  ret
 
+%define LZP_Y 28                        ; LzPoly: y[] (x[] at 8)
+%define LZP_SIZE 48
+
 ; void rv_poly_draw(const LzPoly far *p, unsigned char far *band, int band_y0, int y0, int y1,
 ;                   const short far *ext, int ext_y0)
 ; lz_poly_draw: a convex polygon in one colour into the band, rows y0 .. y1-1
@@ -1085,8 +1088,8 @@ _rv_poly_draw:
         mov ecx,1
 .top:   cmp cx,[si]
         jge .found
-        mov ax,[esi+ecx*2+24]
-        cmp ax,[esi+ebx*2+24]
+        mov ax,[esi+ecx*2+LZP_Y]
+        cmp ax,[esi+ebx*2+LZP_Y]
         jge .not
         mov bx,cx
 .not:   inc cx
@@ -1172,8 +1175,8 @@ chain_at:
         mov cx,[si]
         dec cx
 .ok:    movzx ecx,cx
-        mov ax,[esi+ecx*2+24]       ; y[j]
-        cmp ax,[esi+ebx*2+24]
+        mov ax,[esi+ecx*2+LZP_Y]       ; y[j]
+        cmp ax,[esi+ebx*2+LZP_Y]
         jl .up
         cmp ax,QYC
         jg .edge
@@ -1183,7 +1186,7 @@ chain_at:
         ret
 .edge:  mov CEY,ax
         movsx eax,ax
-        movsx edx,word [esi+ebx*2+24]
+        movsx edx,word [esi+ebx*2+LZP_Y]
         sub eax,edx
         mov QDY,eax                 ; dy
         movsx eax,word [esi+ecx*2+8]
@@ -1195,7 +1198,7 @@ chain_at:
         idiv dword QDY
         mov CMM,eax                 ; m = dx / dy, 16.16 a row
         movsx eax,word QYC
-        movsx edx,word [esi+ebx*2+24]
+        movsx edx,word [esi+ebx*2+LZP_Y]
         sub eax,edx
         imul eax,QDX                ; (yc - y[i]) dx
         mov edx,4096
@@ -1210,8 +1213,9 @@ chain_at:
 
 ; int rv_slab_setup(const LzFat far *f, int shape, const LzStyle far *st, LzPoly far *poly, LzLine far *lines,
 ;                   int far *nlines)
-; lz_slab_setup: the outline and the white middle (or three lines) of a fat
-; bolt in shape LZ_SHAPE_AXIS (1), _RECT (2) or _HEX (3), to the bit.
+; lz_slab_setup: the outline and the white middle (or three lines, or the
+; outline and a core line) of a fat bolt in shape LZ_SHAPE_AXIS (1), _RECT (2),
+; _HEX (3) or _ROUND (4), to the bit.
 %define SAX  [bp-2]
 %define SAY  [bp-4]
 %define SBX  [bp-6]
@@ -1289,7 +1293,7 @@ _rv_slab_setup:
         movzx ax,byte [si+2]        ; body: the outline
         mov SCOL,ax
         call slab_of
-        add di,40
+        add di,LZP_SIZE
         mov ax,SR
         cwd
         mov cx,2
@@ -1303,6 +1307,20 @@ _rv_slab_setup:
         mov ax,2
         jmp .out
 .lines:
+        cmp word [bp+10],4          ; LZ_SHAPE_ROUND: the outline and a white core line
+        jne .three_lines
+        mov ax,SR
+        mov SW,ax
+        movzx ax,byte [si+2]        ; body
+        mov SCOL,ax
+        call slab_of
+        les di,[bp+20]
+        LINE_OF SAX,SAY,SBX,SBY
+        lds si,[bp+24]
+        mov word [si],1
+        mov ax,1
+        jmp .out
+.three_lines:
         ; three lines a pixel apart across it: lines[1] the middle, [0] less, [2] more
         les di,[bp+20]
         add di,20
@@ -1345,11 +1363,13 @@ _rv_slab_setup:
         mov ax,%2
         mov [es:di+8+2*%1],ax
         mov ax,%3
-        mov [es:di+24+2*%1],ax
+        mov [es:di+LZP_Y+2*%1],ax
 %endmacro
 slab_of:
         mov ax,SCOL
         mov [es:di+2],ax
+        cmp word [bp+10],4          ; LZ_SHAPE_ROUND
+        je slab_round
         cmp word [bp+10],1          ; LZ_SHAPE_AXIS
         je .axis
         cmp dword SLEN,16
@@ -1502,15 +1522,87 @@ slab_of:
         mov dx,SAY
         sub dx,SNY
         VTX 5,cx,dx
-        ; (falls into poly_rows)
+        jmp poly_rows
+
+; LZ_SHAPE_ROUND (lasers.c's round_of): the octagon (flats at w, corners at
+; 1.08 w) swept from a to b.  Edge k of the octagon faces (1,0), (1,1), (0,1),
+; (-1,1), (-1,0), (-1,-1), (0,-1), (1,-1), and is the outline's at b where
+; that . (b - a) > 0 (bit k of dl), else at a; where two edges in a row take
+; different ends the long side along the bolt joins them.  No root, no division.
+%macro SIDE 1                           ; the dot in eax: bit %1 of dl if > 0, bit %1 + 4 if < 0
+        or eax,eax
+        jz %%z
+        jl %%n
+        or dl,1 << %1
+        jmp %%z
+%%n:    or dl,1 << (%1 + 4)
+%%z:
+%endmacro
+%macro RPUT 6                           ; vertex bx/2: the end (%1, %2), x %3 %4, y %5 %6
+        mov ax,%1
+        %3 ax,%4
+        mov [es:di+8+bx],ax
+        mov ax,%2
+        %5 ax,%6
+        mov [es:di+LZP_Y+bx],ax
+        add bx,2
+%endmacro
+%macro OCT 5                            ; octagon vertex %1 at (%2 %3, %4 %5) from its end: cx w, si s; dh the last
+        bt dx,%1                        ; edge's end (1 b), CF this edge's
+        setc al
+        cmp al,dh
+        je %%same
+        or dh,dh                        ; the long side: first at the end the last edge took
+        jnz %%lb
+        RPUT SAX,SAY,%2,%3,%4,%5
+        jmp %%sw
+%%lb:   RPUT SBX,SBY,%2,%3,%4,%5
+%%sw:   xor dh,1
+%%same: or dh,dh
+        jnz %%b
+        RPUT SAX,SAY,%2,%3,%4,%5
+        jmp %%done
+%%b:    RPUT SBX,SBY,%2,%3,%4,%5
+%%done:
+%endmacro
+slab_round:
+        push si
+        mov cx,SW
+        mov si,cx
+        imul si,si,53
+        sar si,7                        ; s = w 53 / 128: the flats' half length
+        xor dx,dx
+        mov eax,SDX
+        SIDE 0
+        add eax,SDY
+        SIDE 1
+        mov eax,SDY
+        SIDE 2
+        sub eax,SDX
+        SIDE 3
+        mov dh,dl
+        shr dh,7                        ; the last edge's end (edge 7's)
+        xor bx,bx
+        OCT 0,add,cx,sub,si
+        OCT 1,add,cx,add,si
+        OCT 2,add,si,add,cx
+        OCT 3,sub,si,add,cx
+        OCT 4,sub,cx,add,si
+        OCT 5,sub,cx,sub,si
+        OCT 6,sub,si,sub,cx
+        OCT 7,add,si,sub,cx
+        shr bx,1
+        mov [es:di],bx
+        pop si
+        jmp poly_rows
 
 ; the polygon at es:di's rows: top = (min y + 7) >> 4, bot = ((max y - 8) >> 4) + 1
 poly_rows:
         push si
         mov cx,[es:di]
-        mov ax,[es:di+24]           ; lo
+        mov ax,[es:di+LZP_Y]           ; lo
         mov dx,ax                   ; hi
-        lea bx,[di+26]
+        lea bx,[di+LZP_Y+2]
 .r:     dec cx
         jz .done
         mov si,[es:bx]

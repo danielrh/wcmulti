@@ -1,4 +1,4 @@
-# the bolt demo (run with /boltdemo /record 1 /flight 900): quarters, bar, briefing, deck, launch, then the four rounds (the flight lands itself after them)
+# the bolt demo (run with /boltdemo /record 1 /flight 900): quarters, bar, briefing, deck, launch, then the six rounds (the flight lands itself after them)
 wait 10
 click
 wait 3

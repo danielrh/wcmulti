@@ -74,15 +74,15 @@ typedef struct {
     short r, pad;                       /* 36: the radius x16 */
 } LzPass;
 
-/* a convex polygon on screen (40 bytes; the asm reads this layout): n
+/* a convex polygon on screen (48 bytes; the asm reads this layout): n
  * vertices x16 in order round it, rows top .. bot-1 (those whose centres it
  * covers), one colour.  The simpler bolts (lz_slab_setup) are two of these,
  * a red outline and a white middle painted over it, or lines. */
-#define LZ_POLY_MAX 8
+#define LZ_POLY_MAX 10
 typedef struct {
     short n, colour;                    /* 0 */
     short top, bot;                     /* 4 */
-    short x[LZ_POLY_MAX], y[LZ_POLY_MAX];   /* 8, 24 */
+    short x[LZ_POLY_MAX], y[LZ_POLY_MAX];   /* 8, 28 */
 } LzPoly;
 
 /* the shapes of the near bolts */
@@ -90,6 +90,8 @@ typedef struct {
 #define LZ_SHAPE_AXIS 1                 /* ends level for a steep bolt, upright for a shallow one: no root */
 #define LZ_SHAPE_RECT 2                 /* the rectangle square to its flight */
 #define LZ_SHAPE_HEX 3                  /* the rectangle with pointed ends: an angular pill */
+#define LZ_SHAPE_ROUND 4                /* an octagon swept along the bolt: round ends, no root, no division */
+#define LZ_SHAPE_LAST LZ_SHAPE_ROUND
 
 /* the look */
 typedef struct {
@@ -120,10 +122,11 @@ int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, 
 /* every bolt flies k positions for each sixteenth of a km of its half axis (rv_bolts_move's reference) */
 void lz_move(LzBolt LZ_FAR *b, int n, long k);
 
-/* a fat bolt as polygons (LZ_SHAPE_AXIS, _RECT, _HEX): wider than 3 px, the
+/* a fat bolt as polygons (LZ_SHAPE_AXIS .. _ROUND): wider than 3 px, the
  * red outline and the white middle (half as wide) to paint over it, returns 2;
  * narrower, three lines side by side (red, white, red) in lines[], returns 0
- * with *nlines 3 */
+ * with *nlines 3, or for LZ_SHAPE_ROUND the outline and a white core line,
+ * returns 1 with *nlines 1 (a single line is white, as the middle of three) */
 int lz_slab_setup(const LzFat LZ_FAR *f, int shape, const LzStyle *st, LzPoly LZ_FAR *poly, LzLine LZ_FAR *lines,
                   int *nlines);
 

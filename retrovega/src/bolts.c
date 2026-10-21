@@ -34,6 +34,8 @@ static int g_shape = LZ_SHAPE_CAPSULE;
 static short __far g_open[SCR_H * 2];   /* the whole width, for a draw without the cockpit's extents */
 static LzStyle __far g_style = { UI_RED, 130, UI_RED, UI_WHITE, BOLT_LINE16, 32 };   /* far lines and bodies red, the rim
                                            fire 130 (dark red), the core white */
+static LzStyle __far g_style2 = { UI_RED, 130, UI_RED, UI_WHITE, BOLT_LINE16, 0x7FFF };   /* BOLT_SHAPE_CAPSULE2: no rim */
+#define CAPSULES(s) ((s) == LZ_SHAPE_CAPSULE || (s) == BOLT_SHAPE_CAPSULE2)
 static unsigned long g_t_place, g_t_far, g_t_near, g_t_move;
 
 /* the whole width every row, and the roots' table: for draws without the cockpit's extents */
@@ -116,7 +118,7 @@ static void camera(long px, long py, long pz, const LfBasis *cam, int cx, int cy
               line16, y0, y1);
 }
 
-void bolts_set_shape(int shape) { g_shape = shape < LZ_SHAPE_CAPSULE || shape > LZ_SHAPE_HEX ? LZ_SHAPE_CAPSULE : shape; }
+void bolts_set_shape(int shape) { g_shape = shape < LZ_SHAPE_CAPSULE || shape > BOLT_SHAPE_CAPSULE2 ? LZ_SHAPE_CAPSULE : shape; }
 
 /* the fat ones' passes (or polygons), the smallest (the farthest) first so the nearest paint last */
 static void fat_setup(void)
@@ -128,7 +130,7 @@ static void fat_setup(void)
             g_fat[k] = g_fat[k - 1];
             g_fat[k - 1] = t;
         }
-    if (g_shape != LZ_SHAPE_CAPSULE) {
+    if (!CAPSULES(g_shape)) {
         for (i = 0; i < g_nf; i++) {
             int nl;
             g_slab_of[i].npoly = (unsigned char)rv_slab_setup(&g_fat[i], g_shape, &g_style, &g_poly[2 * i],
@@ -140,7 +142,8 @@ static void fat_setup(void)
     for (i = 0; i < g_nf; i++) {
         int cl;
         g_fat_of[i].first = (unsigned char)np;
-        g_fat_of[i].n = (unsigned char)rv_fat_setup(&g_fat[i], &g_style, &g_pass[np], &g_core[nc], (int __far *)&cl);
+        g_fat_of[i].n = (unsigned char)rv_fat_setup(&g_fat[i], g_shape == BOLT_SHAPE_CAPSULE2 ? &g_style2 : &g_style,
+                                                    &g_pass[np], &g_core[nc], (int __far *)&cl);
         g_fat_of[i].core = (unsigned char)(cl ? nc : 0xFF);
         np += g_fat_of[i].n;
         nc += cl;
@@ -195,14 +198,14 @@ void bolts_draw_near(int y0, int y1, const short __far *ext, int ext_y0, int ext
     unsigned long t0 = clock240();
     if (g_nf && vid_run(&run0, &run1) && rows_of(&y0, &y1, &ext, &ext_y0, ext_rows)) {
         unsigned char __far *band = vid_row(run0);
-        for (i = 0; i < g_nf && g_shape != LZ_SHAPE_CAPSULE; i++) {
+        for (i = 0; i < g_nf && !CAPSULES(g_shape); i++) {
             for (k = 0; k < g_slab_of[i].npoly; k++)
                 rv_poly_draw(&g_poly[2 * i + k], band, run0, y0, y1, ext, ext_y0);
             for (k = 0; k < g_slab_of[i].nline; k++)
-                rv_lines_draw(&g_slab_line[3 * i + k], 1, k == 1 ? g_style.core : g_style.body, band, run0, y0, y1, ext,
-                              ext_y0);
+                rv_lines_draw(&g_slab_line[3 * i + k], 1, k == 1 || g_slab_of[i].nline == 1 ? g_style.core : g_style.body,
+                              band, run0, y0, y1, ext, ext_y0);
         }
-        for (i = 0; i < g_nf && g_shape == LZ_SHAPE_CAPSULE; i++) {
+        for (i = 0; i < g_nf && CAPSULES(g_shape); i++) {
             for (k = 0; k < g_fat_of[i].n; k++)
                 rv_pass_draw(&g_pass[g_fat_of[i].first + k], band, run0, y0, y1, ext, ext_y0, lz_sqrt16);
             if (g_fat_of[i].core != 0xFF)
@@ -388,7 +391,7 @@ long bolts_selftest(void)
         }
     }
     /* the simpler shapes' set-up: rv_slab_setup against lz_slab_setup */
-    for (k = LZ_SHAPE_AXIS; k <= LZ_SHAPE_HEX && !bad; k++)
+    for (k = LZ_SHAPE_AXIS; k <= LZ_SHAPE_LAST && !bad; k++)
         for (i = 0; i < nfc && !bad; i++) {
             int r;
             for (r = 12; r <= 64 && !bad; r += 4) {
@@ -398,6 +401,10 @@ long bolts_selftest(void)
                 LzStyle st = g_style;
                 int n1, n2, l1, l2;
                 f.r = (short)r;
+                if (i % 4 == 3) {               /* (some end on: no length) */
+                    f.bx = f.ax;
+                    f.by = f.ay;
+                }
                 _fmemset(pc, 0, sizeof pc);
                 _fmemset(pa, 0, sizeof pa);
                 n1 = lz_slab_setup(&f, k, &st, pc, lc3, &l1);
@@ -415,7 +422,7 @@ long bolts_selftest(void)
             }
         }
     /* the simpler shapes: rv_poly_draw against lz_poly_draw, every shape, band by band with the extents */
-    for (k = LZ_SHAPE_AXIS; k <= LZ_SHAPE_HEX && !bad; k++)
+    for (k = LZ_SHAPE_AXIS; k <= LZ_SHAPE_LAST && !bad; k++)
         for (w = 0; w < SCR_H / TEST_ROWS && !bad; w++) {
             int y0 = w * TEST_ROWS, y1 = y0 + TEST_ROWS, cy0 = y0 < 12 ? 12 : y0, cy1 = y1 > 388 ? 388 : y1, pass;
             unsigned long sum[2];
@@ -425,7 +432,13 @@ long bolts_selftest(void)
                 for (i = 0; i < nfc; i++) {
                     LzPoly pl[2];
                     LzLine ln[3];
-                    int nl, j, n = lz_slab_setup(&fc[i], k, &st, pl, ln, &nl);
+                    LzFat f = fc[i];
+                    int nl, j, n;
+                    if (i % 4 == 3) {           /* (some end on) */
+                        f.bx = f.ax;
+                        f.by = f.ay;
+                    }
+                    n = lz_slab_setup(&f, k, &st, pl, ln, &nl);
                     for (j = 0; j < n; j++)
                         if (pass)
                             rv_poly_draw(&pl[j], band, y0, cy0, cy1, ext + 2 * 12, 12);
@@ -433,9 +446,11 @@ long bolts_selftest(void)
                             lz_poly_draw(&pl[j], band, y0, y0, y1, ext + 2 * 12, 12, 376);
                     for (j = 0; j < nl; j++)
                         if (pass)
-                            rv_lines_draw(&ln[j], 1, j == 1 ? UI_WHITE : UI_RED, band, y0, cy0, cy1, ext + 2 * 12, 12);
+                            rv_lines_draw(&ln[j], 1, j == 1 || nl == 1 ? UI_WHITE : UI_RED, band, y0, cy0, cy1, ext + 2 * 12,
+                                          12);
                         else
-                            lz_lines_draw(&ln[j], 1, j == 1 ? UI_WHITE : UI_RED, band, y0, y0, y1, ext + 2 * 12, 12, 376);
+                            lz_lines_draw(&ln[j], 1, j == 1 || nl == 1 ? UI_WHITE : UI_RED, band, y0, y0, y1, ext + 2 * 12,
+                                          12, 376);
                 }
                 sum[pass] = checksum(band, &drawn);
             }
@@ -530,7 +545,8 @@ static void t_slab_draw(void)
         for (k = 0; k < t_w->npoly[i]; k++)
             rv_poly_draw(&t_w->poly[2 * i + k], t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
         for (k = 0; k < t_w->nsl[i]; k++)
-            rv_lines_draw(&t_w->sl[3 * i + k], 1, k == 1 ? UI_WHITE : UI_RED, t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
+            rv_lines_draw(&t_w->sl[3 * i + k], 1, k == 1 || t_w->nsl[i] == 1 ? UI_WHITE : UI_RED, t_band, t_y0, t_y0,
+                          t_y0 + TEST_ROWS, g_open, 0);
     }
 }
 
@@ -654,15 +670,26 @@ void bolts_time(long out[6])
            t_nf ? t_f[t_nf - 1].r : 0);
     {
         /* the simpler shapes on the same bolts: set up and drawn; and the same capsules copied as sprite rows */
-        static const char *names[4] = { "", "level/upright ends", "rectangle", "hexagon" };
+        static const char *names[5] = { "", "level/upright ends", "rectangle", "hexagon", "swept octagon" };
         long su, dr, bl;
         int sh;
-        for (sh = LZ_SHAPE_AXIS; sh <= LZ_SHAPE_HEX; sh++) {
+        for (sh = LZ_SHAPE_AXIS; sh <= LZ_SHAPE_LAST; sh++) {
             t_shape = sh;
             su = time_of(t_slab_setup, t_nf);
             dr = time_of(t_slab_draw, t_nf);
             rv_log("bolts: a near bolt as a %s: %ld.%02ld us to set up, %ld.%02ld to draw", names[sh], su / 100, su % 100,
                    dr / 100, dr % 100);
+        }
+        {
+            /* the capsules in two colours (BOLT_SHAPE_CAPSULE2: no dark rim, the body and the core as the
+             * polygons have) */
+            short rim = g_style.rim16;
+            g_style.rim16 = 0x7FFF;
+            su = time_of(t_setup, t_nf);
+            dr = time_of(t_passes, t_nf);
+            g_style.rim16 = rim;
+            rv_log("bolts: a near bolt as capsules in two colours: %ld.%02ld us to set up, %ld.%02ld to draw", su / 100,
+                   su % 100, dr / 100, dr % 100);
         }
         if (t_encode_each()) {
             bl = time_of(t_blit_each, t_nf);

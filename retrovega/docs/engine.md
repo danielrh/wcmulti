@@ -843,17 +843,37 @@ up to 3 px across, three lines side by side (red, white, red), and one line
 under 1.5 px as before. Shapes: 1 the user's level/upright ends (steep bolts
 end level, shallow ones upright, pushed out by the half width so a bolt end
 on is a square: no root, only additions), 2 the rectangle square to the
-flight, 3 the rectangle with pointed ends. `LZ_SHAPES=FILE.ppm` with
-`LZ_SHEET` draws the four side by side (tests/host/run.sh). Cost a near bolt
-(the same twelve, 1.7-3.4 px of radius, at 40,000 cycles):
+flight (its ends pushed out by the half width too since 2026-10-21: before,
+end on it was a sliver), 3 the rectangle with pointed ends, 4 an octagon
+swept along the bolt (below), and `/boltshape 5` the capsules in two colours
+(no dark rim: `BOLT_SHAPE_CAPSULE2`, bolts.c). `LZ_SHAPES=FILE.ppm` with
+`LZ_SHEET` draws the five of lasers.c side by side, the last of each row end
+on (tests/host/run.sh). Cost a near bolt (the same twelve, 1.7-3.4 px of
+radius, at 40,000 cycles; re-timed 2026-10-21 after the rectangle's fix):
 
-| | set up | draw | in all |
-|---|---|---|---|
-| capsules (rim, body, core: three passes) | 13.8 µs | 23.8 | 37.6 |
-| level/upright ends (two polygons) | 6.6 | 26.1 | 32.7 |
-| rectangle | 7.0 | 24.8 | 31.8 |
-| pointed rectangle | 8.3 | 27.9 | 36.2 |
-| the same capsules pre-rendered, a sprite each, copied a row at a time (`rv_blit_row`, as the ships are) | — | 19.2 | 19.2 + finding and fetching the sprite |
+| | set up | draw | in all | ends |
+|---|---|---|---|---|
+| capsules (rim, body, core: three passes) | 13.8 µs | 23.8 | 37.6 | round |
+| capsules in two colours (body, core) | 13.2 | 20.4 | 33.7 | round |
+| level/upright ends (two polygons) | 6.7 | 26.2 | 32.8 | square |
+| rectangle | 7.3 | 27.1 | 34.4 | square |
+| pointed rectangle | 8.4 | 27.9 | 36.3 | pointed |
+| octagon swept along the bolt (two polygons of up to ten corners) | 14.0 | 37.3 | 51.3 | round |
+| the same capsules pre-rendered, a sprite each, copied a row at a time (`rv_blit_row`, as the ships are) | — | 19.2 | 19.2 + finding and fetching the sprite | |
+
+**Round ends from polygons** (the user, 2026-10-21: a square back is a
+nonstarter; could the polygons be round end on at their speed?). Shape 4 is
+the segment's sum with an octagon of flats at the half width: each octagon
+edge goes to the end it faces (the sign of an addition: (1,0), (1,1), (0,1),
+... dotted with b - a), and the long sides join where the ends change; no
+root, no division, at most ten corners, end on an octagon, which at a few
+pixels covers a circle's pixels; under 1.5 px of radius the outline and a
+white core line (as the capsules), not three lines (end on, a dash). It is
+round, and the slowest: every corner is an edge to set up as the chains walk
+down (~30 instructions), and a near bolt is only 4-8 rows, so ten corners
+cost more than the rows. The capsules' arcs come from the root table at a
+row's cost, so the round shape that costs what the polygons do is the
+capsule itself; in two colours it is as cheap as the cheapest polygon.
 
 The draw is the same whatever the shape: under DOSBox's instruction-a-cycle
 rule a bolt costs per row (stepping the edges, rounding, clipping to the
@@ -874,15 +894,16 @@ is taken as 32 km of the flight's units (a fighter's 128 px view is full size
 at 2,500 km: 800 km for a 25-30 m hull), so a bolt is 12 cm thick and 37 cm
 long and the near plane is 6 m out. They fly 7.1 km a frame, the eye to the
 line drawing (1,067 km) in five seconds; a round is ten seconds, a shape a
-round, and the flight lands after the four. `tests/boltdemo.txt` with
-`/boltdemo /record 1 /flight 900` saves every frame (`CYCLES=max
-TIMEOUT=1500`, ~6 minutes; the motion is per frame, so the recording is exact
-however slowly it runs). What it shows: own bolts are seen nearly end on,
+round (the six of `/boltshape`), and the flight lands after them.
+`tests/boltdemo.txt` with `/boltdemo /record 1 /flight 900` saves every
+frame (`CYCLES=max TIMEOUT=1500`, ~8 minutes; the motion is per frame, so
+the recording is exact however slowly it runs). What it shows: own bolts are seen nearly end on,
 so they appear at the near plane 0.9 s out as 8 px blobs (the corners'
 ±96, ±64 px from the middle), are 4 px across by 2 s, dots by 3 s and lines
 from 5 s; the shape shows only in that first second or two. The rectangle
 (shape 2) had its ends at the segment's ends, so end on it was a sliver as
-thin as the bolt's 1-3 px of projected length.
+thin as the bolt's 1-3 px of projected length; its ends are pushed out by the
+half width now, as the other shapes' are (the same four corners).
 
 **The benchmark.** `RV.EXE /lasers N` flies the first mission's launch into a
 still scene: two big ships 1,500 and 2,100 km ahead, rolling and turning so

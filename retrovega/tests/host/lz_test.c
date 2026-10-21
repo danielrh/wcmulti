@@ -177,9 +177,9 @@ int main(int argc, char **argv)
     {
         int wrong = 0, edge = 0, total = 0, shape;
         srand(13);
-        for (shape = LZ_SHAPE_AXIS; shape <= LZ_SHAPE_HEX; shape++)
+        for (shape = LZ_SHAPE_AXIS; shape <= LZ_SHAPE_LAST; shape++)
             for (k = 0; k < 1500; k++) {
-                int ax = 3200 + rand() % 3200, ay = 1600 + rand() % 3200, len = rand() % 600, ang = rand();
+                int ax = 3200 + rand() % 3200, ay = 1600 + rand() % 3200, len = k % 8 ? rand() % 600 : k % 24, ang = rand();
                 int bx = ax + (int)(len * cos(ang)), by = ay + (int)(len * sin(ang)), x, j, n;
                 LzFat fa;
                 LzPoly pl[2];
@@ -210,7 +210,7 @@ int main(int argc, char **argv)
                             wrong++;
                     }
             }
-        CHECK(wrong == 0, "4500 polygons (three shapes): no pixel off the brute force (%d wrong, %d at an edge, of %d)",
+        CHECK(wrong == 0, "6000 polygons (four shapes): no pixel off the brute force (%d wrong, %d at an edge, of %d)",
               wrong, edge, total);
     }
 
@@ -262,16 +262,16 @@ int main(int argc, char **argv)
         write_ppm(argv[1], 640, 400);
     }
     if (argc > 2) {
-        /* the shapes: capsules, level/upright ends, rectangles, hexagons; a column each, radius growing down
-         * the column's pairs, angles across */
+        /* the shapes: capsules, level/upright ends, rectangles, hexagons, swept octagons; a column each,
+         * radius growing down the column, angles across and last end on */
         int shape, a;
         memset(g_band, 0, sizeof g_band);
-        for (shape = 0; shape < 4; shape++)
+        for (shape = 0; shape <= LZ_SHAPE_LAST; shape++)
             for (k = 0; k < 6; k++) {         /* radius x16: 16, 24 (the lines), 32, 44, 54, 64 */
                 int rr = k == 0 ? 16 : k == 1 ? 24 : k == 2 ? 32 : k == 3 ? 44 : k == 4 ? 54 : 64;
                 for (a = 0; a < 4; a++) {
-                    double ang = a * M_PI / 7 + 0.05;
-                    int cx = 22 + shape * 160 + a * 38, cy = 34 + k * 62, half = rr * 4;
+                    double ang = a * M_PI / 5 + 0.05;
+                    int cx = 18 + shape * 128 + a * 32, cy = 34 + k * 62, half = a == 3 ? 0 : rr * 3;
                     LzFat fa;
                     int ax = (int)(cx * 16 - half * cos(ang)), ay = (int)(cy * 16 - half * sin(ang));
                     int bx = (int)(cx * 16 + half * cos(ang)), by = (int)(cy * 16 + half * sin(ang));
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
                         for (j = 0; j < n; j++)
                             lz_poly_draw(&pl[j], g_band, 0, 0, 400, 0, 0, 0);
                         for (j = 0; j < nl2; j++)
-                            lz_lines_draw(&ln[j], 1, j == 1 ? C_CORE : C_BODY, g_band, 0, 0, 400, 0, 0, 0);
+                            lz_lines_draw(&ln[j], 1, j == 1 || nl2 == 1 ? C_CORE : C_BODY, g_band, 0, 0, 400, 0, 0, 0);
                     }
                 }
             }
