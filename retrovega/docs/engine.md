@@ -630,6 +630,23 @@ buys: a fighter type keeps ~1.7 MB of XMS at 15 degrees instead of 2.5
 (about twelve types in a mission instead of eight), and a denser lattice
 for the exact draw now costs disk, not memory.
 
+**A 10-degree lattice** (tried 2026-10-20, after the stream): `lattice(10)`
+is 17 bands x 19 headings, 325 views (614 with an asymmetric ship's
+mirrored headings); the 30-degree sub-lattice nests in it every third
+(`sub_view`'s step is 3), so the sets' copies are unchanged and only block
+0 — now disk, not XMS — grows: the Gawain's .RV 0.69 → 1.56 MB, its .RVS
+2.5 → 3.4 MB, 38 s to render. The engine keeps `SHIP_VIEWS` (330) records
+and resolves a symmetric ship's mirrored headings by index
+(`mirrored_index`: past `2 + nb * nh`) rather than by reading a record, so
+their indices may run past the table; an asymmetric set at 10 degrees
+would need 614 records and stays at 15. In the zoom scene the target
+switched view 137 times against 92 at 15 degrees (each a smaller step);
+whether the pop still reads was put to the user as a blind pair of
+videos. Recipe: `render_all.py --only GAWAIN --step 10 --out DIR`,
+`pack.py --sprites DIR --out OUT` (it skips ships not rendered there),
+`build/host/rvsprites OUT/SHIP02.RV OUT/SHIP02.RVS 0 4 3`, the two files
+copied over build/dos's after `build.sh`.
+
 **Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
 its sprites on the fly, continuously, which the earlier note here got
 wrong; at 320×200 and ~12 fps it had ten times our pixel-time budget per

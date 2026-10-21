@@ -147,9 +147,13 @@ def main():
             rgba = np.asarray(Image.open(p))
             mask = np.asarray(Image.open(os.path.join(d, '%s-%s_paint_%02d.png' % (r['key'], livery, v))))
             views.append(encode(quantise(rgba, mask, meta, pal, liveries[livery])))
+        if not views:
+            continue                    # not rendered into this sprites directory
         tab = wc2data.compose_container(views, flags=[0] * len(views))
-        # the lattice: 37 / 62 views are 5 bands x 7 headings (30 degrees), 145 / 266 are 11 x 13 (15)
-        nb, nh, asym = {37: (5, 7, 0), 62: (5, 7, 1), 145: (11, 13, 0), 266: (11, 13, 1)}[len(views)]
+        # the lattice: 37 / 62 views are 5 bands x 7 headings (30 degrees), 145 / 266 are 11 x 13 (15),
+        # 325 / 614 are 17 x 19 (10)
+        nb, nh, asym = {37: (5, 7, 0), 62: (5, 7, 1), 145: (11, 13, 0), 266: (11, 13, 1),
+                        325: (17, 19, 0), 614: (17, 19, 1)}[len(views)]
         record = struct.pack('<4sBHBBHBB', b'RVSH', int(r['type'], 16), len(views), asym,
                              names.index(livery), int(r['lod0_px']), nb, nh)
         data = wc2data.compose_container([tab, record], flags=[0, 0])

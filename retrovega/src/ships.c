@@ -274,6 +274,7 @@ static int load_rv(ShipSet __far *s, const char *name)
     }
     if (!s->asym)
         s->nviews = (unsigned short)LF_LATTICE_VIEWS(s->nb0, s->nh0);
+        RV_ASSERT(s->nviews <= SHIP_VIEWS);   /* (the .RV fallback makes the mirrored headings here: lattices to 15 degrees) */
     _ffree(rowtab);
     fclose(f);
     s->nsizes = 1;
@@ -612,14 +613,21 @@ static const ShipView *stream_view(const ShipSet __far *s, int set_i, int v, int
     return out;
 }
 
+/* a symmetric set's mirrored headings, the indices past its stored views, are drawn as the pair's mirror image */
+static int mirrored_index(const ShipSet __far *s, int v)
+{
+    return !s->asym && v >= 2 + s->nb0 * s->nh0;
+}
+
 /* the stored view behind v: itself, or a symmetric set's pair of a mirrored heading (then *flags gets BLIT_H) */
 static int stored_view(const ShipSet __far *s, int v, int *flags)
 {
     *flags = 0;
-    if (!s->view[v].w && !s->asym) {
+    if (mirrored_index(s, v)) {
         *flags = BLIT_H;
-        return lf_pair_of(v, s->nb0, s->nh0);
+        v = lf_pair_of(v, s->nb0, s->nh0);
     }
+    RV_CHECK(v, SHIP_VIEWS);
     return v;
 }
 
@@ -628,7 +636,6 @@ int ships_prefetch_view(int set_i, int v)
     const ShipSet __far *s = ships_set(set_i);
     ShipView view;
     int flags;
-    RV_CHECK(v, SHIP_VIEWS);
     return stream_view(s, set_i, stored_view(s, v, &flags), 1, &view) != 0;
 }
 
@@ -770,7 +777,6 @@ int ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int 
 {
     ShipView view;
     int flags;
-    RV_CHECK(v, SHIP_VIEWS);
     v = stored_view(s, v, &flags);      /* a mirrored heading not stored: its pair, mirrored */
     if (!stream_view(s, set_index(s), v, 0, &view))
         return 0;
@@ -937,15 +943,16 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
 static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, int scale256, int roll, int detail,
                        int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
-    ShipView view = s->view[v];
+    ShipView view;
     LfRot r;
     int top, left, oy;
     if (!make_dense(s, set_i, v))
         return 0;
-    if (!view.w && !s->asym) {          /* the pair's picture, mirrored: so is its origin */
+    if (mirrored_index(s, v)) {         /* the pair's picture, mirrored: so is its origin */
         view = s->view[lf_pair_of(v, s->nb0, s->nh0)];
         view.ox = view.w - 1 - view.ox;
-    }
+    } else
+        view = s->view[v];
     lf_rotate_setup(view.w, view.h, view.ox, view.oy, roll, scale256, &r);
     top = y - r.ocy;
     left = x - r.ocx;
@@ -1103,7 +1110,8 @@ long ships_size_of(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasi
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, p);
     if (!p->on_screen)
         return 0;
-    v = s->view[p->view].w ? p->view : lf_pair_of(p->view, s->nb0, s->nh0);
+    v = mirrored_index(s, p->view) ? lf_pair_of(p->view, s->nb0, s->nh0) : p->view;
+    RV_CHECK(v, SHIP_VIEWS);
     return (long)s->view[v].w * s->view[v].h * scale256 / 256 * scale256 / 256;
 }
 
