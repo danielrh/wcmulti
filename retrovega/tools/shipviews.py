@@ -86,6 +86,8 @@ ENV = 'white_light'    # neutral: the Rlaan purple comes from their own specular
 ENV_GAIN = 4.0
 KEY_POWER = 2.8
 VS_EXPOSURE = 1.1
+CONTRAST = 1.25        # the user's pick (2026-10-20) against blown-out hulls: a power curve about middle grey with a
+                       # highlight shoulder; data/art.csv's contrast column overrides it (the Franklin keeps 1)
 VS_REFLECT = 1.0       # how strongly metal reflects (data/art.csv reflect overrides)
 VS_PAINT = 0.5         # livery colours on canon ships, darkened under their exposure
 DECAL_SIZE = 128   # each decal's cell in the atlas
@@ -707,7 +709,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     fill = np.array([0.7, -0.35, 0.45]); fill /= np.linalg.norm(fill)
     prog['fill_dir'].value = tuple(fill)
     prog['exposure'].value = exposure if exposure is not None else float(art.get('exposure') or 1)
-    prog['contrast'].value = contrast if contrast is not None else float(art.get('contrast') or 1)
+    prog['contrast'].value = contrast if contrast is not None else float(art.get('contrast') or CONTRAST)
     prog['toon'].value = float(art.get('toon') or 0)
     prog['whiten'].value = float(art.get('whiten') or 0)
     t = [(float(v) / 255.0) ** 2.2 for v in (art.get('tint') or '255 255 255').split()]
