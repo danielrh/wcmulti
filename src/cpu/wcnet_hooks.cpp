@@ -1631,6 +1631,22 @@ static void rv_check_hooks() {
         if (reg_eip != t.off) {
             continue;
         }
+        // The flight as the layer's measuring sees it (wcnet_perf.h: WCNET_PERF natively, the page's
+        // performance line): from missionStarting to missionEnded or uiMode(1), a frame at each
+        // rvFrameDone (not logged: it comes thirty times a second).
+        if (t.off == 0x00A7) {              // rvFrameDone
+            g_frameSeen = true;
+            if (g_inMission) {
+                perf_frame();
+            }
+            return;
+        }
+        if (t.off == 0x0070) {              // missionStarting
+            g_inMission = true;
+            g_frameSeen = false;
+        } else if (t.off == 0x007A || (t.off == 0x00CF && call_arg16(0) == 1)) {   // missionEnded, uiMode(1)
+            g_inMission = false;
+        }
         char args[64] = "";
         for (int a = 0; a < t.nargs && a < 4; a++) {
             char one[12];

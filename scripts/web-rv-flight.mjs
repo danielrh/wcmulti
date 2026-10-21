@@ -5,7 +5,9 @@
 // the quarters: this is the check that the flight itself works in the page.
 //   PLAYWRIGHT_DIR=... SHOT_DIR=... node scripts/web-rv-flight.mjs PAGE_URL LOBBY_URL
 // CMD="rv /noquit /lasers -1 /flight 30" runs the game with other arguments (the page's ?cmd=; the laser
-// benchmark logs its "lasers:" and "bolts:" lines); FLIGHT_S is how long the flight lasts (20).
+// benchmark logs its "lasers:" and "bolts:" lines); FLIGHT_S is how long the flight lasts (20); PARAMS adds
+// page parameters ("cycles=40000&env.WCNET_PERF=4": the layer's "perf:" lines, emulator speed against the
+// wall clock, are printed at the end).
 import { createRequire } from "node:module";
 import path from "node:path";
 import fs from "node:fs";
@@ -33,6 +35,10 @@ u.searchParams.set("hall", "RVHALL-" + Math.random().toString(36).slice(2, 6).to
 u.searchParams.set("callsign", "FLIGHT");
 u.searchParams.set("retrovega", "");
 if (process.env.CMD) u.searchParams.set("cmd", process.env.CMD);
+for (const kv of (process.env.PARAMS || "").split("&").filter(Boolean)) {
+  const i = kv.indexOf("=");
+  u.searchParams.set(i < 0 ? kv : kv.slice(0, i), i < 0 ? "" : kv.slice(i + 1));
+}
 const flightS = Number(process.env.FLIGHT_S) || 20;
 await page.goto(u.toString());
 await page.waitForFunction(() => document.getElementById("sourceStatus").dataset.state === "ready", null, { timeout: 60000 });
@@ -107,6 +113,7 @@ await sleep(3000); await shot("after");
 const lines = t.split("\n").filter((l) => /^(flight:|ships:|lightfield:|FAIL|cockpit:|stars|lasers:|bolts:)/.test(l));
 console.log(lines.join("\n"));
 console.log(/FAIL /.test(t) ? "FAIL a stop in the engine's log" : "ok   no stop in the engine's log");
+console.log(logs.filter((l) => /perf: /.test(l)).join("\n"));
 console.log(logs.filter((l) => /ended|PAGE ERROR|stack/.test(l)).slice(0, 6).join("\n"));
 fs.writeFileSync(path.join(shotDir, "rv-flight-RVLOG.TXT"), t);
 fs.writeFileSync(path.join(shotDir, "rv-flight.log"), logs.join("\n") + "\n");
