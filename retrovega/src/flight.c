@@ -192,8 +192,10 @@ static void ship_physics(int s)
     if (g_zoom && s == 1) {
         /* the zoom scene's ship, 1,200 .. 6,000 km away on a twelve-second swing: /zoom 1 rolls it
          * at 60 degrees a second (the lightfield's view switches as the camera walks round its
-         * nose); /zoom 2 yaws it slowly instead, for the player to roll round */
-        long d = 256L * 3600 + ((lf_cos((int)(frameCounter * 1024L / 240 % 1024)) * 2400L) >> 14) * 256;
+         * nose); /zoom 2 yaws it slowly instead, for the player to roll round; /zoom 3 the same
+         * swinging 3,000 .. 15,000 km, through the sets' sizes (the player's roll on far ships) */
+        long d = g_zoom == 3 ? 256L * 9000 + ((lf_cos((int)(frameCounter * 1024L / 240 % 1024)) * 6000L) >> 14) * 256
+                             : 256L * 3600 + ((lf_cos((int)(frameCounter * 1024L / 240 % 1024)) * 2400L) >> 14) * 256;
         if (g_zoom == 1)
             rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(60, 9));
         else

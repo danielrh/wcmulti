@@ -73,7 +73,7 @@ int main(int argc, char **argv)
             music_device(MUSIC_MPU401);
         else if (!strcmp(argv[i], "/capital"))          /* tests: the carrier in the flight */
             g_capital = 1;
-        else if (!strcmp(argv[i], "/zoom"))             /* tests: one ship ahead, swinging in and out: 1 it rolls, 2 it yaws */
+        else if (!strcmp(argv[i], "/zoom"))             /* tests: one ship ahead, swinging in and out: 1 it rolls, 2 it yaws, 3 yaws far out */
             g_zoom = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/nomusic"))
             music_device(MUSIC_OFF);

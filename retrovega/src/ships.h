@@ -22,7 +22,7 @@ typedef struct {
     unsigned long len;                  /* its bytes, for the stream */
 } ShipView;
 
-#define SET_BLOCKS 48
+#define SET_BLOCKS 64                   /* 1 + 12 sizes + 9 sizes x 4 stored rolls = 49 *
 
 /* one (size, roll) block of a pre-rendered set (SHIPnn.RVS, tools/rvsprites.c) */
 typedef struct {

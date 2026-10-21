@@ -22,7 +22,7 @@ void __far __cdecl rv_xms(RvRegs *r);
 /* XMS (xms.c): blocks of extended memory, moved with the driver's function 0Bh.
  * A block belongs to a level and every level's blocks can be freed at once. */
 enum { XMS_RESIDENT, XMS_BASE, XMS_ROOM, XMS_MISSION, XMS_LEVELS };
-#define XMS_MAX_BLOCKS 320               /* a mission's sprite sets take a block per (size, roll) */
+#define XMS_MAX_BLOCKS 512               /* a mission's sprite sets take a block per (size, roll): 49 a type, plus the stream's slots */
 typedef unsigned short XmsBlock;       /* index into the block table, 0 = none */
 int xms_init(unsigned long want_kb);   /* allocates one arena of want_kb; 0 on failure */
 unsigned long xms_free_kb(void);       /* free in the arena */
