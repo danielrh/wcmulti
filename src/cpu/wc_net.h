@@ -28,11 +28,33 @@
 extern bool wc_net_watch[0x10000];
 extern Bit32s wc_net_countdown;
 void wc_net_check_cpu_hooks();
-static inline void wc_net_cpu_hook(Bit32u ip) {
+#if defined(EMSCRIPTEN) && defined(EM_ASYNCIFY)
+// In the browser the hooks run outside the CPU core: a hit makes the core
+// return a callback number (wc_net_hook_exit) to the main loop, which runs
+// the hooks from there (Normal_Loop -> CallBack_Handlers) and then comes back
+// to the same instruction.  The hooks may wait for the network, which in the
+// browser means unwinding the stack (Asyncify); with no hook ever on the
+// core's stack the core itself needs no instrumentation, and
+// -sASYNCIFY_REMOVE (src/Makefile.am, asyncify-remove.json) leaves it out:
+// the emulator runs half again as fast.  The returned value: 0 go on with
+// the instruction, else the callback for the core to return (it puts the
+// cycle back and fills the flags first).
+Bitu wc_net_hook_exit(Bit32u ip);
+static inline Bitu wc_net_cpu_hook(Bit32u ip) {
+    if (GCC_UNLIKELY(--wc_net_countdown < 0) || (ip < 0x10000 && GCC_UNLIKELY(wc_net_watch[ip]))) {
+        return wc_net_hook_exit(ip);
+    }
+    return 0;
+}
+#else
+// Natively the hooks are called in place (no Asyncify to spare the core).
+static inline Bitu wc_net_cpu_hook(Bit32u ip) {
     if (GCC_UNLIKELY(--wc_net_countdown < 0) || (ip < 0x10000 && GCC_UNLIKELY(wc_net_watch[ip]))) {
         wc_net_check_cpu_hooks();
     }
+    return 0;
 }
+#endif
 
 // Called by DOS when it has loaded a program (its path, the first paragraph
 // of the image, its PSP) and when a process ends: the hooks only apply to

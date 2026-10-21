@@ -1,0 +1,5 @@
+["CPU_Core_Simple_Run*", "CPU_Core_Normal_Run*",
+ "mem_read*", "mem_write*", "mem_memcpy*", "mem_unalignedread*", "mem_unalignedwrite*",
+ "CPU_CALL*", "CPU_RET*", "CPU_JMP*", "CPU_IRET*", "CPU_Interrupt*", "CPU_HW_Interrupt*", "CPU_Exception*",
+ "CPU_SetSegGeneral*", "CPU_PopSeg*", "CPU_Push16*", "CPU_Push32*", "CPU_Pop16*", "CPU_Pop32*",
+ "DoString*", "IO_ReadB*", "IO_ReadW*", "IO_ReadD*", "IO_WriteB*", "IO_WriteW*", "IO_WriteD*"]

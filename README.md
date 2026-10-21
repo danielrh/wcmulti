@@ -147,9 +147,11 @@ back at the next visit; "Download save games" gives you the file, and
 How it works: the browser build is the same DOSBox and the same `wcnet_*`
 code, compiled with Emscripten and
 [Asyncify](https://emscripten.org/docs/porting/asyncify.html), so the
-multiplayer transport can block for network data from inside the CPU core
-(the wasm stack is unwound while the page's event loop delivers WebRTC
-messages).  `wclobby/include/wclobby.h`, the C API the transport uses, is
+multiplayer transport can block for network data from inside the hooks (the
+wasm stack is unwound while the page's event loop delivers WebRTC messages).
+The hooks run from the main loop in the browser, not inside the CPU core, so
+the core is left out of Asyncify's instrumentation, which makes the emulator
+about 70% faster (docs/wcnet-multiplayer.md, "but not the CPU core").  `wclobby/include/wclobby.h`, the C API the transport uses, is
 implemented for the browser by `src/wclobby_web.js` on top of lobbylink's
 browser client (`lobbylink/clients/ts`); natively it is the Rust crate in
 `wclobby/`.  The page passes the client class in as `Module.P2PGame` and the

@@ -859,13 +859,37 @@ top-level README for the workflow).  What differs:
 
 * **Blocking becomes suspension.**  Emscripten
   [Asyncify](https://emscripten.org/docs/porting/asyncify.html) instruments
-  the whole program, so `Connection::recv`, `Listener::accept` and
-  `LobbyHub::join` can wait for the network from inside
-  `CPU_Core_Normal_Run` exactly as they do natively: the wasm stack is
-  unwound, the page's event loop runs (delivering WebRTC and lobby events,
-  keyboard input, audio), and the stack is rewound when the awaited message
-  arrives.  `Normal_Loop` also yields to the browser every ~10 ms
-  (`emscripten_sleep`, `EM_ASYNCIFY` in `src/dosbox.cpp`).
+  the program, so `Connection::recv`, `Listener::accept` and
+  `LobbyHub::join` can wait for the network from inside the hooks exactly
+  as they do natively: the wasm stack is unwound, the page's event loop runs
+  (delivering WebRTC and lobby events, keyboard input, audio), and the stack
+  is rewound when the awaited message arrives.  `Normal_Loop` also yields to
+  the browser every ~10 ms (`emscripten_sleep`, `EM_ASYNCIFY` in
+  `src/dosbox.cpp`).
+* **...but not the CPU core.**  Instrumenting the interpreter cost the
+  browser build a third of its speed (2026-10-21: ~41,000 emulated cycles a
+  millisecond on a 2016 desktop core in Chrome against ~123,000 natively for
+  the same core; the profile was 75% `CPU_Core_Simple_Run`).  So in the
+  browser the hooks run from the main loop instead: when the in-line test
+  hits, the core puts the cycle back, fills the flags and returns a callback
+  number (`wc_net_hook_exit`, `src/cpu/wc_net.h`); `Normal_Loop` runs that
+  callback, which runs `wc_net_check_cpu_hooks()`, and the core comes back to
+  the same instruction without stopping for its hooks again (the
+  instructions whose hooks have run are kept until reached, since a hardware
+  interrupt may come between; one whose hooks moved CS:IP is not kept, so
+  coming back to it later stops again, as the in-core call did).  With no
+  hook on its stack, the core and the helpers it calls per instruction
+  (memory, I/O ports, calls, returns, interrupts, string moves) are never on
+  the stack when the program unwinds, and `-sASYNCIFY_REMOVE`
+  (`src/asyncify-remove.json`) leaves them uninstrumented: ~70,000 cycles a
+  millisecond, +70%.  What they call that runs code nested (a page fault,
+  an I/O permission fault, `CALLBACK_Idle`) does it without sleeping
+  (`DOSBOX_RunMachineNoSleep`); a network wait in a hook during a
+  protected-mode page fault would break that, and none of the games pages.
+  Natively the hooks are still called in place.  To measure: the page's
+  performance line ("emulator at N% of real time") at `?cycles=N`, or
+  `?env.WCNET_PERF=4` for the layer's log; a Chrome CPU profile shows the
+  rest.
 * **The transport is JavaScript.**  `src/wclobby_web.js` implements the
   `wclobby.h` C API (the one `wcnet_lobby.cpp` uses) on top of lobbylink's
   browser client (`lobbylink/clients/ts`), with the same generation /
@@ -876,9 +900,9 @@ top-level README for the workflow).  What differs:
 * **No TCP.**  `init_network` refuses to start without `WCROOM`.  Only the
   room-code transport exists in a browser.
 * **The simple CPU core runs the hooks too.**  The Emscripten build defaults
-  to `core=simple` (`src/dosbox.cpp`), so `CPU_Core_Simple_Run` calls
-  `wc_net_check_cpu_hooks()` before every instruction exactly like the
-  normal core; the hooks are core-independent.
+  to `core=simple` (`src/dosbox.cpp`; ~25% faster than `normal` natively
+  too), so `CPU_Core_Simple_Run` makes the same in-line test before every
+  instruction as the normal core; the hooks are core-independent.
 * **Frames are pushed as whole-screen updates.**  The chat overlay in
   `GFX_EndUpdate` reports the entire frame as changed; the surface output
   (the browser's renderer) only pushes changed runs, so that table has to

@@ -63,6 +63,15 @@ if ASYNCIFY
 # through function pointers and virtual calls).  The asyncify stack must
 # hold the locals of that whole call chain.
 dosbox_LDFLAGS += -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=1048576
+# ...but the CPU cores and the helpers they call for every instruction or so
+# (memory, I/O ports, calls and returns, interrupts, string moves), none of
+# which is ever on the stack when it unwinds: the hooks run from the main loop
+# in the browser (wc_net.h, wc_net_hook_exit), and what these call that runs
+# code nested (a page fault, an I/O permission fault) does it without
+# sleeping (DOSBOX_RunMachineNoSleep).  (A network wait in a hook during a
+# protected-mode page fault would break that; none of the games pages.)
+dosbox_LDFLAGS += -sASYNCIFY_REMOVE=@$(srcdir)/asyncify-remove.json
+EXTRA_dosbox_DEPENDENCIES += $(srcdir)/asyncify-remove.json
 endif
 if LOBBYLINK_WEB
 dosbox_LDFLAGS += --js-library $(srcdir)/wclobby_web.js

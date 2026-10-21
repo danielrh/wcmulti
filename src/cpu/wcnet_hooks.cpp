@@ -26,6 +26,7 @@
 #include "wcnet_perf.h"
 #include "wcnet_log.h"
 #include "wcnet_rv.h"
+#include "callback.h"
 #include "cpu.h"
 #include "regs.h"
 #include "keyboard.h"
@@ -1657,6 +1658,50 @@ static void rv_check_hooks() {
         return;
     }
 }
+
+#if defined(EMSCRIPTEN) && defined(EM_ASYNCIFY)
+// The hooks from the main loop (wc_net.h).  The core returns g_hookCb before
+// the hooked instruction; the callback runs the hooks; the core comes back to
+// that instruction and must not stop for its hooks again.  Between the two a
+// hardware interrupt may run (and hit hooks of its own), so the instructions
+// whose hooks have run are kept until each is reached (a few: interrupts
+// nest shallowly); one whose hooks sent the CPU elsewhere is not kept, so
+// coming back to it later stops for the hooks again, as the core's own call
+// did.
+static Bitu g_hookCb = 0;
+enum { kHooksRan = 8 };
+static PhysPt g_hooksRan[kHooksRan];
+static int g_nHooksRan = 0;
+static PhysPt g_hookAt;
+
+static Bitu hook_callback() {
+    wc_net_check_cpu_hooks();
+    if (SegPhys(cs) + reg_eip == g_hookAt) {
+        if (g_nHooksRan == kHooksRan) {
+            memmove(g_hooksRan, g_hooksRan + 1, sizeof(g_hooksRan[0]) * (kHooksRan - 1));
+            g_nHooksRan--;
+        }
+        g_hooksRan[g_nHooksRan++] = g_hookAt;
+    }
+    return CBRET_NONE;
+}
+
+Bitu wc_net_hook_exit(Bit32u ip) {
+    PhysPt at = SegPhys(cs) + ip;
+    for (int i = g_nHooksRan - 1; i >= 0; i--) {
+        if (g_hooksRan[i] == at) {          // back at it, its hooks done: on with the instruction
+            g_hooksRan[i] = g_hooksRan[--g_nHooksRan];
+            return 0;
+        }
+    }
+    if (!g_hookCb) {
+        g_hookCb = CALLBACK_Allocate();
+        CallBack_Handlers[g_hookCb] = &hook_callback;
+    }
+    g_hookAt = at;
+    return g_hookCb;
+}
+#endif
 
 void wc_net_check_cpu_hooks() {
     using namespace wc;
