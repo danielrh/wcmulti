@@ -1016,6 +1016,7 @@ int game_run(void)
     message("Wildcard, welcome aboard the TCS Vigilance. Your bunk keeps your saves. "
             "The briefing room is through the hatch in the bar.");
     while (g_mode != MODE_QUIT) {
+        rv_halt();                      /* once a music tick at most (1/240 s): the host idles between */
         g_now = ticks();
         in_steer(g_mode != MODE_BUNK && g_mode != MODE_NAME);     /* those menus take the arrows */
         in_poll(&in);

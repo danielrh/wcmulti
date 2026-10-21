@@ -234,7 +234,9 @@ export const GAMES = [
     build: { rvhook: true, off: 0x0400, text: "Loading RETROVEGA" },
     saves: ["BUNK01.SAV", "BUNK02.SAV", "BUNK03.SAV", "BUNK04.SAV", "BUNK05.SAV", "BUNK06.SAV", "BUNK07.SAV", "BUNK08.SAV",
             "RVSETUP.CFG"],   // (its settings: the talk speed)
-    cycles: 20000,
+    // (50000: the flight's frame costs that many; RV.EXE halts while it waits for its next tick, so a
+    // machine spends only what the game uses; the browser's emulator does ~70000 on a 2016 desktop core)
+    cycles: 50000,
     pointer: { x: 0.5, y: 0.5, rx: 0.5, ry: 0.5 },
     help: "RetroVega has no flight yet: everyone starts in their own quarters on the TCS Clydesdale and walks the ship, bar, briefing room and deck, saving in the bunk. The host's Fly starts everybody's game. Arrow keys steer the pointer, Tab jumps between the things you can use, Enter uses one.",
     dosbox: "[dosbox]\nmemsize=40\n[dos]\nxms=true\nems=false\numb=true\n[sblaster]\nsbtype=sb16\noplmode=opl3\n" },

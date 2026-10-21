@@ -99,6 +99,14 @@ void in_steer(int on);                 /* the arrows steer the pointer (on unles
 int in_arrows(void);                   /* held: bit 0 left, 1 right, 2 up, 3 down, 4 roll left (Q), 5 roll right (E) */
 int in_key_down(int scan);             /* a key held, by scan code */
 unsigned long ticks(void);             /* BIOS ticks, 18.2 a second */
+/* wait for the next interrupt (the music clock's, 240 a second): a loop that
+ * waits for something should halt each time round rather than spin, so the
+ * host idles (DOSBox drops the rest of its time slice at a hlt: the page can
+ * ask for many cycles and only spend them on the game's work) */
+void rv_halt(void);
+#ifdef __WATCOMC__
+#pragma aux rv_halt = "sti" "hlt";
+#endif
 int script_open(const char *path);
 int script_active(void);
 void shot_save(const char *name);      /* the back buffer as NAME.BMP, with the palette shown */

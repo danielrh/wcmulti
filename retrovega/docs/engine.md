@@ -844,7 +844,8 @@ budget, `NOBUILD=1` skips the build. Each frame's parts are timed on the
 | 40,000 | 2 | 0 | 12 | 1,271 |
 | 40,000 | 0 | 16 | 12 | 1,973 |
 | 40,000 | 0 | 0 | 12 | 2,388 and more (the pool full at 25 ms a frame) |
-| 20,000 (the page) | 2 | 16 | 12 | none: 15 fps with no bolt |
+| 50,000 (the page since 2026-10-21, Chrome on a 2016 desktop core) | 2 | 16 | 12 | 1,129 |
+| 20,000 (the page before) | 2 | 16 | 12 | none: 15 fps with no bolt |
 | 20,000 | 1 | 8 | 12 | none: 24 fps with no bolt |
 | 20,000 | 0 | 16 | 12 | none: 30 fps with no bolt |
 | 20,000 | 1 | 0 | 12 | 159 |
@@ -865,7 +866,26 @@ the page):
 
 So frame ≈ 9 + 7.8 B + 0.6 F + 0.04 n + 0.009 N ms. The bolts are not where
 the frame goes: in the user's scene the ships take three quarters of it, and
-in the page (20,000 cycles) that scene runs at ~15 fps before a single bolt.
+in the page as it was (20,000 cycles) that scene ran at ~15 fps before a
+single bolt.
+
+**The page's speed** (2026-10-21). The page was slower than the native tests
+for two reasons, both fixed: it asked DOSBox for 20,000 cycles where the
+tests run 40,000, and its emulator delivered only ~41,000 cycles a
+millisecond on a 2016 desktop core where the native one does ~123,000 (a
+Chrome profile: 75% in the interpreter, which Emscripten's Asyncify
+instrumented because the multiplayer hooks could wait for the network from
+inside it). The hooks now run from the main loop in the browser and the core
+is left uninstrumented (docs/wcnet-multiplayer.md in dosbox3d): ~70,000
+cycles a millisecond. RV.EXE halts (`rv_halt`, `sti; hlt`) while it waits for
+its next tick in the rooms' loop and at the flight's 30 fps cap instead of
+spinning, and DOSBox drops the rest of its time slice at a `hlt`, so asking
+for more cycles costs a machine nothing while the game waits (a third less
+host time in a 20 s flight at 50,000). The page now asks for 50,000
+(web/gamefiles.js): the scene above holds 30 fps with ~1,100 far bolts. A
+machine that cannot keep up shows it in the page's performance line
+("emulator at N% of real time"), which works for RetroVega now: the layer
+counts a flight frame at each `rvFrameDone` (`WCNET_PERF=<s>` natively).
 The levers, in order: place each ship once a frame instead of once a band
 (and `lf_place` in asm, as the stars' placing went: ~10x), the exact path's
 budget or its 2 x 1 detail for the big ones, then the bolts.

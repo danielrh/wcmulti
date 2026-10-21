@@ -1160,7 +1160,7 @@ void __far __cdecl flight_frame(void)
     if (g_bench_wanted >= 0 && g_lasers >= 0) {   /* (the adapting benchmarks measure the uncapped rate) */
         unsigned long t0 = clock240();
         while (clock240() - now < 240 / FPS_WANT)
-            ;
+            rv_halt();
         g_t_wait += clock240() - t0;
     }
 }
