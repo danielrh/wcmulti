@@ -4,6 +4,8 @@
 // "flight:" and "ships:" lines, and any FAIL).  scripts/web-rv.mjs stops at
 // the quarters: this is the check that the flight itself works in the page.
 //   PLAYWRIGHT_DIR=... SHOT_DIR=... node scripts/web-rv-flight.mjs PAGE_URL LOBBY_URL
+// CMD="rv /noquit /lasers -1 /flight 30" runs the game with other arguments (the page's ?cmd=; the laser
+// benchmark logs its "lasers:" and "bolts:" lines); FLIGHT_S is how long the flight lasts (20).
 import { createRequire } from "node:module";
 import path from "node:path";
 import fs from "node:fs";
@@ -30,6 +32,8 @@ u.searchParams.set("server", lobbyUrl);
 u.searchParams.set("hall", "RVHALL-" + Math.random().toString(36).slice(2, 6).toUpperCase());
 u.searchParams.set("callsign", "FLIGHT");
 u.searchParams.set("retrovega", "");
+if (process.env.CMD) u.searchParams.set("cmd", process.env.CMD);
+const flightS = Number(process.env.FLIGHT_S) || 20;
 await page.goto(u.toString());
 await page.waitForFunction(() => document.getElementById("sourceStatus").dataset.state === "ready", null, { timeout: 60000 });
 const rvlog = () => page.evaluate(() => {
@@ -97,10 +101,10 @@ const flying = logs.some((l) => /runHangarMission/.test(l)) || /flight: slot/.te
 console.log(flying ? "ok   the flight started" : "FAIL no flight started (" + (t.split("\n").slice(-3).join(" | ")) + ")");
 await sleep(4000); await shot("flight-4s");
 await sleep(8000); await shot("flight-12s");
-t = await waitLog(/flight: over/, 40000);
+t = await waitLog(/flight: over/, (flightS + 20) * 1000);
 console.log(/flight: over/.test(t) ? "ok   the flight ended" : "FAIL the flight did not end");
 await sleep(3000); await shot("after");
-const lines = t.split("\n").filter((l) => /^(flight:|ships:|lightfield:|FAIL|cockpit:|stars)/.test(l));
+const lines = t.split("\n").filter((l) => /^(flight:|ships:|lightfield:|FAIL|cockpit:|stars|lasers:|bolts:)/.test(l));
 console.log(lines.join("\n"));
 console.log(/FAIL /.test(t) ? "FAIL a stop in the engine's log" : "ok   no stop in the engine's log");
 console.log(logs.filter((l) => /ended|PAGE ERROR|stack/.test(l)).slice(0, 6).join("\n"));

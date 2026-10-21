@@ -1,0 +1,31 @@
+# the laser benchmark (run with /lasers -1 /flight 30): quarters, bar, briefing, deck, launch, then 30 s of flight
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 60
+shot L01
+wait 200
+shot L02
+wait 230
+shot L03
+wait 20
+key esc
+wait 16
+log done

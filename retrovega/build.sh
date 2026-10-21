@@ -19,6 +19,7 @@ if [ -n "${DEBUG:-}" ]; then OPT="-od -d2"; else OPT="-ox -d1"; fi
 CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq $OPT -i=src"
 nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
+nasm -f obj -o "$OUT/lasers_a.obj" src/lasers.asm
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
 # the fighters' views (tools/pack.py, copied into art/ships): beside RV.EXE, and
 # their pre-rendered sets (tools/rvsprites.c, the host build of lightfield.c)
@@ -36,7 +37,7 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     s="$OUT/SHIP20.RVS"
     [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
 fi
-ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships cockpit flight game main"
+ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
@@ -60,5 +61,5 @@ link() {
         file "$OUT/rvhook.obj" "$@" library "$OUT/rvstubs.lib"
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
-link RV.EXE file "$OUT/lowlevel.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
+link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
 echo "built $OUT/RV.EXE and $OUT/HELLO.EXE"

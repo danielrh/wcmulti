@@ -764,6 +764,126 @@ VGA frame at output time, host-side and outside the cycle budget, while
 real DOS shows the blocks. A legitimate DOS game with an "HD" emulator;
 about a day in the layer. Not taken yet.
 
+### Laser bolts
+
+The user's brief (2026-10-20): red bolts, bright white in the middle and red
+toward the edges in two or three colours, an elongated pill (angular is
+fine), visible from any angle and never less than a pixel, up to 32 px long
+and 8 wide when just fired, integer lines once a little away, hundreds a
+frame; quality may give way to speed.
+
+**The shape.** A bolt is a capsule: a segment along its flight with a radius
+round it (`LzBolt`, 18 bytes: its middle in positions, its half axis in
+sixteenths of a km). A capsule projects to a capsule from any angle — end on
+it is a disc — so it is visible however it flies. The flight's bolts are
+2 km in radius and 12 km long, and the near plane is at 200 km, so the
+largest is 8 px across and 32 px long side on (bolts.h).
+
+**Two drawings, chosen by the radius on screen.** Under 3/4 px a bolt is a
+*line*: each row it crosses gets the pixels whose centres the segment passes
+over in that row (an x-major line's run), and a steep row with none gets the
+pixel under the row's middle, so every row shows. Above, it is *fat*: up to
+three nested capsules painted over each other — a dark red rim (fire ramp
+130), a red body (`UI_RED`) and a white core (`UI_WHITE`) from 2 px of
+radius, the body and a white core line below that. Each capsule row is one
+span between its left and right boundary: a's arc, the straight stretch,
+b's arc, met at the tangent rows (rounded so the stretch is never used past
+them: on a nearly level bolt a sixteenth of a row there is pixels of x).
+The flight palette has no pink, hence a dark rim rather than a light halo.
+
+**The pipeline** (src/bolts.c over src/lasers.c and src/lasers.asm):
+
+- once a frame, `rv_bolts_place`: every bolt through the camera (eighteen
+  32-bit products, four divisions, the near-plane cut, the screen box), out
+  as a line set up for the draw (`LzLine`, 20 bytes) or a fat bolt (`LzFat`);
+  then `rv_fat_setup` makes each fat bolt's passes (`LzPass`);
+- per band, `rv_lines_draw` draws every line, one call for all, and
+  `rv_pass_draw` each fat bolt's passes, smallest bolt first; every row is
+  clipped to the cockpit opening's extents as the ships are;
+- `rv_bolts_move` flies them (positions += half axis x speed).
+
+`lasers.c` is the reference, plain C: `tests/host/run.sh` checks it against
+brute force (no capsule pixel off the true distance by more than 0.12 px; no
+line row empty, no gap between rows; mirror images agree) and writes a
+preview sheet with `LZ_SHEET=FILE.ppm`. The asm does the same to the bit:
+`bolts_selftest` compares records and pixels when a laser flight starts.
+DOSBox charges an instruction a cycle whatever it does (a `rep stos` a cycle
+an iteration), so `imul` and `idiv` cost what a `mov` costs: the asm counts
+instructions, not multiplies. Where C's 64-bit `muldiv` wraps, an `idiv`
+would trap: `mdiv` divides in two steps.
+
+**What each costs** (`bolts_time`, logged at the start of a laser flight;
+µs at `cycles=40000`, twice that in the page at 20,000):
+
+| | place | set up | draw | in all |
+|---|---|---|---|---|
+| a far bolt (a line, 1.6 rows) | 5.6 | — | 2.3 | 7.9 (+0.7 flown and re-fired) |
+| a near bolt (fat, 2-4 px radius) | 5.2 | 13.8 | 24.0 | 43 |
+| a far bolt drawn as a capsule (one algorithm for all) | | | | 23.5 |
+
+So one algorithm for every bolt would cost three times the line for the far
+ones: the split pays. The near bolts' set-up was 87 µs in C (Watcom's 64-bit
+helpers) before `rv_fat_setup`.
+
+**The benchmark.** `RV.EXE /lasers N` flies the first mission's launch into a
+still scene: two big ships 1,500 and 2,100 km ahead, rolling and turning so
+they are drawn exactly (`/bigships`, 2), small ships 5,000-15,000 km out
+within 35 degrees of the nose drawn from the sets (`/farships`, 16), bolts
+kept 220-900 km ahead (`/near`, 12, fat), and N far bolts fired every way
+from the far ships, living one to three seconds (`/lasers -1`: N follows the
+frame rate as the sprite benchmark's count does). `tests/lasers.txt` with
+`/lasers -1 /flight 30`; `CYCLES=20000 tests/run.sh ...` gives the page's
+budget, `NOBUILD=1` skips the build. Each frame's parts are timed on the
+240 Hz clock and logged at the end (`lasers: ms a frame ...`):
+
+| cycles | big ships | far ships | near bolts | far bolts held at 30 fps |
+|---|---|---|---|---|
+| 40,000 | 2 | 16 | 12 | ~230 (206-248 over three runs) |
+| 40,000 | 2 | 16 | 0 | 269 |
+| 40,000 | 1 | 8 | 12 | 1,690 |
+| 40,000 | 2 | 0 | 12 | 1,271 |
+| 40,000 | 0 | 16 | 12 | 1,973 |
+| 40,000 | 0 | 0 | 12 | 2,388 and more (the pool full at 25 ms a frame) |
+| 20,000 (the page) | 2 | 16 | 12 | none: 15 fps with no bolt |
+| 20,000 | 1 | 8 | 12 | none: 24 fps with no bolt |
+| 20,000 | 0 | 16 | 12 | none: 30 fps with no bolt |
+| 20,000 | 1 | 0 | 12 | 159 |
+| 20,000 | 0 | 4 | 12 | 829 |
+| 20,000 | 0 | 0 | 12 | 1,029 |
+
+**How the four share the frame** (40,000 cycles; double every figure for
+the page):
+
+- the frame's fixed part: the cockpit and the flip 5.2 ms, the stars 1.3,
+  the simulation and the plan ~2: about 9 of the 33.3 ms;
+- a big ship drawn exactly: ~7.8 ms at 1.2-1.6 times full size (~900 far
+  bolts' worth) — the exact path's own budget, `g_onfly_px`, sets it;
+- a far ship from the sets: ~0.6 ms (~70 far bolts), most of it not pixels:
+  `lf_place` costs 120 µs in C and every ship's draw repeats it in each of
+  the 3 bands the world is drawn in;
+- a near bolt: ~0.04 ms; a far bolt: ~0.009 ms (~115 a millisecond).
+
+So frame ≈ 9 + 7.8 B + 0.6 F + 0.04 n + 0.009 N ms. The bolts are not where
+the frame goes: in the user's scene the ships take three quarters of it, and
+in the page (20,000 cycles) that scene runs at ~15 fps before a single bolt.
+The levers, in order: place each ship once a frame instead of once a band
+(and `lf_place` in asm, as the stars' placing went: ~10x), the exact path's
+budget or its 2 x 1 detail for the big ones, then the bolts.
+
+**Memory.** Conventional memory, not time, was the first wall: the flight
+had about 27 KB to spare (the band buffer and the exact draw's two 64 KB
+dense buffers), and the bolts' ~30 KB of code and tables pushed the second
+dense buffer out (`RV_ASSERT` in ships.c). `rv_alloc_high` (util.c) asks DOS
+for upper memory (DOSBox has 128 KB of UMBs at D000 with EMS off, as both
+configs run it; 64 KB with EMS on) and `ships.c` puts the dense buffers
+there first, else in conventional memory as before: the flight then has
+~155 KB left, and the bolts' pool takes 39 bytes a bolt of it (2,400).
+
+**A Watcom pitfall** found on the way: `-ox` compiled
+`if (s == 0) A; else { B; C; }` in `ship_physics` so that slot 0 ran the
+else arm (the player spun); `wdis` showed the missing test. When C does the
+impossible, read the disassembly.
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the
@@ -839,6 +959,9 @@ enough to want a half-size source set (spec §8).
    lasers" — bolts have a finite speed and a hit is the bolt meeting the
    target; no hitscan, no auto-aim, so a pilot must judge the lead from
    the target's heading, which is why the far ships' roll had to be right.
+   The bolts' drawing is done ("Laser bolts" above: lines far, nested
+   capsules near, the `/lasers` benchmark); their flight in the game, the
+   hits and the guns are next.
 
 Steps 1-6 are done too: `tests/run.sh` plays `tests/walk.txt` (every room,
 a save, a close-up, the briefing, the deck, a launch and its debrief),

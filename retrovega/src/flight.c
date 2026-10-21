@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include "rv.h"
 #include "rvhooks.h"
 #include "room.h"
@@ -23,6 +24,7 @@
 #include "music.h"
 #include "ships.h"
 #include "cockpit.h"
+#include "bolts.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -36,6 +38,11 @@ static const struct { int v; LfVec dir; int scale; } g_sky_sprites[3] = {
     { 10, { 0, 1500, 4096 }, 256 }, { 1, { -3000, 900, 2500 }, 192 }, { 18, { 3500, -600, 2200 }, 128 }
 };
 int g_zoom = 0;                         /* RV.EXE /zoom: one ship ahead, rolling, swinging in and out (a test aid) */
+int g_lasers = 0;                       /* RV.EXE /lasers N: the laser benchmark with N far bolts (-1: as many as hold
+                                           30 fps), two big ships near drawn exactly, small ones far, the near bolts */
+int g_near_bolts = 12;                  /* RV.EXE /near N: the bolts kept near the camera in it */
+int g_far_ships = 16;                   /* RV.EXE /farships N: its small far ships */
+int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
  * at draw time, sixteen cycles a pixel) while their pixels fit this budget
  * a frame and they are big enough for the steps to show; the rest are
@@ -194,6 +201,15 @@ static void ship_physics(int s)
             yaw = (int)((s & 1) ? 3 : -3);
             rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(t->roll_dps, (s & 1) ? 4 : -4));
         }
+    }
+    if (g_lasers && s >= 1 && s <= 2) {
+        /* the laser benchmark's two big ships: in place, rolling and turning (so they are drawn exactly, turned
+         * and scaled every frame).  (An `if (s == 0) ... else` here, the player rolling in the first arm, was
+         * miscompiled by -ox: slot 0 ran the else arm's turns.) */
+        rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(40, s == 1 ? 9 : -6));
+        rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(15, 9));
+        orthonormalise(s);
+        return;
     }
     if (g_zoom && s == 1) {
         /* the zoom scene's ship, 1,200 .. 6,000 km away on a twelve-second swing: /zoom 1 rolls it
@@ -421,6 +437,10 @@ static void plan_draws(void)
         }
 }
 
+static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int rows);
+static unsigned long g_t_exact, g_t_sets;   /* what the slots' ships cost to draw: exactly, and from the sets */
+static unsigned long g_world_calls;     /* draw_world's calls: the bands a frame draws the world in */
+
 static void draw_world(int y0, int y1)
 {
     int ey0, rows, i;
@@ -428,7 +448,11 @@ static void draw_world(int y0, int y1)
     const ShipSet __far *bench = g_set_enemy >= 0 ? ships_set(g_set_enemy) : 0;
     LfBasis cam, ship;
     int path;
+    unsigned long t0;
+    g_world_calls++;
     draw_stars(y0, y1);
+    if (g_lasers)
+        lasers_draw_far(y0, y1, ext, ey0, rows);
     if (g_sky && g_set_enemy >= 0) {
         basis_of(0, &cam);
         for (i = 0; i < 3; i++)
@@ -442,11 +466,15 @@ static void draw_world(int y0, int y1)
         int s = g_plan[i].slot, set = g_plan[i].set;
         rel_of(s, &rel);
         basis_of(s, &ship);
+        t0 = clock240();
         if (g_plan[i].exact && ships_draw_exact(set, &rel, &cam, &ship, g_plan[i].scale, g_plan[i].exact, y0, y1,
-                                                0, SCR_W, ext, ey0, rows))
+                                                0, SCR_W, ext, ey0, rows)) {
             path = 8 + g_plan[i].exact;
-        else                            /* (or its view is not streamed in yet: from the sets this frame) */
+            g_t_exact += clock240() - t0;
+        } else {                        /* (or its view is not streamed in yet: from the sets this frame) */
             path = ships_draw(set, &rel, &cam, &ship, g_plan[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
+            g_t_sets += clock240() - t0;
+        }
         if (y0 <= ey0 && (frameCounter % 100 == 1 || (g_record && frameCounter % g_record == 0))) {
             /* now and then, where each ship was put (tests/ships.txt reads it) */
             LfPlace p;
@@ -457,6 +485,8 @@ static void draw_world(int y0, int y1)
                    frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, g_plan[i].scale, p.sx, p.sy, path);
         }
     }
+    if (g_lasers)                       /* the near bolts last: nearest of all */
+        bolts_draw_near(y0, y1, ext, ey0, rows);
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
@@ -495,6 +525,8 @@ static void mfd_draw(int which, const RvRect __far *r, int y0, int y1)
     ships_blit_size(set, 1, 10, r->x + r->w / 2, r->y + r->h / 2, y0 > r->y ? y0 : r->y,
                     y1 < r->y + r->h ? y1 : r->y + r->h, r->x, r->x + r->w, 0, 0, 0);
 }
+
+static int lasers_far(void);
 
 /* the cockpit's state from the slots */
 static void gather(void)
@@ -544,7 +576,11 @@ static void gather(void)
     }
     g_st.ncontacts = n;
     (void)c;
-    if (g_nbench) {                     /* the benchmark's readout; else the controls (the user asked how to roll) */
+    if (g_lasers) {                     /* the laser benchmark's readout */
+        sprintf(g_mfd[0][0], "BOLTS %d+%d", g_near_bolts, lasers_far());
+        sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
+        sprintf(g_mfd[0][2], "SHIPS %d+%d", g_big_ships, g_far_ships);
+    } else if (g_nbench) {              /* the benchmark's readout; else the controls (the user asked how to roll) */
         sprintf(g_mfd[0][0], "SPRITES %d", g_nbench);
         sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
         sprintf(g_mfd[0][2], "%dx%d VIEW", g_bench_w, g_bench_h);
@@ -611,6 +647,270 @@ int flight_bench_result(int *w, int *h)
     return g_bench_frames ? (int)(g_bench_sum / g_bench_frames) : 0;
 }
 
+/* --- the laser benchmark (RV.EXE /lasers N) ---
+ *
+ * The user's question: how many laser bolts a frame holds at 30 fps beside
+ * two big ships near (drawn exactly: turned and scaled each frame), many
+ * small ones far (copies from the sets), and a dozen bolts near enough to be
+ * drawn fat.  The far bolts are fired from the far ships, every way, and
+ * live a second or two; the near ones are kept 220 .. 900 km ahead.  With N
+ * -1 their count follows the frame rate as the sprite benchmark's does; the
+ * frame's parts are timed, for how the four (big ships, far ships, near and
+ * far bolts) share the frame. */
+#define LZ_SHIPS 48
+#define LZ_DIRS 64
+#define LZ_SPEED 200                    /* positions per sixteenth of a km of half axis: 75 km a frame, 1,500 kps */
+static struct { LfVec pos; LfBasis b; unsigned char set; } __far g_lz_ship[LZ_SHIPS];
+static struct { short x, y, z; } __far g_lz_dir[LZ_DIRS];   /* bolts' half axes, every way, BOLT_HALF16 long */
+static unsigned char __far *g_lz_life;  /* frames each bolt has left */
+static int g_lz_far, g_lz_cap, g_lz_n, g_lz_frames;
+static long g_lz_sum;
+static unsigned long g_t_far_ships, g_t_draw, g_t_lz_step, g_t_wait;
+
+static void lz_aim(LzBolt __far *b)
+{
+    int k = vrnd() % LZ_DIRS;
+    b->hx = g_lz_dir[k].x;
+    b->hy = g_lz_dir[k].y;
+    b->hz = g_lz_dir[k].z;
+}
+
+/* a near one: 220 .. 900 km ahead of the camera, within the view, any way */
+static void lz_spawn_near(int i)
+{
+    LzBolt __far *b = bolts_pool() + i;
+    long d = 220 + vrnd() % 680, across = (long)((int)(vrnd() % 2001) - 1000) * d * 3 / 10000,
+         up = (long)((int)(vrnd() % 2001) - 1000) * d * 18 / 100000;
+    const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
+    b->x = gPositionVector[0].x + f->x * d + r->x * across + u->x * up;
+    b->y = gPositionVector[0].y + f->y * d + r->y * across + u->y * up;
+    b->z = gPositionVector[0].z + f->z * d + r->z * across + u->z * up;
+    lz_aim(b);
+    g_lz_life[i] = (unsigned char)(6 + vrnd() % 10);
+}
+
+/* a far one: from a far ship, any way (with no far ships, from where one would be) */
+static void lz_spawn_far(int i)
+{
+    LzBolt __far *b = bolts_pool() + i;
+    int k = (int)(vrnd() % (g_far_ships ? g_far_ships : LZ_SHIPS));
+    b->x = g_lz_ship[k].pos.x + 256L * ((int)(vrnd() % 1201) - 600);
+    b->y = g_lz_ship[k].pos.y + 256L * ((int)(vrnd() % 601) - 300);
+    b->z = g_lz_ship[k].pos.z + 256L * ((int)(vrnd() % 1201) - 600);
+    lz_aim(b);
+    g_lz_life[i] = (unsigned char)(20 + vrnd() % 40);
+}
+
+static int lasers_far(void) { return g_lz_far; }
+
+static void lasers_setup(int enemy_type)
+{
+    int k;
+    /* the two big ships, 1,500 and 2,100 km ahead (drawn exactly), and the player still */
+    memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
+    spawn(1, enemy_type, 1, 4, -256L * 380, 256L * 60, 256L * 1500, 300);
+    spawn(2, g_camp.player_ship, 0, 4, 256L * 520, -256L * 90, 256L * 2100, 700);
+    for (k = g_big_ships + 1; k <= 2; k++)
+        maybeEntityType[k] = 0;         /* (/bigships: fewer; their sets stay loaded for the far ones) */
+    for (k = 0; k < 3; k++)
+        setSpeed[k] = speedLo[k] = 0;
+    /* the far ships: 5,000 .. 15,000 km, within 35 degrees of the nose across and 15 up and down */
+    if (g_far_ships > LZ_SHIPS)
+        g_far_ships = LZ_SHIPS;
+    for (k = 0; k < LZ_SHIPS; k++) {    /* (all of them placed: the far bolts start at them even when none is drawn) */
+        long d = 5000 + vrnd() % 10000;
+        int a = (int)(vrnd() % 200) - 100, e = (int)(vrnd() % 86) - 43;   /* 1024 a turn */
+        g_lz_ship[k].pos.x = (lf_sin(a) * d >> 14) * 256;
+        g_lz_ship[k].pos.y = (lf_sin(e) * d >> 14) * 256;
+        g_lz_ship[k].pos.z = (lf_cos(a) * d >> 14) * 256;
+        face(RV_SCRATCH_SLOT, (int)(vrnd() % 1024), (int)(vrnd() % 300) - 150);
+        g_lz_ship[k].b.front = *(const LfVec *)&gOrientationFrontVector[RV_SCRATCH_SLOT];
+        g_lz_ship[k].b.right = *(const LfVec *)&gOrientationRightVector[RV_SCRATCH_SLOT];
+        g_lz_ship[k].b.up = *(const LfVec *)&gOrientationUpVector[RV_SCRATCH_SLOT];
+    }
+    for (k = 0; k < LZ_DIRS; k++) {
+        long x, y, z, n;
+        unsigned long len;
+        do {
+            x = (long)(vrnd() % 2001) - 1000;
+            y = (long)(vrnd() % 2001) - 1000;
+            z = (long)(vrnd() % 2001) - 1000;
+            n = x * x + y * y + z * z;
+        } while (n < 40000L || n > 1000000L);
+        len = lf_sqrt((unsigned long)n);
+        g_lz_dir[k].x = (short)(x * BOLT_HALF16 / (long)len);
+        g_lz_dir[k].y = (short)(y * BOLT_HALF16 / (long)len);
+        g_lz_dir[k].z = (short)(z * BOLT_HALF16 / (long)len);
+    }
+    lz_init();
+    g_lz_far = g_lasers > 0 ? g_lasers : 64;
+    g_lz_n = 0;
+    g_lz_sum = 0;
+    g_lz_frames = 0;
+    g_t_exact = g_t_sets = g_t_far_ships = g_t_draw = g_t_lz_step = g_t_wait = g_world_calls = 0;
+}
+
+/* the bolts' pool: what memory is left once the rest of the flight has taken its share (the exact draw's
+ * dense buffers first), after the bolts' checks and timings */
+static void lasers_pool(void)
+{
+    long t[6];
+    unsigned long before = bolts_dos_free();
+    if (!ships_dense_reserve())
+        rv_log("lasers: no room for the exact draw's buffers");
+    rv_log("lasers: DOS memory free: %lu KB before the exact draw's buffers, %lu after", before / 1024,
+           bolts_dos_free() / 1024);
+    bolts_selftest();
+    bolts_time(t);
+    {
+        /* what placing a far ship costs (lf_place, the C every ship's draw starts with, once a band) */
+        LfBasis cam, ship = g_lz_ship[0].b;
+        LfPlace p;
+        LfVec rel;
+        unsigned long t0 = clock240(), dt;
+        long it = 0;
+        basis_of(0, &cam);
+        rel.x = 256L * 1500; rel.y = 256L * 400; rel.z = 256L * 8000;
+        do {
+            lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, 5, 7, &p);
+            it++;
+        } while ((dt = clock240() - t0) < 120);
+        rv_log("lasers: lf_place takes %lu us", dt * 1000000UL / 240 / (unsigned long)it);
+    }
+    _fheapshrink();                     /* (what the checks took back to DOS) */
+    g_lz_cap = bolts_init(3200, 12);    /* 12 KB kept for what the flight takes later */
+    g_lz_life = g_lz_cap ? (unsigned char __far *)_fmalloc(g_lz_cap) : 0;
+    if (!g_lz_life)
+        g_lz_cap = 0;
+    if (g_near_bolts > g_lz_cap)
+        g_near_bolts = g_lz_cap;
+    rv_log("lasers: room for %d bolts; %d near, %s far; 2 big ships near, %d far", g_lz_cap, g_near_bolts,
+           g_lasers < 0 ? "adapting" : "fixed", g_far_ships);
+}
+
+/* the far ships' sets, once the types are loaded */
+static void lasers_sets(void)
+{
+    int k;
+    for (k = 0; k < g_far_ships; k++)
+        g_lz_ship[k].set = (unsigned char)((k & 1) && g_set_wing >= 0 ? g_set_wing : g_set_enemy);
+}
+
+/* once a frame: the count, the flight, the expired ones fired again */
+static void lasers_step(void)
+{
+    int i, n;
+    unsigned long t0 = clock240();
+    if (!g_lz_cap)
+        return;
+    if (g_lasers < 0) {
+        if (g_fps10 > FPS_WANT * 10 + 10)
+            g_lz_far += g_lz_far < 400 ? 16 : 8;
+        else if (g_fps10 < FPS_WANT * 10 - 10)
+            g_lz_far -= g_lz_far < 400 ? 8 : 4;
+    } else {
+        g_lz_far = g_lasers;
+    }
+    if (g_lz_far > g_lz_cap - g_near_bolts)
+        g_lz_far = g_lz_cap - g_near_bolts;
+    if (g_lz_far < 0)
+        g_lz_far = 0;
+    n = g_near_bolts + g_lz_far;
+    for (i = g_lz_n; i < n; i++)
+        if (i < g_near_bolts)
+            lz_spawn_near(i);
+        else
+            lz_spawn_far(i);
+    g_lz_n = n;
+    bolts_set_count(n);
+    bolts_move(LZ_SPEED);
+    for (i = 0; i < n; i++)
+        if (!--g_lz_life[i]) {
+            if (i < g_near_bolts)
+                lz_spawn_near(i);
+            else
+                lz_spawn_far(i);
+        }
+    if (clock240() - g_t0 > FLIGHT_TICKS / 2) {
+        g_lz_sum += g_lz_far;
+        g_lz_frames++;
+    }
+    g_t_lz_step += clock240() - t0;
+}
+
+static void lasers_place(void)
+{
+    LfBasis cam;
+    const RvCockpit __far *c = cockpit_record();
+    basis_of(0, &cam);
+    bolts_place(gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, &cam, SCR_W / 2, g_cam_cy, 400,
+                c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H, BOLT_LINE16);
+}
+
+static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int rows)
+{
+    LfBasis cam;
+    int k;
+    unsigned long t0 = clock240();
+    basis_of(0, &cam);
+    for (k = 0; k < g_far_ships; k++) {
+        LfVec rel;
+        LfBasis ship = g_lz_ship[k].b;  /* (near: ships_draw takes the bases near) */
+        rel.x = g_lz_ship[k].pos.x - gPositionVector[0].x;
+        rel.y = g_lz_ship[k].pos.y - gPositionVector[0].y;
+        rel.z = g_lz_ship[k].pos.z - gPositionVector[0].z;
+        ships_draw(g_lz_ship[k].set, &rel, &cam, &ship, scale_of(&rel), y0, y1, 0, SCR_W, ext, ey0, rows);
+    }
+    g_t_far_ships += clock240() - t0;
+    bolts_draw_far(y0, y1, ext, ey0, rows);
+}
+
+/* ms a frame x 100 from 240 Hz ticks over `frames` */
+static unsigned long per_frame(unsigned long ticks, unsigned frames)
+{
+    return ticks * 100000UL / 240 / (frames ? frames : 1);
+}
+
+static void lasers_report(void)
+{
+    unsigned long t[4], f = frameCounter;
+    int lines, fats;
+    if (!g_lz_cap)
+        return;
+    bolts_ticks(t);
+    bolts_on_screen(&lines, &fats);
+    rv_log("lasers: %ld far bolts and %d near held %d fps (the settled half's average; %d lines and %d fat on screen at "
+           "the end), beside %d big ships drawn exactly and %d far ones", g_lz_frames ? g_lz_sum / g_lz_frames : 0L,
+           g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships);
+    rv_log("lasers: ms a frame: bolts placed %lu.%02lu, far bolts drawn %lu.%02lu, near %lu.%02lu, flown and fired "
+           "%lu.%02lu; big ships %lu.%02lu, far ships %lu.%02lu (the slots' from the sets %lu.%02lu); stars %lu.%02lu; "
+           "the whole picture %lu.%02lu",
+           per_frame(t[0], f) / 100, per_frame(t[0], f) % 100, per_frame(t[1], f) / 100, per_frame(t[1], f) % 100,
+           per_frame(t[2], f) / 100, per_frame(t[2], f) % 100, per_frame(g_t_lz_step, f) / 100,
+           per_frame(g_t_lz_step, f) % 100, per_frame(g_t_exact, f) / 100, per_frame(g_t_exact, f) % 100,
+           per_frame(g_t_far_ships, f) / 100, per_frame(g_t_far_ships, f) % 100, per_frame(g_t_sets, f) / 100,
+           per_frame(g_t_sets, f) % 100, per_frame(g_star_place_ticks + g_star_draw_ticks, f) / 100,
+           per_frame(g_star_place_ticks + g_star_draw_ticks, f) % 100, per_frame(g_t_draw, f) / 100,
+           per_frame(g_t_draw, f) % 100);
+    {
+        /* the rest: the picture less its world (the cockpit, the instruments, the flip) and the frame less the
+         * picture and the bolts' own work (the simulation, the plan, the stars' placing) */
+        unsigned long world = t[1] + t[2] + g_t_exact + g_t_sets + g_t_far_ships + g_star_draw_ticks;
+        unsigned long frame = (clock240() - g_t0) - g_t_wait;
+        rv_log("lasers: the cockpit and the flip %lu.%02lu ms a frame; the rest of the frame (simulation, plan, stars "
+               "placed) %lu.%02lu; frames %lu.%02lu ms on average; the world drawn in %lu.%02lu bands a frame",
+               per_frame(g_t_draw - world, f) / 100, per_frame(g_t_draw - world, f) % 100,
+               per_frame(frame - g_t_draw - t[0] - g_t_lz_step, f) / 100,
+               per_frame(frame - g_t_draw - t[0] - g_t_lz_step, f) % 100, per_frame(frame, f) / 100,
+               per_frame(frame, f) % 100, g_world_calls / (f ? f : 1), g_world_calls * 100 / (f ? f : 1) % 100);
+    }
+    if (g_lz_life)
+        _ffree(g_lz_life);
+    g_lz_life = 0;
+    g_lz_cap = 0;
+    bolts_free();
+}
+
 /* --- the loop's calls (rvflight.inc) --- */
 
 void __far __cdecl flight_startup(void)
@@ -619,6 +919,8 @@ void __far __cdecl flight_startup(void)
     int i, k, n = 1, enemy_type = -1;
     unsigned long now;
     memset(maybeEntityType, 0, RV_SLOTS * 2);
+    if (g_lasers)
+        rv_log("lasers: DOS memory free as the flight starts: %lu KB", bolts_dos_free() / 1024);
     missionStatus = 0;
     frameCounter = 0;
     rvCockpitDamage = 0;
@@ -657,6 +959,10 @@ void __far __cdecl flight_startup(void)
         ships_load(0x02);
         n = 2;
     }
+    if (g_lasers) {
+        lasers_setup(enemy_type);
+        n = 3;
+    }
     if (g_capital && n <= RV_MAX_SHIP_SLOT) {
         /* a test aid: the Vigilance off to the left, ahead, standing still */
         spawn(n, 0x20, 0, 4, -256L * 3000, 0, 256L * 5000, 256);
@@ -665,10 +971,14 @@ void __far __cdecl flight_startup(void)
         ships_load(0x20);
         n++;
     }
+    if (g_lasers)
+        rv_log("lasers: DOS memory free before the ship sets: %lu KB", bolts_dos_free() / 1024);
     g_set_enemy = ships_load(enemy_type);
     g_set_wing = ships_load(g_camp.player_ship);
     for (i = 1; i < n; i++)
         ships_load(gInstanceShipTypes[i]);
+    if (g_lasers)
+        lasers_sets();
     {
         /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
         unsigned long free_kb = xms_free_kb(), taken, t0 = clock240();
@@ -704,6 +1014,8 @@ void __far __cdecl flight_startup(void)
         rv_log("lightfield: view %d (%dx%d): copy %ld px/ms, scaled to 3/4 %ld, turned 45 degrees at 3/4 %ld, copy upside down %ld, copy mirrored %ld",
                tv, set->view[tv].w, set->view[tv].h, paths[0], paths[1], paths[2], paths[3], paths[4]);
     }
+    if (g_lasers)
+        lasers_pool();
     g_nbench = 0;
     g_bench_sum = 0;
     g_bench_frames = 0;
@@ -801,14 +1113,18 @@ void __far __cdecl flight_frame(void)
     sim_step();
     stars_place();
     plan_draws();
+    if (g_lasers) {
+        lasers_step();
+        lasers_place();
+    }
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];
     g_frame_t[k] = now;
     g_fps10 = dt ? (int)(2400UL * FPS_WINDOW / dt) : 999;
     rvFps = (unsigned short)g_fps10;
     bench_step();
-    /* the benchmark's scenery: a damage layer more every three seconds */
-    if (now >= g_damage_at) {
+    /* the benchmark's scenery: a damage layer more every three seconds (not in the laser benchmark: they hid its readout) */
+    if (now >= g_damage_at && !g_lasers) {
         const RvCockpit __far *c = cockpit_record();
         int i;
         g_damage_at = now + 240 * 3;
@@ -825,7 +1141,11 @@ void __far __cdecl flight_frame(void)
     }
     gather();
     cockpit_dirty(&g_st);
-    scene_draw();
+    {
+        unsigned long t0 = clock240();
+        scene_draw();
+        g_t_draw += clock240() - t0;
+    }
     if (g_record && frameCounter % g_record == 0) {
         char name[12];
         sprintf(name, "R%05u", frameCounter / g_record);
@@ -837,9 +1157,12 @@ void __far __cdecl flight_frame(void)
     /* the frame rate capped at FPS_WANT: the simulation is per frame (a kps is 12.8 units a frame), so
      * without the cap a bare flight ran three times too fast natively (the adapting benchmark had been
      * holding it at 30 by loading it; off by default now) */
-    if (g_bench_wanted >= 0)            /* (the adapting benchmark measures the uncapped rate) */
+    if (g_bench_wanted >= 0 && g_lasers >= 0) {   /* (the adapting benchmarks measure the uncapped rate) */
+        unsigned long t0 = clock240();
         while (clock240() - now < 240 / FPS_WANT)
             ;
+        g_t_wait += clock240() - t0;
+    }
 }
 
 void __far __cdecl flight_music(void)
@@ -874,6 +1197,8 @@ int flight_fly(const RvMission __far *m)
            (g_star_place_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,
            g_star_draw_ticks * 1000 / 240 / (frameCounter ? frameCounter : 1),
            (g_star_draw_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100);
+    if (g_lasers)
+        lasers_report();
     g_star_place_ticks = g_star_draw_ticks = 0;
     g_scene.full = 0;
     g_scene.no_room = 0;
