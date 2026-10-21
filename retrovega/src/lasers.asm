@@ -6,6 +6,9 @@
 ; instruction a cycle whatever its width, so a bolt's eighteen products cost
 ; what eighteen moves would.
         cpu 486
+%define LZ_BALL_SMALL 8                  ; lasers.h's: the small balls' sprites, in a block
+%define LZ_BALL_SMALL_SET 204
+
 segment LASERS_TEXT public align=16 class=CODE use16
 
 ; int rv_bolts_place(const LzBolt far *b, int n, const LzCam far *cam,
@@ -1373,3 +1376,368 @@ isqrt32:
         jmp .loop
 .done:  ret
 
+
+; long rv_balls_place(const LzBall far *b, int n, const LzCam far *cam, const LzBallKind far *k, int dmax,
+;                     unsigned anim, LzBallOut far *out, int maxout, const unsigned char far *small)
+; lz_balls_place: the balls through the camera, each one on screen out (its
+; sprite's top left, diameter and set): a small one to out's front, its
+; sprite in `small`; a big one to out's back, its sprite 0.  ax the small
+; ones, dx the big.  A ball past its kind's z1 is one pixel (no division for
+; its size): nearly all of them.
+%define BCAM(k) [bp-96+(k)]
+%define BZZ   [bp-100]                  ; Z, camera units
+%define BXX_  [bp-104]                  ; its middle's x on screen, x16
+%define BXMIN [bp-108]                  ; the box, pixels
+%define BXMAX [bp-112]
+%define BYMIN [bp-116]
+%define BYMAX [bp-120]
+%define BLEFT [bp-122]                  ; balls still to do
+%define BROOM [bp-124]                  ; room left in out
+%define BNS   [bp-126]                  ; small balls out, big
+%define BNB   [bp-128]
+%define BFRONT [bp-130]                 ; where the next small one goes (es), the next big one
+%define BBACK [bp-132]
+%define BKOFF [bp-134]                  ; the kinds' offset (fs)
+%define BD    [bp-136]                  ; the diameter
+%define BFRAME 136
+        global _rv_balls_place
+_rv_balls_place:
+        push bp
+        mov bp,sp
+        sub sp,BFRAME
+        push si
+        push di
+        push ds
+        cld
+        lds si,[bp+12]              ; the camera into the frame: 21 dwords
+        push ss
+        pop es
+        lea di,BCAM(0)
+        mov cx,21
+        rep movsd
+        movsx eax,word BCAM(76)     ; its box in pixels
+        sar eax,4
+        mov BXMIN,eax
+        movsx eax,word BCAM(78)
+        sar eax,4
+        mov BXMAX,eax
+        movsx eax,word BCAM(80)
+        sar eax,4
+        mov BYMIN,eax
+        movsx eax,word BCAM(82)
+        sar eax,4
+        mov BYMAX,eax
+        xor ax,ax
+        mov BNS,ax
+        mov BNB,ax
+        mov ax,[bp+10]
+        mov BLEFT,ax
+        lfs ax,[bp+16]
+        mov BKOFF,ax
+        les di,[bp+24]              ; out: the small ones from its front, the big from its back
+        mov BFRONT,di
+        mov ax,[bp+28]
+        mov BROOM,ax
+        dec ax
+        imul ax,ax,12
+        add ax,di
+        mov BBACK,ax
+        lds si,[bp+6]               ; the balls
+        cmp word BLEFT,0
+        jle .done
+        cmp word BROOM,0
+        jle .done
+.ball:  mov eax,[si]                ; the middle less the camera: an axis past 2^20 sixteenths, gone
+        sub eax,BCAM(0)
+        cmp eax,0x2000000
+        jae .next
+        shr eax,4
+        sub eax,0x100000
+        mov ebx,eax                 ; rx
+        mov eax,[si+4]
+        sub eax,BCAM(4)
+        cmp eax,0x2000000
+        jae .next
+        shr eax,4
+        sub eax,0x100000
+        mov ecx,eax                 ; ry
+        mov eax,[si+8]
+        sub eax,BCAM(8)
+        cmp eax,0x2000000
+        jae .next
+        shr eax,4
+        sub eax,0x100000
+        mov edi,eax                 ; rz
+        imul eax,BCAM(20)           ; Z = r . front: before the near plane or past the far, gone
+        mov edx,ebx
+        imul edx,BCAM(12)
+        add eax,edx
+        mov edx,ecx
+        imul edx,BCAM(16)
+        add eax,edx
+        cmp eax,BCAM(64)
+        jg .next
+        cmp eax,BCAM(60)
+        jl .next
+        mov BZZ,eax
+        mov eax,ebx                 ; X = r . right: cx16 + X f16 / Z
+        imul eax,BCAM(24)
+        mov edx,ecx
+        imul edx,BCAM(28)
+        add eax,edx
+        mov edx,edi
+        imul edx,BCAM(32)
+        add eax,edx
+        imul dword BCAM(48)
+        idiv dword BZZ
+        add eax,BCAM(52)
+        mov BXX_,eax
+        mov eax,ebx                 ; Y = r . up: cy16 - Y f16 / Z
+        imul eax,BCAM(36)
+        imul ecx,BCAM(40)
+        add eax,ecx
+        imul edi,BCAM(44)
+        add eax,edi
+        imul dword BCAM(48)
+        idiv dword BZZ
+        mov ecx,BCAM(56)
+        sub ecx,eax
+        movzx bx,byte [si+18]       ; its kind
+        shl bx,4
+        add bx,BKOFF
+        mov eax,BZZ
+        cmp eax,[fs:bx+4]           ; past z1: one pixel
+        jg .one
+        mov eax,[fs:bx]             ; d = (rf / Z + 4) >> 3 (2 at least here), dmax at most
+        cdq
+        idiv dword BZZ
+        add eax,4
+        sar eax,3
+        cmp ax,[bp+20]
+        jle .dk
+        mov ax,[bp+20]
+.dk:    mov BD,ax
+        dec ax                      ; the top left: the middle less (d - 1) 8
+        shl ax,3
+        movsx edx,ax
+        sub ecx,edx
+        mov eax,BXX_
+        sub eax,edx
+        mov di,BFRONT               ; where it goes
+        cmp word BD,LZ_BALL_SMALL
+        jle .box
+        mov di,BBACK
+        jmp .box
+.one:   mov word BD,1
+        mov eax,BXX_
+        mov di,BFRONT
+.box:   sar eax,4                   ; x0, y0: off the box, gone
+        sar ecx,4
+        cmp eax,BXMAX
+        jge .next
+        cmp ecx,BYMAX
+        jge .next
+        movzx edx,word BD
+        add edx,eax
+        cmp edx,BXMIN
+        jle .next
+        movzx edx,word BD
+        add edx,ecx
+        cmp edx,BYMIN
+        jle .next
+        mov [es:di],ax
+        mov [es:di+2],cx
+        mov dx,BD
+        mov [es:di+4],dl
+        mov al,[si+19]              ; its set: the kind's first + (anim + phase) & mask
+        add al,[bp+22]
+        and al,[fs:bx+10]
+        add al,[fs:bx+8]
+        mov [es:di+5],al
+        mov word [es:di+6],0
+        cmp dl,LZ_BALL_SMALL
+        ja .big
+        movzx ax,al                 ; a small one's sprite: small + set 204 + the set's smaller ones
+        imul ax,ax,LZ_BALL_SMALL_SET
+        movzx bx,dl
+        add al,[cs:ball_before+bx-1]
+        adc ah,0
+        add ax,[bp+30]
+        mov [es:di+8],ax
+        mov ax,[bp+32]
+        mov [es:di+10],ax
+        add word BFRONT,12
+        inc word BNS
+        dec word BROOM
+        jz .done
+        jmp .next
+.big:   mov dword [es:di+8],0
+        sub word BBACK,12
+        inc word BNB
+        dec word BROOM
+        jz .done
+.next:  add si,20
+        dec word BLEFT
+        jnz .ball
+.done:  mov ax,BNS
+        mov dx,BNB
+        pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
+
+ball_before:                            ; the pixels of the sprites smaller than 1 .. 8
+        db 0, 1, 5, 14, 30, 55, 91, 140
+
+; void rv_balls_draw(const LzBallOut far *o, int n, unsigned char far *band, int band_y0, int y0, int y1,
+;                    const short far *ext, int ext_y0)
+; lz_balls_draw: each ball's sprite rows that fall in rows y0 .. y1-1 (cut
+; by the caller to the extents'), each clipped to its row's extent, the 0
+; pixels clear.  A ball not in the rows costs five to nine instructions (the
+; balls are visited once a band); one of one pixel goes straight in; the
+; rest two pixels a step.
+%define DEND  [bp-2]                    ; the list's end (its offset)
+%define DSEG  [bp-4]                    ; the list's segment (ds between balls)
+%define DSI   [bp-6]                    ; the ball being drawn
+%define DYS   [bp-8]                    ; its rows: the next, the end
+%define DYE   [bp-10]
+%define DROW  [bp-12]                   ; the next row's start in the band
+%define DEXT  [bp-14]                   ; its extent (fs)
+%define DX0   [bp-16]                   ; the sprite's left, its diameter
+%define DD    [bp-18]
+%define DSPR  [bp-20]                   ; the next row's first pixel in the sprite (ds while it is drawn)
+%define DFRAME 20
+        global _rv_balls_draw
+_rv_balls_draw:
+        push bp
+        mov bp,sp
+        sub sp,DFRAME
+        push si
+        push di
+        push ds
+        cld
+        mov cx,[bp+10]
+        or cx,cx
+        jle .done
+        lds si,[bp+6]
+        mov DSEG,ds
+        imul cx,cx,12
+        add cx,si
+        mov DEND,cx
+        mov es,[bp+14]
+        mov fs,[bp+24]
+.ball:  mov ax,[si+2]               ; its top at or past the rows' end, or its bottom at or before their start: not here
+        cmp ax,[bp+20]
+        jge .next
+        movzx cx,byte [si+4]
+        add cx,ax
+        cmp cx,[bp+18]
+        jle .next
+        mov dx,[si]                 ; its left
+        cmp byte [si+4],1
+        jne .rows
+        mov bx,ax                   ; one pixel: inside its row's extent, straight in
+        sub bx,[bp+26]
+        shl bx,2
+        add bx,[bp+22]
+        cmp dx,[fs:bx]
+        jl .next
+        cmp dx,[fs:bx+2]
+        jge .next
+        lgs bx,[si+8]
+        mov cl,[gs:bx]
+        or cl,cl
+        jz .next
+        mov di,ax
+        sub di,[bp+16]
+        imul di,di,640
+        add di,[bp+12]
+        add di,dx
+        mov [es:di],cl
+.next:  add si,12
+        cmp si,DEND
+        jb .ball
+.done:  pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
+
+.rows:  mov bx,ax                   ; its top; ys = max(top, y0), ye = min(bottom, y1)
+        cmp ax,[bp+18]
+        jge .s
+        mov ax,[bp+18]
+.s:     cmp cx,[bp+20]
+        jle .e
+        mov cx,[bp+20]
+.e:     mov DYS,ax
+        mov DYE,cx
+        mov DX0,dx
+        movzx cx,byte [si+4]
+        mov DD,cx
+        mov DSI,si
+        mov dx,ax                   ; the sprite's row ys: spr + (ys - top) d
+        sub dx,bx
+        imul dx,cx
+        add dx,[si+8]
+        mov DSPR,dx
+        mov dx,ax                   ; the band's
+        sub dx,[bp+16]
+        imul dx,dx,640
+        add dx,[bp+12]
+        mov DROW,dx
+        sub ax,[bp+26]              ; its extent
+        shl ax,2
+        add ax,[bp+22]
+        mov DEXT,ax
+        mov ds,[si+10]              ; the sprite's segment (the list's again after the ball)
+.row:   mov bx,DEXT
+        mov cx,DX0                  ; xs = max(x0, lo), xe = min(x0 + d, hi)
+        cmp cx,[fs:bx]
+        jge .xl
+        mov cx,[fs:bx]
+.xl:    mov dx,DX0
+        add dx,DD
+        cmp dx,[fs:bx+2]
+        jle .xh
+        mov dx,[fs:bx+2]
+.xh:    sub dx,cx                   ; the pixels
+        jle .rnext
+        mov di,DROW
+        add di,cx
+        mov si,DSPR
+        add si,cx
+        sub si,DX0
+        shr dx,1                    ; two at a time, an odd one first
+        jnc .two
+        lodsb
+        or al,al
+        jz .o
+        mov [es:di],al
+.o:     inc di
+        or dx,dx
+        jz .rnext
+.two:   lodsw
+        or al,al
+        jz .t1
+        mov [es:di],al
+.t1:    or ah,ah
+        jz .t2
+        mov [es:di+1],ah
+.t2:    add di,2
+        dec dx
+        jnz .two
+.rnext: mov ax,DD
+        add DSPR,ax
+        add word DROW,640
+        add word DEXT,4
+        inc word DYS
+        mov ax,DYS
+        cmp ax,DYE
+        jl .row
+        mov ds,DSEG
+        mov si,DSI
+        jmp .next

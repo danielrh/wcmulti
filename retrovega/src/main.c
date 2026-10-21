@@ -2,6 +2,7 @@
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
  *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo] [/flames]
+ *          [/balls N [/nearballs N]] [/balldemo]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -18,10 +19,12 @@
 #include "music.h"
 #include "ships.h"
 #include "flames.h"
+#include "balls.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
-extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo;
+extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
+    g_ball_demo;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -80,7 +83,22 @@ int main(int argc, char **argv)
             g_big_ships = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/flames"))           /* tests: six ships turning every way, their engines' flames */
             g_flames_demo = 1;
-        else if (!strcmp(argv[i], "/boltdemo")) {       /* tests: the player's own bolts */
+        else if (!strcmp(argv[i], "/balls")) {          /* tests: balls in the laser benchmark, N far (-1 adapting) */
+            g_balls = atoi(argv[++i]);
+            if (!g_lasers) {            /* (alone: the scene with one bolt) */
+                g_lasers = 1;
+                g_near_bolts = 0;
+            }
+        } else if (!strcmp(argv[i], "/nearballs"))      /* tests: its near balls (12) */
+            g_near_balls = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/balldemo")) {       /* tests: the four kinds of ball flying at the eye */
+            g_ball_demo = 1;
+            g_balls = 1;
+            g_near_balls = 0;
+            g_lasers = 1;
+            g_near_bolts = 0;
+            g_big_ships = g_far_ships = 0;
+        } else if (!strcmp(argv[i], "/boltdemo")) {     /* tests: the player's own bolts */
             g_bolt_demo = 1;
             g_lasers = 1;
             g_near_bolts = 0;
@@ -114,6 +132,7 @@ int main(int argc, char **argv)
         music_init();                   /* before the back buffer: its reading needs room */
         log_free("after the music");
         flames_reserve();               /* (resident too) */
+        balls_reserve();                /* the balls' sprites (resident) */
         ok = dat_open("RV.DAT");
     }
     if (!ok) {

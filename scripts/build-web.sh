@@ -194,7 +194,7 @@ if [ -z "${SKIP_RETROVEGA:-}" ]; then
     say "building RetroVega"
     "$ROOT/retrovega/build.sh" > "$BUILD/retrovega.log" 2>&1 || { tail -20 "$BUILD/retrovega.log"; exit 1; }
     (cd "$ROOT/retrovega/build/dos" && tar --format=ustar -czf "$OUT/retrovega.tar.gz" \
-        RV.EXE RV.DAT RVGAME.DAT RVOPL.BNK SHIP*.RV BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID \
+        RV.EXE RV.DAT RVGAME.DAT BALLS.DAT RVOPL.BNK SHIP*.RV BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID \
         LOUNGE.MID)
 fi
 

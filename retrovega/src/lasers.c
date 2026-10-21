@@ -179,6 +179,50 @@ void lz_place(const LzBolt LZ_FAR *b, int n, const LzCam LZ_FAR *c, LzLine LZ_FA
     *nfats = nf;
 }
 
+/* --- the balls --- */
+
+long lz_balls_place(const LzBall LZ_FAR *b, int n, const LzCam LZ_FAR *c, const LzBallKind LZ_FAR *k, int dmax,
+                    unsigned anim, LzBallOut LZ_FAR *out, int maxout, const unsigned char LZ_FAR *small)
+{
+    int i, ns = 0, nb = 0;
+    for (i = 0; i < n && ns + nb < maxout; i++, b++) {
+        const LzBallKind LZ_FAR *kd = &k[b->kind];
+        LzBallOut LZ_FAR *o;
+        long rx = b->x - c->bx, ry = b->y - c->by, rz = b->z - c->bz, X, Y, Z, d, x0, y0;
+        if ((unsigned long)rx >= 0x2000000UL || (unsigned long)ry >= 0x2000000UL || (unsigned long)rz >= 0x2000000UL)
+            continue;
+        rx = (rx >> 4) - 0x100000L;
+        ry = (ry >> 4) - 0x100000L;
+        rz = (rz >> 4) - 0x100000L;
+        Z = rx * c->f[0] + ry * c->f[1] + rz * c->f[2];
+        if (Z > c->zmax || Z < c->zmin)
+            continue;
+        X = rx * c->r[0] + ry * c->r[1] + rz * c->r[2];
+        Y = rx * c->u[0] + ry * c->u[1] + rz * c->u[2];
+        d = (kd->rf / Z + 4) >> 3;          /* 2 radii x16 over 16, rounded */
+        if (d < 1) d = 1;
+        if (d > dmax) d = dmax;
+        x0 = (c->cx16 + muldiv(X, c->f16, Z) - (d - 1) * 8) >> 4;
+        y0 = (c->cy16 - muldiv(Y, c->f16, Z) - (d - 1) * 8) >> 4;
+        if (x0 + d <= c->xmin16 >> 4 || x0 >= c->xmax16 >> 4 || y0 + d <= c->ymin16 >> 4 || y0 >= c->ymax16 >> 4)
+            continue;
+        o = d <= LZ_BALL_SMALL ? &out[ns] : &out[maxout - 1 - nb];
+        o->x = (short)x0;
+        o->y = (short)y0;
+        o->d = (unsigned char)d;
+        o->set = (unsigned char)(kd->set + ((anim + b->phase) & kd->mask));
+        o->pad = 0;
+        if (d <= LZ_BALL_SMALL) {           /* the set's sprites before it, this one's smaller ones */
+            o->spr = small + o->set * LZ_BALL_SMALL_SET + (unsigned)((d - 1) * d * (2 * d - 1) / 6);
+            ns++;
+        } else {
+            o->spr = 0;
+            nb++;
+        }
+    }
+    return (long)nb << 16 | ns;
+}
+
 void lz_move(LzBolt LZ_FAR *b, int n, long k)
 {
     for (; n > 0; n--, b++) {
@@ -476,3 +520,29 @@ void lz_flame_draw(const LzPass LZ_FAR *p, const LzFlame LZ_FAR *f, const LzFlam
     }
 }
 
+/* --- the balls' draw --- */
+
+void lz_balls_draw(const LzBallOut LZ_FAR *o, int n, unsigned char LZ_FAR *band, int band_y0, int y0, int y1,
+                   const short LZ_FAR *ext, int ext_y0, int ext_rows)
+{
+    int i;
+    if (!clip_rows(&y0, &y1, ext_y0, ext_rows, ext))
+        return;
+    for (i = 0; i < n; i++, o++) {
+        int ys = o->y > y0 ? o->y : y0, ye = o->y + o->d < y1 ? o->y + o->d : y1, y;
+        for (y = ys; y < ye; y++) {
+            const unsigned char LZ_FAR *src = o->spr + (unsigned)(y - o->y) * o->d;
+            unsigned char LZ_FAR *row = band + (unsigned)(y - band_y0) * 640;
+            int lo = 0, hi = 640, xs, xe, x;
+            if (ext) {
+                lo = ext[2 * (y - ext_y0)];
+                hi = ext[2 * (y - ext_y0) + 1];
+            }
+            xs = o->x > lo ? o->x : lo;
+            xe = o->x + o->d < hi ? o->x + o->d : hi;
+            for (x = xs; x < xe; x++)
+                if (src[x - o->x])
+                    row[x] = src[x - o->x];
+        }
+    }
+}

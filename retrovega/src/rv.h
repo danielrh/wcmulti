@@ -13,6 +13,7 @@ void rv_fail(const char *file, int line, const char *what, long value, long limi
 #define RV_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 
 void rv_log(const char *fmt, ...);
+void rv_logf(const char __far *fmt, ...);   /* a far format (DGROUP is nearly full) */
 void __far *rv_alloc_high(unsigned long bytes);   /* upper memory (a UMB), or 0 when DOS has none (util.c) */
 extern unsigned char rv_filebuf[1024];  /* the one near buffer file reads land in (fread wants near; DGROUP is nearly full) */
 

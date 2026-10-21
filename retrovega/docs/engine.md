@@ -1045,13 +1045,14 @@ checked against the C at every laser flight's start, set-up and pixels.
 **Baked** (the user's idea: pre-baked noisy frames rather than shading every
 frame). Shaded live, six near ships' 18 flames cost 16.6 ms a frame at
 40,000 cycles; shading two pixels at once and the set-up in asm brought it
-to 9.4. So every flame is baked when the flight starts: 2 looks x 6
+to 9.4. So every flame is baked, once, when the game starts (the user's
+wish: not at every launch; `flames_bake` after the fonts): 2 looks x 6
 foreshortenings (the tail's length over the root's radius: 0, end on, to 5,
 or 10 for the afterburner) x 9 ways (0 .. 90 degrees down-right; the rest
 mirrored and flipped as the ships' sprites are) x 6 sizes (1 .. 7 px of
 radius) x 2 frames of noise: 1,104 run-length sprites in the ships' format,
-260 KB of XMS (the mission level, reserved before the ships' sets take the
-rest), 0.7 s at 40,000 cycles. A frame takes the nearest, its nozzle at the
+260 KB of XMS (the resident level, reserved before RV.DAT), 0.7 s at
+40,000 cycles. A frame takes the nearest, its nozzle at the
 sprite's origin, and draws it with `ships_blit_mix`: each row from one of
 the two frames at random (the user's idea again: two frames mixed row by
 row make a new flame every frame). The way snaps to 11.25 degrees, the size
@@ -1095,6 +1096,69 @@ ships are at most `SHIPS_DENSE_BUFS` (2): the exact draws 11.2 ms, the frame
 6 are exact all 15 s and the other four from the sets, no switch. More
 exact ships would need the dense copies sized to their views (a fighter's is
 ~16 KB of the 64) rather than more memory.
+
+### Balls: the spherical projectiles
+
+The user's brief (2026-10-21): very fast spherical projectiles, far more
+common than the bolts, animating (1-4 frames), round so they need only a
+scale; a single pixel of their colour when far; all of it from XMS; four
+kinds: a silver mass driver slug (still), a glowing swirling blue ball, a
+searing hot ball with energy crackling out of it, a shining green ball with
+four points. Then, on the first sprites: the fire pinker with more
+discharges, the green one a continuous star rather than a lit ball with
+spikes, the blue one fiery plasma with random white highlights and clear
+sections.
+
+**The sprites** (`tools/balls.py` -> `BALLS.DAT`, built by `build.sh`, in
+the page's `retrovega.tar.gz`): for each kind and frame (a set: 1 + 4 + 4 +
+4 = 13), a sprite at every diameter 1 .. 32, d x d bytes, 0 clear; 145 KB.
+Each is drawn procedurally 8 x 8 times supersampled: the slug a shaded
+metal sphere; the plasma three swirling arms round a white core, its edge
+ragged, white flecks and clear rents from noise new every frame; the fire
+white through pale pink to hot pink and crimson, thirteen jagged
+discharges out of its rim, most forking; the star the curve |x|^½ + |y|^½ =
+1, white-green at its heart, turning an eighth of its points' spacing a
+frame (four frames loop). A pixel mostly covered is opaque, a partly
+covered one (a glow) a stipple, the rest clear; colours are the flight
+palette's fixed ones (1 .. 207), or a checker of two where their mix is
+much nearer than any one (the palette has no pinks: salmon and lavender
+make them). At 1 and 2 px a ball is one colour, its inner part's.
+
+**The engine** (`balls.c`, `balls.h`; the asm in `lasers.asm`, its
+reference in `lasers.c`). The file goes into resident XMS when the game
+starts. A flight with balls copies every set's sprites up to 8 px (204
+bytes a set, 2.6 KB) into conventional memory; bigger ones are fetched from
+XMS once a frame into an 8 KB buffer, each set and size once (a frame with
+more falls back to the 8 px one). A ball is 20 bytes (position, a velocity
+in positions a frame, its kind and animation phase); `balls_move` flies
+them. Once a frame `rv_balls_place` puts them through the camera (the
+bolts' `LzCam`, its near plane 100 km): diameter = 2 x the radius on
+screen, rounded, 1 .. 32; a kind past `z1` = rf / 12 is one pixel without
+the division; the set is the kind's first + (anim + phase) & mask (the
+animation steps every other frame, 15 a second). Small ones (8 px at most)
+go to the front of the list with their sprite pointers, big ones to its
+back; the small ones are drawn before the ships, the big ones after
+(`rv_balls_draw`: a ball not in the band costs five to nine instructions,
+one of one pixel goes straight in, the rest two pixels a step with 0
+clear, clipped to the cockpit's extents). Radii: slug 1.5 km, plasma and
+star 2.5, fire 3: 12-24 px at the near plane, one pixel past ~1,000-2,000
+km. The asm is checked against the C (records and pixels) at the start of
+every flight with balls; `balls_time` logs the costs.
+
+**Costs** at 40,000 cycles: a ball placed 2.69 us; drawn 0.78 us at 1 px
+(the band's whole visit), 5.4 at 4, 13.2 at 8, 40 at 16. The benchmark
+(`RV.EXE /balls -1 /bigships 1`, `tests/lasers.txt`: far balls fired from
+the far ships every way at 60 km a frame, living 1-3 s, 12 near ones):
+1,687 far balls and 12 near held ~30 fps beside a big ship drawn exactly,
+16 far ones and the cockpit; the balls 7 ms of the frame (placed 4.0,
+drawn 1.4, flown and fired 1.6 in the benchmark's C). `/balls N` fixes the
+count, `/nearballs N` the near ones; with no `/lasers` the scene has one
+bolt. `RV.EXE /balldemo` (`tests/boltdemo.txt`, `/record 1`): ten of each
+kind in a column off each corner of the view, 300 km apart from 100 km to
+3,000, flying at the eye 10 km a frame: every size at once, ten seconds.
+The module's state and its log formats are far (`rv_logf` takes a far
+format): DGROUP is nearly full (Watcom's `__far` binds to one declarator:
+each in a list needs its own).
 
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 

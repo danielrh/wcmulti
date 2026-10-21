@@ -98,6 +98,36 @@ typedef struct {
     signed char nr[256], nv[256];       /* 768, 1024 */
 } LzFlameLook;
 
+/* --- spherical projectiles, "balls" (balls.c; their sprites tools/balls.py's BALLS.DAT) --- */
+
+/* a ball in the world (20 bytes; the asm reads this layout) */
+typedef struct {
+    long x, y, z;                       /* 0: its middle, positions */
+    short vx, vy, vz;                   /* 12: its velocity, positions a frame (256 a km: 128 km a frame at most) */
+    unsigned char kind, phase;          /* 18: what it is (BALLS.DAT's), its animation's start */
+} LzBall;
+
+/* a kind of ball as the camera needs it (16 bytes; the asm reads this layout) */
+typedef struct {
+    long rf;                            /* 0: its radius (camera units) x f16, as LzCam.rf: rf / Z = radius x16 */
+    long z1;                            /* 4: rf / 12: past this Z it is one pixel (the asm's shortcut) */
+    unsigned char set, frames, mask;    /* 8: its first sprite set, its animation's frames (a power of 2), less 1 */
+    unsigned char pad[5];
+} LzBallKind;
+
+/* a ball on screen (12 bytes on DOS; the asm reads this layout) */
+typedef struct {
+    short x, y;                         /* 0: its sprite's top left */
+    unsigned char d, set;               /* 4: its diameter (1 .. dmax), its sprite set (the kind's first + frame) */
+    unsigned short pad;                 /* 6 */
+    const unsigned char LZ_FAR *spr;    /* 8: its d x d pixels, 0 clear (place's for a small one; 0 for a big one) */
+} LzBallOut;
+
+/* the small sprites, every set's sizes 1 .. LZ_BALL_SMALL in a block (set-major, each set's in order of size):
+ * place points a small ball at its own; a bigger one's sprite is the caller's to find */
+#define LZ_BALL_SMALL 8
+#define LZ_BALL_SMALL_SET 204                  /* a set's small sprites' bytes: 1 + 4 + ... + 64 */
+
 /* the look */
 typedef struct {
     unsigned char line, body, core, pad;   /* palette indices: far lines; the fat bolt's body, its middle */
@@ -133,6 +163,14 @@ void lz_capsule_setup(const LzFat LZ_FAR *f, int colour, LzPass LZ_FAR *p);
  * are the pixels the flame's shading visits) */
 void lz_flame_setup(int ax, int ay, int tx, int ty, int r16, int seed, LzFlame LZ_FAR *f, LzFat LZ_FAR *fp);
 
+/* the balls through the camera (its near plane, far cull and screen box): each one on screen out, its diameter
+ * the radius on screen x 2 rounded (at least 1 pixel, at most dmax), its frame (anim + phase) & mask.  The
+ * small ones (LZ_BALL_SMALL across at most) go to out's front, their sprites in `small`; the big ones to its
+ * back (out[maxout-1], out[maxout-2] ...), their sprites 0.  Returns how many small, and big x 65536
+ * (rv_balls_place's reference) */
+long lz_balls_place(const LzBall LZ_FAR *b, int n, const LzCam LZ_FAR *c, const LzBallKind LZ_FAR *k, int dmax,
+                    unsigned anim, LzBallOut LZ_FAR *out, int maxout, const unsigned char LZ_FAR *small);
+
 /* every bolt flies k positions for each sixteenth of a km of its half axis (rv_bolts_move's reference) */
 void lz_move(LzBolt LZ_FAR *b, int n, long k);
 
@@ -147,6 +185,10 @@ void lz_lines_draw(const LzLine LZ_FAR *l, int n, unsigned char colour, unsigned
                    int y0, int y1, const short LZ_FAR *ext, int ext_y0, int ext_rows);
 void lz_pass_draw(const LzPass LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1, const short LZ_FAR *ext,
                   int ext_y0, int ext_rows);
+/* the balls' sprites into the band's rows y0 .. y1-1, each row clipped to its extent, 0 pixels clear */
+void lz_balls_draw(const LzBallOut LZ_FAR *o, int n, unsigned char LZ_FAR *band, int band_y0, int y0, int y1,
+                   const short LZ_FAR *ext, int ext_y0, int ext_rows);
+
 /* a flame through its footprint p's rows and spans, each pixel shaded (its place in the flame, the profile, the
  * noise, the stipple) */
 void lz_flame_draw(const LzPass LZ_FAR *p, const LzFlame LZ_FAR *f, const LzFlameLook LZ_FAR *lk, unsigned char LZ_FAR *band,
@@ -165,6 +207,11 @@ int __far __cdecl rv_fat_setup(const LzFat __far *f, const LzStyle __far *st, Lz
                                int __far *core_line);
 void __far __cdecl rv_capsule_setup(const LzFat __far *f, int colour, LzPass __far *pass);
 void __far __cdecl rv_flame_setup(int ax, int ay, int tx, int ty, int r16, int seed, LzFlame __far *f, LzFat __far *fp);
+long __far __cdecl rv_balls_place(const LzBall __far *b, int n, const LzCam __far *cam, const LzBallKind __far *k,
+                                  int dmax, unsigned anim, LzBallOut __far *out, int maxout,
+                                  const unsigned char __far *small);
+void __far __cdecl rv_balls_draw(const LzBallOut __far *o, int n, unsigned char __far *band, int band_y0, int y0,
+                                 int y1, const short __far *ext, int ext_y0);
 void __far __cdecl rv_flame_draw(const LzPass __far *p, unsigned char __far *band, int band_y0, int y0, int y1,
                                  const short __far *ext, int ext_y0, const unsigned char __far *roots,
                                  const LzFlame __far *f, const LzFlameLook __far *look);

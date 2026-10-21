@@ -26,6 +26,7 @@
 #include "cockpit.h"
 #include "bolts.h"
 #include "flames.h"
+#include "balls.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -46,6 +47,14 @@ int g_far_ships = 16;                   /* RV.EXE /farships N: its small far shi
 int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
 int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts (a test aid) */
 int g_flames_demo = 0;                  /* RV.EXE /flames: six ships turning every way, flames on (a test aid) */
+int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
+                                           30 fps) and g_near_balls near */
+int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept near the camera in it */
+int g_ball_demo = 0;                    /* RV.EXE /balldemo: the four kinds of ball flying at the eye (a test aid) */
+static unsigned char __far *__far g_bl_life;   /* the balls' frames left each */
+static int __far g_bl_far, __far g_bl_cap, __far g_bl_n, __far g_bl_frames;   /* (far: DGROUP is nearly full) */
+static long __far g_bl_sum;
+static unsigned long __far g_t_bl_step;
 #define FLAMES_FRAMES 450               /* its recording's length (/record): fifteen seconds at 30 fps */
 static int g_flames_frames;
 #define DEMO_BOLTS 11
@@ -555,6 +564,8 @@ static void draw_world(int y0, int y1)
     draw_stars(y0, y1);
     if (g_lasers)
         lasers_draw_far(y0, y1, ext, ey0, rows);
+    if (g_bl_cap)                       /* the far balls: a pixel or a few */
+        balls_draw_far(y0, y1, ext, ey0, rows);
     if (g_sky && g_set_enemy >= 0) {
         basis_of(0, &cam);
         for (i = 0; i < 3; i++)
@@ -598,6 +609,8 @@ static void draw_world(int y0, int y1)
     }
     if (g_lasers)                       /* the near bolts last: nearest of all */
         bolts_draw_near(y0, y1, ext, ey0, rows);
+    if (g_bl_cap)
+        balls_draw_near(y0, y1, ext, ey0, rows);
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
@@ -610,7 +623,7 @@ static void __far __cdecl draw_pointer_body(void)
 {
     /* the steering cross where the pointer is, in mouse mode */
     int x = g_scene.px, y = g_scene.py;
-    if (g_keyboard_steer || g_bolt_demo)   /* (the demo's middle bolt is where the cross would be) */
+    if (g_keyboard_steer || g_bolt_demo || g_ball_demo)   /* (the demo's middle bolt is where the cross would be) */
         return;
     gfx_fill(x - 5, y, 11, 1, UI_WHITE, g_ptr_y0, g_ptr_y1);
     gfx_fill(x, y - 5, 1, 11, UI_WHITE, g_ptr_y0, g_ptr_y1);
@@ -697,6 +710,16 @@ static void gather(void)
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
+    } else if (g_ball_demo) {           /* the demo's readout: the time in its round */
+        static const char __far name[] = "BALLS";
+        int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
+        _fstrcpy((char __far *)g_mfd[0][0], name);
+        sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
+        g_mfd[0][2][0] = 0;
+    } else if (g_balls) {               /* the balls' benchmark's */
+        sprintf(g_mfd[0][0], "BALLS %d+%d", g_near_balls, g_bl_far);
+        sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
+        sprintf(g_mfd[0][2], "BOLTS %d+%d", g_near_bolts, lasers_far());
     } else if (g_lasers) {              /* the laser benchmark's readout */
         sprintf(g_mfd[0][0], "BOLTS %d+%d", g_near_bolts, lasers_far());
         sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
@@ -829,6 +852,111 @@ static void lz_spawn_far(int i)
 
 static int lasers_far(void) { return g_lz_far; }
 
+/* --- the balls in the laser benchmark (RV.EXE /balls N) ---
+ *
+ * The user's (2026-10-21): spherical projectiles, far more common than the
+ * bolts, so the question is again how many a frame holds at 30 fps.  N far
+ * ones fired from the far ships every way, living one to three seconds, and
+ * g_near_balls kept 150 .. 900 km ahead; the four kinds at random; N -1
+ * adapts to the frame rate.  They fly 60 km a frame (1,800 kps). */
+#define BALL_SPEED_KM 60
+
+static void ball_spawn(int i)
+{
+    LzBall __far *b = balls_pool() + i;
+    int k;
+    if (i < g_near_balls) {             /* near: 150 .. 900 km ahead, within the view */
+        long d = 150 + vrnd() % 750, across = (long)((int)(vrnd() % 2001) - 1000) * d * 3 / 10000,
+             up = (long)((int)(vrnd() % 2001) - 1000) * d * 18 / 100000;
+        const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
+        b->x = gPositionVector[0].x + f->x * d + r->x * across + u->x * up;
+        b->y = gPositionVector[0].y + f->y * d + r->y * across + u->y * up;
+        b->z = gPositionVector[0].z + f->z * d + r->z * across + u->z * up;
+        g_bl_life[i] = (unsigned char)(6 + vrnd() % 10);
+    } else {                            /* far: from a far ship (or where one would be) */
+        k = (int)(vrnd() % (g_far_ships ? g_far_ships : LZ_SHIPS));
+        b->x = g_lz_ship[k].pos.x + 256L * ((int)(vrnd() % 1201) - 600);
+        b->y = g_lz_ship[k].pos.y + 256L * ((int)(vrnd() % 601) - 300);
+        b->z = g_lz_ship[k].pos.z + 256L * ((int)(vrnd() % 1201) - 600);
+        g_bl_life[i] = (unsigned char)(30 + vrnd() % 60);
+    }
+    k = vrnd() % LZ_DIRS;               /* any way */
+    b->vx = (short)((long)g_lz_dir[k].x * (BALL_SPEED_KM * 256L) / BOLT_HALF16);
+    b->vy = (short)((long)g_lz_dir[k].y * (BALL_SPEED_KM * 256L) / BOLT_HALF16);
+    b->vz = (short)((long)g_lz_dir[k].z * (BALL_SPEED_KM * 256L) / BOLT_HALF16);
+    b->kind = (unsigned char)(vrnd() % BALL_KINDS);
+    b->phase = (unsigned char)(vrnd() % 4);
+}
+
+/* --- the ball demo (RV.EXE /balldemo): the four kinds flying at the eye ---
+ *
+ * Ten of each kind in a column off the view's middle (one kind in each
+ * corner), 300 km apart from 100 km out to 3,000, flying at the eye 10 km a
+ * frame and starting again at the back: every size at once, from a pixel to
+ * the biggest, animating.  Ten seconds (DEMO_FRAMES), then the flight lands. */
+#define BDEMO_DEPTHS 10
+static void ball_demo_step(void)
+{
+    static const signed char __far at[BALL_KINDS][2] = { { -24, 10 }, { 24, 10 }, { -24, -10 }, { 24, -10 } };
+    const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
+    int k, j, i = 0;
+    if (g_bl_cap < BALL_KINDS * BDEMO_DEPTHS)
+        return;
+    for (k = 0; k < BALL_KINDS; k++)
+        for (j = 0; j < BDEMO_DEPTHS; j++, i++) {
+            LzBall __far *b = balls_pool() + i;
+            long d = 100 + ((j * 300L - (long)g_demo_frame * 10) % 3000 + 3000) % 3000, across = at[k][0], up = at[k][1];
+            b->x = gPositionVector[0].x + f->x * d + r->x * across + u->x * up;
+            b->y = gPositionVector[0].y + f->y * d + r->y * across + u->y * up;
+            b->z = gPositionVector[0].z + f->z * d + r->z * across + u->z * up;
+            b->vx = b->vy = b->vz = 0;
+            b->kind = (unsigned char)k;
+            b->phase = (unsigned char)j;
+        }
+    balls_set_count(i);
+    if (++g_demo_frame >= DEMO_FRAMES)
+        missionStatus = 1;              /* landed */
+}
+
+/* once a frame: the count, the flight, the expired ones fired again */
+static void balls_step(void)
+{
+    int i, n;
+    unsigned long t0 = clock240();
+    if (!g_bl_cap)
+        return;
+    if (g_ball_demo) {
+        ball_demo_step();
+        return;
+    }
+    if (g_balls < 0) {
+        if (g_fps10 > FPS_WANT * 10 + 10)
+            g_bl_far += g_bl_far < 800 ? 32 : 16;
+        else if (g_fps10 < FPS_WANT * 10 - 10)
+            g_bl_far -= g_bl_far < 800 ? 16 : 8;
+    } else {
+        g_bl_far = g_balls;
+    }
+    if (g_bl_far > g_bl_cap - g_near_balls)
+        g_bl_far = g_bl_cap - g_near_balls;
+    if (g_bl_far < 0)
+        g_bl_far = 0;
+    n = g_near_balls + g_bl_far;
+    for (i = g_bl_n; i < n; i++)
+        ball_spawn(i);
+    g_bl_n = n;
+    balls_set_count(n);
+    balls_move();
+    for (i = 0; i < n; i++)
+        if (!--g_bl_life[i])
+            ball_spawn(i);
+    if (clock240() - g_t0 > FLIGHT_TICKS / 2) {
+        g_bl_sum += g_bl_far;
+        g_bl_frames++;
+    }
+    g_t_bl_step += clock240() - t0;
+}
+
 /* --- the bolt demo (RV.EXE /boltdemo): the player's own shots ---
  *
  * The user's question (2026-10-21): most near bolts a player sees are their
@@ -917,6 +1045,11 @@ static void lasers_setup(int enemy_type)
     lz_init();
     g_demo_frame = 0;
     g_lz_far = g_lasers > 0 ? g_lasers : 64;
+    g_bl_far = g_balls > 0 ? g_balls : 128;
+    g_bl_n = 0;
+    g_bl_sum = 0;
+    g_bl_frames = 0;
+    g_t_bl_step = 0;
     g_lz_n = 0;
     g_lz_sum = 0;
     g_lz_frames = 0;
@@ -950,13 +1083,31 @@ static void lasers_pool(void)
         } while ((dt = clock240() - t0) < 120);
         rv_log("lasers: lf_place takes %lu us", dt * 1000000UL / 240 / (unsigned long)it);
     }
+    if (g_balls) {
+        balls_selftest();
+        balls_time();
+        balls_free();
+    }
     _fheapshrink();                     /* (what the checks took back to DOS) */
-    g_lz_cap = bolts_init(3200, 12);    /* 12 KB kept for what the flight takes later */
+    /* 12 KB kept for what the flight takes later; with balls, the bolts fixed in number or 800 */
+    g_lz_cap = bolts_init(g_balls ? (g_lasers > 0 ? g_lasers + g_near_bolts + 16 : 800) : 3200, 12);
     g_lz_life = g_lz_cap ? (unsigned char __far *)_fmalloc(g_lz_cap) : 0;
     if (!g_lz_life)
         g_lz_cap = 0;
     if (g_near_bolts > g_lz_cap)
         g_near_bolts = g_lz_cap;
+    if (g_balls) {                      /* the balls: what is left but 14 KB (their lives' 2 from it) */
+        static const char __far s_room[] = "balls: room for %d; %d near, %s far";
+        g_bl_cap = balls_init(2000, 14);
+        g_bl_life = g_bl_cap ? (unsigned char __far *)_fmalloc(g_bl_cap) : 0;
+        if (!g_bl_life) {
+            g_bl_cap = 0;
+            balls_free();
+        }
+        if (g_near_balls > g_bl_cap)
+            g_near_balls = g_bl_cap;
+        rv_logf(s_room, g_bl_cap, g_near_balls, g_balls < 0 ? "adapting" : "fixed");
+    }
     rv_log("lasers: room for %d bolts; %d near, %s far; 2 big ships near, %d far", g_lz_cap, g_near_bolts,
            g_lasers < 0 ? "adapting" : "fixed", g_far_ships);
 }
@@ -1018,6 +1169,8 @@ static void lasers_place(void)
     basis_of(0, &cam);
     bolts_place(gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, &cam, SCR_W / 2, g_cam_cy, 400,
                 c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H, BOLT_LINE16);
+    balls_place(gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, &cam, SCR_W / 2, g_cam_cy, 400,
+                c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H, frameCounter / 2);   /* (15 animation frames a second) */
 }
 
 static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int rows)
@@ -1046,19 +1199,21 @@ static unsigned long per_frame(unsigned long ticks, unsigned frames)
 
 static void lasers_report(void)
 {
+    static const char __far s_held[] = "lasers: %ld far bolts and %d near held %d fps (the settled half's average; "
+        "%d lines and %d fat on screen at the end), beside %d big ships drawn exactly and %d far ones",
+        __far s_ms[] = "lasers: ms a frame: bolts placed %lu.%02lu, far bolts drawn %lu.%02lu, near %lu.%02lu, flown and fired "
+        "%lu.%02lu; big ships %lu.%02lu, far ships %lu.%02lu (the slots' from the sets %lu.%02lu); stars %lu.%02lu; "
+        "the whole picture %lu.%02lu",
+        __far s_rest[] = "lasers: the cockpit and the flip %lu.%02lu ms a frame; the rest of the frame (simulation, plan, "
+        "stars and balls placed) %lu.%02lu; frames %lu.%02lu ms on average; the world drawn in %lu.%02lu bands a frame";
     unsigned long t[4], f = frameCounter;
     int lines, fats;
     if (!g_lz_cap)
         return;
     bolts_ticks(t);
     bolts_on_screen(&lines, &fats);
-    rv_log("lasers: %ld far bolts and %d near held %d fps (the settled half's average; %d lines and %d fat on screen at "
-           "the end), beside %d big ships drawn exactly and %d far ones",
-           g_lz_frames ? g_lz_sum / g_lz_frames : 0L, g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships);
-    rv_log("lasers: ms a frame: bolts placed %lu.%02lu, far bolts drawn %lu.%02lu, near %lu.%02lu, flown and fired "
-           "%lu.%02lu; big ships %lu.%02lu, far ships %lu.%02lu (the slots' from the sets %lu.%02lu); stars %lu.%02lu; "
-           "the whole picture %lu.%02lu",
-           per_frame(t[0], f) / 100, per_frame(t[0], f) % 100, per_frame(t[1], f) / 100, per_frame(t[1], f) % 100,
+    rv_logf(s_held, g_lz_frames ? g_lz_sum / g_lz_frames : 0L, g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships);
+    rv_logf(s_ms, per_frame(t[0], f) / 100, per_frame(t[0], f) % 100, per_frame(t[1], f) / 100, per_frame(t[1], f) % 100,
            per_frame(t[2], f) / 100, per_frame(t[2], f) % 100, per_frame(g_t_lz_step, f) / 100,
            per_frame(g_t_lz_step, f) % 100, per_frame(g_t_exact, f) / 100, per_frame(g_t_exact, f) % 100,
            per_frame(g_t_far_ships, f) / 100, per_frame(g_t_far_ships, f) % 100, per_frame(g_t_sets, f) / 100,
@@ -1070,9 +1225,7 @@ static void lasers_report(void)
          * picture and the bolts' own work (the simulation, the plan, the stars' placing) */
         unsigned long world = t[1] + t[2] + g_t_exact + g_t_sets + g_t_far_ships + g_star_draw_ticks;
         unsigned long frame = (clock240() - g_t0) - g_t_wait;
-        rv_log("lasers: the cockpit and the flip %lu.%02lu ms a frame; the rest of the frame (simulation, plan, stars "
-               "placed) %lu.%02lu; frames %lu.%02lu ms on average; the world drawn in %lu.%02lu bands a frame",
-               per_frame(g_t_draw - world, f) / 100, per_frame(g_t_draw - world, f) % 100,
+        rv_logf(s_rest, per_frame(g_t_draw - world, f) / 100, per_frame(g_t_draw - world, f) % 100,
                per_frame(frame - g_t_draw - t[0] - g_t_lz_step, f) / 100,
                per_frame(frame - g_t_draw - t[0] - g_t_lz_step, f) % 100, per_frame(frame, f) / 100,
                per_frame(frame, f) % 100, g_world_calls / (f ? f : 1), g_world_calls * 100 / (f ? f : 1) % 100);
@@ -1082,6 +1235,29 @@ static void lasers_report(void)
     g_lz_life = 0;
     g_lz_cap = 0;
     bolts_free();
+}
+
+static void balls_report(void)
+{
+    static const char __far s_held[] = "balls: %ld far balls and %d near held %d fps (the settled half's average; %d "
+        "small and %d big on screen at the end)",
+        __far s_ms[] = "balls: ms a frame: placed %lu.%02lu, the small ones drawn %lu.%02lu, the big %lu.%02lu, flown and "
+        "fired %lu.%02lu";
+    unsigned long t[3], f = frameCounter;
+    int small, big;
+    if (g_bl_cap) {
+        balls_ticks(t);
+        balls_on_screen(&small, &big);
+        rv_logf(s_held, g_bl_frames ? g_bl_sum / g_bl_frames : 0L, g_near_balls, FPS_WANT, small, big);
+        rv_logf(s_ms, per_frame(t[0], f) / 100, per_frame(t[0], f) % 100, per_frame(t[1], f) / 100,
+                per_frame(t[1], f) % 100, per_frame(t[2], f) / 100, per_frame(t[2], f) % 100,
+                per_frame(g_t_bl_step, f) / 100, per_frame(g_t_bl_step, f) % 100);
+    }
+    if (g_bl_life)
+        _ffree(g_bl_life);
+    g_bl_life = 0;
+    g_bl_cap = 0;
+    balls_free();
 }
 
 /* --- the loop's calls (rvflight.inc) --- */
@@ -1314,8 +1490,9 @@ void __far __cdecl flight_frame(void)
     if (g_lasers) {
         if (g_bolt_demo)
             demo_step();
-        else
+        else if (!g_ball_demo)
             lasers_step();
+        balls_step();
         lasers_place();
     }
     /* the rate over the last FPS_WINDOW frames */
@@ -1360,7 +1537,7 @@ void __far __cdecl flight_frame(void)
     /* the frame rate capped at FPS_WANT: the simulation is per frame (a kps is 12.8 units a frame), so
      * without the cap a bare flight ran three times too fast natively (the adapting benchmark had been
      * holding it at 30 by loading it; off by default now) */
-    if (g_bench_wanted >= 0 && g_lasers >= 0) {   /* (the adapting benchmarks measure the uncapped rate) */
+    if (g_bench_wanted >= 0 && g_lasers >= 0 && g_balls >= 0) {   /* (the adapting benchmarks: the uncapped rate) */
         unsigned long t0 = clock240();
         while (clock240() - now < 240 / FPS_WANT)
             rv_halt();
@@ -1413,8 +1590,10 @@ int flight_fly(const RvMission __far *m)
            (g_star_place_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,
            g_star_draw_ticks * 1000 / 240 / (frameCounter ? frameCounter : 1),
            (g_star_draw_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100);
-    if (g_lasers)
+    if (g_lasers) {
         lasers_report();
+        balls_report();
+    }
     g_star_place_ticks = g_star_draw_ticks = 0;
     g_scene.full = 0;
     g_scene.no_room = 0;

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 #include <dos.h>
 #include <i86.h>
 #include "rv.h"
@@ -21,6 +22,26 @@ void rv_log(const char *fmt, ...)
     g_log_started = 1;
     va_start(ap, fmt);
     vfprintf(f, fmt, ap);
+    va_end(ap);
+    fputc('\n', f);
+    fclose(f);
+}
+
+/* the same with its format far (out of DGROUP, which is nearly full: `static const char __far` formats), copied
+ * to the stack for the library */
+void rv_logf(const char __far *fmt, ...)
+{
+    char buf[400];
+    va_list ap;
+    FILE *f;
+    _fstrncpy(buf, fmt, sizeof buf - 1);
+    buf[sizeof buf - 1] = 0;
+    f = fopen("RVLOG.TXT", g_log_started ? "a" : "w");
+    if (!f)
+        return;
+    g_log_started = 1;
+    va_start(ap, fmt);
+    vfprintf(f, buf, ap);
     va_end(ap);
     fputc('\n', f);
     fclose(f);
