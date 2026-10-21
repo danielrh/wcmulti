@@ -410,7 +410,10 @@ static void slab_of(const LzFat LZ_FAR *f, int shape, int w, int colour, LzPoly 
     {
         int nx = (int)(-dy * w / len), ny = (int)(dx * w / len);   /* w across the bolt */
         if (shape == LZ_SHAPE_RECT) {
-            poly4(p, colour, ax + nx, ay + ny, bx + nx, by + ny, bx - nx, by - ny, ax - nx, ay - ny);
+            /* its ends pushed out by w along the bolt, (ny, -nx), as the other shapes' are: end on it is a
+             * square, not a sliver as thin as the bolt's projected length */
+            poly4(p, colour, ax - ny + nx, ay + nx + ny, bx + ny + nx, by - nx + ny, bx + ny - nx, by - nx - ny,
+                  ax - ny - nx, ay + nx - ny);
         } else {
             int tx = (int)(dx * w / len), ty = (int)(dy * w / len);   /* w along it: the points */
             p->n = 6;

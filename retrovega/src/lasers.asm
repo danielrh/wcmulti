@@ -1430,25 +1430,34 @@ slab_of:
         mov SNY,ax
         cmp word [bp+10],2
         jne .hex
+        ; the rectangle, its ends pushed out by w along the bolt, (ny, -nx): a-t+n, b+t+n, b+t-n, a-t-n
         mov word [es:di],4
         mov cx,SAX
+        sub cx,SNY
         add cx,SNX
         mov dx,SAY
+        add dx,SNX
         add dx,SNY
         VTX 0,cx,dx
         mov cx,SBX
+        add cx,SNY
         add cx,SNX
         mov dx,SBY
+        sub dx,SNX
         add dx,SNY
         VTX 1,cx,dx
         mov cx,SBX
+        add cx,SNY
         sub cx,SNX
         mov dx,SBY
+        sub dx,SNX
         sub dx,SNY
         VTX 2,cx,dx
         mov cx,SAX
+        sub cx,SNY
         sub cx,SNX
         mov dx,SAY
+        add dx,SNX
         sub dx,SNY
         VTX 3,cx,dx
         jmp poly_rows
