@@ -1103,6 +1103,19 @@ int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBa
     return draw_turned(s, set_i, p.view, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows);
 }
 
+int ships_draw_sky(int set_i, int v, const LfVec *dir, const LfVec *up, const LfBasis *cam, int scale256,
+                   int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    LfPlace p;
+    lf_sky(dir, up, cam, g_cx, g_cy, g_focal, &p);
+    if (!p.on_screen || scale256 < 8)
+        return 0;
+    if (scale256 == 256 && ((p.roll + 8) & 1023) < 16)
+        return ships_blit(s, v, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+    return draw_turned(s, set_i, v, p.sx, p.sy, scale256, p.roll, 1, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+}
+
 long ships_size_of(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, LfPlace *p)
 {
     const ShipSet __far *s = ships_set(set_i);

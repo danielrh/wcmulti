@@ -678,6 +678,27 @@ videos. Recipe: `render_all.py --only GAWAIN --step 10 --out DIR`,
 `build/host/rvsprites OUT/SHIP02.RV OUT/SHIP02.RVS 0 4 3`, the two files
 copied over build/dos's after `build.sh`.
 
+**The sky** (2026-10-20, the user's ask: "a generic function to blit a
+sprite at infinity at a vector ... so it will rotate with the player; that
+way we can make a starfield if we want"). `lf_sky(dir, up, cam, cx, cy,
+focal, &place)` (lightfield.c, unit-tested on the host) puts a direction
+of the sky — any length, the world frame — through the camera exactly as
+`lf_place` puts a ship: where it shows, and the turn on screen of a sprite
+painted there whose up in the world is `up` (the world's own for most), so
+it turns with the sky as the player rolls. `ships_draw_sky(set, v, dir,
+up, cam, scale, ...)` paints a set's full-size view there through the
+exact path (turned by the sky's roll, scaled); the view must be in the
+frame's plan (`ships_prefetch_view`). The stars themselves are now 2,000
+directions over the whole sky (the opening sees about a twentieth): each
+frame `stars_place` puts them through the camera — three products first,
+to drop the sky behind and beside — so they turn with pitch, yaw and roll
+alike, and the ships sit still against them (the old field slid in two
+dimensions against the steering). Test scene: `RV.EXE /sky /stream 8`
+with tests/sky.txt (three Gawain views painted ahead, high left and low
+right; the player rolls, yaws, pitches): the sky sprites take stream
+slots like any full-size view, so the scene asks for eight; real sky art
+(suns, nebulae, planets) would live in its own small set, resident.
+
 **Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
 its sprites on the fly, continuously, which the earlier note here got
 wrong; at 320×200 and ~12 fps it had ten times our pixel-time budget per

@@ -22,7 +22,7 @@ typedef struct {
     unsigned long len;                  /* its bytes, for the stream */
 } ShipView;
 
-#define SET_BLOCKS 64                   /* 1 + 12 sizes + 9 sizes x 4 stored rolls = 49 *
+#define SET_BLOCKS 64                   /* 1 + 12 sizes + 9 sizes x 4 stored rolls = 49 */
 
 /* one (size, roll) block of a pre-rendered set (SHIPnn.RVS, tools/rvsprites.c) */
 typedef struct {
@@ -98,6 +98,14 @@ int ships_draw(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *shi
  * or too big for the dense buffer: the caller draws from the sets. */
 int ships_draw_exact(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int detail,
                      int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
+
+/* a set's full-size view v painted on the sky: at direction dir (the world
+ * frame, any length), its up `up` in the world, turned with the sky as the
+ * camera rolls (lf_sky), at scale256 / 256 of full size; the view must be
+ * prefetched in the frame's plan (ships_prefetch_view).  For suns, nebulae,
+ * planets.  Returns 0 when nothing is drawn (behind, or the view not in). */
+int ships_draw_sky(int set, int v, const LfVec *dir, const LfVec *up, const LfBasis *cam, int scale256,
+                   int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
 
 /* where a ship would show and how big: lf_place through the camera, and the
  * output pixels its full-size view would cover at scale256 (for the plan) */

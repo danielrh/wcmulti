@@ -29,6 +29,11 @@ int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE
 int g_bench_wanted = -1;                /* RV.EXE /bench N: that many copies, no adapting; 0 none; -1 adapt */
 int g_record = 0;                       /* RV.EXE /record N: a screenshot (Rnnnnn.BMP) every N frames of flight */
 int g_capital = 0;                      /* RV.EXE /capital: the carrier in the flight (a test aid) */
+int g_sky = 0;                          /* RV.EXE /sky: three ship views painted on the sky, to roll and turn round (a test aid) */
+/* the sky test scene's sprites: the enemy type's views, painted on the sky at these directions and sizes */
+static const struct { int v; LfVec dir; int scale; } g_sky_sprites[3] = {
+    { 10, { 0, 1500, 4096 }, 256 }, { 1, { -3000, 900, 2500 }, 192 }, { 18, { 3500, -600, 2200 }, 128 }
+};
 int g_zoom = 0;                         /* RV.EXE /zoom: one ship ahead, rolling, swinging in and out (a test aid) */
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
  * at draw time, sixteen cycles a pixel) while their pixels fit this budget
@@ -47,7 +52,7 @@ static int g_nplan;
 #define FPS_WINDOW 8                    /* frames the rate is measured over */
 #define FPS_WANT 30
 #define BENCH_MAX 900
-#define STARS 160
+#define STARS 2000                      /* over the whole sky: the opening sees a twentieth of it */
 
 /* rvflight.inc */
 unsigned short __far __cdecl rv_flight_run(void);
@@ -256,33 +261,61 @@ static void spawn(int s, int type, int side, int controller, long x, long y, lon
 
 /* --- the picture --- */
 
-static struct { short x, y; } __far g_star[STARS];
-static int g_star_x0, g_star_y0, g_star_w, g_star_h;
+/* the stars are directions of the sky (the world frame): each frame they are
+ * put through the camera (lf_sky), so they turn with every axis of the
+ * player's own rotation, as the ships do, and the ships sit still against
+ * them */
+static struct { short x, y, z; } __far g_star[STARS];
+static struct { short x, y; } __far g_star_at[STARS];   /* on screen this frame, -1 when off */
+static const LfVec g_world_up = { 0, 256, 0 };
+static int g_cam_cy = SCR_H / 2;        /* the camera's centre row: the opening's middle (ships_set_camera's) */
 
 static void stars_init(void)
 {
-    const RvCockpit __far *c = cockpit_record();
     int i;
-    g_star_x0 = 0;
-    g_star_w = SCR_W;
-    g_star_y0 = c ? c->open_y0 : 0;
-    g_star_h = c ? c->open_y1 - c->open_y0 : SCR_H;
     for (i = 0; i < STARS; i++) {
-        g_star[i].x = (short)(vrnd() % g_star_w);
-        g_star[i].y = (short)(vrnd() % g_star_h);
+        /* a point of the unit sphere: one of the cube, inside the ball, pushed out to length 4096 */
+        long x, y, z, n;
+        unsigned long r;
+        do {
+            x = (long)(vrnd() % 8192) - 4096;
+            y = (long)(vrnd() % 8192) - 4096;
+            z = (long)(vrnd() % 8192) - 4096;
+            n = x * x + y * y + z * z;
+        } while (n < 1024L * 1024 || n > 4096L * 4096);
+        r = lf_sqrt((unsigned long)n);
+        g_star[i].x = (short)(x * 4096 / (long)r);
+        g_star[i].y = (short)(y * 4096 / (long)r);
+        g_star[i].z = (short)(z * 4096 / (long)r);
+        g_star_at[i].x = g_star_at[i].y = -1;
     }
 }
 
-/* the stars slide against the turn, wrapping round the opening */
-static void stars_move(void)
+static void basis_of(int s, LfBasis *b);
+
+/* once a frame: where each star shows through the camera */
+static void stars_place(void)
 {
-    int i, dx = -g_steer_x * 2, dy = -g_steer_y * 2;
-    if (!dx && !dy)
-        return;
+    LfBasis cam;
+    LfVec dir;
+    LfPlace p;
+    int i;
+    basis_of(0, &cam);
     for (i = 0; i < STARS; i++) {
-        int x = (g_star[i].x + dx) % g_star_w, y = (g_star[i].y + dy) % g_star_h;
-        g_star[i].x = (short)(x < 0 ? x + g_star_w : x);
-        g_star[i].y = (short)(y < 0 ? y + g_star_h : y);
+        dir.x = g_star[i].x;
+        dir.y = g_star[i].y;
+        dir.z = g_star[i].z;
+        /* most of the sky is behind or beside the opening: three products tell before the projection does */
+        if (dir.x * cam.front.x + dir.y * cam.front.y + dir.z * cam.front.z < 4096L * 256 * 7 / 10) {
+            g_star_at[i].x = g_star_at[i].y = -1;
+            continue;
+        }
+        lf_sky(&dir, &g_world_up, &cam, SCR_W / 2, g_cam_cy, 400, &p);
+        if (p.on_screen && p.sx >= 0 && p.sx < SCR_W && p.sy >= 0 && p.sy < SCR_H) {
+            g_star_at[i].x = (short)p.sx;
+            g_star_at[i].y = (short)p.sy;
+        } else
+            g_star_at[i].x = g_star_at[i].y = -1;
     }
 }
 
@@ -291,7 +324,7 @@ static void draw_stars(int y0, int y1)
     int i, ey0, rows;
     const short __far *ext = cockpit_extents(&ey0, &rows);
     for (i = 0; i < STARS; i++) {
-        int x = g_star_x0 + g_star[i].x, y = g_star_y0 + g_star[i].y, k = y - ey0;
+        int x = g_star_at[i].x, y = g_star_at[i].y, k = y - ey0;
         if (y < y0 || y >= y1)
             continue;
         if (ext && (k < 0 || k >= rows || x < ext[2 * k] || x >= ext[2 * k + 1]))
@@ -377,6 +410,9 @@ static void plan_draws(void)
         basis_of(g_plan[best].slot, &ship);
         ships_prefetch(g_plan[best].set, &rel, &cam, &ship);
     }
+    if (g_sky && g_set_enemy >= 0)      /* the sky scene's views, in before the draws */
+        for (i = 0; i < 3; i++)
+            ships_prefetch_view(g_set_enemy, g_sky_sprites[i].v);
     /* back to front */
     for (i = 1; i < g_nplan; i++)
         for (k = i; k > 0 && g_plan[k].depth > g_plan[k - 1].depth; k--) {
@@ -394,6 +430,12 @@ static void draw_world(int y0, int y1)
     LfBasis cam, ship;
     int path;
     draw_stars(y0, y1);
+    if (g_sky && g_set_enemy >= 0) {
+        basis_of(0, &cam);
+        for (i = 0; i < 3; i++)
+            ships_draw_sky(g_set_enemy, g_sky_sprites[i].v, &g_sky_sprites[i].dir, &g_world_up, &cam,
+                           g_sky_sprites[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
+    }
     /* the ships, as the frame's plan has them: the nearest exactly, the rest from the sets */
     basis_of(0, &cam);
     for (i = 0; i < g_nplan; i++) {
@@ -628,8 +670,8 @@ void __far __cdecl flight_startup(void)
         taken = ships_load_blocks(free_kb > 1024 ? (free_kb - 1024) * 1024UL : 0);
         rv_log("ships: %lu KB of blocks loaded, %lu KB of XMS left", taken / 1024, xms_free_kb());
     }
-    ships_set_camera(SCR_W / 2, cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2,
-                     400);
+    g_cam_cy = cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2;
+    ships_set_camera(SCR_W / 2, g_cam_cy, 400);
     if (g_set_enemy >= 0) {
         /* the benchmark's sprite: the biggest of the type's band views at the sets' first resident step (84 %) */
         const ShipSet __far *set = ships_set(g_set_enemy);
@@ -749,7 +791,7 @@ void __far __cdecl flight_frame(void)
     int k = (int)(frameCounter % FPS_WINDOW);
     ships_frame();
     sim_step();
-    stars_move();
+    stars_place();
     plan_draws();
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];

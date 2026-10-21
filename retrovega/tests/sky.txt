@@ -1,0 +1,31 @@
+# three ship views on the sky: the player rolls, yaws, pitches (/sky /stream 8 /bench 0 /record 2 /flight 26)
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+hold rright 150
+wait 160
+hold left 70
+wait 80
+hold up 70
+wait 80
+key esc
+wait 16
+log done

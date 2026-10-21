@@ -42,6 +42,14 @@ typedef struct {
 void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, int nb, int nh,
               LfPlace *out);
 
+/* A direction of the sky, any length in the world frame, through the camera:
+ * where it shows (sx, sy and on_screen as lf_place puts a ship; view unused,
+ * depth the farthest) and the turn on screen, clockwise, of a sprite painted
+ * there whose up in the world is `up` ((0, 256, 0), the world's own, for
+ * most): so it turns with the sky as the player rolls.  For suns, nebulae,
+ * planets, and the stars themselves. */
+void lf_sky(const LfVec *dir, const LfVec *up, const LfBasis *cam, int cx, int cy, int focal, LfPlace *out);
+
 /* the view of lattice (nb, nh) seen from (vx, vy, vz) in the renderer's frame
  * of the ship (+x its left, +y up, +z the nose; any scale) */
 int lf_view_of(long vx, long vy, long vz, int nb, int nh);

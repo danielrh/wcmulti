@@ -194,6 +194,35 @@ int main(void)
             }
         CHECK(ok, "lf_rotate_span is exactly where the turned row draws, at every turn and scale tried");
     }
-    printf("%s (%d failures)\n", fails ? "LF FAILED" : "LF OK", fails);
+        /* the sky: directions through the camera, and the turn of a sprite painted there */
+    {
+        LfVec dir, upv;
+        LfPlace q, s;
+        basis(&cam, 0, 0, 256, 256, 0, 0, 0, 256, 0);
+        upv.x = 0; upv.y = 256; upv.z = 0;
+        dir.x = 0; dir.y = 0; dir.z = 4096;
+        lf_sky(&dir, &upv, &cam, 320, 200, 400, &q);
+        CHECK(q.on_screen && q.sx == 320 && q.sy == 200 && q.roll == 0,
+              "lf_sky: dead ahead shows at the centre, unturned (%d,%d roll %d)", q.sx, q.sy, q.roll);
+        dir.x = 4096; dir.y = 4096;
+        lf_sky(&dir, &upv, &cam, 320, 200, 400, &q);
+        CHECK(q.on_screen && q.sx == 720 && q.sy == -200,
+              "lf_sky: up and right at 45 degrees shows a focal length right and up (%d,%d)", q.sx, q.sy);
+        dir.x = 0; dir.y = 0; dir.z = -4096;
+        lf_sky(&dir, &upv, &cam, 320, 200, 400, &q);
+        CHECK(!q.on_screen, "lf_sky: behind the camera is off screen");
+        /* the camera rolled a quarter turn right: the sky's up shows to the left, and a sprite there turns exactly
+         * as lf_place turns a ship whose up is the world's */
+        basis(&cam, 0, 0, 256, 0, -256, 0, 256, 0, 0);
+        dir.x = 0; dir.y = 4096; dir.z = 4096;
+        lf_sky(&dir, &upv, &cam, 320, 200, 400, &q);
+        basis(&ship, 0, 0, -256, -256, 0, 0, 0, 256, 0);
+        rel.x = 0; rel.y = 4096L * 16; rel.z = 4096L * 16;
+        lf_place(&rel, &cam, &ship, 320, 200, 400, 5, 7, &s);
+        CHECK(q.on_screen && q.sx == -80 && q.sy == 200 && q.roll == s.roll && (q.roll == 256 || q.roll == 768),
+              "lf_sky: the camera rolled right, up shows left (%d,%d), turned as a ship would be (roll %d, lf_place %d)",
+              q.sx, q.sy, q.roll, s.roll);
+    }
+printf("%s (%d failures)\n", fails ? "LF FAILED" : "LF OK", fails);
     return fails != 0;
 }

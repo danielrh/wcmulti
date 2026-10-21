@@ -146,6 +146,22 @@ void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx,
     }
 }
 
+void lf_sky(const LfVec *dir, const LfVec *up, const LfBasis *cam, int cx, int cy, int focal, LfPlace *out)
+{
+    long x = dot(dir, &cam->right) / 256, y = dot(dir, &cam->up) / 256, z = dot(dir, &cam->front) / 256;
+    out->depth = 0x7FFFFFFFL;
+    out->on_screen = 0;
+    out->sx = out->sy = out->view = out->roll = 0;
+    if (z < 2)
+        return;
+    out->sx = cx + (int)(x * focal / z);
+    out->sy = cy - (int)(y * focal / z);
+    if (out->sx < -320 || out->sx > 960 || out->sy < -320 || out->sy > 720)
+        return;
+    out->on_screen = 1;
+    out->roll = lf_atan2(dot(up, &cam->right), dot(up, &cam->up));   /* as a band view's up is turned (lf_place) */
+}
+
 /* --- the kernels --- */
 
 void lf_colmap(int src_w, int dst_w, unsigned short LF_FAR *map)

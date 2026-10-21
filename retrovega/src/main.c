@@ -18,7 +18,7 @@
 #include "ships.h"
 
 char g_people_names[16][28];
-extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom;
+extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -75,6 +75,8 @@ int main(int argc, char **argv)
             g_capital = 1;
         else if (!strcmp(argv[i], "/zoom"))             /* tests: one ship ahead, swinging in and out: 1 it rolls, 2 it yaws, 3 yaws far out */
             g_zoom = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/sky"))              /* tests: three ship views painted on the sky, to roll and turn round */
+            g_sky = 1;
         else if (!strcmp(argv[i], "/nomusic"))
             music_device(MUSIC_OFF);
     }
