@@ -1,7 +1,7 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
- *          [/lasers N [/near N] [/farships N] [/bigships N] [/boltshape N]] [/boltdemo]
+ *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -20,7 +20,7 @@
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
-extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_shape, g_bolt_demo;
+extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -77,10 +77,6 @@ int main(int argc, char **argv)
             g_far_ships = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/bigships"))         /* tests: its big near ships (2) */
             g_big_ships = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "/boltshape"))        /* tests: the near bolts' shape (0 capsules, 1 level/upright
-                                                           ends, 2 rectangles, 3 hexagons, 4 octagons swept along,
-                                                           5 capsules in two colours) */
-            g_bolt_shape = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/boltdemo")) {       /* tests: the player's own bolts, each shape in turn */
             g_bolt_demo = 1;
             g_lasers = 1;

@@ -43,12 +43,10 @@ int g_lasers = 0;                       /* RV.EXE /lasers N: the laser benchmark
 int g_near_bolts = 12;                  /* RV.EXE /near N: the bolts kept near the camera in it */
 int g_far_ships = 16;                   /* RV.EXE /farships N: its small far ships */
 int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
-int g_bolt_shape = 0;                   /* RV.EXE /boltshape N: the near bolts' shape (LZ_SHAPE_*: 0 capsules) */
-int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts, each shape in turn (a test aid) */
+int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts (a test aid) */
 #define DEMO_BOLTS 11
 #define DEMO_FRAMES 300                 /* ten seconds at 30 fps */
-#define DEMO_SHAPES (BOLT_SHAPE_CAPSULE2 + 1)
-#define DEMO_SPEED 19                   /* positions per sixteenth of a km of half axis: 7.1 km a frame */
+#define DEMO_SPEED (27L * 64 / BOLT_HALF16)   /* positions per sixteenth of a km of half axis: 6.75 km a frame */
 #define DEMO_METRE 32                   /* km a metre */
 static int g_demo_frame;                /* its frames so far */
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
@@ -584,12 +582,16 @@ static void gather(void)
     }
     g_st.ncontacts = n;
     (void)c;
-    if (g_bolt_demo) {                  /* the demo's readout: the shape, the time in its round, where the bolts are */
-        static const char __far names[DEMO_SHAPES][11] = { "CAPSULES", "LEVEL ENDS", "RECTANGLE", "POINTED", "OCTAGON",
-                                                             "2-TONE CAP" };
-                                        /* (far: DGROUP is full) */
+    if (g_bolt_demo) {                  /* the demo's readout: the drawing, the time in its round, where the bolts are */
+#if LZ_NEAR == LZ_NEAR_CAPSULE
+        static const char __far name[] = "CAPSULES";
+#elif LZ_NEAR == LZ_NEAR_OCTAGON
+        static const char __far name[] = "OCTAGONS";
+#else
+        static const char __far name[] = "RECTANGLES";
+#endif
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
-        _fstrcpy((char __far *)g_mfd[0][0], names[(g_demo_frame ? g_demo_frame - 1 : 0) / DEMO_FRAMES % DEMO_SHAPES]);
+        _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
     } else if (g_lasers) {              /* the laser benchmark's readout */
@@ -680,7 +682,7 @@ int flight_bench_result(int *w, int *h)
  * far bolts) share the frame. */
 #define LZ_SHIPS 48
 #define LZ_DIRS 64
-#define LZ_SPEED 200                    /* positions per sixteenth of a km of half axis: 75 km a frame, 1,500 kps */
+#define LZ_SPEED (75L * 256 / BOLT_HALF16)   /* positions per sixteenth of a km of half axis: 75 km a frame, 1,500 kps */
 static struct { LfVec pos; LfBasis b; unsigned char set; } __far g_lz_ship[LZ_SHIPS];
 static struct { short x, y, z; } __far g_lz_dir[LZ_DIRS];   /* bolts' half axes, every way, BOLT_HALF16 long */
 static unsigned char __far *g_lz_life;  /* frames each bolt has left */
@@ -734,9 +736,9 @@ static int lasers_far(void) { return g_lz_far; }
  * four at the corners of those.  A metre is taken as 32 km of the flight's
  * units: a fighter's view (128 px) is full size at 2,500 km, 800 km for a
  * 25-30 m hull.  They fly at a constant speed that takes them from the eye to
- * the line drawing (3/4 px of radius, 1,067 km) in five seconds; each round
- * is ten seconds, a shape a round (capsules, level ends, rectangles, pointed,
- * swept octagons, two-colour capsules), and the flight lands after the six. */
+ * the line drawing (3/4 px of radius, 1,067 km) in about five seconds; the round
+ * is ten seconds (drawn as this build draws fat bolts), then the flight
+ * lands. */
 #define DEMO_GAP_KM ((2 * BOLT_RMAX16 / 16 + 10) * BOLT_ZMIN_KM / 400)   /* centres 18 px apart at the near plane */
 static const signed char __far g_demo_at[DEMO_BOLTS][2] = {   /* across, up: km */
     { 0, 0 }, { DEMO_GAP_KM, 0 }, { -DEMO_METRE / 2, 0 },
@@ -749,10 +751,9 @@ static void demo_step(void)
     int i, k = g_demo_frame % DEMO_FRAMES;
     if (g_lz_cap < DEMO_BOLTS)
         return;
-    if (!k) {                           /* a round: the next shape, the bolts back at the eye */
+    if (!k) {                           /* the round: the bolts at the eye */
         const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
         long d = BOLT_HALF16 / 16;      /* (their tails at the eye's depth) */
-        bolts_set_shape(g_demo_frame / DEMO_FRAMES % DEMO_SHAPES);
         for (i = 0; i < DEMO_BOLTS; i++) {
             LzBolt __far *b = bolts_pool() + i;
             long across = g_demo_at[i][0], up = g_demo_at[i][1];
@@ -767,7 +768,7 @@ static void demo_step(void)
     } else {
         bolts_move(DEMO_SPEED);
     }
-    if (++g_demo_frame >= DEMO_SHAPES * DEMO_FRAMES)
+    if (++g_demo_frame >= DEMO_FRAMES)
         missionStatus = 1;              /* landed */
 }
 
@@ -848,7 +849,6 @@ static void lasers_pool(void)
     }
     _fheapshrink();                     /* (what the checks took back to DOS) */
     g_lz_cap = bolts_init(3200, 12);    /* 12 KB kept for what the flight takes later */
-    bolts_set_shape(g_bolt_shape);
     g_lz_life = g_lz_cap ? (unsigned char __far *)_fmalloc(g_lz_cap) : 0;
     if (!g_lz_life)
         g_lz_cap = 0;
@@ -950,9 +950,8 @@ static void lasers_report(void)
     bolts_ticks(t);
     bolts_on_screen(&lines, &fats);
     rv_log("lasers: %ld far bolts and %d near held %d fps (the settled half's average; %d lines and %d fat on screen at "
-           "the end), beside %d big ships drawn exactly and %d far ones; near bolts' shape %d",
-           g_lz_frames ? g_lz_sum / g_lz_frames : 0L, g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships,
-           g_bolt_shape);
+           "the end), beside %d big ships drawn exactly and %d far ones; near bolts " LZ_NEAR_NAME,
+           g_lz_frames ? g_lz_sum / g_lz_frames : 0L, g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships);
     rv_log("lasers: ms a frame: bolts placed %lu.%02lu, far bolts drawn %lu.%02lu, near %lu.%02lu, flown and fired "
            "%lu.%02lu; big ships %lu.%02lu, far ships %lu.%02lu (the slots' from the sets %lu.%02lu); stars %lu.%02lu; "
            "the whole picture %lu.%02lu",

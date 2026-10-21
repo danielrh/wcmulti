@@ -1,10 +1,15 @@
 ; lasers.asm: the laser bolts' fast paths (lasers.h).  Each does what its
 ; reference in lasers.c does, to the bit (bolts.c compares them when a flight
-; starts): rv_bolts_place = lz_place, rv_lines_draw = lz_lines_draw,
-; rv_pass_draw = lz_pass_draw.  Far cdecl, as the medium model calls them;
+; starts): rv_bolts_place = lz_place, rv_lines_draw = lz_lines_draw, and so
+; on.  Far cdecl, as the medium model calls them;
 ; SI DI BP DS kept.  32-bit registers throughout (486): DOSBox charges an
 ; instruction a cycle whatever its width, so a bolt's eighteen products cost
-; what eighteen moves would.
+; what eighteen moves would.  The fat bolts' drawing is chosen at build time
+; as lasers.h's is (nasm -DLZ_NEAR=1 capsules, 2 the swept octagon, 3 the
+; rectangle): only that one is assembled.
+%ifndef LZ_NEAR
+%define LZ_NEAR 1
+%endif
         cpu 486
 segment LASERS_TEXT public align=16 class=CODE use16
 
@@ -569,6 +574,7 @@ emit_clip:
         add bx,4
         ret
 
+%if LZ_NEAR == 1
 ; void rv_pass_draw(const LzPass far *p, unsigned char far *band, int band_y0, int y0, int y1,
 ;                   const short far *ext, int ext_y0, const unsigned char far *roots)
 ; One capsule of a fat bolt into the band, rows y0 .. y1-1 (cut by the
@@ -715,6 +721,7 @@ root:
         movzx ax,byte [gs:di]
         ret
 
+%endif
 ; void rv_bolts_move(LzBolt far *b, int n, long k): every bolt flies k
 ; positions for each sixteenth of a km of its half axis (lz_move).
         global _rv_bolts_move
@@ -745,10 +752,11 @@ _rv_bolts_move:
         pop bp
         retf
 
+%if LZ_NEAR == 1
 ; int rv_fat_setup(const LzFat far *f, const LzStyle far *st, LzPass far *pass, LzLine far *core,
 ;                  int far *core_line)
-; lz_fat_setup: a fat bolt's nested capsules (rim, body, core as its radius
-; allows) into pass[], the count back; a core too thin for a capsule as a
+; lz_fat_setup: a fat bolt's capsules (the body, and the core if it is thick
+; enough) into pass[], the count back; a core too thin for a capsule as a
 ; line into *core (*core_line 1).
 %define FAX  [bp-2]                     ; the bolt's ends and radius
 %define FAY  [bp-4]
@@ -813,33 +821,17 @@ _rv_fat_setup:
         mov word FNP,0
         lds si,[bp+10]              ; the style
         mov ax,FR
-        cmp ax,[si+6]               ; rim16
-        jl .norim
         mov FPR,ax
-        mov al,[si+1]               ; rim
-        mov FCOL,al
-        call pass_of
-        mov ax,FR
-        imul ax,ax,5
-        sar ax,3
-        mov FPR,ax
-        mov al,[si+2]               ; body
-        mov FCOL,al
-        call pass_of
-        mov ax,FR
-        sar ax,2                    ; the core: r / 4
-        jmp .core
-.norim: mov FPR,ax
-        mov al,[si+2]
+        mov al,[si+1]               ; body
         mov FCOL,al
         call pass_of
         mov ax,FR
         imul ax,ax,3
         sar ax,3                    ; the core: 3 r / 8
-.core:  cmp ax,[si+4]               ; body16: a capsule core, or a line
+        cmp ax,[si+4]               ; body16: a capsule core, or a line
         jl .line
         mov FPR,ax
-        mov al,[si+3]
+        mov al,[si+2]               ; core
         mov FCOL,al
         call pass_of
         lds si,[bp+22]
@@ -1019,8 +1011,15 @@ isqrt32:
         jmp .loop
 .done:  ret
 
-%define LZP_Y 28                        ; LzPoly: y[] (x[] at 8)
-%define LZP_SIZE 48
+%endif
+%if LZ_NEAR != 1
+%if LZ_NEAR == 2
+%define LZ_POLY_MAX 10
+%else
+%define LZ_POLY_MAX 4
+%endif
+%define LZP_Y (8 + 2 * LZ_POLY_MAX)       ; LzPoly: y[] (x[] at 8)
+%define LZP_SIZE (8 + 4 * LZ_POLY_MAX)
 
 ; void rv_poly_draw(const LzPoly far *p, unsigned char far *band, int band_y0, int y0, int y1,
 ;                   const short far *ext, int ext_y0)
@@ -1211,11 +1210,11 @@ chain_at:
         clc
         ret
 
-; int rv_slab_setup(const LzFat far *f, int shape, const LzStyle far *st, LzPoly far *poly, LzLine far *lines,
+; int rv_slab_setup(const LzFat far *f, const LzStyle far *st, LzPoly far *poly, LzLine far *lines,
 ;                   int far *nlines)
-; lz_slab_setup: the outline and the white middle (or three lines, or the
-; outline and a core line) of a fat bolt in shape LZ_SHAPE_AXIS (1), _RECT (2),
-; _HEX (3) or _ROUND (4), to the bit.
+; lz_slab_setup: a fat bolt's red outline and white middle, or thinner, the
+; outline and a core line (the octagon) or three lines (the rectangle); to
+; the bit.
 %define SAX  [bp-2]
 %define SAY  [bp-4]
 %define SBX  [bp-6]
@@ -1230,9 +1229,7 @@ chain_at:
 %define SCOL [bp-34]
 %define SNX  [bp-36]
 %define SNY  [bp-38]
-%define STX  [bp-40]
-%define STY  [bp-42]
-%define SFRAME 44
+%define SFRAME 38
         global _rv_slab_setup
 _rv_slab_setup:
         push bp
@@ -1256,15 +1253,18 @@ _rv_slab_setup:
         movsx edx,word SAX
         sub eax,edx
         mov SDX,eax
+%if LZ_NEAR == 3
         mov ecx,eax
         sar ecx,31
         xor eax,ecx
         sub eax,ecx
         mov SADX,eax                ; |dx|
+%endif
         movsx eax,word SBY
         movsx edx,word SAY
         sub eax,edx
         mov SDY,eax
+%if LZ_NEAR == 3
         mov ecx,eax
         sar ecx,31
         xor eax,ecx
@@ -1284,13 +1284,14 @@ _rv_slab_setup:
         sar edx,3
         add eax,edx
         mov SLEN,eax
-        lds si,[bp+12]              ; the style
-        les di,[bp+16]              ; the polygons out
+%endif
+        lds si,[bp+10]              ; the style
+        les di,[bp+14]              ; the polygons out
         cmp word SR,24
-        jle .lines
+        jle .thin
         mov ax,SR
         mov SW,ax
-        movzx ax,byte [si+2]        ; body: the outline
+        movzx ax,byte [si+1]        ; body: the outline
         mov SCOL,ax
         call slab_of
         add di,LZP_SIZE
@@ -1299,30 +1300,29 @@ _rv_slab_setup:
         mov cx,2
         idiv cx
         mov SW,ax                   ; r / 2
-        movzx ax,byte [si+3]        ; core: the middle
+        movzx ax,byte [si+2]        ; core: the middle
         mov SCOL,ax
         call slab_of
-        lds si,[bp+24]
+        lds si,[bp+22]
         mov word [si],0
         mov ax,2
         jmp .out
-.lines:
-        cmp word [bp+10],4          ; LZ_SHAPE_ROUND: the outline and a white core line
-        jne .three_lines
+.thin:
+%if LZ_NEAR == 2
+        ; the outline and a white core line
         mov ax,SR
         mov SW,ax
-        movzx ax,byte [si+2]        ; body
+        movzx ax,byte [si+1]
         mov SCOL,ax
         call slab_of
-        les di,[bp+20]
+        les di,[bp+18]
         LINE_OF SAX,SAY,SBX,SBY
-        lds si,[bp+24]
+        lds si,[bp+22]
         mov word [si],1
         mov ax,1
-        jmp .out
-.three_lines:
+%else
         ; three lines a pixel apart across it: lines[1] the middle, [0] less, [2] more
-        les di,[bp+20]
+        les di,[bp+18]
         add di,20
         LINE_OF SAX,SAY,SBX,SBY
         mov eax,SADY
@@ -1330,27 +1330,28 @@ _rv_slab_setup:
         jl .shallow
         sub word SAX,16
         sub word SBX,16
-        les di,[bp+20]
+        les di,[bp+18]
         LINE_OF SAX,SAY,SBX,SBY
         add word SAX,32
         add word SBX,32
-        les di,[bp+20]
+        les di,[bp+18]
         add di,40
         LINE_OF SAX,SAY,SBX,SBY
         jmp .three
 .shallow:
         sub word SAY,16
         sub word SBY,16
-        les di,[bp+20]
+        les di,[bp+18]
         LINE_OF SAX,SAY,SBX,SBY
         add word SAY,32
         add word SBY,32
-        les di,[bp+20]
+        les di,[bp+18]
         add di,40
         LINE_OF SAX,SAY,SBX,SBY
-.three: lds si,[bp+24]
+.three: lds si,[bp+22]
         mov word [si],3
         xor ax,ax
+%endif
 .out:   pop ds
         pop di
         pop si
@@ -1358,177 +1359,13 @@ _rv_slab_setup:
         pop bp
         retf
 
-; one outline at half width SW, colour SCOL, into es:di (lasers.c's slab_of; the shape at [bp+10])
-%macro VTX 3                            ; vertex %1: x %2, y %3 (words in registers or memory)
-        mov ax,%2
-        mov [es:di+8+2*%1],ax
-        mov ax,%3
-        mov [es:di+LZP_Y+2*%1],ax
-%endmacro
-slab_of:
-        mov ax,SCOL
-        mov [es:di+2],ax
-        cmp word [bp+10],4          ; LZ_SHAPE_ROUND
-        je slab_round
-        cmp word [bp+10],1          ; LZ_SHAPE_AXIS
-        je .axis
-        cmp dword SLEN,16
-        jge .slant
-.axis:  mov word [es:di],4
-        mov bx,SW
-        mov eax,SADY
-        cmp eax,SADX
-        jl .shal
-        ; steep: level ends, pushed out by w
-        mov cx,SAX
-        sub cx,bx
-        mov dx,SAY
-        sub dx,bx
-        VTX 0,cx,dx
-        mov cx,SAX
-        add cx,bx
-        VTX 1,cx,dx
-        mov cx,SBX
-        add cx,bx
-        mov dx,SBY
-        add dx,bx
-        VTX 2,cx,dx
-        mov cx,SBX
-        sub cx,bx
-        VTX 3,cx,dx
-        jmp poly_rows
-.shal:  cmp dword SDX,0
-        jl .left
-        mov cx,SAX
-        sub cx,bx
-        mov dx,SAY
-        sub dx,bx
-        VTX 0,cx,dx
-        mov cx,SBX
-        add cx,bx
-        mov dx,SBY
-        sub dx,bx
-        VTX 1,cx,dx
-        mov dx,SBY
-        add dx,bx
-        VTX 2,cx,dx
-        mov cx,SAX
-        sub cx,bx
-        mov dx,SAY
-        add dx,bx
-        VTX 3,cx,dx
-        jmp poly_rows
-.left:  mov cx,SAX
-        add cx,bx
-        mov dx,SAY
-        sub dx,bx
-        VTX 0,cx,dx
-        mov dx,SAY
-        add dx,bx
-        VTX 1,cx,dx
-        mov cx,SBX
-        sub cx,bx
-        mov dx,SBY
-        add dx,bx
-        VTX 2,cx,dx
-        mov dx,SBY
-        sub dx,bx
-        VTX 3,cx,dx
-        jmp poly_rows
-.slant: ; w across the bolt (nx, ny) and, for the hexagon, along it (tx, ty): (-dy w / len, dx w / len)
-        movsx ecx,word SW
-        mov eax,SDY
-        neg eax
-        imul eax,ecx
-        cdq
-        idiv dword SLEN
-        mov SNX,ax
-        mov eax,SDX
-        imul eax,ecx
-        cdq
-        idiv dword SLEN
-        mov SNY,ax
-        cmp word [bp+10],2
-        jne .hex
-        ; the rectangle, its ends pushed out by w along the bolt, (ny, -nx): a-t+n, b+t+n, b+t-n, a-t-n
-        mov word [es:di],4
-        mov cx,SAX
-        sub cx,SNY
-        add cx,SNX
-        mov dx,SAY
-        add dx,SNX
-        add dx,SNY
-        VTX 0,cx,dx
-        mov cx,SBX
-        add cx,SNY
-        add cx,SNX
-        mov dx,SBY
-        sub dx,SNX
-        add dx,SNY
-        VTX 1,cx,dx
-        mov cx,SBX
-        add cx,SNY
-        sub cx,SNX
-        mov dx,SBY
-        sub dx,SNX
-        sub dx,SNY
-        VTX 2,cx,dx
-        mov cx,SAX
-        sub cx,SNY
-        sub cx,SNX
-        mov dx,SAY
-        add dx,SNX
-        sub dx,SNY
-        VTX 3,cx,dx
-        jmp poly_rows
-.hex:   mov eax,SDX
-        imul eax,ecx
-        cdq
-        idiv dword SLEN
-        mov STX,ax
-        mov eax,SDY
-        imul eax,ecx
-        cdq
-        idiv dword SLEN
-        mov STY,ax
-        mov word [es:di],6
-        mov cx,SAX
-        sub cx,STX
-        mov dx,SAY
-        sub dx,STY
-        VTX 0,cx,dx
-        mov cx,SAX
-        add cx,SNX
-        mov dx,SAY
-        add dx,SNY
-        VTX 1,cx,dx
-        mov cx,SBX
-        add cx,SNX
-        mov dx,SBY
-        add dx,SNY
-        VTX 2,cx,dx
-        mov cx,SBX
-        add cx,STX
-        mov dx,SBY
-        add dx,STY
-        VTX 3,cx,dx
-        mov cx,SBX
-        sub cx,SNX
-        mov dx,SBY
-        sub dx,SNY
-        VTX 4,cx,dx
-        mov cx,SAX
-        sub cx,SNX
-        mov dx,SAY
-        sub dx,SNY
-        VTX 5,cx,dx
-        jmp poly_rows
-
-; LZ_SHAPE_ROUND (lasers.c's round_of): the octagon (flats at w, corners at
-; 1.08 w) swept from a to b.  Edge k of the octagon faces (1,0), (1,1), (0,1),
-; (-1,1), (-1,0), (-1,-1), (0,-1), (1,-1), and is the outline's at b where
-; that . (b - a) > 0 (bit k of dl), else at a; where two edges in a row take
-; different ends the long side along the bolt joins them.  No root, no division.
+%if LZ_NEAR == 2
+; one outline at half width SW, colour SCOL, into es:di (lasers.c's slab_of):
+; the octagon (flats at w, corners at 1.08 w) swept from a to b.  Edge k of
+; the octagon faces (1,0), (1,1), (0,1), (-1,1), (-1,0), (-1,-1), (0,-1),
+; (1,-1), and is the outline's at b where that . (b - a) > 0 (bit k of dl),
+; else at a; where two edges in a row take different ends the long side
+; along the bolt joins them.  No root, no division.
 %macro SIDE 1                           ; the dot in eax: bit %1 of dl if > 0, bit %1 + 4 if < 0
         or eax,eax
         jz %%z
@@ -1565,7 +1402,9 @@ slab_of:
 %%b:    RPUT SBX,SBY,%2,%3,%4,%5
 %%done:
 %endmacro
-slab_round:
+slab_of:
+        mov ax,SCOL
+        mov [es:di+2],ax
         push si
         mov cx,SW
         mov si,cx
@@ -1595,6 +1434,84 @@ slab_round:
         mov [es:di],bx
         pop si
         jmp poly_rows
+%else
+; one outline at half width SW, colour SCOL, into es:di (lasers.c's slab_of):
+; the rectangle, its ends pushed out by w along the bolt; under a pixel long,
+; a square 2w across round its ends
+%macro VTX 3                            ; vertex %1: x %2, y %3 (words in registers or memory)
+        mov ax,%2
+        mov [es:di+8+2*%1],ax
+        mov ax,%3
+        mov [es:di+LZP_Y+2*%1],ax
+%endmacro
+slab_of:
+        mov ax,SCOL
+        mov [es:di+2],ax
+        mov word [es:di],4
+        mov bx,SW
+        cmp dword SLEN,16
+        jge .slant
+        mov cx,SAX
+        sub cx,bx
+        mov dx,SAY
+        sub dx,bx
+        VTX 0,cx,dx
+        mov cx,SAX
+        add cx,bx
+        VTX 1,cx,dx
+        mov cx,SBX
+        add cx,bx
+        mov dx,SBY
+        add dx,bx
+        VTX 2,cx,dx
+        mov cx,SBX
+        sub cx,bx
+        VTX 3,cx,dx
+        jmp poly_rows
+.slant: ; w across the bolt, (nx, ny) = (-dy w / len, dx w / len); along it (ny, -nx)
+        movsx ecx,word SW
+        mov eax,SDY
+        neg eax
+        imul eax,ecx
+        cdq
+        idiv dword SLEN
+        mov SNX,ax
+        mov eax,SDX
+        imul eax,ecx
+        cdq
+        idiv dword SLEN
+        mov SNY,ax
+        ; a-t+n, b+t+n, b+t-n, a-t-n
+        mov cx,SAX
+        sub cx,SNY
+        add cx,SNX
+        mov dx,SAY
+        add dx,SNX
+        add dx,SNY
+        VTX 0,cx,dx
+        mov cx,SBX
+        add cx,SNY
+        add cx,SNX
+        mov dx,SBY
+        sub dx,SNX
+        add dx,SNY
+        VTX 1,cx,dx
+        mov cx,SBX
+        add cx,SNY
+        sub cx,SNX
+        mov dx,SBY
+        sub dx,SNX
+        sub dx,SNY
+        VTX 2,cx,dx
+        mov cx,SAX
+        sub cx,SNY
+        sub cx,SNX
+        mov dx,SAY
+        add dx,SNX
+        sub dx,SNY
+        VTX 3,cx,dx
+        jmp poly_rows
+%endif
 
 ; the polygon at es:di's rows: top = (min y + 7) >> 4, bot = ((max y - 8) >> 4) + 1
 poly_rows:
@@ -1623,3 +1540,4 @@ poly_rows:
         mov [es:di+6],dx
         pop si
         ret
+%endif

@@ -784,30 +784,33 @@ frame; quality may give way to speed.
 round it (`LzBolt`, 18 bytes: its middle in positions, its half axis in
 sixteenths of a km). A capsule projects to a capsule from any angle — end on
 it is a disc — so it is visible however it flies. The flight's bolts are
-2 km in radius and 12 km long, and the near plane is at 200 km, so the
-largest is 8 px across and 32 px long side on (bolts.h).
+2 km in radius and 24 km long (the user doubled the length on 2026-10-21,
+the same width), and the near plane is at 200 km, so the largest is 8 px
+across and 64 px long side on (bolts.h).
 
 **Two drawings, chosen by the radius on screen.** Under 3/4 px a bolt is a
 *line*: each row it crosses gets the pixels whose centres the segment passes
 over in that row (an x-major line's run), and a steep row with none gets the
-pixel under the row's middle, so every row shows. Above, it is *fat*: up to
-three nested capsules painted over each other — a dark red rim (fire ramp
-130), a red body (`UI_RED`) and a white core (`UI_WHITE`) from 2 px of
-radius, the body and a white core line below that. Each capsule row is one
-span between its left and right boundary: a's arc, the straight stretch,
-b's arc, met at the tangent rows (rounded so the stretch is never used past
-them: on a nearly level bolt a sixteenth of a row there is pixels of x).
-The flight palette has no pink, hence a dark rim rather than a light halo.
+pixel under the row's middle, so every row shows. Above, it is *fat*: red
+(`UI_RED`) with a white middle (`UI_WHITE`) painted over it, drawn in one of
+three ways chosen when RV.EXE is built (`NEAR=` below; until 2026-10-21 the
+capsules also had a dark red rim, fire ramp 130, as a third colour). As
+capsules: the body, and from 32 x16 of radius a white core capsule 3/8 as
+wide, below that a white core line. Each capsule row is one span between its
+left and right boundary: a's arc, the straight stretch, b's arc, met at the
+tangent rows (rounded so the stretch is never used past them: on a nearly
+level bolt a sixteenth of a row there is pixels of x).
 
 **The pipeline** (src/bolts.c over src/lasers.c and src/lasers.asm):
 
 - once a frame, `rv_bolts_place`: every bolt through the camera (eighteen
   32-bit products, four divisions, the near-plane cut, the screen box), out
   as a line set up for the draw (`LzLine`, 20 bytes) or a fat bolt (`LzFat`);
-  then `rv_fat_setup` makes each fat bolt's passes (`LzPass`);
+  then `rv_fat_setup` makes each fat bolt's passes (`LzPass`), or
+  `rv_slab_setup` its polygons (`LzPoly`);
 - per band, `rv_lines_draw` draws every line, one call for all, and
-  `rv_pass_draw` each fat bolt's passes, smallest bolt first; every row is
-  clipped to the cockpit opening's extents as the ships are;
+  `rv_pass_draw` or `rv_poly_draw` each fat bolt, smallest first; every row
+  is clipped to the cockpit opening's extents as the ships are;
 - `rv_bolts_move` flies them (positions += half axis x speed).
 
 `lasers.c` is the reference, plain C: `tests/host/run.sh` checks it against
@@ -821,69 +824,77 @@ instructions, not multiplies. Where C's 64-bit `muldiv` wraps, an `idiv`
 would trap: `mdiv` divides in two steps.
 
 **What each costs** (`bolts_time`, logged at the start of a laser flight;
-µs at `cycles=40000`, twice that in the page at 20,000):
+µs at `cycles=40000`; the bolts 24 km long since 2026-10-21, the near ones
+drawn as capsules):
 
 | | place | set up | draw | in all |
 |---|---|---|---|---|
-| a far bolt (a line, 1.6 rows) | 5.6 | — | 2.3 | 7.9 (+0.7 flown and re-fired) |
-| a near bolt (fat, 2-4 px radius) | 5.2 | 13.8 | 24.0 | 43 |
-| a far bolt drawn as a capsule (one algorithm for all) | | | | 23.5 |
+| a far bolt (a line, 2.2 rows) | 5.6 | — | 2.7 | 8.3 (+0.7 flown and re-fired) |
+| a near bolt (fat, 2-4 px radius) | 5.2 | 13.2 | 30.0 | 48.4 |
+| a far bolt drawn fat (one algorithm for all) | | | | 25.4 |
 
 So one algorithm for every bolt would cost three times the line for the far
 ones: the split pays. The near bolts' set-up was 87 µs in C (Watcom's 64-bit
 helpers) before `rv_fat_setup`.
 
-**Simpler near bolts** (2026-10-21, the user's alternatives; `RV.EXE /boltshape
-N`, 0 the capsules by default). A near bolt as two convex polygons painted
-over each other, a red outline and a white middle half as wide (the "step up
-then down"), set up by `rv_slab_setup` and filled by `rv_poly_draw` (one span
-a row between two chains of edges walked down from the top vertex; both
-checked against lasers.c, the filler against brute force in tests/host), or,
-up to 3 px across, three lines side by side (red, white, red), and one line
-under 1.5 px as before. Shapes: 1 the user's level/upright ends (steep bolts
-end level, shallow ones upright, pushed out by the half width so a bolt end
-on is a square: no root, only additions), 2 the rectangle square to the
-flight (its ends pushed out by the half width too since 2026-10-21: before,
-end on it was a sliver), 3 the rectangle with pointed ends, 4 an octagon
-swept along the bolt (below), and `/boltshape 5` the capsules in two colours
-(no dark rim: `BOLT_SHAPE_CAPSULE2`, bolts.c). `LZ_SHAPES=FILE.ppm` with
-`LZ_SHEET` draws the five of lasers.c side by side, the last of each row end
-on (tests/host/run.sh). Cost a near bolt (the same twelve, 1.7-3.4 px of
-radius, at 40,000 cycles; re-timed 2026-10-21 after the rectangle's fix):
+**How the fat bolts are drawn: chosen at build time** (2026-10-21).
+`NEAR=capsule` (the default), `NEAR=octagon` or `NEAR=rect ./build.sh`
+defines lasers.h's `LZ_NEAR` for the C and lasers.asm, and only that drawing
+is compiled (its C reference, its asm, its buffers, its part of the
+self-test and the timings); `tests/host/run.sh` builds and checks all three.
+How we got there, the user's questions in turn:
 
-| | set up | draw | in all | ends |
-|---|---|---|---|---|
-| capsules (rim, body, core: three passes) | 13.8 µs | 23.8 | 37.6 | round |
-| capsules in two colours (body, core) | 13.2 | 20.4 | 33.7 | round |
-| level/upright ends (two polygons) | 6.7 | 26.2 | 32.8 | square |
-| rectangle | 7.3 | 27.1 | 34.4 | square |
-| pointed rectangle | 8.4 | 27.9 | 36.3 | pointed |
-| octagon swept along the bolt (two polygons of up to ten corners) | 14.0 | 37.3 | 51.3 | round |
-| the same capsules pre-rendered, a sprite each, copied a row at a time (`rv_blit_row`, as the ships are) | — | 19.2 | 19.2 + finding and fetching the sprite | |
+- *Simpler near bolts?* A bolt as two convex polygons painted over each
+  other, a red outline and a white middle half as wide (the "step up then
+  down"), set up by `rv_slab_setup` and filled by `rv_poly_draw` (one span a
+  row between two chains of edges walked down from the top vertex), up to
+  3 px across three lines side by side (red, white, red). Four shapes were
+  tried: the user's level/upright ends, the rectangle square to the flight,
+  the rectangle with pointed ends, and (below) the swept octagon.
+- *Own bolts are seen end on* (`/boltdemo`, below): the rectangle then had
+  its ends at the segment's ends and was a sliver; its ends are pushed out
+  by the half width now (the same four corners).
+- *A square back is a nonstarter: round, at the polygons' speed?* An octagon
+  swept along the bolt: the segment's sum with an octagon of flats at the
+  half width, each octagon edge going to the end it faces (the sign of an
+  addition: (1,0), (1,1), (0,1), ... dotted with b - a), the long sides
+  joining where the ends change; no root, no division, at most ten corners,
+  end on an octagon, which at a few pixels covers a circle's pixels; under
+  1.5 px of radius the outline and a white core line (three lines would be a
+  dash end on). It is round, and the slowest: every corner is an edge to set
+  up as the chains walk down (~30 instructions), and a near bolt is only a
+  few rows, so ten corners cost more than the rows. The capsules' arcs come
+  from the root table at a row's cost; their dark rim, a third colour, was
+  their extra pass, and in two colours they are as cheap as the rectangle.
+- *Do the capsules point where the bolt flies?* Measured on the host (the C
+  reference, random bolts of 1.7-4 px radius): the drawn pixels' principal
+  axis is within 1° of the bolt's for every shape once a bolt is 5 px long
+  (0.9° the capsules and the rectangle, 1.3° the octagon); on 2-5 px bolts
+  2.5°, 2.4° and 3.4°, and the white middle's 3.7° (the old three-colour
+  capsule's thin core 5.0°), 3.1° and 3.3°. No shape shows the direction
+  better than another to speak of.
+- *Which uses the least memory under 1 MB?* All of it is conventional
+  memory (none of it is XMS): the code, the far buffers, the capsules' root
+  table. Sized for the radius the flight draws at most (4 px,
+  `LZ_RMAX16`) the table is 1,025 bytes (it was 4,097, for 8 px). Bytes of
+  RV.EXE's image (the linker's "Memory size") and of the bolts' modules:
 
-**Round ends from polygons** (the user, 2026-10-21: a square back is a
-nonstarter; could the polygons be round end on at their speed?). Shape 4 is
-the segment's sum with an octagon of flats at the half width: each octagon
-edge goes to the end it faces (the sign of an addition: (1,0), (1,1), (0,1),
-... dotted with b - a), and the long sides join where the ends change; no
-root, no division, at most ten corners, end on an octagon, which at a few
-pixels covers a circle's pixels; under 1.5 px of radius the outline and a
-white core line (as the capsules), not three lines (end on, a dash). It is
-round, and the slowest: every corner is an edge to set up as the chains walk
-down (~30 instructions), and a near bolt is only 4-8 rows, so ten corners
-cost more than the rows. The capsules' arcs come from the root table at a
-row's cost, so the round shape that costs what the polygons do is the
-capsule itself; in two colours it is as cheap as the cheapest polygon.
+| `NEAR=` | RV.EXE | lasers code (asm and C) | bolts.c code | far data | root table | bolts in all | near bolt, set up + draw |
+|---|---|---|---|---|---|---|---|
+| `capsule` | 261,856 | 8,608 | 7,579 | 5,370 | 1,025 | 22,582 | 13.2 + 30.0 = 43.2 µs |
+| `octagon` | 261,696 | 8,928 | 7,684 | 5,850 | — | 22,462 | 13.3 + 46.9 = 60.2 µs |
+| `rect` | 261,776 | 9,274 | 7,662 | 5,594 | — | 22,530 | 7.2 + 37.2 = 44.4 µs |
 
-The draw is the same whatever the shape: under DOSBox's instruction-a-cycle
-rule a bolt costs per row (stepping the edges, rounding, clipping to the
-opening, starting a fill: ~25 instructions a row a pass), not per pixel nor
-per shape's maths, and a capsule's three passes cost what two polygons' do.
-A pre-rendered sprite halves the draw but needs a set of them by angle, size
-and length in XMS, and the choosing and fetching. In the frame the twelve
-near bolts take ~0.3-0.5 ms of 33 whatever their shape, and the far ones are
-lines in every design: the near bolts' shape is a matter of looks and of code
-(the polygons need no root table and about half the asm), not of speed.
+The three are within 160 bytes of each other: the capsules' code is the
+smallest and their table the difference, so counted as shared state (a
+square root by table that the AI could use too) the capsules take the
+least. Until 2026-10-21 every shape was in the build at once (280,608
+bytes, 3-colour capsules the default).
+
+A pre-rendered sprite a bolt (`rv_blit_row`, as the ships are) is no
+faster at these sizes: 31 µs a bolt to copy (the runs' bookkeeping) before
+finding and fetching it. In the frame the twelve near bolts take 0.1-0.2 ms
+of 33 whatever the drawing, and the far ones are lines in every build.
 
 **The player's own bolts** (`RV.EXE /boltdemo`, the user's question of
 2026-10-21: most near bolts a player sees are their own). Eleven bolts fly
@@ -891,19 +902,17 @@ straight ahead from the eye's depth: one at the eye, one just right of it (a
 10 px gap between the two where they appear), one half a metre left, four
 1.5 m left and right and 1 m up and down, and four at those corners. A metre
 is taken as 32 km of the flight's units (a fighter's 128 px view is full size
-at 2,500 km: 800 km for a 25-30 m hull), so a bolt is 12 cm thick and 37 cm
-long and the near plane is 6 m out. They fly 7.1 km a frame, the eye to the
-line drawing (1,067 km) in five seconds; a round is ten seconds, a shape a
-round (the six of `/boltshape`), and the flight lands after them.
+at 2,500 km: 800 km for a 25-30 m hull), so a bolt is 12 cm thick and 75 cm
+long and the near plane is 6 m out. They fly 6.75 km a frame, the eye to the
+line drawing (1,067 km) in about five seconds; the round is ten seconds,
+drawn as the build draws fat bolts, then the flight lands.
 `tests/boltdemo.txt` with `/boltdemo /record 1 /flight 900` saves every
-frame (`CYCLES=max TIMEOUT=1500`, ~8 minutes; the motion is per frame, so
-the recording is exact however slowly it runs). What it shows: own bolts are seen nearly end on,
-so they appear at the near plane 0.9 s out as 8 px blobs (the corners'
-±96, ±64 px from the middle), are 4 px across by 2 s, dots by 3 s and lines
-from 5 s; the shape shows only in that first second or two. The rectangle
-(shape 2) had its ends at the segment's ends, so end on it was a sliver as
-thin as the bolt's 1-3 px of projected length; its ends are pushed out by the
-half width now, as the other shapes' are (the same four corners).
+frame (`CYCLES=max`, a few minutes; the motion is per frame, so the
+recording is exact however slowly it runs; stop DOSBox when RVLOG.TXT says
+the flight is over, as the script then idles). What it shows: own bolts are
+seen nearly end on, so they appear at the near plane 0.9 s out as 8 px blobs
+(the corners' ±96, ±64 px from the middle), are 4 px across by 2 s, dots by
+3 s and lines from 5 s; the shape shows only in that first second or two.
 
 **The benchmark.** `RV.EXE /lasers N` flies the first mission's launch into a
 still scene: two big ships 1,500 and 2,100 km ahead, rolling and turning so

@@ -4,9 +4,10 @@
  * lines the camera makes of them (20 bytes), as many as memory allows.  Once
  * a frame rv_bolts_place puts every bolt through the camera: the far ones
  * (under BOLT_LINE16 of radius on screen) come out as lines, the near ones as
- * fat bolts, whose nested capsules lz_fat_setup prepares in C (they are few:
- * a dozen).  The bands then draw the lines (rv_lines_draw, one call for all)
- * and the fat bolts smallest first, each its passes then its core line.
+ * fat bolts, set up for the build's drawing (lasers.h's LZ_NEAR: capsules,
+ * rv_fat_setup; or polygons, rv_slab_setup; a dozen of them).  The bands then
+ * draw the lines (rv_lines_draw, one call for all) and the fat bolts smallest
+ * first.
  *
  * The asm is lasers.c's module to the bit: bolts_selftest checks that when a
  * flight starts, bolts_time measures what each stage costs. */
@@ -24,18 +25,23 @@ static LzLine __far *g_l;
 static int g_cap, g_n, g_nl, g_nf;
 static LzCam __far g_cam;
 static LzFat __far g_fat[FAT_MAX];
-static LzPass __far g_pass[FAT_MAX * 3];
+#if LZ_POLYGONS
+#if LZ_NEAR == LZ_NEAR_OCTAGON
+#define SLAB_LINES 1                    /* a thin one's core line */
+#else
+#define SLAB_LINES 3                    /* a thin one's three lines */
+#endif
+static LzPoly __far g_poly[FAT_MAX * 2];   /* each fat bolt's outline and middle (at 2i) */
+static LzLine __far g_slab_line[FAT_MAX * SLAB_LINES];   /* ... or its lines (at SLAB_LINES i) */
+static struct { unsigned char npoly, nline; } __far g_slab_of[FAT_MAX];
+#else
+static LzPass __far g_pass[FAT_MAX * 2];
 static LzLine __far g_core[FAT_MAX];
 static struct { unsigned char first, n, core; } __far g_fat_of[FAT_MAX];   /* its passes, and its core line (0xFF none) */
-static LzPoly __far g_poly[FAT_MAX * 2];   /* the simpler shapes (LZ_SHAPE_AXIS ..): outline and middle */
-static LzLine __far g_slab_line[FAT_MAX * 3];   /* ... or three lines */
-static struct { unsigned char npoly, nline; } __far g_slab_of[FAT_MAX];   /* (each bolt's at 2i and 3i) */
-static int g_shape = LZ_SHAPE_CAPSULE;
+#endif
 static short __far g_open[SCR_H * 2];   /* the whole width, for a draw without the cockpit's extents */
-static LzStyle __far g_style = { UI_RED, 130, UI_RED, UI_WHITE, BOLT_LINE16, 32 };   /* far lines and bodies red, the rim
-                                           fire 130 (dark red), the core white */
-static LzStyle __far g_style2 = { UI_RED, 130, UI_RED, UI_WHITE, BOLT_LINE16, 0x7FFF };   /* BOLT_SHAPE_CAPSULE2: no rim */
-#define CAPSULES(s) ((s) == LZ_SHAPE_CAPSULE || (s) == BOLT_SHAPE_CAPSULE2)
+static LzStyle __far g_style = { UI_RED, UI_RED, UI_WHITE, 0, BOLT_LINE16 };   /* far lines and bodies red, the middle
+                                           white */
 static unsigned long g_t_place, g_t_far, g_t_near, g_t_move;
 
 /* the whole width every row, and the roots' table: for draws without the cockpit's extents */
@@ -118,8 +124,6 @@ static void camera(long px, long py, long pz, const LfBasis *cam, int cx, int cy
               line16, y0, y1);
 }
 
-void bolts_set_shape(int shape) { g_shape = shape < LZ_SHAPE_CAPSULE || shape > BOLT_SHAPE_CAPSULE2 ? LZ_SHAPE_CAPSULE : shape; }
-
 /* the fat ones' passes (or polygons), the smallest (the farthest) first so the nearest paint last */
 static void fat_setup(void)
 {
@@ -130,24 +134,25 @@ static void fat_setup(void)
             g_fat[k] = g_fat[k - 1];
             g_fat[k - 1] = t;
         }
-    if (!CAPSULES(g_shape)) {
-        for (i = 0; i < g_nf; i++) {
-            int nl;
-            g_slab_of[i].npoly = (unsigned char)rv_slab_setup(&g_fat[i], g_shape, &g_style, &g_poly[2 * i],
-                                                              &g_slab_line[3 * i], (int __far *)&nl);
-            g_slab_of[i].nline = (unsigned char)nl;
-        }
-        return;
+#if LZ_POLYGONS
+    for (i = 0; i < g_nf; i++) {
+        int nl;
+        g_slab_of[i].npoly = (unsigned char)rv_slab_setup(&g_fat[i], &g_style, &g_poly[2 * i],
+                                                          &g_slab_line[SLAB_LINES * i], (int __far *)&nl);
+        g_slab_of[i].nline = (unsigned char)nl;
     }
+    (void)np;
+    (void)nc;
+#else
     for (i = 0; i < g_nf; i++) {
         int cl;
         g_fat_of[i].first = (unsigned char)np;
-        g_fat_of[i].n = (unsigned char)rv_fat_setup(&g_fat[i], g_shape == BOLT_SHAPE_CAPSULE2 ? &g_style2 : &g_style,
-                                                    &g_pass[np], &g_core[nc], (int __far *)&cl);
+        g_fat_of[i].n = (unsigned char)rv_fat_setup(&g_fat[i], &g_style, &g_pass[np], &g_core[nc], (int __far *)&cl);
         g_fat_of[i].core = (unsigned char)(cl ? nc : 0xFF);
         np += g_fat_of[i].n;
         nc += cl;
     }
+#endif
 }
 
 void bolts_place(long px, long py, long pz, const LfBasis *cam, int cx, int cy, int focal, int y0, int y1, int line16)
@@ -198,18 +203,20 @@ void bolts_draw_near(int y0, int y1, const short __far *ext, int ext_y0, int ext
     unsigned long t0 = clock240();
     if (g_nf && vid_run(&run0, &run1) && rows_of(&y0, &y1, &ext, &ext_y0, ext_rows)) {
         unsigned char __far *band = vid_row(run0);
-        for (i = 0; i < g_nf && !CAPSULES(g_shape); i++) {
+        for (i = 0; i < g_nf; i++) {
+#if LZ_POLYGONS
             for (k = 0; k < g_slab_of[i].npoly; k++)
                 rv_poly_draw(&g_poly[2 * i + k], band, run0, y0, y1, ext, ext_y0);
             for (k = 0; k < g_slab_of[i].nline; k++)
-                rv_lines_draw(&g_slab_line[3 * i + k], 1, k == 1 || g_slab_of[i].nline == 1 ? g_style.core : g_style.body,
-                              band, run0, y0, y1, ext, ext_y0);
-        }
-        for (i = 0; i < g_nf && CAPSULES(g_shape); i++) {
+                rv_lines_draw(&g_slab_line[SLAB_LINES * i + k], 1,
+                              k == 1 || g_slab_of[i].nline == 1 ? g_style.core : g_style.body, band, run0, y0, y1, ext,
+                              ext_y0);
+#else
             for (k = 0; k < g_fat_of[i].n; k++)
                 rv_pass_draw(&g_pass[g_fat_of[i].first + k], band, run0, y0, y1, ext, ext_y0, lz_sqrt16);
             if (g_fat_of[i].core != 0xFF)
                 rv_lines_draw(&g_core[g_fat_of[i].core], 1, g_style.core, band, run0, y0, y1, ext, ext_y0);
+#endif
         }
     }
     g_t_near += clock240() - t0;
@@ -276,6 +283,115 @@ static void identity(LfBasis *cam)
     cam->up.y = 256;
 }
 
+/* a fat bolt (end_on: its b moved onto its a) drawn by lasers.c, as the build draws them */
+static void fat_c(const LzFat __far *src, int end_on, unsigned char __far *band, int y0, int y1,
+                  const short __far *ex)
+{
+    LzFat f = *src;
+    LzStyle st = g_style;
+    int k, n;
+#if LZ_POLYGONS
+    LzPoly pl[2];
+    LzLine ln[3];
+    int nl;
+#else
+    LzPass p[2];
+    LzLine core;
+    int cl;
+#endif
+    if (end_on) {
+        f.bx = f.ax;
+        f.by = f.ay;
+    }
+#if LZ_POLYGONS
+    n = lz_slab_setup(&f, &st, pl, ln, &nl);
+    for (k = 0; k < n; k++)
+        lz_poly_draw(&pl[k], band, y0, y0, y1, ex, 12, 376);
+    for (k = 0; k < nl; k++)
+        lz_lines_draw(&ln[k], 1, k == 1 || nl == 1 ? UI_WHITE : UI_RED, band, y0, y0, y1, ex, 12, 376);
+#else
+    n = lz_fat_setup(&f, &st, p, &core, &cl);
+    for (k = 0; k < n; k++)
+        lz_pass_draw(&p[k], band, y0, y0, y1, ex, 12, 376);
+    if (cl)
+        lz_lines_draw(&core, 1, UI_WHITE, band, y0, y0, y1, ex, 12, 376);
+#endif
+}
+
+/* ... and by the asm, rows cy0 .. cy1-1 with the extents ax from row e0 */
+static void fat_asm(const LzFat __far *src, int end_on, unsigned char __far *band, int y0, int cy0, int cy1,
+                    const short __far *ax, int e0)
+{
+    LzFat f = *src;
+    int k, n;
+#if LZ_POLYGONS
+    LzPoly pl[2];
+    LzLine ln[3];
+    int nl;
+#else
+    LzPass p[2];
+    LzLine core;
+    int cl;
+#endif
+    if (end_on) {
+        f.bx = f.ax;
+        f.by = f.ay;
+    }
+#if LZ_POLYGONS
+    n = rv_slab_setup(&f, &g_style, pl, ln, (int __far *)&nl);
+    for (k = 0; k < n; k++)
+        rv_poly_draw(&pl[k], band, y0, cy0, cy1, ax, e0);
+    for (k = 0; k < nl; k++)
+        rv_lines_draw(&ln[k], 1, k == 1 || nl == 1 ? UI_WHITE : UI_RED, band, y0, cy0, cy1, ax, e0);
+#else
+    n = rv_fat_setup(&f, &g_style, p, &core, (int __far *)&cl);
+    for (k = 0; k < n; k++)
+        rv_pass_draw(&p[k], band, y0, cy0, cy1, ax, e0, lz_sqrt16);
+    if (cl)
+        rv_lines_draw(&core, 1, UI_WHITE, band, y0, cy0, cy1, ax, e0);
+#endif
+}
+
+/* a fat bolt's set-up, the asm's records against lasers.c's (logged when they differ) */
+static int setup_agrees(const LzFat *f, LzStyle *st)
+{
+#if LZ_POLYGONS
+    LzPoly pc[2], pa[2];
+    LzLine lc3[3], la3[3];
+    int n1, n2, l1, l2;
+    _fmemset(pc, 0, sizeof pc);
+    _fmemset(pa, 0, sizeof pa);
+    n1 = lz_slab_setup(f, st, pc, lc3, &l1);
+    n2 = rv_slab_setup(f, &g_style, pa, la3, (int __far *)&l2);
+    if (n1 == n2 && l1 == l2 && !(n1 && _fmemcmp(pc, pa, n1 * sizeof(LzPoly))) &&
+        !(l1 && _fmemcmp(lc3, la3, l1 * sizeof(LzLine))))
+        return 1;
+    rv_log("bolts: rv_slab_setup differs for %d,%d-%d,%d r %d: %d polygons, %d lines (C %d, %d)", f->ax, f->ay, f->bx,
+           f->by, f->r, n2, l2, n1, l1);
+    if (n1 && n2)
+        rv_log("bolts: C n %d top %d bot %d v0 %d,%d v1 %d,%d; asm n %d top %d bot %d v0 %d,%d v1 %d,%d", pc[0].n,
+               pc[0].top, pc[0].bot, pc[0].x[0], pc[0].y[0], pc[0].x[1], pc[0].y[1], pa[0].n, pa[0].top, pa[0].bot,
+               pa[0].x[0], pa[0].y[0], pa[0].x[1], pa[0].y[1]);
+    return 0;
+#else
+    LzPass pc[2], pa[2];
+    LzLine cc, ca;
+    int clc, cla, n1, n2, w;
+    n1 = lz_fat_setup(f, st, pc, &cc, &clc);
+    n2 = rv_fat_setup(f, &g_style, pa, &ca, (int __far *)&cla);
+    if (n1 == n2 && clc == cla && !_fmemcmp(pc, pa, n1 * sizeof(LzPass)) && !(clc && _fmemcmp(&cc, &ca, sizeof cc)))
+        return 1;
+    rv_log("bolts: rv_fat_setup differs for %d,%d-%d,%d r %d: %d passes (C %d), core line %d (C %d)", f->ax, f->ay,
+           f->bx, f->by, f->r, n2, n1, cla, clc);
+    for (w = 0; w < n1 && w < n2; w++)
+        if (_fmemcmp(&pc[w], &pa[w], sizeof(LzPass)))
+            rv_log("bolts: pass %d: C top %d bot %d la %d lb %d ra %d rb %d c0 %ld m %ld hw %ld; asm %d %d %d %d %d %d %ld "
+                   "%ld %ld", w, pc[w].top, pc[w].bot, pc[w].la, pc[w].lb, pc[w].ra, pc[w].rb, pc[w].c0, pc[w].m,
+                   pc[w].hw, pa[w].top, pa[w].bot, pa[w].la, pa[w].lb, pa[w].ra, pa[w].rb, pa[w].c0, pa[w].m, pa[w].hw);
+    return 0;
+#endif
+}
+
 long bolts_selftest(void)
 {
     LzBolt __far *b = (LzBolt __far *)_fmalloc(TEST_BOLTS * sizeof(LzBolt));
@@ -322,31 +438,20 @@ long bolts_selftest(void)
         bad = -1;
         goto out;
     }
-    /* the fat bolts' set-ups: rv_fat_setup against lz_fat_setup, at their own radii and every other */
-    for (i = 0; i < nfc && !bad; i++) {
-        for (k = 4; k <= 64 && !bad; k += 3) {
-            LzPass pc[3], pa[3];
-            LzLine cc, ca;
+    /* the fat bolts' set-ups, asm against C, at their own radii and every other, some end on */
+    for (i = 0; i < nfc && !bad; i++)
+        for (k = 12; k <= 64 && !bad; k += 4) {
             LzFat f = fc[i];
             LzStyle st = g_style;
-            int clc, cla, n1, n2;
-            f.r = (short)(k == 4 ? fc[i].r : k);
-            n1 = lz_fat_setup(&f, &st, pc, &cc, &clc);
-            n2 = rv_fat_setup(&f, &g_style, pa, &ca, (int __far *)&cla);
-            if (n1 != n2 || clc != cla || _fmemcmp(pc, pa, n1 * sizeof(LzPass)) || (clc && _fmemcmp(&cc, &ca, sizeof cc))) {
-                rv_log("bolts: rv_fat_setup differs for %d,%d-%d,%d r %d: %d passes (C %d), core line %d (C %d)", f.ax,
-                       f.ay, f.bx, f.by, f.r, n2, n1, cla, clc);
-                for (w = 0; w < n1 && w < n2; w++)
-                    if (_fmemcmp(&pc[w], &pa[w], sizeof(LzPass)))
-                        rv_log("bolts: pass %d: C top %d bot %d la %d lb %d ra %d rb %d c0 %ld m %ld hw %ld; asm %d %d %d %d "
-                               "%d %d %ld %ld %ld", w, pc[w].top, pc[w].bot, pc[w].la, pc[w].lb, pc[w].ra, pc[w].rb,
-                               pc[w].c0, pc[w].m, pc[w].hw, pa[w].top, pa[w].bot, pa[w].la, pa[w].lb, pa[w].ra, pa[w].rb,
-                               pa[w].c0, pa[w].m, pa[w].hw);
-                bad = -1;
+            f.r = (short)k;
+            if (i % 4 == 3) {
+                f.bx = f.ax;
+                f.by = f.ay;
             }
+            if (!setup_agrees(&f, &st))
+                bad = -1;
         }
-    }
-    /* the draws, band by band (40 rows), with and without the extents */
+    /* the draws, band by band (40 rows), with and without the extents: the lines and the fat bolts */
     for (w = 0; w < SCR_H / TEST_ROWS * 2 && !bad; w++) {
         int y0 = (w % (SCR_H / TEST_ROWS)) * TEST_ROWS, y1 = y0 + TEST_ROWS, cy0 = y0, cy1 = y1, e0 = 12;
         const short __far *ex = w >= SCR_H / TEST_ROWS ? ext + 2 * 12 : 0;
@@ -360,29 +465,14 @@ long bolts_selftest(void)
         }
         _fmemset(band, 0, TEST_ROWS * SCR_W);
         lz_lines_draw(lc, nlc, UI_RED, band, y0, y0, y1, ex, 12, 376);
-        for (i = 0; i < nfc; i++) {
-            LzPass p[3];
-            LzLine core;
-            LzStyle st = g_style;
-            int cl, n = lz_fat_setup(&fc[i], &st, p, &core, &cl);
-            for (k = 0; k < n; k++)
-                lz_pass_draw(&p[k], band, y0, y0, y1, ex, 12, 376);
-            if (cl)
-                lz_lines_draw(&core, 1, UI_WHITE, band, y0, y0, y1, ex, 12, 376);
-        }
+        for (i = 0; i < nfc; i++)
+            fat_c(&fc[i], i % 4 == 3, band, y0, y1, ex);
         s1 = checksum(band, &drawn);
         _fmemset(band, 0, TEST_ROWS * SCR_W);
         if (cy0 < cy1) {
             rv_lines_draw(la, nla, UI_RED, band, y0, cy0, cy1, ax, e0);
-            for (i = 0; i < nfa; i++) {
-                LzPass p[3];
-                LzLine core;
-                int cl, n = rv_fat_setup(&fa[i], &g_style, p, &core, (int __far *)&cl);
-                for (k = 0; k < n; k++)
-                    rv_pass_draw(&p[k], band, y0, cy0, cy1, ax, e0, lz_sqrt16);
-                if (cl)
-                    rv_lines_draw(&core, 1, UI_WHITE, band, y0, cy0, cy1, ax, e0);
-            }
+            for (i = 0; i < nfa; i++)
+                fat_asm(&fa[i], i % 4 == 3, band, y0, cy0, cy1, ax, e0);
         }
         s2 = checksum(band, &drawn);
         if (s1 != s2) {
@@ -390,75 +480,6 @@ long bolts_selftest(void)
             bad = -1;
         }
     }
-    /* the simpler shapes' set-up: rv_slab_setup against lz_slab_setup */
-    for (k = LZ_SHAPE_AXIS; k <= LZ_SHAPE_LAST && !bad; k++)
-        for (i = 0; i < nfc && !bad; i++) {
-            int r;
-            for (r = 12; r <= 64 && !bad; r += 4) {
-                LzPoly pc[2], pa[2];
-                LzLine lc3[3], la3[3];
-                LzFat f = fc[i];
-                LzStyle st = g_style;
-                int n1, n2, l1, l2;
-                f.r = (short)r;
-                if (i % 4 == 3) {               /* (some end on: no length) */
-                    f.bx = f.ax;
-                    f.by = f.ay;
-                }
-                _fmemset(pc, 0, sizeof pc);
-                _fmemset(pa, 0, sizeof pa);
-                n1 = lz_slab_setup(&f, k, &st, pc, lc3, &l1);
-                n2 = rv_slab_setup(&f, k, &g_style, pa, la3, (int __far *)&l2);
-                if (n1 != n2 || l1 != l2 || (n1 && _fmemcmp(pc, pa, n1 * sizeof(LzPoly))) ||
-                    (l1 && _fmemcmp(lc3, la3, l1 * sizeof(LzLine)))) {
-                    rv_log("bolts: rv_slab_setup differs for shape %d, %d,%d-%d,%d r %d: %d polygons, %d lines (C %d, %d)",
-                           k, f.ax, f.ay, f.bx, f.by, r, n2, l2, n1, l1);
-                    if (n1 && n2)
-                        rv_log("bolts: C n %d top %d bot %d v0 %d,%d v1 %d,%d; asm n %d top %d bot %d v0 %d,%d v1 %d,%d",
-                               pc[0].n, pc[0].top, pc[0].bot, pc[0].x[0], pc[0].y[0], pc[0].x[1], pc[0].y[1], pa[0].n,
-                               pa[0].top, pa[0].bot, pa[0].x[0], pa[0].y[0], pa[0].x[1], pa[0].y[1]);
-                    bad = -1;
-                }
-            }
-        }
-    /* the simpler shapes: rv_poly_draw against lz_poly_draw, every shape, band by band with the extents */
-    for (k = LZ_SHAPE_AXIS; k <= LZ_SHAPE_LAST && !bad; k++)
-        for (w = 0; w < SCR_H / TEST_ROWS && !bad; w++) {
-            int y0 = w * TEST_ROWS, y1 = y0 + TEST_ROWS, cy0 = y0 < 12 ? 12 : y0, cy1 = y1 > 388 ? 388 : y1, pass;
-            unsigned long sum[2];
-            LzStyle st = g_style;
-            for (pass = 0; pass < 2; pass++) {
-                _fmemset(band, 0, TEST_ROWS * SCR_W);
-                for (i = 0; i < nfc; i++) {
-                    LzPoly pl[2];
-                    LzLine ln[3];
-                    LzFat f = fc[i];
-                    int nl, j, n;
-                    if (i % 4 == 3) {           /* (some end on) */
-                        f.bx = f.ax;
-                        f.by = f.ay;
-                    }
-                    n = lz_slab_setup(&f, k, &st, pl, ln, &nl);
-                    for (j = 0; j < n; j++)
-                        if (pass)
-                            rv_poly_draw(&pl[j], band, y0, cy0, cy1, ext + 2 * 12, 12);
-                        else
-                            lz_poly_draw(&pl[j], band, y0, y0, y1, ext + 2 * 12, 12, 376);
-                    for (j = 0; j < nl; j++)
-                        if (pass)
-                            rv_lines_draw(&ln[j], 1, j == 1 || nl == 1 ? UI_WHITE : UI_RED, band, y0, cy0, cy1, ext + 2 * 12,
-                                          12);
-                        else
-                            lz_lines_draw(&ln[j], 1, j == 1 || nl == 1 ? UI_WHITE : UI_RED, band, y0, y0, y1, ext + 2 * 12,
-                                          12, 376);
-                }
-                sum[pass] = checksum(band, &drawn);
-            }
-            if (sum[0] != sum[1]) {
-                rv_log("bolts: rv_poly_draw differs from lz_poly_draw for shape %d in rows %d-%d", k, y0, y1);
-                bad = -1;
-            }
-        }
     /* the flight: rv_bolts_move against lz_move */
     if (!bad) {
         _fmemcpy(lc, b, sizeof(LzBolt) * 6);
@@ -487,67 +508,64 @@ static LzLine __far *t_l;
 static unsigned char __far *t_band;
 static struct {                         /* (allocated for the timings only) */
     LzFat f[FAT_MAX];
-    LzPass p[FAT_MAX * 3];
-    LzLine core[FAT_MAX];
-    unsigned char np[FAT_MAX], hascore[FAT_MAX];
+#if LZ_POLYGONS
     LzPoly poly[FAT_MAX * 2];
     LzLine sl[FAT_MAX * 3];
     unsigned char npoly[FAT_MAX], nsl[FAT_MAX];
+#else
+    LzPass p[FAT_MAX * 2];
+    LzLine core[FAT_MAX];
+    unsigned char np[FAT_MAX], hascore[FAT_MAX];
+#endif
     unsigned char spans[12000];        /* the blit's sprites: each bolt's rows of runs, from sp_at[i] */
     short sp_top[FAT_MAX], sp_rows[FAT_MAX], sp_left[FAT_MAX];
     unsigned short sp_at[FAT_MAX], spans_used;
 } __far *t_w;
-static int t_shape;
 #define t_f (t_w->f)
-#define t_p (t_w->p)
-#define t_core (t_w->core)
-#define t_np (t_w->np)
-#define t_hascore (t_w->hascore)
 static int t_n, t_nl, t_nf, t_y0;
 
 static void t_place(void) { t_nl = rv_bolts_place(t_b, t_n, &g_cam, t_l, 512, t_f, FAT_MAX, (int __far *)&t_nf); }
 static void t_lines(void) { rv_lines_draw(t_l, t_nl, UI_RED, t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0); }
 
+/* the fat bolts set up, as the build draws them */
 static void t_setup(void)
 {
-    int i, cl;
+    int i, n;
     for (i = 0; i < t_nf; i++) {
-        t_np[i] = (unsigned char)rv_fat_setup(&t_f[i], &g_style, &t_p[i * 3], &t_core[i], (int __far *)&cl);
-        t_hascore[i] = (unsigned char)cl;
+#if LZ_POLYGONS
+        t_w->npoly[i] = (unsigned char)rv_slab_setup(&t_f[i], &g_style, &t_w->poly[2 * i], &t_w->sl[3 * i],
+                                                     (int __far *)&n);
+        t_w->nsl[i] = (unsigned char)n;
+#else
+        t_w->np[i] = (unsigned char)rv_fat_setup(&t_f[i], &g_style, &t_w->p[i * 2], &t_w->core[i], (int __far *)&n);
+        t_w->hascore[i] = (unsigned char)n;
+#endif
     }
 }
 
-static void t_passes(void)
+/* fat bolt i drawn into the timings' band */
+static void t_draw_one(int i)
 {
-    int i, k;
-    for (i = 0; i < t_nf; i++) {
-        for (k = 0; k < t_np[i]; k++)
-            rv_pass_draw(&t_p[i * 3 + k], t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0, lz_sqrt16);
-        if (t_hascore[i])
-            rv_lines_draw(&t_core[i], 1, UI_WHITE, t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
-    }
+    int k;
+#if LZ_POLYGONS
+    for (k = 0; k < t_w->npoly[i]; k++)
+        rv_poly_draw(&t_w->poly[2 * i + k], t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
+    for (k = 0; k < t_w->nsl[i]; k++)
+        rv_lines_draw(&t_w->sl[3 * i + k], 1, k == 1 || t_w->nsl[i] == 1 ? UI_WHITE : UI_RED, t_band, t_y0, t_y0,
+                      t_y0 + TEST_ROWS, g_open, 0);
+#else
+    for (k = 0; k < t_w->np[i]; k++)
+        rv_pass_draw(&t_w->p[i * 2 + k], t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0, lz_sqrt16);
+    if (t_w->hascore[i])
+        rv_lines_draw(&t_w->core[i], 1, UI_WHITE, t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
+#endif
 }
 
-static void t_slab_setup(void)
+static void t_draw(void)
 {
-    int i, nl;
-    for (i = 0; i < t_nf; i++) {
-        t_w->npoly[i] = (unsigned char)rv_slab_setup(&t_f[i], t_shape, &g_style, &t_w->poly[2 * i], &t_w->sl[3 * i],
-                                                     (int __far *)&nl);
-        t_w->nsl[i] = (unsigned char)nl;
-    }
-}
-
-static void t_slab_draw(void)
-{
-    int i, k;
-    for (i = 0; i < t_nf; i++) {
-        for (k = 0; k < t_w->npoly[i]; k++)
-            rv_poly_draw(&t_w->poly[2 * i + k], t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
-        for (k = 0; k < t_w->nsl[i]; k++)
-            rv_lines_draw(&t_w->sl[3 * i + k], 1, k == 1 || t_w->nsl[i] == 1 ? UI_WHITE : UI_RED, t_band, t_y0, t_y0,
-                          t_y0 + TEST_ROWS, g_open, 0);
-    }
+    int i;
+    for (i = 0; i < t_nf; i++)
+        t_draw_one(i);
 }
 
 void __far __cdecl rv_blit_row(unsigned char __far *row, const unsigned char __far *spans, int left, int xa, int xb);
@@ -561,10 +579,7 @@ static int t_encode_each(void)
     for (i = 0; i < t_nf && i < FAT_MAX; i++) {
         int top = TEST_ROWS, bot = -1, left = SCR_W;
         _fmemset(t_band, 0, TEST_ROWS * SCR_W);
-        for (r = 0; r < t_np[i]; r++)
-            rv_pass_draw(&t_p[i * 3 + r], t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0, lz_sqrt16);
-        if (t_hascore[i])
-            rv_lines_draw(&t_core[i], 1, UI_WHITE, t_band, t_y0, t_y0, t_y0 + TEST_ROWS, g_open, 0);
+        t_draw_one(i);
         for (r = 0; r < TEST_ROWS; r++)
             for (x = 0; x < SCR_W; x++)
                 if (t_band[(unsigned)r * SCR_W + x]) {
@@ -614,11 +629,11 @@ static void t_blit_each(void)
     }
 }
 
-static void t_capsules(void)
+static void t_all_fat(void)
 {
     t_place();
     t_setup();
-    t_passes();
+    t_draw();
 }
 
 /* microseconds x 100 a bolt for `work` over n bolts: run until half a second has gone */
@@ -665,46 +680,22 @@ void bolts_time(long out[6])
     t_n = 12;
     out[2] = time_of(t_place, 12);
     out[3] = time_of(t_setup, t_nf);
-    out[4] = time_of(t_passes, t_nf);
+    out[4] = time_of(t_draw, t_nf);
     rv_log("bolts: the timing's near bolts: %d of 12 on screen, radius %d..%d x16", t_nf, t_nf ? t_f[0].r : 0,
            t_nf ? t_f[t_nf - 1].r : 0);
-    {
-        /* the simpler shapes on the same bolts: set up and drawn; and the same capsules copied as sprite rows */
-        static const char *names[5] = { "", "level/upright ends", "rectangle", "hexagon", "swept octagon" };
-        long su, dr, bl;
-        int sh;
-        for (sh = LZ_SHAPE_AXIS; sh <= LZ_SHAPE_LAST; sh++) {
-            t_shape = sh;
-            su = time_of(t_slab_setup, t_nf);
-            dr = time_of(t_slab_draw, t_nf);
-            rv_log("bolts: a near bolt as a %s: %ld.%02ld us to set up, %ld.%02ld to draw", names[sh], su / 100, su % 100,
-                   dr / 100, dr % 100);
-        }
-        {
-            /* the capsules in two colours (BOLT_SHAPE_CAPSULE2: no dark rim, the body and the core as the
-             * polygons have) */
-            short rim = g_style.rim16;
-            g_style.rim16 = 0x7FFF;
-            su = time_of(t_setup, t_nf);
-            dr = time_of(t_passes, t_nf);
-            g_style.rim16 = rim;
-            rv_log("bolts: a near bolt as capsules in two colours: %ld.%02ld us to set up, %ld.%02ld to draw", su / 100,
-                   su % 100, dr / 100, dr % 100);
-        }
-        if (t_encode_each()) {
-            bl = time_of(t_blit_each, t_nf);
-            rv_log("bolts: the same capsules as pre-rendered sprites, each its own, copied a row at a time "
-                   "(rv_blit_row, as ships_blit_view does): %ld.%02ld us a bolt (%u bytes of runs)", bl / 100, bl % 100,
-                   t_w->spans_used);
-        }
+    if (t_encode_each()) {              /* the same bolts pre-rendered, each a sprite of its own */
+        long bl = time_of(t_blit_each, t_nf);
+        rv_log("bolts: the same bolts as pre-rendered sprites, each its own, copied a row at a time "
+               "(rv_blit_row, as ships_blit_view does): %ld.%02ld us a bolt (%u bytes of runs)", bl / 100, bl % 100,
+               t_w->spans_used);
     }
-    /* one algorithm: far bolts drawn as capsules (no line under any radius) */
+    /* one algorithm: far bolts drawn fat (no line under any radius) */
     test_bolts(t_b, FAT_MAX, 0, 700, 40);
     t_n = FAT_MAX;
     camera(0, 0, 0, &cam, SCR_W / 2, SCR_H / 2, 400, t_y0, t_y0 + TEST_ROWS, 0);
-    out[5] = time_of(t_capsules, FAT_MAX);
-    rv_log("bolts: a far bolt %ld.%02ld us to place, %ld.%02ld to draw (%d lines of %ld.%02ld rows); a near one "
-           "%ld.%02ld to place, %ld.%02ld to set up, %ld.%02ld to draw; a far one as a capsule %ld.%02ld in all",
+    out[5] = time_of(t_all_fat, FAT_MAX);
+    rv_log("bolts: a far bolt %ld.%02ld us to place, %ld.%02ld to draw (%d lines of %ld.%02ld rows); a near one ("
+           LZ_NEAR_NAME ") %ld.%02ld to place, %ld.%02ld to set up, %ld.%02ld to draw; a far one drawn so %ld.%02ld in all",
            out[0] / 100, out[0] % 100, out[1] / 100, out[1] % 100, nfar, nfar ? rows / nfar : 0L,
            nfar ? rows * 100 / nfar % 100 : 0L, out[2] / 100, out[2] % 100, out[3] / 100, out[3] % 100,
            out[4] / 100, out[4] % 100, out[5] / 100, out[5] % 100);
