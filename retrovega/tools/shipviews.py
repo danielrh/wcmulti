@@ -270,6 +270,7 @@ uniform sampler2D decal_atlas;
 uniform vec4 decal_pos[4];  // centre x, centre z, size (ship units), rotation (radians)
 uniform vec4 decal_opt[4];  // atlas cell, side (0, 1 top, -1 bottom), mirrored, in use
 uniform float exposure;
+uniform float contrast;   // a power curve about middle grey in linear light (1 = none): deeper shadows, the same midtone
 uniform float toon;
 uniform vec3 key_pos;     // a point light, view space, ship units
 uniform float ambient;
@@ -347,6 +348,9 @@ void main() {
         // alpha 0 the uber material keeps no diffuse at all)
         vec3 c = vs_uber(vec4(albedo, 1.0), vec4(specc, 1.0), vec4(lin(glw.rgb), 1.0), n, v, kdir, fill_dir);
         c *= exposure * vs_exposure;
+        // (a hard clip to white above 1.0 is what blew the hulls out: the contrast curve brings a
+        // shoulder with it, so highlights roll off instead)
+        if (contrast != 1.0) { c = 0.18 * pow(max(c, vec3(0.0)) / 0.18, vec3(contrast)); c = c / (1.0 + 0.12 * c); }
         frag = vec4(sqrt(clamp(c, 0.0, 1.0)), 1.0);
         paint = vec4(p1 > 0.5 ? 1.0 : 0.0, p2 > 0.5 ? 1.0 : 0.0, g > 0.5 ? 1.0 : 0.0, 1.0);
         return;
@@ -374,6 +378,7 @@ void main() {
                 + mix(vec3(0.01, 0.015, 0.03), vec3(0.16, 0.24, 0.42), smoothstep(-0.2, 0.8, r.y)) * 0.4);
     col += lin(texture(glow_map, v_uv).rgb);
     col *= exposure;
+    if (contrast != 1.0) col = 0.18 * pow(max(col, vec3(0.0)) / 0.18, vec3(contrast));
     col = col / (1.0 + 0.12 * col);
     frag = vec4(pow(clamp(col, 0.0, 1.0), vec3(1.0 / 2.2)), 1.0);
     paint = vec4(p1 > 0.5 ? 1.0 : 0.0, p2 > 0.5 ? 1.0 : 0.0, g > 0.5 ? 1.0 : 0.0, 1.0);
@@ -673,7 +678,8 @@ def ship_mesh(row, assets):
 
 
 def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix='',
-           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None, views=None, step=30):
+           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None, views=None, step=30,
+           contrast=None):
     """views: (elevation, heading) pairs to render instead of the sprite set,
     saved as TAG_eE_hH.png with no sheet (the scenes' own views of a ship).
     step: the sprite set's angular step, 30 (WC1's 37 views) or 15 (145)."""
@@ -701,6 +707,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     fill = np.array([0.7, -0.35, 0.45]); fill /= np.linalg.norm(fill)
     prog['fill_dir'].value = tuple(fill)
     prog['exposure'].value = exposure if exposure is not None else float(art.get('exposure') or 1)
+    prog['contrast'].value = contrast if contrast is not None else float(art.get('contrast') or 1)
     prog['toon'].value = float(art.get('toon') or 0)
     prog['whiten'].value = float(art.get('whiten') or 0)
     t = [(float(v) / 255.0) ** 2.2 for v in (art.get('tint') or '255 255 255').split()]
