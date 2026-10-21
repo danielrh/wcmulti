@@ -550,8 +550,8 @@ user's design, in which the 37 or 62 full-size views (SHIPnn.RV) are the
 the emulator.
 
 - **SHIPnn.RVS** holds every view at 13 size steps (each 0.84 of the last,
-  full size down to 1/8) and, for the sizes round the hand-off (steps 4..6,
-  half size and below), at roll steps of 22.5 degrees, all in the engine's
+  full size down to 1/8) and, for every size from half down (steps 4..12:
+  the recipe `0 4 9`), at roll steps of 22.5 degrees, all in the engine's
   own run-length row format: a block of the file goes into XMS by a
   straight copy (`file_to_xms`), the index (a view table per block) sits in
   XMS too and is fetched twelve bytes at a time. `tools/rvsprites.c` makes a
@@ -626,9 +626,21 @@ the emulated clock standing still: 256 reads of 6 KB did not move the 240
 Hz clock (under 16 µs a read), so the reads cost no frame time where this
 game runs; on real hardware they would be a few ms each, which `/reads 0`
 turns off (everything from the sets) and chunking would bound. What it
-buys: a fighter type keeps ~1.7 MB of XMS at 15 degrees instead of 2.5
-(about twelve types in a mission instead of eight), and a denser lattice
-for the exact draw now costs disk, not memory.
+buys: a fighter type keeps ~2.2 MB of XMS at 15 degrees (ladder 0.8,
+rolls at nine sizes 1.4) instead of 2.5 with the full-size block resident
+and rolls at three, and a denser lattice for the exact draw now costs disk,
+not memory.
+
+**The player's roll on far ships** (2026-10-20): rolling the camera never
+switches a view (the direction to the camera in the ship's frame does not
+change), so a near ship turns smoothly on the exact path; a far one comes
+from the sets' roll blocks, and with rolls only at sizes 4..6 a ship
+beyond a third of full size was drawn upright while the stars turned (162
+of 406 logged frames of `/zoom 3`, the far swing 3,000..15,000 km with
+`hold rright`): the user's verdict "a massive bug, not shippable", against
+"perfect" with rolls at every size from half down (`0 4 9`, 49 blocks a
+set, +0.57 MB on disk and +0.54 MB of XMS a fighter type). The recipe is
+`0 4 9` everywhere since (build.sh, web/wc.js, the check).
 
 **A 10-degree lattice** (tried 2026-10-20, after the stream): `lattice(10)`
 is 17 bands x 19 headings, 325 views (614 with an asymmetric ship's
@@ -740,8 +752,12 @@ enough to want a half-size source set (spec §8).
 8. The layer: RV.EXE recognised, DS from RVHOOK, the new thunks logged.
    **Done** (below).
 9. The flight loop at its sites, the cockpits, the drawing benchmark.
-   **Done** ("Flight" above); next the scale ladder, combat, the 20 fps
-   pacing.
+   **Done** ("Flight" above); the sets, the hybrid and the stream too.
+   Next combat and the 20 fps pacing. The user's rule for the guns
+   (2026-10-20): "it's necessary to lead the target properly with
+   lasers" — bolts have a finite speed and a hit is the bolt meeting the
+   target; no hitscan, no auto-aim, so a pilot must judge the lead from
+   the target's heading, which is why the far ships' roll had to be right.
 
 Steps 1-6 are done too: `tests/run.sh` plays `tests/walk.txt` (every room,
 a save, a close-up, the briefing, the deck, a launch and its debrief),

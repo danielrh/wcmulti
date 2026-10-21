@@ -14,7 +14,7 @@ for (const f of fs.readdirSync(path.join(root, "art", "ships")).sort()) {
   const want = path.join(dos, f + "S");
   if (!fs.existsSync(want)) continue;
   const t0 = Date.now();
-  const set = makeSet(new Uint8Array(fs.readFileSync(path.join(root, "art", "ships", f))), 0, 4, 3);
+  const set = makeSet(new Uint8Array(fs.readFileSync(path.join(root, "art", "ships", f))), 0, 4, 9);
   const same = Buffer.compare(Buffer.from(set), fs.readFileSync(want)) === 0;
   console.log(`${same ? "ok  " : "FAIL"} ${f}: ${set.length >> 10} KB in ${Date.now() - t0} ms${same ? "" : " differs from the C tool's"}`);
   same ? ok++ : bad++;

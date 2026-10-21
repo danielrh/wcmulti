@@ -1299,7 +1299,7 @@ async function start(fromGesture) {
         const m = /^(SHIP[0-9A-F]{2})\.RV$/i.exec(f.path);
         if (!m) continue;
         status(`Making ${m[1]}'s sprite set…`);
-        try { sets.push({ path: f.path + "S", data: makeSet(f.data, 0, 4, 3) }); }
+        try { sets.push({ path: f.path + "S", data: makeSet(f.data, 0, 4, 9) }); }
         catch (e) { log(`${f.path}: no sprite set (${e.message})`); }
       }
       installFiles(Module.FS, GAME_ROOT, sets);
