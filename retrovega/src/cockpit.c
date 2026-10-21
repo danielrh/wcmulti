@@ -51,8 +51,7 @@ int cockpit_load(int ship_type)
             g_ext = (short __far *)_fmalloc((size_t)ex->size + 2);
             RV_ASSERT(g_ext != 0 && ex->size == 4UL * g_ext_rows);
             dat_read(ex->at, g_ext, ex->size);
-            gfx_use_palette(c->palette);
-            g_cockpit_index = (int)i;
+            g_cockpit_index = (int)i;   /* (the palette goes in with cockpit_palette, once the flight's loading is done) */
             g_last_valid = 0;
             rv_log("cockpit: %.8Fs for ship type %d, rows %d-%d open, %d damage layers", (char __far *)c->key,
                    ship_type, c->open_y0, c->open_y1, c->nlayers);
@@ -61,6 +60,12 @@ int cockpit_load(int ship_type)
     }
     rv_log("cockpit: none for ship type %d", ship_type);
     return 0;
+}
+
+void cockpit_palette(void)
+{
+    if (g_cp)
+        gfx_use_palette(g_cp->palette);
 }
 
 void cockpit_unload(void)

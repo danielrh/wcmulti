@@ -287,14 +287,18 @@ static int load_rv(ShipSet __far *s, const char *name)
 /* --- the pre-rendered sets --- */
 
 /* a file's bytes [at, at+n) into an XMS block at `to` */
+/* n bytes of the file from `at` into XMS, through gfx's scratch (32 KB a read: a mission's blocks are
+ * megabytes, and in the browser every DOS read is a trip through the page's file system) */
 static void file_to_xms(FILE *f, unsigned long at, unsigned long n, XmsBlock blk, unsigned long to)
 {
     unsigned long k;
-    fseek(f, at, SEEK_SET);
-    for (k = 0; k < n; k += sizeof rv_filebuf) {
-        unsigned part = n - k < sizeof rv_filebuf ? (unsigned)(n - k) : sizeof rv_filebuf;
-        fread(rv_filebuf, 1, part, f);
-        xms_put(blk, to + k, rv_filebuf, part);
+    int fd = fileno(f);
+    lseek(fd, at, SEEK_SET);
+    for (k = 0; k < n; k += SCRATCH) {
+        unsigned part = n - k < SCRATCH ? (unsigned)(n - k) : SCRATCH, got;
+        if (_dos_read(fd, gfx_scratch(), part, &got) != 0 || got != part)
+            break;
+        xms_put(blk, to + k, gfx_scratch(), part);
     }
 }
 

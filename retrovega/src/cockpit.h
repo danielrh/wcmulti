@@ -20,7 +20,9 @@ typedef struct {
     void (*mfd_draw)(int which, const RvRect __far *r, int y0, int y1);   /* drawn before the text, or NULL */
 } CockpitState;
 
-int cockpit_load(int ship_type);        /* the cockpit for a ship type; sets its palette. 0: none */
+int cockpit_load(int ship_type);        /* the cockpit for a ship type (its palette waits for cockpit_palette). 0: none */
+void cockpit_palette(void);              /* its palette installed: when the flight is about to draw, not at the load
+                                           (the deck stayed on screen in it while the sets loaded: seconds in the browser) */
 void cockpit_unload(void);
 const RvCockpit __far *cockpit_record(void);
 const short __far *cockpit_extents(int *y0, int *rows);   /* (first, end) x per row of the opening */

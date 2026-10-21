@@ -664,9 +664,10 @@ void __far __cdecl flight_startup(void)
         ships_load(gInstanceShipTypes[i]);
     {
         /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
-        unsigned long free_kb = xms_free_kb(), taken;
+        unsigned long free_kb = xms_free_kb(), taken, t0 = clock240();
         taken = ships_load_blocks(free_kb > 1024 ? (free_kb - 1024) * 1024UL : 0);
-        rv_log("ships: %lu KB of blocks loaded, %lu KB of XMS left", taken / 1024, xms_free_kb());
+        rv_log("ships: %lu KB of blocks loaded in %lu ms, %lu KB of XMS left", taken / 1024, (clock240() - t0) * 1000 / 240,
+               xms_free_kb());
     }
     g_cam_cy = cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2;
     ships_set_camera(SCR_W / 2, g_cam_cy, 400);
@@ -723,6 +724,8 @@ void __far __cdecl flight_startup(void)
     vid_fade(64);
     rv_log("flight: %.16Fs, %d ships, benchmark view %d (%dx%d)", (char __far *)m->id, n - 1, g_bench_view, g_bench_w,
            g_bench_h);
+    cockpit_palette();                  /* only now: the deck kept its own palette while all that loaded (seconds in the
+                                           browser: the user saw it go "all crazy" in the flight's palette) */
 }
 
 /* the keys and the pointer: returns the status the exit key sets, else 0 */
@@ -849,7 +852,7 @@ int flight_fly(const RvMission __far *m)
     int w, h, n;
     g_m = m;
     uiMode(0);
-    status = rv_flight_run();
+    status = rv_flight_run();           /* (its loop begins with flight_startup: the loading, then the palette) */
     n = flight_bench_result(&w, &h);
     rv_log("flight: over with status %u after %u frames; benchmark %d sprites of %dx%d a frame at %d fps (%ld pixels a second)",
            status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
