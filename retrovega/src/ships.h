@@ -8,7 +8,7 @@
 #include "rv.h"
 #include "lightfield.h"
 
-#define SHIP_VIEWS 62
+#define SHIP_VIEWS 266                  /* the densest lattice, 11 x 13 with the mirrored headings (lightfield.h) */
 #define SHIP_SETS 8
 
 typedef struct {
@@ -29,15 +29,22 @@ typedef struct {
 } SetBlock;
 
 typedef struct {
-    unsigned char type, nviews, asym, rvs;   /* rvs: a pre-rendered set; else the .RV views at full size only */
-    unsigned char nsizes, nrolls, roll_sizes, pad;
+    unsigned char type, asym, rvs, pad;      /* rvs: a pre-rendered set; else the .RV views at full size only */
+    unsigned short nviews;
+    unsigned char nb0, nh0;             /* the full-size views' lattice (the exact draw's) */
+    unsigned char nb1, nh1;             /* the sets' (the copies') lattice: 5 x 7 */
+    unsigned char nsizes, nrolls, roll_sizes, pad2;
     unsigned short lod0;
     unsigned short scale[16];           /* the size steps, 256 = full */
     XmsBlock blk;                       /* .RV: the views; .RVS: the index */
     int nblocks;
     SetBlock block[SET_BLOCKS];
-    ShipView view[SHIP_VIEWS];          /* the full-size, unturned views (a .RVS set's block 0) */
+    ShipView view[SHIP_VIEWS];          /* the full-size, unturned views (a .RVS set's block 0): a symmetric
+                                           ship's mirrored headings are empty and made from their pair */
 } ShipSet;
+
+/* the lattice a set's views are in: the exact draw's (block 0) or the copies' */
+void ships_lattice(int set, int exact, int *nb, int *nh);
 
 int ships_load(unsigned type);          /* a type's set: SHIPnn.RVS (its index and its full-size block), else
                                            SHIPnn.RV decoded; -> set index, or -1 (no file, no room) */

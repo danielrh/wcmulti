@@ -58,10 +58,10 @@ int lf_atan2(long y, long x)
 
 /* --- which view --- */
 
-int lf_view_of(long vx, long vy, long vz)
+int lf_view_of(long vx, long vy, long vz, int nb, int nh)
 {
     long r;
-    int elev, head, band, h;
+    int elev, head, band, h, full = 2 * (nh - 1);
     while (vx > 16000 || vx < -16000 || vy > 16000 || vy < -16000 || vz > 16000 || vz < -16000) {
         vx /= 4;                        /* the squares below must fit: the angles do not change */
         vy /= 4;
@@ -71,20 +71,40 @@ int lf_view_of(long vx, long vy, long vz)
     elev = lf_atan2(vy, r);             /* 256 = straight above */
     head = lf_atan2(vx, vz);            /* 0 nose toward the viewer, 256 = the ship's left (the renderer's +x) */
     if (elev > 512) elev -= 1024;       /* -512..512 */
-    if (elev > 213) return 0;           /* above 75 degrees: the top */
-    if (elev < -213) return 36;
-    band = elev > 128 ? 0 : elev > 43 ? 1 : elev >= -43 ? 2 : elev >= -128 ? 3 : 4;   /* 60, 30, 0, -30, -60 */
-    h = ((head + 43) / 85) % 12;        /* 30 degree steps: 0 .. 11 */
-    if (h <= 6)
-        return 1 + band * 7 + h;
-    return 37 + band * 5 + (h - 7);     /* 210, 240, 270, 300, 330 */
+    /* the band: the nearest of the nb + 2 rows top .. bottom, each 1024 / (2 (nb + 1)) apart */
+    band = (int)((2L * (256 - elev) * (nb + 1) + 512) / 1024);
+    if (band <= 0) return 0;            /* the top */
+    if (band >= nb + 1) return 1 + nb * nh;
+    band--;
+    h = (int)(((long)head * (nh - 1) * 2 + 512) / 1024) % full;   /* the nearest heading step */
+    if (h <= nh - 1)
+        return 1 + band * nh + h;
+    return 2 + nb * nh + band * (nh - 2) + (h - nh);               /* 180 + step .. 360 - step */
+}
+
+int lf_pair_of(int v, int nb, int nh)
+{
+    int band, j, k, base = 2 + nb * nh;
+    if (v == 0 || v == 1 + nb * nh)
+        return v;
+    if (v < base) {
+        band = (v - 1) / nh;
+        j = (v - 1) % nh;
+        if (j == 0 || j == nh - 1)
+            return v;                   /* nose on, tail on: their own mirror */
+        return base + band * (nh - 2) + (nh - 2 - j);
+    }
+    band = (v - base) / (nh - 2);
+    k = (v - base) % (nh - 2);
+    return 1 + band * nh + (nh - 2 - k);
 }
 
 /* --- where --- */
 
 static long dot(const LfVec *a, const LfVec *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
 
-void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, LfPlace *out)
+void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, int nb, int nh,
+              LfPlace *out)
 {
     LfVec d, back;
     long x, y, z, ux, uy;
@@ -110,11 +130,12 @@ void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx,
      * the ship's left (a right-handed mesh with the nose on +z), the game's
      * right vector its right: hence -right. */
     back.x = -d.x; back.y = -d.y; back.z = -d.z;
-    out->view = lf_view_of(-dot(&back, &ship->right) / 256, dot(&back, &ship->up) / 256, dot(&back, &ship->front) / 256);
+    out->view = lf_view_of(-dot(&back, &ship->right) / 256, dot(&back, &ship->up) / 256, dot(&back, &ship->front) / 256,
+                           nb, nh);
     /* the turn on screen, clockwise: a band view is drawn with the ship's up
      * toward the top of the screen; the top and bottom views lie nose left.
      * On the screen (y down) the ship's up shows as (ux, -uy). */
-    if (out->view == 0 || out->view == 36) {
+    if (out->view == 0 || out->view == 1 + nb * nh) {
         ux = dot(&ship->front, &cam->right);
         uy = dot(&ship->front, &cam->up);
         out->roll = lf_atan2(uy, -ux);

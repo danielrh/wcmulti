@@ -58,6 +58,18 @@ VIEWS = [(90, 90)] + [(e, h) for e in BANDS for h in HEADINGS] + [(-90, 90)]
 ASYM_HEADINGS = (210, 240, 270, 300, 330)
 VIEWS_ASYM = VIEWS + [(e, h) for e in BANDS for h in ASYM_HEADINGS]
 
+
+def lattice(step):
+    """The same layout at another angular step: (views, views_asym, bands,
+    headings).  step 30 is WC1's 37; step 15 is the flight's denser lightfield
+    for the nearest ships (11 bands 75..-75, 13 headings 0..180: 145 views,
+    266 with the mirrored headings of an asymmetric ship)."""
+    bands = list(range(90 - step, -90, -step))
+    heads = list(range(0, 181, step))
+    asym_heads = list(range(180 + step, 360, step))
+    views = [(90, 90)] + [(e, h) for e in bands for h in heads] + [(-90, 90)]
+    return views, views + [(e, h) for e in bands for h in asym_heads], len(bands), len(heads)
+
 GLOW = {'terran': (255, 168, 72), 'aera': (90, 255, 140), 'rlaan': (240, 90, 220)}
 GLASS = (14, 22, 52)  # canopy glass, dark navy, before its highlight and reflection
 # The key light, the same for every ship so the sprites match: a point light
@@ -661,16 +673,18 @@ def ship_mesh(row, assets):
 
 
 def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMBIENT, shine=None, tag_suffix='',
-           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None, views=None):
+           env=ENV, env_gain=ENV_GAIN, key_power=KEY_POWER, exposure=None, reflect=None, views=None, step=30):
     """views: (elevation, heading) pairs to render instead of the sprite set,
-    saved as TAG_eE_hH.png with no sheet (the scenes' own views of a ship)."""
+    saved as TAG_eE_hH.png with no sheet (the scenes' own views of a ship).
+    step: the sprite set's angular step, 30 (WC1's 37 views) or 15 (145)."""
+    lat_views, lat_asym, nbands, nheads = lattice(step)
     art = table_row('art.csv', row['key']) or {}
     livery_name = livery_name or art.get('livery') or 'none'
     livery = table_row('liveries.csv', livery_name, 'name')
     if livery is None:
         sys.exit('no livery %r in data/liveries.csv' % livery_name)
     parts, lights, center, radius, strips = ship_mesh(row, assets)
-    views_wanted = VIEWS_ASYM if asymmetric(row, parts) else VIEWS
+    views_wanted = lat_asym if asymmetric(row, parts) else lat_views
     if views:
         views_wanted = views
     allpos = np.concatenate([m.positions for m in parts])
@@ -783,7 +797,7 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
 
     os.makedirs(outdir, exist_ok=True)
     tag = '%s-%s%s' % (row['key'], livery_name, tag_suffix)
-    if views_wanted not in (VIEWS, VIEWS_ASYM):
+    if views_wanted not in (lat_views, lat_asym):
         for (elev, head), img, pm, fl in zip(views_wanted, views, paints, flares):
             name = '%s_e%g_h%g' % (tag, elev, head)
             img.save(os.path.join(outdir, name + '.png'))
@@ -795,7 +809,9 @@ def render(row, outdir, size, assets, livery_name=None, key=KEY_DIR, ambient=AMB
     for vi, (img, pm) in enumerate(zip(views, paints)):
         img.save(os.path.join(outdir, '%s_%02d.png' % (tag, vi)))
         pm.save(os.path.join(outdir, '%s_paint_%02d.png' % (tag, vi)))
-    sheet = make_sheet(views, size)
+    with open(os.path.join(outdir, '%s_lattice.json' % tag), 'w') as f:
+        json.dump({'step': step, 'bands': nbands, 'headings': nheads, 'views': len(views)}, f)
+    sheet = make_sheet(views, size, nbands, nheads)
     sheet.save(os.path.join(outdir, '%s_sheet.png' % tag))
     flat = Image.new('RGB', sheet.size, (0, 0, 0))
     flat.paste(sheet, mask=sheet.split()[3])
@@ -878,18 +894,20 @@ def post(rgba, paint, z, size, engines, glow, strips=None):
     return Image.fromarray(out, 'RGBA'), Image.fromarray(pm, 'L')
 
 
-def make_sheet(views, size):
-    """Rows top, the five bands, bottom; headings 0..180 (then 210..330 for
-    an asymmetric ship) across."""
-    asym = len(views) > 37
-    rows = [[views[0]]] + [views[1 + 7 * b:8 + 7 * b] + (views[37 + 5 * b:42 + 5 * b] if asym else [])
-                           for b in range(5)] + [[views[36]]]
-    cols = 12 if asym else 7
+def make_sheet(views, size, nbands=5, nheads=7):
+    """Rows top, the bands, bottom; headings 0..180 (then the mirrored
+    headings for an asymmetric ship) across."""
+    nb, nh = nbands, nheads
+    asym = len(views) > 2 + nb * nh
+    base = 2 + nb * nh
+    rows = [[views[0]]] + [views[1 + nh * b:1 + nh * (b + 1)] + (views[base + (nh - 2) * b:base + (nh - 2) * (b + 1)] if asym else [])
+                           for b in range(nb)] + [[views[1 + nb * nh]]]
+    cols = 2 * nh - 2 if asym else nh
     pad = 4
-    sheet = Image.new('RGBA', (cols * (size + pad), 7 * (size + pad)), (0, 0, 0, 0))
+    sheet = Image.new('RGBA', (cols * (size + pad), (nb + 2) * (size + pad)), (0, 0, 0, 0))
     for r, row in enumerate(rows):
         for c, img in enumerate(row):
-            sheet.paste(img, ((3 if len(row) == 1 else c) * (size + pad), r * (size + pad)))
+            sheet.paste(img, ((nh // 2 if len(row) == 1 else c) * (size + pad), r * (size + pad)))
     return sheet
 
 

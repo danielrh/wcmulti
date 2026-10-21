@@ -587,6 +587,20 @@ the emulator.
   above copied by `rep movsd`; then 2 × 1 blocks, `rv_rotate_row2`): the
   user's rule that a ship in your face gets blockier, never slower.
 
+**The 15-degree lattice** (the user's choice after the comparison): the
+lightfield is now any lattice of nb bands x nh headings (lightfield.h:
+WC1's 37 views are 5 x 7; the fighters are rendered at 11 x 13, 145 views,
+266 for the asymmetric Convolution, `render_all.py --step 15`), and
+`lf_view_of` / `lf_pair_of` take the lattice. The exact path uses the
+dense one, so a view switch pops half as far; the sets' smaller sizes keep
+the 30-degree sub-lattice (every other band and heading), so the page's
+memory does not quadruple. A symmetric ship's mirrored headings are no
+longer stored anywhere: the generator makes the sets' from the pair, and
+the engine makes a full-size one by expanding its pair backwards
+(`make_dense`) or copying it mirrored (`ships_blit`). The .RV record
+carries the lattice in its last two bytes (`pack.py`); capitals stay at
+30 degrees.
+
 **Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
 its sprites on the fly, continuously, which the earlier note here got
 wrong; at 320×200 and ~12 fps it had ten times our pixel-time budget per

@@ -461,9 +461,11 @@ natively (the browser is the binding constraint). If it misses 20 fps at
 
 ## 8. Sprites and assets in EMS
 
-**The view layout is WC1's**, read from WC1's own ship files (`SHIPTYPE.Vnn`:
-a block of 37 run-length sprites, then a hardpoint block and the ship's
-record). Each ship has 37 pre-rendered views:
+**The view layout is WC1's** (2026-10-20: now one case of a lattice of
+nb bands x nh headings, src/lightfield.h; the fighters are rendered at
+11 x 13 as well, see docs/engine.md "Flight"), read from WC1's own ship
+files (`SHIPTYPE.Vnn`: a block of 37 run-length sprites, then a hardpoint
+block and the ship's record). Each ship has 37 pre-rendered views:
 
 | index | view |
 |---|---|

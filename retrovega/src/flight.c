@@ -403,7 +403,9 @@ static void draw_world(int y0, int y1)
         if (y0 <= ey0 && (frameCounter % 100 == 1 || (g_record && frameCounter % g_record == 0))) {
             /* now and then, where each ship was put (tests/ships.txt reads it) */
             LfPlace p;
-            lf_place(&rel, &cam, &ship, SCR_W / 2, (ey0 + rows / 2), 400, &p);
+            int nb, nh;
+            ships_lattice(set, g_plan[i].exact != 0, &nb, &nh);
+            lf_place(&rel, &cam, &ship, SCR_W / 2, (ey0 + rows / 2), 400, nb, nh, &p);
             rv_log("lightfield: frame %u slot %d type %02X at %ld,%ld,%ld: view %d roll %d scale %d at %d,%d path %d",
                    frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, g_plan[i].scale, p.sx, p.sy, path);
         }

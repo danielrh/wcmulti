@@ -2,7 +2,7 @@
 """Render every ship of data/ships.csv that has a mesh, and a gallery.
 
     render_all.py [--out build/sprites] [--size PX] [--only KEY,KEY|faction]
-                  [--livery NAME] [--view N] [--gallery FILE]
+                  [--livery NAME] [--view N] [--gallery FILE] [--step 30|15]
 
 Each ship goes to OUT/KEY/ (shipviews.py's files); --size overrides every
 ship's lod0_px (a quick survey); --livery overrides each ship's default;
@@ -32,6 +32,7 @@ def main():
     ap.add_argument('--gallery', default='')
     ap.add_argument('--cell', type=int, default=200, help='gallery cell size')
     ap.add_argument('--assets', default=os.path.expanduser('~/dev/vegastrike-assets'))
+    ap.add_argument('--step', type=int, default=30, help='the views\' angular step: 30 (37 views) or 15 (145)')
     args = ap.parse_args()
     only = set(filter(None, args.only.split(',')))
     rows = [r for r in csv.DictReader(open(os.path.join(HERE, '..', 'data', 'ships.csv')))
@@ -42,7 +43,7 @@ def main():
         size = args.size or int(row['lod0_px'])
         outdir = os.path.join(args.out, row['key'])
         try:
-            shipviews.render(row, outdir, size, args.assets, args.livery)
+            shipviews.render(row, outdir, size, args.assets, args.livery, step=args.step)
         except Exception as e:  # keep going: the survey wants every failure
             print('%-10s FAILED %s' % (row['key'], e))
             continue

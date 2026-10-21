@@ -22,9 +22,19 @@
  * eight 45-degree steps.  Rolls are stored for the ROLL_SIZES largest
  * sizes only.
  *
+ * The views come in a lattice (lightfield.h): WC1's 5 bands x 7 headings
+ * (37 views, 62 with an asymmetric ship's mirrored headings) or the denser
+ * 11 x 13 (145 / 266).  Block 0, the full-size views the flight turns and
+ * scales exactly, keeps the lattice as the .RV has it (a symmetric ship's
+ * mirrored headings are not stored: the flight mirrors them as it expands
+ * a view).  The other blocks, the copies for the smaller sizes, use the
+ * 30-degree sub-lattice (every other band and heading of a 15-degree one)
+ * with the mirrored headings made here, 62 views, so the sets stay small.
+ *
  * File (little-endian):
- *   "RVSP"  u8 type, u8 nviews, u8 nsizes, u8 nrolls, u8 roll_sizes, u8 asym, u16 0
+ *   "RVSP"  u8 type, u8 nviews0 (low byte), u8 nsizes, u8 nrolls, u8 roll_sizes, u8 asym, u8 nb0, u8 nh0
  *   u16 scale256[16]                       the size steps (0 past nsizes)
+ *   u8 nb1, u8 nh1, u16 nviews0            the sets' lattice (5, 7), block 0's view count whole
  *   u32 nblocks; block[nblocks]:           u8 size, u8 roll, u16 nviews, u32 at, u32 length,
  *                                          then nviews x {u16 w, u16 h, i16 ox, i16 oy, u32 at}
  *                                          (at: from the block's start; w == 0: not stored)
@@ -40,7 +50,7 @@
 #define NSIZES 13
 #define NROLLS 16
 #define ROLL_SIZES 4
-#define MAXV 62
+#define MAXV 266
 static const int SCALES[NSIZES] = { 256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32 };
 
 typedef struct { int w, h, ox, oy; unsigned char *px; } Dense;
@@ -187,14 +197,39 @@ static int stored(int v, int r, int asym)
     return r <= 4;
 }
 
+/* the 30-degree sub-lattice's view j (of 62: 37 and the mirrored headings)
+ * as a view of the .RV's lattice (nb, nh): the lattice's own index, or -1
+ * when it must be made as the mirror image of the view returned in *mirror_of */
+static int sub_view(int j, int nb, int nh, int asym, int *mirror_of)
+{
+    int step = (nb + 1) / 6;           /* 1 for (5, 7), 2 for (11, 13) */
+    int b, h, k;
+    *mirror_of = -1;
+    if (j == 0) return 0;
+    if (j == 36) return 1 + nb * nh;
+    if (j <= 35) {
+        b = (j - 1) / 7;
+        h = (j - 1) % 7;
+        return 1 + (b * step + step - 1) * nh + h * step;
+    }
+    b = (j - 37) / 5;                  /* the mirrored headings 210 .. 330: k = 1 .. 5 */
+    k = (j - 37) % 5 + 1;
+    if (asym)
+        return 2 + nb * nh + (b * step + step - 1) * (nh - 2) + (k * step - 1);
+    *mirror_of = 1 + (b * step + step - 1) * nh + (6 - k) * step;   /* heading 360 - 30k = the mirror of 30 (6 - k) */
+    return -1;
+}
+
 int main(int argc, char **argv)
 {
     FILE *f;
     unsigned long b0, b1, total, nv, i;
     const unsigned char *rec;
     Dense views[MAXV];
-    int type, nviews, asym, v, k, r, nblocks = 0, first_size = 0, roll_from = 0, roll_sizes = ROLL_SIZES;
-    struct { int size, roll; long at, len; unsigned char *data; int w[MAXV], h[MAXV], ox[MAXV], oy[MAXV]; long vat[MAXV]; } *blocks;
+    int type, nviews, asym, v, k, r, nblocks = 0, first_size = 0, roll_from = 0, roll_sizes = ROLL_SIZES, nb, nh;
+    Dense sub[62];
+    int nview0;
+    struct { int size, roll, nv; long at, len; unsigned char *data; int w[MAXV], h[MAXV], ox[MAXV], oy[MAXV]; long vat[MAXV]; } *blocks;
     long at;
     if (argc < 3) {
         fprintf(stderr, "usage: rvsprites IN.RV OUT.RVS\n");
@@ -218,8 +253,10 @@ int main(int argc, char **argv)
     rec = g_file + b1;
     if (memcmp(rec, "RVSH", 4) != 0) { fprintf(stderr, "%s: not a ship file\n", argv[1]); return 1; }
     type = rec[4];
-    nviews = rec[5];
-    asym = rec[6] & 1;
+    nviews = rec[5] | (rec[6] << 8);   /* a word: an asymmetric 15-degree ship has 266 */
+    asym = rec[7] & 1;
+    nb = rec[11] ? rec[11] : 5;        /* the lattice (0, 0 in older files: WC1's) */
+    nh = rec[12] ? rec[12] : 7;
     total = rd32(g_file + b0);
     nv = (rd32(g_file + b0 + 4) & 0xFFFFFF);
     nv = (nv - 4) / 4;
@@ -229,29 +266,32 @@ int main(int argc, char **argv)
         unsigned long end = v + 1 < (int)nv ? b0 + (rd32(g_file + b0 + 4 + 4 * (v + 1)) & 0xFFFFFF) : b0 + total;
         decode(g_file + off, (long)(end - off), &views[v]);
     }
-    if (!asym && nviews == 37) {
-        /* the opposite headings: 150 -> 210, 120 -> 240, 90 -> 270, 60 -> 300, 30 -> 330, per band */
-        for (v = 1; v <= 35; v++) {
-            int band = (v - 1) / 7, hh = (v - 1) % 7;
-            if (hh >= 1 && hh <= 5)
-                mirror(&views[v], &views[37 + band * 5 + (5 - hh)]);
-        }
-        nviews = MAXV;
+    nview0 = nviews;                   /* block 0: the lattice's views as stored */
+    /* the sets' 62 views: the 30-degree sub-lattice, its mirrored headings made */
+    for (v = 0; v < 62; v++) {
+        int m, src = sub_view(v, nb, nh, asym, &m);
+        if (src >= 0)
+            sub[v] = views[src];
+        else
+            mirror(&views[m], &sub[v]);
     }
     blocks = calloc(NSIZES * NROLLS, sizeof *blocks);
     for (k = 0; k < NSIZES; k++)
         for (r = 0; r < NROLLS; r++) {
             long cap = 0, n = 0;
             unsigned char *data;
+            const Dense *src = (k == 0 && r == 0) ? views : sub;
+            int nv = (k == 0 && r == 0) ? nview0 : 62;
             if (k < first_size || (r && (k < roll_from || k >= roll_from + roll_sizes)))
                 continue;
-            for (v = 0; v < nviews; v++) {
+            for (v = 0; v < nv; v++) {
                 if (!stored(v, r, asym))
                     continue;
-                cap += (long)views[v].w * views[v].h * 3 + 4000;
+                cap += (long)src[v].w * src[v].h * 3 + 4000;
             }
             data = malloc(cap);
-            for (v = 0; v < nviews; v++) {
+            blocks[nblocks].nv = nv;
+            for (v = 0; v < nv; v++) {
                 int w, h, ox, oy;
                 long len;
                 unsigned char *one;
@@ -259,7 +299,7 @@ int main(int argc, char **argv)
                     blocks[nblocks].w[v] = 0;
                     continue;
                 }
-                one = render(&views[v], SCALES[k], r * (1024 / NROLLS), &w, &h, &ox, &oy, &len);
+                one = render(&src[v], SCALES[k], r * (1024 / NROLLS), &w, &h, &ox, &oy, &len);
                 memcpy(data + n, one, len);
                 blocks[nblocks].w[v] = w; blocks[nblocks].h[v] = h;
                 blocks[nblocks].ox[v] = ox; blocks[nblocks].oy[v] = oy;
@@ -280,16 +320,19 @@ int main(int argc, char **argv)
     f = fopen(argv[2], "wb");
     if (!f) { perror(argv[2]); return 1; }
     fwrite("RVSP", 1, 4, f);
-    fputc(type, f); fputc(nviews, f); fputc(NSIZES, f); fputc(NROLLS, f);
-    fputc(roll_sizes, f); fputc(asym, f); put16(f, 0);
+    fputc(type, f); fputc(nview0 & 255, f); fputc(NSIZES, f); fputc(NROLLS, f);
+    fputc(roll_sizes, f); fputc(asym, f); fputc(nb, f); fputc(nh, f);
     for (k = 0; k < 16; k++)
         put16(f, k < NSIZES ? SCALES[k] : 0);
+    fputc(5, f); fputc(7, f); put16(f, nview0);   /* the view count whole (266 overflows the byte) */
     put32(f, nblocks);
-    at = 4 + 8 + 32 + 4 + (long)nblocks * (12 + 12L * nviews);
+    at = 4 + 8 + 32 + 4 + 4;
+    for (i = 0; i < (unsigned long)nblocks; i++)
+        at += 12 + 12L * blocks[i].nv;
     for (i = 0; i < (unsigned long)nblocks; i++) {
-        fputc(blocks[i].size, f); fputc(blocks[i].roll, f); put16(f, nviews);
+        fputc(blocks[i].size, f); fputc(blocks[i].roll, f); put16(f, blocks[i].nv);
         put32(f, at); put32(f, blocks[i].len);
-        for (v = 0; v < nviews; v++) {
+        for (v = 0; v < blocks[i].nv; v++) {
             put16(f, blocks[i].w[v]); put16(f, blocks[i].h[v]);
             put16(f, (unsigned)(short)blocks[i].ox[v]); put16(f, (unsigned)(short)blocks[i].oy[v]);
             put32(f, blocks[i].vat[v]);
@@ -300,6 +343,6 @@ int main(int argc, char **argv)
     for (i = 0; i < (unsigned long)nblocks; i++)
         fwrite(blocks[i].data, 1, blocks[i].len, f);
     fclose(f);
-    printf("%s: type %02X, %d views, %d blocks, %ld KB\n", argv[2], type, nviews, nblocks, at / 1024);
+    printf("%s: type %02X, %d views (%d x %d), %d blocks, %ld KB\n", argv[2], type, nview0, nb, nh, nblocks, at / 1024);
     return 0;
 }

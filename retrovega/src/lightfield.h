@@ -27,15 +27,28 @@ typedef struct {
     long depth;                         /* camera-space distance along the view axis, position units */
 } LfPlace;
 
-/* where a ship shows and which view: rel = ship - camera (positions), the
- * camera's and the ship's bases; (cx, cy) is the view's centre on screen and
- * focal the projection's focal length in pixels */
-void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, LfPlace *out);
+/* A lightfield's lattice: nb bands of elevation, every 180/(nb+1) degrees
+ * from the top down, nh headings 0..180 every 180/(nh-1) degrees.  View 0
+ * is the top, 1 + b*nh + j band b heading j, 1 + nb*nh the bottom, and the
+ * headings past 180 (180 + k*step, k = 1..nh-2) follow at 2 + nb*nh + b*(nh-2)
+ * + (k-1): stored for an asymmetric ship, the mirror images of the others'
+ * for a symmetric one.  WC1's 37 views are (5, 7); the flight's denser
+ * lattice for the nearest ships is (11, 13): 145 views, 266 asymmetric. */
+#define LF_LATTICE_VIEWS(nb, nh) (2 + (nb) * (nh) + (nb) * ((nh) - 2))
 
-/* the view seen from (vx, vy, vz) in the renderer's frame of the ship (+x
- * its left, +y up, +z the nose; any scale): 0 top, 1..35 the bands, 36
- * bottom, 37..61 the headings past 180 */
-int lf_view_of(long vx, long vy, long vz);
+/* where a ship shows and which view of lattice (nb, nh): rel = ship - camera
+ * (positions), the camera's and the ship's bases; (cx, cy) is the view's
+ * centre on screen and focal the projection's focal length in pixels */
+void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, int nb, int nh,
+              LfPlace *out);
+
+/* the view of lattice (nb, nh) seen from (vx, vy, vz) in the renderer's frame
+ * of the ship (+x its left, +y up, +z the nose; any scale) */
+int lf_view_of(long vx, long vy, long vz, int nb, int nh);
+
+/* the opposite heading's view (the one whose mirror image a view is): a
+ * view at heading 0 or 180, the top and the bottom are their own */
+int lf_pair_of(int v, int nb, int nh);
 
 /* integer trigonometry: angles 1024 a turn, 1.0 = 16384 */
 long lf_sin(int a);

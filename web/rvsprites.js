@@ -135,14 +135,29 @@ function stored(v, r, asym) {
   return r <= 4;
 }
 
+// the 30-degree sub-lattice's view j (of 62) as a view of the .RV's lattice (nb, nh):
+// the index, or {mirrorOf} when it must be made as the mirror image of that view
+function subView(j, nb, nh, asym) {
+  const step = idiv(nb + 1, 6);
+  if (j === 0) return 0;
+  if (j === 36) return 1 + nb * nh;
+  if (j <= 35) {
+    const b = idiv(j - 1, 7), h = (j - 1) % 7;
+    return 1 + (b * step + step - 1) * nh + h * step;
+  }
+  const b = idiv(j - 37, 5), k = (j - 37) % 5 + 1;
+  if (asym) return 2 + nb * nh + (b * step + step - 1) * (nh - 2) + (k * step - 1);
+  return { mirrorOf: 1 + (b * step + step - 1) * nh + (6 - k) * step };
+}
+
 // the set for a .RV's bytes: a Uint8Array of the .RVS
 function makeSet(rv, firstSize, rollFrom, rollSizes) {
   firstSize = firstSize || 0; rollFrom = rollFrom || 0; rollSizes = rollSizes === undefined ? 4 : rollSizes;
   const dv = new DataView(rv.buffer, rv.byteOffset, rv.byteLength);
   const b0 = dv.getUint32(4, true) & 0xffffff, b1 = dv.getUint32(8, true) & 0xffffff;
   if (String.fromCharCode(rv[b1], rv[b1 + 1], rv[b1 + 2], rv[b1 + 3]) !== "RVSH") throw new Error("not a ship file");
-  const type = rv[b1 + 4], asym = rv[b1 + 6] & 1;
-  let nviews = rv[b1 + 5];
+  const type = rv[b1 + 4], asym = rv[b1 + 7] & 1, nb = rv[b1 + 11] || 5, nh = rv[b1 + 12] || 7;
+  let nviews = rv[b1 + 5] | (rv[b1 + 6] << 8);
   const total = dv.getUint32(b0, true), nv = ((dv.getUint32(b0 + 4, true) & 0xffffff) - 4) / 4;
   if (nviews > nv) nviews = nv;
   const views = [];
@@ -151,39 +166,43 @@ function makeSet(rv, firstSize, rollFrom, rollSizes) {
     const end = v + 1 < nv ? b0 + (dv.getUint32(b0 + 4 + 4 * (v + 1), true) & 0xffffff) : b0 + total;
     views[v] = decode(rv, off, end - off);
   }
-  if (!asym && nviews === 37) {
-    for (let v = 1; v <= 35; v++) {
-      const band = idiv(v - 1, 7), hh = (v - 1) % 7;
-      if (hh >= 1 && hh <= 5) views[37 + band * 5 + (5 - hh)] = mirror(views[v]);
-    }
-    nviews = 62;
+  // block 0 keeps the lattice's views; the sets use the 30-degree sub-lattice, mirrored headings made
+  const nview0 = nviews;
+  const sub = [];
+  for (let v = 0; v < 62; v++) {
+    const src = subView(v, nb, nh, asym);
+    sub[v] = typeof src === "number" ? views[src] : mirror(views[src.mirrorOf]);
   }
   const blocks = [];
   for (let k = 0; k < NSIZES; k++)
     for (let r = 0; r < NROLLS; r++) {
       if (k < firstSize || (r && (k < rollFrom || k >= rollFrom + rollSizes))) continue;
+      const srcViews = (k === 0 && r === 0) ? views : sub, nv = (k === 0 && r === 0) ? nview0 : 62;
       const parts = [], meta = [];
       let n = 0;
-      for (let v = 0; v < nviews; v++) {
+      for (let v = 0; v < nv; v++) {
         if (!stored(v, r, asym)) { meta.push({ w: 0, h: 0, ox: 0, oy: 0, at: 0 }); continue; }
-        const one = render(views[v], SCALES[k], r * (1024 / NROLLS));
+        const one = render(srcViews[v], SCALES[k], r * (1024 / NROLLS));
         meta.push({ w: one.w, h: one.h, ox: one.ox, oy: one.oy, at: n });
         parts.push(one.data); n += one.data.length;
       }
       if (n === 0) continue;
-      blocks.push({ size: k, roll: r, parts, meta, len: n });
+      blocks.push({ size: k, roll: r, nv, parts, meta, len: n });
     }
-  const headLen = 48 + blocks.length * (12 + 12 * nviews);
+  let headLen = 52;
+  for (const b of blocks) headLen += 12 + 12 * b.nv;
   let at = headLen, total2 = headLen;
   for (const b of blocks) total2 += b.len;
   const out = new Uint8Array(total2), o = new DataView(out.buffer);
   out.set([82, 86, 83, 80], 0);                // "RVSP"
-  out[4] = type; out[5] = nviews; out[6] = NSIZES; out[7] = NROLLS; out[8] = rollSizes; out[9] = asym;
+  out[4] = type; out[5] = nview0 & 255; out[6] = NSIZES; out[7] = NROLLS; out[8] = rollSizes; out[9] = asym;
+  out[10] = nb; out[11] = nh;
   for (let k = 0; k < 16; k++) o.setUint16(12 + 2 * k, k < NSIZES ? SCALES[k] : 0, true);
-  o.setUint32(44, blocks.length, true);
-  let p = 48;
+  out[44] = 5; out[45] = 7; o.setUint16(46, nview0, true);
+  o.setUint32(48, blocks.length, true);
+  let p = 52;
   for (const b of blocks) {
-    out[p] = b.size; out[p + 1] = b.roll; o.setUint16(p + 2, nviews, true);
+    out[p] = b.size; out[p + 1] = b.roll; o.setUint16(p + 2, b.nv, true);
     o.setUint32(p + 4, at, true); o.setUint32(p + 8, b.len, true); p += 12;
     for (const m of b.meta) {
       o.setUint16(p, m.w, true); o.setUint16(p + 2, m.h, true);

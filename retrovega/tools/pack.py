@@ -15,8 +15,9 @@ encode_sprite), origin at the view's centre.  A ship becomes OUT/SHIPnn.RV
 (nn its type in hex): a WC container whose block 0 is the table of its views
 (37, or 62 for an asymmetric ship) and block 1 its record:
 
-    'RVSH', type byte, view count byte, flags byte (1 asymmetric),
-    default livery index byte, lod0 px word, radius word (decimetres)
+    'RVSH', type byte, view count word, flags byte (1 asymmetric),
+    default livery index byte, lod0 px word, the lattice's bands and
+    headings (bytes: 5 and 7 for the 30-degree layout, 11 and 13 for 15)
 
 The preview decodes the packed files back, so it shows what the game draws.
 """
@@ -139,7 +140,7 @@ def main():
         livery = (art.get(r['key']) or {}).get('livery') or 'none'
         d = os.path.join(args.sprites, r['key'])
         views = []
-        for v in range(62):
+        for v in range(400):
             p = os.path.join(d, '%s-%s_%02d.png' % (r['key'], livery, v))
             if not os.path.exists(p):
                 break
@@ -147,8 +148,10 @@ def main():
             mask = np.asarray(Image.open(os.path.join(d, '%s-%s_paint_%02d.png' % (r['key'], livery, v))))
             views.append(encode(quantise(rgba, mask, meta, pal, liveries[livery])))
         tab = wc2data.compose_container(views, flags=[0] * len(views))
-        record = struct.pack('<4sBBBBHH', b'RVSH', int(r['type'], 16), len(views), 1 if len(views) > 37 else 0,
-                             names.index(livery), int(r['lod0_px']), 0)
+        # the lattice: 37 / 62 views are 5 bands x 7 headings (30 degrees), 145 / 266 are 11 x 13 (15)
+        nb, nh, asym = {37: (5, 7, 0), 62: (5, 7, 1), 145: (11, 13, 0), 266: (11, 13, 1)}[len(views)]
+        record = struct.pack('<4sBHBBHBB', b'RVSH', int(r['type'], 16), len(views), asym,
+                             names.index(livery), int(r['lod0_px']), nb, nh)
         data = wc2data.compose_container([tab, record], flags=[0, 0])
         name = 'SHIP%02X.RV' % int(r['type'], 16)
         open(os.path.join(args.out, name), 'wb').write(data)
@@ -163,8 +166,8 @@ def read_ship(path):
     """(views, record fields) of a packed SHIPnn.RV."""
     blocks = wc2data.blocks_of(path)
     views = wc2data.blocks_of(blocks[0])
-    magic, typ, n, flags, livery, lod0, _r = struct.unpack('<4sBBBBHH', blocks[1][:12])
-    return views, dict(type=typ, views=n, flags=flags, livery=livery, lod0=lod0)
+    magic, typ, n, flags, livery, lod0, nb, nh = struct.unpack('<4sBHBBHBB', blocks[1][:13])
+    return views, dict(type=typ, views=n, flags=flags, livery=livery, lod0=lod0, bands=nb, headings=nh)
 
 
 def preview(packdir, out, meta, pal, ships, names):
