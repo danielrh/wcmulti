@@ -542,7 +542,76 @@ copy. That settles the question of scales and rolls below: a sprite drawn
 often must be a copy, so sizes and turns are rendered once (by these same
 kernels) and copied after.
 
-### Pre-rendering: what the numbers allow
+### Pre-rendered sets, and the hybrid
+
+What the flight draws from now (src/ships.c, tools/rvsprites.c): the
+user's design, in which the 37 or 62 full-size views (SHIPnn.RV) are the
+*compressed* form of a ship and the decompressor runs on the host, not in
+the emulator.
+
+- **SHIPnn.RVS** holds every view at 13 size steps (each 0.84 of the last,
+  full size down to 1/8) and, for the sizes round the hand-off (steps 4..6,
+  half size and below), at roll steps of 22.5 degrees, all in the engine's
+  own run-length row format: a block of the file goes into XMS by a
+  straight copy (`file_to_xms`), the index (a view table per block) sits in
+  XMS too and is fetched twelve bytes at a time. `tools/rvsprites.c` makes a
+  set in 40 ms on the host with lightfield.c's kernels (the same C will
+  build a DOS SETUP.EXE; the page's JavaScript is to make them at load,
+  since the files are 1.2 MB a fighter and are not shipped). Until then the
+  page has no sets and falls back to the .RV views, scaled and turned at
+  draw time.
+- **Five stored turns give sixteen.** An upside-down copy (the rows in the
+  other order, the same cost as a copy) turns a sprite by 180 − θ and
+  mirrors its heading; a mirrored copy (`rv_blit_row_rev`, four pixels a
+  `bswap`, 0.7 of a copy) turns it by −θ and mirrors the heading; both
+  together turn it by 180. So a symmetric ship stores only the arc 0..90
+  for every view and the flight draws the other eleven steps as those
+  copies of the stored five, of the view or of the opposite heading's
+  (`find_sprite`); the top and bottom views, their own mirror, have their
+  own table; the asymmetric Convolution stores eight 45-degree steps.
+- **Loading** (`ships_load_blocks`): every type's full-size block, then the
+  ladder for every type, then the rolls size by size, while the mission
+  budget lasts (1 MB of XMS kept back); a draw whose block is missing takes
+  the unturned sprite at that size.
+- **The hybrid** (flight.c `plan_draws`, once a frame): the ships on
+  screen are sorted back to front; the biggest, while their pixels fit a
+  budget (`g_onfly_px`, 32,000 a frame; `RV.EXE /onfly N`) and they are
+  above 40% size, are drawn **exactly** — the full-size view turned by the
+  true roll and scaled to the true size by inverse mapping from a dense
+  copy (`ships_draw_exact`, two dense buffers kept between frames); the
+  rest are copies from the sets, where 22.5-degree and 16% steps are
+  invisible. A ship too big for what is left of the budget is drawn at
+  half or quarter detail instead (every other row computed and the row
+  above copied by `rep movsd`; then 2 × 1 blocks, `rv_rotate_row2`): the
+  user's rule that a ship in your face gets blockier, never slower.
+
+**Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
+its sprites on the fly, continuously, which the earlier note here got
+wrong; at 320×200 and ~12 fps it had ten times our pixel-time budget per
+sprite, which is why the hybrid reserves the exact path for the one or two
+nearest ships. What still pops in ours is a **view switch**: when the
+camera's direction in a ship's own frame crosses a 30-degree sector or
+band, the next pre-rendered silhouette replaces the last (a rolling target
+seen near nose-on switches eight times a turn; the player rolling switches
+never, since that direction does not change). The remedies, in order: a
+denser lightfield for the full-size views (15 degrees: 145 views, ~0.5 MB
+of XMS a fighter, four times the .RV on disk), and a short checkerboard
+crossfade at a switch. Test scenes: `tests/zoom.txt` with `/zoom 1`
+(a Gawain ahead, rolling, 1,200..6,000 km on a twelve-second swing) and
+`tests/zoom2.txt` with `/zoom 2` (it yaws slowly while the player rolls:
+`hold rright N`), both with `/bench 0 /record 2`, turned into a video by
+ffmpeg from the R*.BMP frames.
+
+**In reserve: blocks plus a DOSBox hint.** The game could draw its nearest
+ships at 2 × 2 or 4 × 4 block detail always and publish a draw list (type,
+view, scale, roll, origin, detail) in the fixed block at `rvFrameDone`; the
+browser's DOSBox, which already hooks RV.EXE, would composite its own
+full-detail (even filtered, even 2×) rendering of those sprites over the
+VGA frame at output time, host-side and outside the cycle budget, while
+real DOS shows the blocks. A legitimate DOS game with an "HD" emulator;
+about a day in the layer. Not taken yet.
+
+### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the
 briefing. Decoded, a fighter's 62 views (the 25 mirrored headings made at

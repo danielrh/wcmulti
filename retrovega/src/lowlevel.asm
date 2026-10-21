@@ -290,3 +290,72 @@ _rv_blit_row_rev:
         pop si
         pop bp
         retf
+
+; void rv_rotate_row2(const unsigned char far *dense, int w, int h, const LfRot *r,
+;                     int y, int xs, int xe, unsigned char far *out)
+; rv_rotate_row at half the horizontal detail: every other output column is
+; sampled and written twice (a 2 x 1 block), so a row costs half.  xs is
+; made even by the caller; the span is still [xs, xe).
+        global _rv_rotate_row2
+_rv_rotate_row2:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        sub sp,8                    ; [bp-12] du * 2, [bp-8] dv * 2
+        mov si,[bp+14]              ; r
+        mov eax,[si+16]
+        add eax,eax
+        mov [bp-12],eax
+        mov eax,[si+20]
+        add eax,eax
+        mov [bp-8],eax
+        movsx eax,word [bp+16]      ; y
+        imul eax,[si+24]            ; y * dru
+        add eax,[si+8]              ; + u00
+        movsx edx,word [bp+18]      ; xs
+        imul edx,[si+16]            ; xs * du
+        add eax,edx
+        movsx edx,word [bp+16]
+        imul edx,[si+28]            ; y * drv
+        add edx,[si+12]             ; + v00
+        movsx ecx,word [bp+18]
+        imul ecx,[si+20]            ; xs * dv
+        add edx,ecx
+        mov esi,eax                 ; u
+        mov edi,edx                 ; v
+        mov cx,[bp+20]
+        sub cx,[bp+18]              ; n = xe - xs
+        jle .done
+        inc cx
+        shr cx,1                    ; pairs
+        mov gs,[bp+8]               ; dense
+        mov es,[bp+24]
+        mov bx,[bp+22]
+        add bx,[bp+18]              ; out + xs
+.loop:
+        mov edx,edi
+        shr edx,16                  ; v
+        imul dx,[bp+10]             ; v * w
+        mov eax,esi
+        shr eax,16                  ; u
+        add dx,ax
+        add dx,[bp+6]               ; + dense's offset
+        movzx edx,dx
+        mov al,[gs:edx]
+        test al,al
+        jz .skip
+        mov ah,al
+        mov [es:bx],ax              ; the sample, twice
+.skip:
+        add esi,[bp-12]
+        add edi,[bp-8]
+        add bx,2
+        dec cx
+        jnz .loop
+.done:
+        add sp,8
+        pop di
+        pop si
+        pop bp
+        retf

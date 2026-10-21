@@ -17,7 +17,8 @@
 #include "music.h"
 
 char g_people_names[16][28];
-extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital;
+extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom;
+extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
 void __far __cdecl uiMode_impl(unsigned short on) { (void)on; }
@@ -57,6 +58,8 @@ int main(int argc, char **argv)
             g_bench_wanted = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/record"))           /* tests: a screenshot every N frames of flight */
             g_record = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/onfly"))            /* the exact draws' pixel budget a frame (32000) */
+            g_onfly_px = atol(argv[++i]);
     }
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "/midilog"))               /* tests: what the music sent, and when */
@@ -65,6 +68,8 @@ int main(int argc, char **argv)
             music_device(MUSIC_MPU401);
         else if (!strcmp(argv[i], "/capital"))          /* tests: the carrier in the flight */
             g_capital = 1;
+        else if (!strcmp(argv[i], "/zoom"))             /* tests: one ship ahead, swinging in and out: 1 it rolls, 2 it yaws */
+            g_zoom = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/nomusic"))
             music_device(MUSIC_OFF);
     }

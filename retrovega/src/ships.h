@@ -60,6 +60,19 @@ void ships_set_camera(int cx, int cy, int focal);
 int ships_draw(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
                int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
 
+/* the same ship drawn exactly: its full-size view turned by its true roll
+ * and scaled to the size wanted, by inverse mapping from a dense copy
+ * (sixteen cycles a pixel: for the nearest ships only, see flight.c's
+ * plan); detail 1 every pixel, 2 every other row copied to the next, 4
+ * also 2 x 1 blocks.  Returns 0 when the view is too big for the dense
+ * buffer. */
+int ships_draw_exact(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int detail,
+                     int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
+
+/* where a ship would show and how big: lf_place through the camera, and the
+ * output pixels its full-size view would cover at scale256 (for the plan) */
+long ships_size_of(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, LfPlace *p);
+
 /* the plain copy of view v (full size, unturned) with the ship's origin at (x, y), clipped as above */
 void ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
                 const short __far *ext, int ext_y0, int ext_rows);

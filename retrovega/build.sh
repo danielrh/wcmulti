@@ -27,7 +27,8 @@ mkdir -p build/host
 gcc -std=gnu99 -O2 -I src -o build/host/rvsprites src/lightfield.c tools/rvsprites.c
 for f in art/ships/SHIP*.RV; do
     s="$OUT/$(basename "${f%.RV}").RVS"
-    [ "$s" -nt "$f" ] && [ "$s" -nt tools/rvsprites.c ] && [ "$s" -nt src/lightfield.c ] || build/host/rvsprites "$f" "$s" > /dev/null
+    # (the nearest ships are drawn exactly in flight: rolls only round the hand-off size)
+    [ "$s" -nt "$f" ] && [ "$s" -nt tools/rvsprites.c ] && [ "$s" -nt src/lightfield.c ] || build/host/rvsprites "$f" "$s" 0 4 3 > /dev/null
 done
 # the carrier (a test aid, RV.EXE /capital): from half size down, rolls at two sizes
 if [ -f build/rvdat/SHIP20.RV ]; then

@@ -29,6 +29,16 @@ int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE
 int g_bench_wanted = -1;                /* RV.EXE /bench N: that many copies, no adapting; 0 none; -1 adapt */
 int g_record = 0;                       /* RV.EXE /record N: a screenshot (Rnnnnn.BMP) every N frames of flight */
 int g_capital = 0;                      /* RV.EXE /capital: the carrier in the flight (a test aid) */
+int g_zoom = 0;                         /* RV.EXE /zoom: one ship ahead, rolling, swinging in and out (a test aid) */
+/* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
+ * at draw time, sixteen cycles a pixel) while their pixels fit this budget
+ * a frame and they are big enough for the steps to show; the rest are
+ * copies from the pre-rendered sets (RV.EXE /onfly N sets the budget) */
+long g_onfly_px = 32000L;
+#define ONFLY_MIN_SCALE 100
+#define PLAN_MAX 16
+static struct { unsigned char slot, exact, set; long depth; int scale; } g_plan[PLAN_MAX];   /* exact: 0, or the detail (1, 2, 4) */
+static int g_nplan;
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
 /* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
 #define SHIELD(s, k) (((unsigned short *)curShield)[(s) * 2 + (k)])
@@ -179,6 +189,18 @@ static void ship_physics(int s)
             rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(t->roll_dps, (s & 1) ? 4 : -4));
         }
     }
+    if (g_zoom && s == 1) {
+        /* the zoom scene's ship, 1,200 .. 6,000 km away on a twelve-second swing: /zoom 1 rolls it
+         * at 60 degrees a second (the lightfield's view switches as the camera walks round its
+         * nose); /zoom 2 yaws it slowly instead, for the player to roll round */
+        long d = 256L * 3600 + ((lf_cos((int)(frameCounter * 1024L / 240 % 1024)) * 2400L) >> 14) * 256;
+        if (g_zoom == 1)
+            rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(60, 9));
+        else
+            rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(12, 9));
+        gPositionVector[s].z = gPositionVector[0].z + d;
+        return;
+    }
     if (yaw)
         rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(t->yaw_dps, yaw));
     if (pitch)
@@ -298,36 +320,92 @@ static int scale_of(const LfVec *rel)
     return (int)(sc > 512 ? 512 : sc);
 }
 
-static void draw_world(int y0, int y1)
+static void rel_of(int s, LfVec *rel)
 {
-    int ey0, rows, s, i;
-    const short __far *ext = cockpit_extents(&ey0, &rows);
-    const ShipSet __far *bench = g_set_enemy >= 0 ? ships_set(g_set_enemy) : 0;
+    rel->x = gPositionVector[s].x - gPositionVector[0].x;
+    rel->y = gPositionVector[s].y - gPositionVector[0].y;
+    rel->z = gPositionVector[s].z - gPositionVector[0].z;
+}
+
+/* once a frame: which ships show, how big, which are drawn exactly, in what order */
+static void plan_draws(void)
+{
     LfBasis cam, ship;
-    int path;
-    draw_stars(y0, y1);
-    /* the ships near the player: their view for the camera, at the size
-     * their distance gives, turned as they roll (ships_draw: the lightfield) */
+    LfVec rel;
+    LfPlace p;
+    long px[PLAN_MAX], budget = g_onfly_px;
+    int s, i, k;
+    g_nplan = 0;
     basis_of(0, &cam);
-    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
-        LfVec rel;
+    for (s = 1; s <= RV_MAX_SHIP_SLOT && g_nplan < PLAN_MAX; s++) {
         int set;
         if (maybeEntityType[s] != 0xC && maybeEntityType[s] != 0xD)
             continue;
         set = ships_find(gInstanceShipTypes[s]);
         if (set < 0)
             continue;
-        rel.x = gPositionVector[s].x - gPositionVector[0].x;
-        rel.y = gPositionVector[s].y - gPositionVector[0].y;
-        rel.z = gPositionVector[s].z - gPositionVector[0].z;
+        rel_of(s, &rel);
         basis_of(s, &ship);
-        path = ships_draw(set, &rel, &cam, &ship, scale_of(&rel), y0, y1, 0, SCR_W, ext, ey0, rows);
-        if (y0 <= ey0 && frameCounter % 100 == 1) {
+        g_plan[g_nplan].scale = scale_of(&rel);
+        px[g_nplan] = ships_size_of(set, &rel, &cam, &ship, g_plan[g_nplan].scale, &p);
+        if (!p.on_screen)
+            continue;
+        g_plan[g_nplan].slot = (unsigned char)s;
+        g_plan[g_nplan].set = (unsigned char)set;
+        g_plan[g_nplan].depth = p.depth;
+        g_plan[g_nplan].exact = 0;
+        g_nplan++;
+    }
+    /* the exact ones: the biggest first, while the budget holds; one too big
+     * for what is left is drawn at half or quarter detail (rows copied, then
+     * 2 x 1 blocks) rather than from the sets or slower */
+    for (;;) {
+        int best = -1, detail;
+        for (i = 0; i < g_nplan; i++)
+            if (!g_plan[i].exact && g_plan[i].scale >= ONFLY_MIN_SCALE && px[i] > 0 && px[i] <= budget * 4
+                && (best < 0 || px[i] > px[best]))
+                best = i;
+        if (best < 0)
+            break;
+        detail = px[best] <= budget ? 1 : px[best] <= budget * 2 ? 2 : 4;
+        g_plan[best].exact = (unsigned char)detail;
+        budget -= px[best] / detail;
+    }
+    /* back to front */
+    for (i = 1; i < g_nplan; i++)
+        for (k = i; k > 0 && g_plan[k].depth > g_plan[k - 1].depth; k--) {
+            struct { unsigned char slot, exact, set; long depth; int scale; } t = g_plan[k];
+            g_plan[k] = g_plan[k - 1];
+            g_plan[k - 1] = t;
+        }
+}
+
+static void draw_world(int y0, int y1)
+{
+    int ey0, rows, i;
+    const short __far *ext = cockpit_extents(&ey0, &rows);
+    const ShipSet __far *bench = g_set_enemy >= 0 ? ships_set(g_set_enemy) : 0;
+    LfBasis cam, ship;
+    int path;
+    draw_stars(y0, y1);
+    /* the ships, as the frame's plan has them: the nearest exactly, the rest from the sets */
+    basis_of(0, &cam);
+    for (i = 0; i < g_nplan; i++) {
+        LfVec rel;
+        int s = g_plan[i].slot, set = g_plan[i].set;
+        rel_of(s, &rel);
+        basis_of(s, &ship);
+        if (g_plan[i].exact)
+            path = 8 + g_plan[i].exact * ships_draw_exact(set, &rel, &cam, &ship, g_plan[i].scale, g_plan[i].exact, y0, y1,
+                                                          0, SCR_W, ext, ey0, rows);
+        else
+            path = ships_draw(set, &rel, &cam, &ship, g_plan[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
+        if (y0 <= ey0 && (frameCounter % 100 == 1 || (g_record && frameCounter % g_record == 0))) {
             /* now and then, where each ship was put (tests/ships.txt reads it) */
             LfPlace p;
             lf_place(&rel, &cam, &ship, SCR_W / 2, (ey0 + rows / 2), 400, &p);
             rv_log("lightfield: frame %u slot %d type %02X at %ld,%ld,%ld: view %d roll %d scale %d at %d,%d path %d",
-                   frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, scale_of(&rel), p.sx, p.sy, path);
+                   frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, g_plan[i].scale, p.sx, p.sy, path);
         }
     }
     /* the benchmark's copies */
@@ -514,6 +592,16 @@ void __far __cdecl flight_startup(void)
     }
     if (enemy_type < 0)
         enemy_type = 0x08;
+    if (g_zoom) {
+        /* a test aid: one Gawain dead ahead, a little off the nose, rolling, swinging in and out */
+        n = 1;
+        memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
+        spawn(1, 0x02, 0, 4, 0, 0, 256L * 4000, 512 + 100);
+        setSpeed[1] = speedLo[1] = 0;
+        setSpeed[0] = speedLo[0] = 0;
+        ships_load(0x02);
+        n = 2;
+    }
     if (g_capital && n <= RV_MAX_SHIP_SLOT) {
         /* a test aid: the Vigilance off to the left, ahead, standing still */
         spawn(n, 0x20, 0, 4, -256L * 3000, 0, 256L * 5000, 256);
@@ -649,6 +737,7 @@ void __far __cdecl flight_frame(void)
     int k = (int)(frameCounter % FPS_WINDOW);
     sim_step();
     stars_move();
+    plan_draws();
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];
     g_frame_t[k] = now;

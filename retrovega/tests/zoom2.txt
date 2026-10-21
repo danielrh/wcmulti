@@ -1,0 +1,27 @@
+# one ship ahead, yawing slowly, swinging in and out while the player rolls (run with /zoom 2 /bench 0 /record 2 /flight 26)
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+hold rright 460
+wait 480
+key esc
+wait 16
+log done
