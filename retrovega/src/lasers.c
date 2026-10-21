@@ -257,6 +257,13 @@ int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, 
     return n;
 }
 
+void lz_capsule_setup(const LzFat LZ_FAR *f, int colour, LzPass LZ_FAR *p)
+{
+    int sh;
+    long len = seg_len((long)f->bx - f->ax, (long)f->by - f->ay, &sh);
+    pass_of(f, len, sh, f->r, colour, p);
+}
+
 /* --- the draws --- */
 
 static int clip_rows(int *y0, int *y1, int ext_y0, int ext_rows, const short LZ_FAR *ext)

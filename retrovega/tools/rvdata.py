@@ -33,7 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 1
+VERSION = 2                             # 2: the ship types' engines
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
           'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
@@ -66,8 +66,12 @@ SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME
             ('unsigned short', 'shield_f', 'H'), ('unsigned short', 'shield_r', 'H'),
             ('unsigned short', 'armor_f', 'H'), ('unsigned short', 'armor_r', 'H'), ('unsigned short', 'armor_l', 'H'),
             ('unsigned short', 'armor_rt', 'H'), ('unsigned short', 'hull', 'H'), ('unsigned short', 'lod0_px', 'H'),
-            ('unsigned short', 'missiles', 'H'), ('unsigned char', 'pad[2]', '2s')]
+            ('unsigned short', 'missiles', 'H'), ('unsigned char', 'nengines', 'B'), ('unsigned char', 'pad', 'B'),
+            ('signed char', 'engine[RV_ENGINES][4]', '%db' % (4 * 4))]
 SHIPTYPE_FLAG_PLAYER = 1               # the player may fly it (a cockpit kit exists)
+# a ship type's engines (data/engines.csv, tools/engines.py): x, y, z in its sprites' box (127 = the half box; +x
+# the ship's left, +z the nose) and the glow's radius, min(0.3 size, 0.09) of the half box, in 1/1024ths
+ENGINES = 4
 PILOT = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'callsign[RV_CALLSIGN]', '%ds' % TEXT['CALLSIGN']),
          ('char', 'name[RV_NAME]', '%ds' % TEXT['NAME']), ('unsigned char', 'role', 'B'),
          ('unsigned char', 'pad', 'B'), ('char', 'line[RV_LINE]', '%ds' % TEXT['LINE'])]
@@ -157,8 +161,17 @@ def compile_all():
     if len(ships_csv) > LIMITS['SHIPTYPES']:
         raise Fail('ships.csv: %d types, at most %d' % (len(ships_csv), LIMITS['SHIPTYPES']))
     out_types = []
+    engines_csv = {r['key']: r for r in load_csv('engines.csv')}
     for r in ships_csv:
         n = lambda k: int(r[k] or 0)
+        eng = []
+        e = engines_csv.get(r['key'])
+        for i in range(int(e['n']) if e else 0):
+            x, y, z, size = (float(e['%s%d' % (c, i)]) for c in ('x', 'y', 'z', 'size'))
+            clamp = lambda v: max(-127, min(127, int(round(v * 127))))
+            eng += [clamp(x), clamp(y), clamp(z), max(1, int(round(min(0.3 * size, 0.09) * 1024)))]
+        nengines = len(eng) // 4
+        eng += [0] * (4 * ENGINES - len(eng))
         count = lambda k: int(r[k].split('x')[0]) if r[k] and 'x' in r[k] else 0
         for k in ('yaw_dps', 'pitch_dps', 'roll_dps'):
             if n(k) > 255:
@@ -170,7 +183,7 @@ def compile_all():
                                      n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), n('yaw_dps'),
                                      n('pitch_dps'), n('roll_dps'), count('guns'), n('shield_f'), n('shield_r'),
                                      n('armor_f'), n('armor_r'), n('armor_l'), n('armor_rt'), n('hull'),
-                                     n('lod0_px'), count('missiles'), b''))
+                                     n('lod0_px'), count('missiles'), nengines, 0, *eng))
     talk_ok = {frozenset((r['a'], r['b'])): r['talk'] == 'yes' for r in load_csv('relations.csv')}
     for pair in talk_ok:
         for k in pair:
@@ -348,6 +361,7 @@ def header_text(sizes):
     for k, v in LIMITS.items():
         out.append('#define RV_%s %d' % (k, v))
     out.append('#define RV_ROOMS %d' % len(ROOMS))
+    out.append('#define RV_ENGINES %d' % ENGINES)
     for k, v in TEXT.items():
         out.append('#define RV_%s %d' % (k, v))
     out += ['', '/* node edges */', '#define RV_NODE_NONE 0x%02X' % NONE, '#define RV_NODE_GOOD 0x%02X' % GOOD,

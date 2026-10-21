@@ -101,6 +101,9 @@ void lz_place(const LzBolt LZ_FAR *b, int n, const LzCam LZ_FAR *c, LzLine LZ_FA
  * how many; a core too thin for a capsule comes back as a line (*core_line 1) */
 int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, LzLine LZ_FAR *core, int *core_line);
 
+/* one capsule of f's ends and radius (at most LZ_RMAX16), in one colour: the engines' flames are made of these */
+void lz_capsule_setup(const LzFat LZ_FAR *f, int colour, LzPass LZ_FAR *p);
+
 /* every bolt flies k positions for each sixteenth of a km of its half axis (rv_bolts_move's reference) */
 void lz_move(LzBolt LZ_FAR *b, int n, long k);
 
@@ -127,6 +130,7 @@ void __far __cdecl rv_pass_draw(const LzPass __far *p, unsigned char __far *band
                                 const short __far *ext, int ext_y0, const unsigned char __far *roots);
 int __far __cdecl rv_fat_setup(const LzFat __far *f, const LzStyle __far *st, LzPass __far *pass, LzLine __far *core,
                                int __far *core_line);
+void __far __cdecl rv_capsule_setup(const LzFat __far *f, int colour, LzPass __far *pass);
 #endif
 
 #endif

@@ -58,6 +58,19 @@ int lf_view_of(long vx, long vy, long vz, int nb, int nh);
  * view at heading 0 or 180, the top and the bottom are their own */
 int lf_pair_of(int v, int nb, int nh);
 
+/* a view's turn: rows the picture's x (right), its y (up) and the way to the
+ * viewer, in the renderer's frame of the ship (shipviews.view_matrix); 16384
+ * = 1.0 */
+typedef struct { long m[9]; } LfViewRot;
+void lf_view_rot(int v, int nb, int nh, LfViewRot *r);
+
+/* a point of the ship (the renderer's frame, any scale up to 2^16) as its
+ * view's sprite shows it turned by roll (clockwise, 1024 a turn, as lf_place
+ * gives): its offset from the ship's origin on the screen (x right, y down)
+ * and its height toward the viewer, the same scale.  Where the engines' flames
+ * start and which way they point. */
+void lf_sprite_point(const LfViewRot *r, int roll, long x, long y, long z, long *sx, long *sy, long *sz);
+
 /* integer trigonometry: angles 1024 a turn, 1.0 = 16384 */
 long lf_sin(int a);
 long lf_cos(int a);

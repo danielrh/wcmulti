@@ -33,7 +33,7 @@ static LzStyle __far g_style = { UI_RED, UI_RED, UI_WHITE, 0, BOLT_LINE16 };   /
 static unsigned long g_t_place, g_t_far, g_t_near, g_t_move;
 
 /* the whole width every row, and the roots' table: for draws without the cockpit's extents */
-static void open_init(void)
+void bolts_tables(void)
 {
     int k;
     for (k = 0; k < SCR_H; k++) {
@@ -85,7 +85,7 @@ int bolts_init(int want, unsigned keep_kb)
     }
     g_cap = g_b ? want : 0;
     rv_log("bolts: room for %d (%lu KB of DOS memory was free)", g_cap, (unsigned long)r.x.bx * 16 / 1024);
-    open_init();
+    bolts_tables();
     bolts_ticks_reset();
     return g_cap;
 }
@@ -151,7 +151,7 @@ int bolts_on_screen(int *lines, int *fats)
 }
 
 /* the rows of this band the bolts may touch, and the extents for them */
-static int rows_of(int *y0, int *y1, const short __far **ext, int *ext_y0, int ext_rows)
+int bolts_rows(int *y0, int *y1, const short __far **ext, int *ext_y0, int ext_rows)
 {
     if (*ext) {
         if (*y0 < *ext_y0) *y0 = *ext_y0;
@@ -169,7 +169,7 @@ void bolts_draw_far(int y0, int y1, const short __far *ext, int ext_y0, int ext_
 {
     int run0, run1;
     unsigned long t0 = clock240();
-    if (g_nl && vid_run(&run0, &run1) && rows_of(&y0, &y1, &ext, &ext_y0, ext_rows))
+    if (g_nl && vid_run(&run0, &run1) && bolts_rows(&y0, &y1, &ext, &ext_y0, ext_rows))
         rv_lines_draw(g_l, g_nl, g_style.line, vid_row(run0), run0, y0, y1, ext, ext_y0);
     g_t_far += clock240() - t0;
 }
@@ -178,7 +178,7 @@ void bolts_draw_near(int y0, int y1, const short __far *ext, int ext_y0, int ext
 {
     int run0, run1, i, k;
     unsigned long t0 = clock240();
-    if (g_nf && vid_run(&run0, &run1) && rows_of(&y0, &y1, &ext, &ext_y0, ext_rows)) {
+    if (g_nf && vid_run(&run0, &run1) && bolts_rows(&y0, &y1, &ext, &ext_y0, ext_rows)) {
         unsigned char __far *band = vid_row(run0);
         for (i = 0; i < g_nf; i++) {
             for (k = 0; k < g_fat_of[i].n; k++)
@@ -298,6 +298,12 @@ static int setup_agrees(const LzFat *f, LzStyle *st)
     LzPass pc[2], pa[2];
     LzLine cc, ca;
     int clc, cla, n1, n2, w;
+    lz_capsule_setup(f, 99, &pc[0]);   /* (one capsule, as the flames are made) */
+    rv_capsule_setup(f, 99, &pa[0]);
+    if (_fmemcmp(&pc[0], &pa[0], sizeof(LzPass))) {
+        rv_log("bolts: rv_capsule_setup differs for %d,%d-%d,%d r %d", f->ax, f->ay, f->bx, f->by, f->r);
+        return 0;
+    }
     n1 = lz_fat_setup(f, st, pc, &cc, &clc);
     n2 = rv_fat_setup(f, &g_style, pa, &ca, (int __far *)&cla);
     if (n1 == n2 && clc == cla && !_fmemcmp(pc, pa, n1 * sizeof(LzPass)) && !(clc && _fmemcmp(&cc, &ca, sizeof cc)))
@@ -323,7 +329,7 @@ long bolts_selftest(void)
     LfBasis cam;
     long drawn = 0;
     int nlc, nfc, nla, nfa, w, i, k, bad = 0;
-    open_init();
+    bolts_tables();
     if (!b || !lc || !la || !band || !fc || !ext) {
         rv_log("bolts: no memory for the self-test");
         bad = -2;
@@ -558,7 +564,7 @@ void bolts_time(long out[6])
     t_band = (unsigned char __far *)_fmalloc(TEST_ROWS * SCR_W);
     t_w = _fmalloc(sizeof *t_w);
     t_y0 = SCR_H / 2 - TEST_ROWS / 2;
-    open_init();
+    bolts_tables();
     for (k = 0; k < 6; k++)
         out[k] = 0;
     if (!t_b || !t_l || !t_band || !t_w) {

@@ -773,42 +773,7 @@ _rv_fat_setup:
         push si
         push di
         push ds
-        lds si,[bp+6]
-        mov ax,[si]
-        mov FAX,ax
-        mov ax,[si+2]
-        mov FAY,ax
-        mov ax,[si+4]
-        mov FBX,ax
-        mov ax,[si+6]
-        mov FBY,ax
-        mov ax,[si+8]
-        mov FR,ax
-        movsx eax,word FBX
-        movsx edx,word FAX
-        sub eax,edx
-        mov FDX,eax
-        movsx eax,word FBY
-        movsx edx,word FAY
-        sub eax,edx
-        mov FDY,eax
-        ; the length with as many more bits as keep its square in 31 (seg_len)
-        mov eax,FDX
-        imul eax,eax
-        mov ecx,FDY
-        imul ecx,ecx
-        add eax,ecx
-        xor cx,cx
-.sh:    cmp cx,8
-        jge .root
-        cmp eax,0x20000000
-        jae .root
-        shl eax,2
-        inc cx
-        jmp .sh
-.root:  mov FSH,cx
-        call isqrt32
-        mov FLEN,eax
+        call fat_load
         les di,[bp+14]              ; the passes out
         mov word FNP,0
         lds si,[bp+10]              ; the style
@@ -840,6 +805,73 @@ _rv_fat_setup:
         mov sp,bp
         pop bp
         retf
+
+; int rv_capsule_setup(const LzFat far *f, int colour, LzPass far *pass)
+; lz_capsule_setup: one capsule of f's ends and radius, in one colour (the
+; engines' flames are three of these).
+        global _rv_capsule_setup
+_rv_capsule_setup:
+        push bp
+        mov bp,sp
+        sub sp,FFRAME
+        push si
+        push di
+        push ds
+        call fat_load
+        les di,[bp+12]
+        mov word FNP,0
+        mov ax,FR
+        mov FPR,ax
+        mov al,[bp+10]
+        mov FCOL,al
+        call pass_of
+        pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
+
+; the fat bolt at [bp+6] into the frame's locals: its ends and radius, b - a,
+; and its length with as many more bits as keep its square in 31 (seg_len).
+; Leaves ds:si on it.
+fat_load:
+        lds si,[bp+6]
+        mov ax,[si]
+        mov FAX,ax
+        mov ax,[si+2]
+        mov FAY,ax
+        mov ax,[si+4]
+        mov FBX,ax
+        mov ax,[si+6]
+        mov FBY,ax
+        mov ax,[si+8]
+        mov FR,ax
+        movsx eax,word FBX
+        movsx edx,word FAX
+        sub eax,edx
+        mov FDX,eax
+        movsx eax,word FBY
+        movsx edx,word FAY
+        sub eax,edx
+        mov FDY,eax
+        mov eax,FDX
+        imul eax,eax
+        mov ecx,FDY
+        imul ecx,ecx
+        add eax,ecx
+        xor cx,cx
+.sh:    cmp cx,8
+        jge .root
+        cmp eax,0x20000000
+        jae .root
+        shl eax,2
+        inc cx
+        jmp .sh
+.root:  mov FSH,cx
+        call isqrt32
+        mov FLEN,eax
+        ret
 
 ; one pass (pass_of) into es:di, radius FPR, colour FCOL; then di += 40, FNP++.
 ; Keeps si (the style).

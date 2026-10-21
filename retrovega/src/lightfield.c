@@ -103,6 +103,43 @@ int lf_pair_of(int v, int nb, int nh)
 
 static long dot(const LfVec *a, const LfVec *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
 
+void lf_view_rot(int v, int nb, int nh, LfViewRot *r)
+{
+    int band, e, h, base = 2 + nb * nh;
+    long se, ce, sh, ch;
+    if (v == 0 || v == 1 + nb * nh) {  /* the top and the bottom: heading 90 (shipviews.lattice) */
+        e = v ? -256 : 256;
+        h = 256;
+    } else {
+        if (v < base) {
+            band = (v - 1) / nh;
+            h = (v - 1) % nh * 512 / (nh - 1);
+        } else {
+            band = (v - base) / (nh - 2);
+            h = 512 + ((v - base) % (nh - 2) + 1) * 512 / (nh - 1);
+        }
+        e = 256 - (band + 1) * 512 / (nb + 1);
+    }
+    se = lf_sin(e); ce = lf_cos(e); sh = lf_sin(h); ch = lf_cos(h);
+    /* shipviews.view_matrix: the viewer's way d = (sin h cos e, sin e, cos h cos e), the view's x = (cos h, 0,
+     * -sin h), its y = (-sin h sin e, cos e, -cos h sin e), its z = d (the poles' up as the tool picks it gives
+     * the same) */
+    r->m[0] = ch; r->m[1] = 0; r->m[2] = -sh;
+    r->m[3] = -(sh * se >> 14); r->m[4] = ce; r->m[5] = -(ch * se >> 14);
+    r->m[6] = sh * ce >> 14; r->m[7] = se; r->m[8] = ch * ce >> 14;
+}
+
+void lf_sprite_point(const LfViewRot *r, int roll, long x, long y, long z, long *sx, long *sy, long *sz)
+{
+    long qx = (r->m[0] * x + r->m[1] * y + r->m[2] * z) >> 14;
+    long qy = (r->m[3] * x + r->m[4] * y + r->m[5] * z) >> 14;
+    long c = lf_cos(roll), s = lf_sin(roll);
+    *sz = (r->m[6] * x + r->m[7] * y + r->m[8] * z) >> 14;
+    /* the picture's x right, y down (-qy), then turned clockwise on the screen */
+    *sx = (qx * c + qy * s) >> 14;
+    *sy = (qx * s - qy * c) >> 14;
+}
+
 void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, int nb, int nh,
               LfPlace *out)
 {

@@ -25,6 +25,7 @@
 #include "ships.h"
 #include "cockpit.h"
 #include "bolts.h"
+#include "flames.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -44,6 +45,9 @@ int g_near_bolts = 12;                  /* RV.EXE /near N: the bolts kept near t
 int g_far_ships = 16;                   /* RV.EXE /farships N: its small far ships */
 int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
 int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts (a test aid) */
+int g_flames_demo = 0;                  /* RV.EXE /flames: six ships turning every way, flames on (a test aid) */
+#define FLAMES_FRAMES 450               /* its recording's length (/record): fifteen seconds at 30 fps */
+static int g_flames_frames;
 #define DEMO_BOLTS 11
 #define DEMO_FRAMES 300                 /* ten seconds at 30 fps */
 #define DEMO_SPEED (27L * 64 / BOLT_HALF16)   /* positions per sixteenth of a km of half axis: 6.75 km a frame */
@@ -56,7 +60,13 @@ static int g_demo_frame;                /* its frames so far */
 long g_onfly_px = 32000L;
 #define ONFLY_MIN_SCALE 100
 #define PLAN_MAX 16
-static struct { unsigned char slot, exact, set; long depth; int scale; } g_plan[PLAN_MAX];   /* exact: 0, or the detail (1, 2, 4) */
+typedef struct {
+    unsigned char slot, exact, set;     /* exact: 0, or the detail (1, 2, 4) */
+    long depth;
+    int scale;
+    FlameSet fl;                        /* its engines' flames this frame */
+} PlanEntry;
+static PlanEntry g_plan[PLAN_MAX];
 static int g_nplan;
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
 /* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
@@ -214,6 +224,15 @@ static void ship_physics(int s)
          * miscompiled by -ox: slot 0 ran the else arm's turns.) */
         rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(40, s == 1 ? 9 : -6));
         rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(15, 9));
+        orthonormalise(s);
+        return;
+    }
+    if (g_flames_demo && s >= 1) {
+        /* the flames scene: in place, each yawing at its own rate, the odd ones pitching too, so every view of
+         * their engines comes round */
+        rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(20 + 7 * s, (s & 2) ? 9 : -9));
+        if (s & 1)
+            rotate_pair(&gOrientationFrontVector[s], &gOrientationUpVector[s], turn_step(11, 9));
         orthonormalise(s);
         return;
     }
@@ -383,6 +402,17 @@ static void rel_of(int s, LfVec *rel)
     rel->z = gPositionVector[s].z - gPositionVector[0].z;
 }
 
+static unsigned long g_t_flames, g_t_flames_set;   /* what the engines' flames cost: in all, and set up */
+
+/* a ship's afterburner: faster than its type's top speed (the flames scene: every other ship) */
+static int burning(int s)
+{
+    const RvShipType __far *t = type_of(s);
+    if (g_flames_demo)
+        return (s & 1) == 0;
+    return t && speedLo[s] > (unsigned long)t->max_kps;
+}
+
 /* once a frame: which ships show, how big, which are drawn exactly, in what order */
 static void plan_draws(void)
 {
@@ -437,10 +467,26 @@ static void plan_draws(void)
     /* back to front */
     for (i = 1; i < g_nplan; i++)
         for (k = i; k > 0 && g_plan[k].depth > g_plan[k - 1].depth; k--) {
-            struct { unsigned char slot, exact, set; long depth; int scale; } t = g_plan[k];
+            PlanEntry t = g_plan[k];
             g_plan[k] = g_plan[k - 1];
             g_plan[k - 1] = t;
         }
+    /* the engines' flames, as each ship's sprite will be drawn: the nearest first (the frame's room is limited) */
+    {
+        unsigned long t0 = clock240();
+        flames_frame();
+        for (i = g_nplan - 1; i >= 0; i--) {
+            int nb, nh, sl = g_plan[i].slot;
+            const RvShipType __far *t = type_of(sl);
+            rel_of(sl, &rel);
+            basis_of(sl, &ship);
+            ships_lattice(g_plan[i].set, g_plan[i].exact != 0, &nb, &nh);
+            lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, nb, nh, &p);
+            flames_add(t, &p, nb, nh, g_plan[i].scale, burning(sl), &g_plan[i].fl);
+        }
+        g_t_flames += clock240() - t0;
+        g_t_flames_set += clock240() - t0;
+    }
 }
 
 static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int rows);
@@ -473,6 +519,10 @@ static void draw_world(int y0, int y1)
         rel_of(s, &rel);
         basis_of(s, &ship);
         t0 = clock240();
+        if (!g_plan[i].fl.front)        /* flames pointing away: behind the hull */
+            flames_draw(&g_plan[i].fl, y0, y1, ext, ey0, rows);
+        g_t_flames += clock240() - t0;
+        t0 = clock240();
         if (g_plan[i].exact && ships_draw_exact(set, &rel, &cam, &ship, g_plan[i].scale, g_plan[i].exact, y0, y1,
                                                 0, SCR_W, ext, ey0, rows)) {
             path = 8 + g_plan[i].exact;
@@ -480,6 +530,11 @@ static void draw_world(int y0, int y1)
         } else {                        /* (or its view is not streamed in yet: from the sets this frame) */
             path = ships_draw(set, &rel, &cam, &ship, g_plan[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
             g_t_sets += clock240() - t0;
+        }
+        if (g_plan[i].fl.front) {       /* flames toward the camera: over it */
+            t0 = clock240();
+            flames_draw(&g_plan[i].fl, y0, y1, ext, ey0, rows);
+            g_t_flames += clock240() - t0;
         }
         if (y0 <= ey0 && (frameCounter % 100 == 1 || (g_record && frameCounter % g_record == 0))) {
             /* now and then, where each ship was put (tests/ships.txt reads it) */
@@ -582,7 +637,11 @@ static void gather(void)
     }
     g_st.ncontacts = n;
     (void)c;
-    if (g_bolt_demo) {                  /* the demo's readout: the drawing, the time in its round, where the bolts are */
+    if (g_flames_demo) {
+        strcpy(g_mfd[0][0], "FLAMES");
+        strcpy(g_mfd[0][1], "2 4 6 BURN");
+        sprintf(g_mfd[0][2], "%s", g_flame_flicker ? "FLICKER" : "STATIC");
+    } else if (g_bolt_demo) {           /* the demo's readout: the drawing, the time in its round, where the bolts are */
         static const char __far name[] = "CAPSULES";
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
@@ -1027,6 +1086,21 @@ void __far __cdecl flight_startup(void)
         lasers_setup(enemy_type);
         n = 3;
     }
+    if (g_flames_demo) {
+        /* a test aid: six ships 3,000 .. 3,500 km ahead in two rows of three, standing, turning every way */
+        static const unsigned char types[6] = { 0x08, 0x02, 0x04, 0x0A, 0x09, 0x06 };
+        static const short at[6][3] = { { -1100, 330, 3200 }, { 0, 330, 3500 }, { 1100, 330, 3200 },
+                                        { -1100, -330, 3000 }, { 0, -330, 3300 }, { 1100, -330, 3000 } };
+        memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
+        for (k = 0; k < 6; k++) {
+            spawn(k + 1, types[k], 1, 4, 256L * at[k][0], 256L * at[k][1], 256L * at[k][2], k * 170);
+            setSpeed[k + 1] = speedLo[k + 1] = 0;
+            ships_load(types[k]);
+        }
+        setSpeed[0] = speedLo[0] = 0;
+        g_flames_frames = 0;
+        n = 7;
+    }
     if (g_capital && n <= RV_MAX_SHIP_SLOT) {
         /* a test aid: the Vigilance off to the left, ahead, standing still */
         spawn(n, 0x20, 0, 4, -256L * 3000, 0, 256L * 5000, 256);
@@ -1109,6 +1183,8 @@ void __far __cdecl flight_startup(void)
            g_bench_h);
     cockpit_palette();                  /* only now: the deck kept its own palette while all that loaded (seconds in the
                                            browser: the user saw it go "all crazy" in the flight's palette) */
+    flames_init();                      /* (its colours from that palette) */
+    g_t_flames = g_t_flames_set = 0;
 }
 
 /* the keys and the pointer: returns the status the exit key sets, else 0 */
@@ -1221,6 +1297,8 @@ void __far __cdecl flight_frame(void)
     rvFrameDone();
     if (now - g_t0 >= FLIGHT_TICKS)
         missionStatus = 1;              /* landed */
+    if (g_flames_demo && g_record && ++g_flames_frames >= FLAMES_FRAMES)
+        missionStatus = 1;              /* (its recording is so many frames, however slowly they are made) */
     /* the frame rate capped at FPS_WANT: the simulation is per frame (a kps is 12.8 units a frame), so
      * without the cap a bare flight ran three times too fast natively (the adapting benchmark had been
      * holding it at 30 by loading it; off by default now) */
@@ -1259,6 +1337,11 @@ int flight_fly(const RvMission __far *m)
     n = flight_bench_result(&w, &h);
     rv_log("flight: over with status %u after %u frames; benchmark %d sprites of %dx%d a frame at %d fps (%ld pixels a second)",
            status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
+    rv_log("flight: the engines' flames took %lu.%02lu ms a frame (%lu.%02lu of it set up)",
+           g_t_flames * 1000 / 240 / (frameCounter ? frameCounter : 1),
+           (g_t_flames * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,
+           g_t_flames_set * 1000 / 240 / (frameCounter ? frameCounter : 1),
+           (g_t_flames_set * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100);
     rv_log("flight: the stars took %lu.%02lu ms a frame to place and %lu.%02lu to draw",
            g_star_place_ticks * 1000 / 240 / (frameCounter ? frameCounter : 1),
            (g_star_place_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,

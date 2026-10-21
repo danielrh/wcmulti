@@ -46,6 +46,50 @@ int main(void)
     CHECK(lf_view_of(0, 0, -256, 5, 7) == 21, "the viewer astern sees heading 180: view 21");
     CHECK(lf_view_of(-256, 0, 0, 5, 7) == 49, "the viewer at -x sees heading 270: view 49 (37 + band 2 x 5 + 2)");
     CHECK(lf_view_of(0, 256, 0, 5, 7) == 0 && lf_view_of(0, -256, 0, 5, 7) == 36, "straight above is the top, below the bottom");
+
+    /* a point of the ship as each view's sprite shows it, turned: against shipviews.view_matrix (numpy) */
+    {
+        static const long want[][5] = {     /* view of (5, 7), roll, then x, y on the screen and the height */
+            {  0,   0,  -3000,   1000,   2000 },   /* elev 90 heading 90 */
+            {  0, 256,  -1000,  -3000,   2000 },
+            {  0, 100,  -3029,   -910,   2000 },
+            { 15,   0,   1000,  -2000,   3000 },   /* elev 0 heading 0 */
+            { 15, 256,   2000,   1000,   3000 },
+            { 15, 100,   1969,  -1059,   3000 },
+            { 18,   0,  -3000,  -2000,   1000 },   /* elev 0 heading 90 */
+            { 18, 256,   2000,  -3000,   1000 },
+            { 18, 100,  -1301,  -3363,   1000 },
+            { 36,   0,  -3000,  -1000,  -2000 },   /* elev -90 heading 90 */
+            { 36, 256,   1000,  -3000,  -2000 },
+            { 36, 100,  -1877,  -2545,  -2000 },
+            {  8,   0,   1000,   -232,   3598 },   /* elev 30 heading 0 */
+            {  8, 256,    232,   1000,   3598 },
+            {  8, 100,    951,    386,   3598 },
+            { 30,   0,   -634,  -3683,   -183 },   /* elev -60 heading 30 */
+            { 30, 256,   3683,   -634,   -183 },
+            { 30, 100,   1602,  -3376,   -183 },
+            { 45,   0,   3098,  -1415,   1549 },   /* elev 30 heading 300 (a mirrored heading) */
+            { 45, 256,   1415,   3098,   1549 },
+            { 45, 100,   3348,    627,   1549 },
+            { 60,   0,   3098,  -1549,  -1415 },   /* elev -60 heading 300 */
+            { 60, 256,   1549,   3098,  -1415 },
+            { 60, 100,   3425,    517,  -1415 },
+        };
+        int k, bad = 0;
+        for (k = 0; k < (int)(sizeof want / sizeof want[0]); k++) {
+            LfViewRot r;
+            long x, y, z;
+            lf_view_rot((int)want[k][0], 5, 7, &r);
+            lf_sprite_point(&r, (int)want[k][1], 1000, 2000, 3000, &x, &y, &z);
+            /* within 20 of the point's 3,742: the views' angles are 1024ths of a turn (30 degrees is 85 1/3) */
+            if (labs(x - want[k][2]) > 20 || labs(y - want[k][3]) > 20 || labs(z - want[k][4]) > 20) {
+                printf("     view %ld roll %ld: %ld %ld %ld, want %ld %ld %ld\n", want[k][0], want[k][1], x, y, z,
+                       want[k][2], want[k][3], want[k][4]);
+                bad++;
+            }
+        }
+        CHECK(bad == 0, "a point as 8 views' sprites show it, turned 3 ways, as shipviews.view_matrix has it, within 1/2 %% (%d off)", bad);
+    }
     CHECK(lf_view_of(0, 128, 222, 5, 7) == 8, "30 degrees up, ahead: band +30, heading 0: view 8");
     CHECK(lf_view_of(0, -222, 128, 5, 7) == 29, "60 degrees down, ahead: band -60, heading 0: view 29");
     CHECK(lf_view_of(128, 0, 222, 5, 7) == 16, "30 degrees to the right: heading 30: view 16");

@@ -990,6 +990,72 @@ there first, else in conventional memory as before: the flight then has
 else arm (the player spun); `wdis` showed the missing test. When C does the
 impossible, read the disassembly.
 
+### Engine flames
+
+The user's brief (2026-10-21, with four WC1 screenshots): animating
+purplish-blue flames from each engine where Vega Strike puts it, full on
+normally, the afterburner's longer (or reddish), pixelated is fine since they
+are bright, static first (perhaps a two-frame flicker later), sharing the
+laser bolts' capsule code.
+
+**Where the engines are.** `tools/engines.py` (run once; it reads the Vega
+Strike meshes as `shipviews.py` does) writes `data/engines.csv`: each ship
+type's exhaust points from units.csv's Light column, the largest four, in
+the frame its sprites are rendered in: (point - the mesh's centre) / the
+view box's radius, +x the ship's left, +z the nose, 1.0 the box's half
+(`lod0_px / 2` px at full size), and the light's size. Nine third-party
+types have no exhaust in Vega Strike: they get one engine at the middle of
+the hull's tail. `rvdata.py` packs them into each `RvShipType` (RVGAME.DAT
+version 2: `nengines`, `engine[4][4]`: x, y, z x 127 and the radius of the
+glow the sprites carry, `min(0.3 size, 0.09)` of the half box, in 1/1024ths).
+
+**On the sprite.** The flames must sit on the engines the picture shows, and
+the picture is a lattice view (30 or 15 degrees apart), turned on screen by
+the roll and scaled. So an engine is placed through the drawn sprite's own
+frame, not the ship's true orientation: `lf_view_rot` is the tool's
+`view_matrix` for view v of a lattice (rows: the picture's x, its y, the way
+to the viewer), and `lf_sprite_point` takes a point of the ship through it,
+turned clockwise by the roll as `lf_rotate_setup` turns the sprite (output =
+R (source - origin), R = [c -s; s c] on a y-down screen), scaled by the
+ship's size: the nozzle's offset from the ship's origin on screen, and the
+tail's way (the renderer's -z) and whether it points toward the viewer.
+`tests/host/lf_test.c` checks eight views at three rolls against numpy's
+`view_matrix` (within 1/2 %: the views' angles are 1024ths of a turn, 30
+degrees is 85 1/3).
+
+**The flame** (src/flames.c). Three capsules from the nozzle, set up by
+`rv_capsule_setup` (one capsule of any colour, beside the bolts'
+`rv_fat_setup`; the self-test checks it against `lz_capsule_setup`) and
+drawn by `rv_pass_draw` as the near bolts are: a thin dark blue-violet tail
+the whole length (half the radius), a wide blue root over its first 7/16,
+a white core over the first quarter. A capsule is the same width all along,
+so the taper is the three together: white root, blue body, dark tip, as WC's
+flames are; end on, a blue disc with a white middle. The radius is the
+glow's (at least 3/4 px, at most 4 px: the root table's limit), the length
+five radii (at least 1/10 of the half box), the afterburner's twice that
+with a violet tail and a longer core (`burning()`: faster than the type's
+top speed). The colours are the flight palette's nearest to the user's
+pictures, picked when the flight starts: (45, 32, 218), (90, 86, 227),
+(220, 219, 248); the afterburner's tail (190, 50, 170). A flame pointing
+away from the camera is drawn before its ship, so the hull hides its root;
+one pointing toward it after. Set up once a frame (`plan_draws`, the nearest
+ships first, 96 capsules at most), drawn band by band with the ships.
+`RV.EXE /flicker`: every other frame a flame is 1/8 shorter.
+
+**The test scene.** `RV.EXE /flames` (`tests/flames.txt`): six ships in two
+rows of three 3,000-3,500 km ahead, standing, each yawing at its own rate
+and the odd ones pitching too, so every view of their engines comes round;
+ships 2, 4 and 6 on the afterburner. With `/record 1` the flight lands
+after 450 frames (15 s at 30 fps), however slowly they are made.
+
+**Cost** (40,000 cycles): the scene's six near ships, 18 engines, 3.15 ms a
+frame, 2.29 of it the set-up (in C: the ship placed again, its view's turn,
+two sprite points an engine with Watcom's 32-bit multiply helpers, then the
+three capsules in asm) and 0.86 the drawing; the laser benchmark's two big
+ships 0.68. The set-up in asm (as the bolts' is) is the lever if it matters.
+RV.EXE grew by 7.7 KB (the 96 capsules' buffer, 3.8 KB, the code, the
+engines in the ship types).
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the

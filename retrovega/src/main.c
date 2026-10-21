@@ -1,7 +1,7 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
- *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo]
+ *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo] [/flames] [/flicker]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -20,7 +20,7 @@
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
-extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo;
+extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_flame_flicker;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -77,7 +77,11 @@ int main(int argc, char **argv)
             g_far_ships = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/bigships"))         /* tests: its big near ships (2) */
             g_big_ships = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "/boltdemo")) {       /* tests: the player's own bolts, each shape in turn */
+        else if (!strcmp(argv[i], "/flames"))           /* tests: six ships turning every way, their engines' flames */
+            g_flames_demo = 1;
+        else if (!strcmp(argv[i], "/flicker"))          /* the flames a little shorter every other frame */
+            g_flame_flicker = 1;
+        else if (!strcmp(argv[i], "/boltdemo")) {       /* tests: the player's own bolts */
             g_bolt_demo = 1;
             g_lasers = 1;
             g_near_bolts = 0;

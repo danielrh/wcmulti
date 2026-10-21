@@ -15,6 +15,10 @@
 #define BOLT_RMAX16 LZ_RMAX16            /* the radius drawn at most: 4 px (the capsules' root table holds no more) */
 #define BOLT_LINE16 12                  /* under 3/4 px of radius a bolt is a line */
 
+void bolts_tables(void);                /* the capsules' root table and the whole width's extents: before any draw
+                                           of capsules (the engines' flames too) */
+int bolts_rows(int *y0, int *y1, const short __far **ext, int *ext_y0, int ext_rows);   /* a band's rows a draw may
+                                           touch, its extents (the whole width when none): 0 when none */
 int bolts_init(int want, unsigned keep_kb);   /* room for `want` bolts, or as many as memory allows keeping keep_kb
                                            free (a byte each for the caller too): returns the room */
 void bolts_free(void);
