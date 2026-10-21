@@ -1,0 +1,61 @@
+# the tally board and the XO's close-up: the board's scribbles in the bar and
+# the board up close (a click on it); the XO's talking face at the briefing;
+# after a mission flown, the board again with the splashes chalked up
+wait 12
+click
+wait 3
+move 593 200
+wait 2
+click
+wait 12
+move 431 170
+wait 2
+click
+wait 12
+shot B01BAR
+move 232 142
+wait 4
+click
+wait 10
+shot B02BOARD
+click
+wait 8
+shot B03BACK
+move 145 152
+wait 2
+click
+wait 30
+move 146 126
+wait 2
+click
+wait 12
+shot B04XO
+wait 30
+shot B05XO
+click
+wait 8
+shot B06BRIEF
+key esc
+wait 3
+key esc
+wait 3
+key esc
+wait 14
+move 478 176
+wait 2
+click
+wait 30
+key esc
+wait 20
+shot B07DEBR
+key esc
+wait 16
+shot B08BAR
+move 232 142
+wait 4
+click
+wait 10
+shot B09BOARD
+key esc
+wait 6
+log done

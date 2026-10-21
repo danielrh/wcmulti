@@ -272,6 +272,16 @@ Alt-X, "so it's rare".
   `RVSETUP.CFG` (the browser page keeps it with the bunks). The bar's and
   the lounge's table talk stays up for a second plus its reading time at
   that pace.
+- **Clicking the XO** at the briefing opens her talking close-up, the same
+  as a pilot's (her face over the room blurred, her name and rank); the
+  briefing goes on there, and a speech too long for the column shows the
+  sentence being said.
+- **The tally board:** the bar's chalkboard shows chalk scribbles from
+  across the room; a click shows it up close, every pilot, most splashes
+  first, in a chalk hand with tally marks (gfx.c's `gfx_chalk`: a stroke
+  whose pixels are mixed toward white by a hash of where they are, so the
+  slate shows through). The hand's font (13 KB) is loaded only while the
+  board shows: after a flight the largest free block can be under 32 KB.
 
 ## Music: interactive MIDI on the OPL3
 
@@ -790,9 +800,11 @@ enough to want a half-size source set (spec §8).
 
 ## Fonts, pointer, driver
 
-- **Fonts:** rasterised from Roboto (Apache 2.0) by
-  `tools/font.py` into our own bitmap format, 2-bit antialiased into
-  palette ramps. Two sizes: 11 px for text, 16 px for titles.
+- **Fonts:** rasterised by `tools/rvpack.py` into our own bitmap format,
+  2-bit coverage drawn through the palette's mix tables: Orbitron (SIL OFL)
+  at 13 px for text and 22 px for titles, always in memory; the tally
+  board's chalk hand, Caveat (SIL OFL) at 30 px, roughened a little and
+  packed four pixels to a byte, in memory only while the board shows.
 - **Pointer:** our own art (CC0), an arrow and a highlight ring, drawn by
   the engine with save-under.
 - **Mouse driver:** DOSBox's int 33h. Nothing to ship.

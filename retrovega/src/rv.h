@@ -77,8 +77,11 @@ void gfx_mix_to_black(int x, int y, int w, int h, int y0, int y1);
 void gfx_line(int xa, int ya, int xb, int yb, unsigned char c, int dash, int y0, int y1);
 void gfx_circle(int cx, int cy, int r, unsigned char c, int dotted, int y0, int y1);
 void gfx_frame(int x, int y, int w, int h, unsigned char c, int y0, int y1);
-enum { FONT_BODY, FONT_TITLE };
+void gfx_chalk(int xa, int ya, int xb, int yb, int width, int colour, int y0, int y1);  /* RV_TEXT_*, grainy */
+enum { FONT_BODY, FONT_TITLE, FONT_CHALK };
+#define TEXT_CHALK 0x20                /* gfx_text: chalk, never solid */
 int gfx_font_load(void);
+int gfx_font_chalk(int on);            /* FONT_CHALK in memory (13 KB) or not; 0: no room for it */
 int gfx_text(int font, int x, int y, const char *s, int colour, int y0, int y1);   /* RV_TEXT_*; returns width */
 int gfx_text_width(int font, const char *s);
 int gfx_font_height(int font);

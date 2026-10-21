@@ -28,6 +28,9 @@ A room can have:
     hotspots   rectangles the mouse can click, with what they do
     boards     rectangles the engine writes or draws on (the chalkboard, the
                briefing screen, the medal case)
+    zoom       a board seen up close: a 16:10 crop of the plate around it,
+               scaled to the screen (zoom-BOARD.png), and where the board's
+               rectangle lands in it
 
 Source pixels throughout data/places.json; the outputs are in screen pixels.
 """
@@ -447,6 +450,11 @@ def build(key, cfg, out, log=print):
         place['stages'] = stages(cfg['stages'], src, frame, od)
     place['hotspots'] = {n: dict(h, rect=scale_rect(frame, h['rect'])) for n, h in cfg.get('hotspots', {}).items()}
     place['boards'] = {n: scale_rect(frame, r) for n, r in cfg.get('boards', {}).items()}
+    for n, crop in cfg.get('zoom', {}).items():
+        zf = places.Frame(crop)
+        name = 'zoom-%s.png' % n
+        zf.image(Image.fromarray((plate * 255 + 0.5).astype(np.uint8), 'RGB')).save(os.path.join(od, name))
+        place.setdefault('zoom', {})[n] = {'file': name, 'board': scale_rect(zf, cfg['boards'][n])}
     with open(os.path.join(od, 'place.json'), 'w') as f:
         json.dump(place, f, indent=1)
     return place

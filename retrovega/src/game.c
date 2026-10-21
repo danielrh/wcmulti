@@ -20,7 +20,7 @@
 #include "game.h"
 
 enum { MODE_ROOM, MODE_TALK, MODE_BRIEF, MODE_XOCLOSE, MODE_DECK, MODE_DEBRIEF, MODE_BUNK,
-       MODE_NAME, MODE_LOG, MODE_MESSAGE, MODE_ENDING, MODE_QUIT };
+       MODE_NAME, MODE_LOG, MODE_MESSAGE, MODE_ENDING, MODE_BOARD, MODE_QUIT };
 
 static int g_mode, g_back_mode;
 static RvMission __far g_m;
@@ -162,31 +162,141 @@ static void talk_overlay(int y0, int y1)
     gfx_text(FONT_BODY, 16, SCR_H - LABEL_H - 22, line, RV_TEXT_WHITE | 0x10, y0, y1);
 }
 
+/* --- the tally board: Tally's chalk --- */
+
+/* the pilots, most splashes first */
+static int tally_order(int *order)
+{
+    int i, k, n = 0;
+    for (i = 0; i < (int)g_npilots; i++)
+        if (g_pilots[i].role == RV_ROLE_PILOT)
+            order[n++] = i;
+    for (i = 0; i < n; i++)
+        for (k = i + 1; k < n; k++)
+            if (g_camp.pilot[order[k]].kills > g_camp.pilot[order[i]].kills) {
+                int t = order[i]; order[i] = order[k]; order[k] = t;
+            }
+    return n;
+}
+
+/* the hand's wobble: -range .. range, the same for the same seed and step */
+static int wobble(unsigned seed, int k, int range)
+{
+    unsigned h = seed * 0x9E37u + (unsigned)k * 0x85EBu;
+    h ^= h >> 7;
+    h *= 0x2C1Bu;
+    h ^= h >> 9;
+    return (int)(h % (unsigned)(2 * range + 1)) - range;
+}
+
+/* a line of chalk too small to read: a hand's ups and downs from the
+ * baseline y, w pixels long, x-height xh, a tall stroke now and then; a
+ * heading (two words) breaks after three fifths */
+static void scribble(int x, int y, int w, int xh, int words, unsigned seed, int y0, int y1)
+{
+    int k, px = x, py = y, gap = words > 1 ? x + w * 3 / 5 : x + w;
+    for (k = 1; px < x + w; k++) {
+        int nx = px + 1 + (wobble(seed, k, 1) >= 0);
+        int ny = (k & 1) ? y - xh - (wobble(seed, k + 50, 2) == 2 ? 2 : 0) : y + (wobble(seed, k + 90, 1) > 0);
+        gfx_chalk(px, py, nx, ny, 1, RV_TEXT_WHITE, y0, y1);
+        px = nx;
+        py = ny;
+        if (px >= gap && px < x + w - 4) {      /* (a word's end) */
+            px += 4;
+            py = y;
+            gap = x + w;
+        }
+    }
+}
+
+/* n tally marks from x: four strokes h tall and `gap` apart, the fifth across them */
+static void tally_marks(int x, int y, int h, int gap, int width, unsigned n, unsigned seed, int y0, int y1)
+{
+    unsigned i;
+    for (i = 0; i < n; i++) {
+        int m = (int)(i % 5), a = wobble(seed, (int)i, 1), b = wobble(seed, (int)i + 100, 1);
+        if (m < 4)
+            gfx_chalk(x + m * gap + a, y + b, x + m * gap - a, y + h + b, width, RV_TEXT_WHITE, y0, y1);
+        else {
+            gfx_chalk(x - gap / 2, y + h * 3 / 4 + a, x + 3 * gap + gap / 2, y + h / 4 + b, width, RV_TEXT_WHITE, y0, y1);
+            x += 6 * gap;
+        }
+    }
+}
+
+/* in the bar: a few scribbles, a heading and the top four with their marks
+ * (the user's call: the board's text was out of keeping; click it to read it) */
 static void chalkboard(int y0, int y1)
 {
     const RvRoom __far *r = dat_room(g_scene.room);
-    int b, i, n = 0, order[RV_PILOTS], k;
+    int b, i, order[RV_PILOTS], n;
     for (b = 0; b < 4; b++) {
         const RvBoard __far *bd = &r->board[b];
-        if (bd->w == 0 || bd->kind != 0)
+        int cx = bd->x + bd->w / 2;
+        if (bd->w == 0 || bd->kind != 0 || y1 <= bd->y || y0 >= bd->y + bd->h)
             continue;
-        if (y1 <= bd->y || y0 >= bd->y + bd->h)
-            continue;
-        for (i = 0; i < (int)g_npilots; i++)
-            if (g_pilots[i].role == RV_ROLE_PILOT)
-                order[n++] = i;
-        for (i = 0; i < n; i++)
-            for (k = i + 1; k < n; k++)
-                if (g_camp.pilot[order[k]].kills > g_camp.pilot[order[i]].kills) {
-                    int t = order[i]; order[i] = order[k]; order[k] = t;
-                }
-        gfx_text(FONT_BODY, bd->x + 6, bd->y + 4, "SPLASH COUNT", RV_TEXT_WHITE, y0, y1);
+        n = tally_order(order);
+        scribble(cx - 20, bd->y + 9, 40, 3, 2, 1, y0, y1);
+        gfx_chalk(cx - 23, bd->y + 12, cx + 22, bd->y + 11, 1, RV_TEXT_WHITE, y0, y1);
         for (i = 0; i < 4 && i < n; i++) {
-            char s[24];
-            sprintf(s, "%-8.8s %3u", g_pilots[order[i]].callsign, g_camp.pilot[order[i]].kills);
-            gfx_text(FONT_BODY, bd->x + 6, bd->y + 20 + i * 14, s, RV_TEXT_GREY, y0, y1);
+            unsigned k = g_camp.pilot[order[i]].kills;
+            scribble(bd->x + 8, bd->y + 22 + i * 8, 10 + (int)strlen(g_pilots[order[i]].callsign) * 2, 2, 1,
+                     7 + order[i], y0, y1);
+            tally_marks(bd->x + 42, bd->y + 18 + i * 8, 4, 2, 1, k < 15 ? k : 15, 31 + order[i], y0, y1);
         }
     }
+}
+
+/* the board up close: every pilot, in Tally's hand (or the title font, if
+ * there was no room for the hand) */
+static int g_hand = FONT_CHALK;
+
+static void board_full(int y0, int y1)
+{
+    const RvDatHeader __far *h = dat_header();
+    int sx = h->chalk_slate[0], sy = h->chalk_slate[1], sw = h->chalk_slate[2];
+    int order[RV_PILOTS], n = tally_order(order), i, w;
+    gfx_image(h->chalk_back, 0, 0, y0, y1);
+    w = gfx_text_width(g_hand, "Splash Count");
+    gfx_text(g_hand, sx + (sw - w) / 2, sy + 2, "Splash Count", RV_TEXT_WHITE | TEXT_CHALK, y0, y1);
+    gfx_chalk(sx + (sw - w) / 2 - 8, sy + 41, sx + (sw + w) / 2 + 8, sy + 39, 3, RV_TEXT_WHITE, y0, y1);
+    for (i = 0; i < n && i < 8; i++) {
+        int ry = sy + 46 + i * 29;
+        unsigned k = g_camp.pilot[order[i]].kills;
+        char num[8];
+        gfx_text(g_hand, sx + 28, ry, g_pilots[order[i]].callsign, RV_TEXT_WHITE | TEXT_CHALK, y0, y1);
+        tally_marks(sx + 176, ry + 9, 22, 7, 3, k < 30 ? k : 30, 31 + order[i], y0, y1);
+        sprintf(num, "%u", k);
+        gfx_text(g_hand, sx + sw - 28 - gfx_text_width(g_hand, num), ry, num, RV_TEXT_WHITE | TEXT_CHALK, y0, y1);
+    }
+    gfx_text(FONT_BODY, 14, SCR_H - 18, "click to close", RV_TEXT_GREY | 0x10, y0, y1);
+}
+
+static void open_board(void)
+{
+    vid_fade(0);
+    g_hand = gfx_font_chalk(1) ? FONT_CHALK : FONT_TITLE;
+    gfx_use_palette(dat_header()->chalk_pal);
+    g_scene.full = board_full;
+    g_scene.no_room = 1;
+    g_mode = MODE_BOARD;
+    rv_log("board: up close%s", g_hand == FONT_CHALK ? "" : " (no room for the chalk hand: the title font)");
+    vid_dirty(0, SCR_H);
+    scene_draw();
+    vid_fade(64);
+}
+
+static void close_board(void)
+{
+    g_scene.full = 0;
+    g_scene.no_room = 0;
+    vid_fade(0);
+    gfx_font_chalk(0);
+    gfx_use_palette(dat_room(g_scene.room)->palette);
+    g_mode = MODE_ROOM;
+    vid_dirty(0, SCR_H);
+    scene_draw();
+    vid_fade(64);
 }
 
 static void room_overlay(int y0, int y1)
@@ -242,54 +352,105 @@ static void ambient_talk(void)
 #define FACE_X 24
 #define FACE_Y 62
 
-static int g_close_room;
+static int g_close_room, g_close_back;      /* the close-up's room, and the mode it goes back to */
+
+/* the speech so far; of a long one (a briefing), only the sentence being said */
+static const char *said_so_far(void)
+{
+    static char shown[RV_BRIEFING];
+    int n = _fstrlen(g_said), k = speech_done() ? n : (int)((long)n * speaking_step() / (g_nlip ? g_nlip : 1)), from = 0;
+    if (n > 240)
+        for (from = k - 1; from > 0; from--)
+            if (g_said[from] == ' ' && (g_said[from - 1] == '.' || g_said[from - 1] == '!' || g_said[from - 1] == '?')) {
+                from++;
+                break;
+            }
+    if (from < 0 || from > k)
+        from = 0;
+    _fstrncpy(shown, g_said + from, k - from);
+    shown[k - from] = 0;
+    return shown;
+}
+
+/* a close-up: the speaker's face over the room, blurred (the XO's too: her
+ * gesture sheet twitched at this size; the user's call, 2026-10-21) */
+static int eyes_now(void)
+{
+    return (g_now / 4) % 17 == 0 ? 2 : (g_now / 4) % 17 == 1 ? 1 : 0;   /* a blink every 4 s */
+}
 
 static void talk_full(int y0, int y1)
 {
     const RvRoom __far *r = dat_room(g_close_room);
     const RvPerson __far *p = dat_person(g_speaker);
-    int mouth = mouth_now(), eyes = ((g_now / 4) % 17 == 0) ? 2 : ((g_now / 4) % 17 == 1 ? 1 : 0);
+    int mouth = mouth_now(), eyes = eyes_now();
     char title[40];
     gfx_image(r->closeup_back, 0, 0, y0, y1);
     gfx_sprite(p->face, FACE_X, FACE_Y, y0, y1);
     gfx_image(p->eyes0 + eyes, FACE_X + dat_asset(p->eyes0)->x, FACE_Y + dat_asset(p->eyes0)->y, y0, y1);
     gfx_image(p->mouth0 + mouth, FACE_X + dat_asset(p->mouth0)->x, FACE_Y + dat_asset(p->mouth0)->y, y0, y1);
-    sprintf(title, "\"%.10s\"", g_pilots[g_speaker].callsign);
-    gfx_text(FONT_TITLE, 400, 130, title, RV_TEXT_AMBER, y0, y1);
-    gfx_text(FONT_BODY, 400, 160, g_pilots[g_speaker].name, RV_TEXT_WHITE, y0, y1);
-    {
-        static char shown[RV_BRIEFING];
-        int n = _fstrlen(g_said), k = speech_done() ? n : (int)((long)n * speaking_step() / (g_nlip ? g_nlip : 1));
-        _fstrncpy(shown, g_said, k);
-        shown[k] = 0;
-        gfx_wrap(FONT_BODY, 400, 196, 220, shown, RV_TEXT_WHITE, 4, y0, y1);
+    if (g_pilots[g_speaker].role == RV_ROLE_XO) {        /* (no callsign: her name and rank) */
+        int w = gfx_text_width(FONT_TITLE, g_pilots[g_speaker].name);
+        gfx_text(FONT_TITLE, w > SCR_W - 412 ? SCR_W - 12 - w : 400, 130, g_pilots[g_speaker].name, RV_TEXT_AMBER, y0, y1);
+        gfx_text(FONT_BODY, 400, 160, "Executive Officer", RV_TEXT_WHITE, y0, y1);
+    } else {
+        sprintf(title, "\"%.10s\"", g_pilots[g_speaker].callsign);
+        gfx_text(FONT_TITLE, 400, 130, title, RV_TEXT_AMBER, y0, y1);
+        gfx_text(FONT_BODY, 400, 160, g_pilots[g_speaker].name, RV_TEXT_WHITE, y0, y1);
     }
+    gfx_wrap(FONT_BODY, 400, 196, 220, said_so_far(), RV_TEXT_WHITE, 4, y0, y1);
+}
+
+/* what moves in a close-up: the mouth, the eyes, the words */
+static void face_tick(void)
+{
+    static int said = -1;
+    int step = speech_done() ? g_nlip : speaking_step();
+    if (mouth_now() != g_mouth || eyes_now() != g_eyes || step != said) {
+        g_mouth = mouth_now();
+        g_eyes = eyes_now();
+        said = step;
+        vid_dirty(FACE_Y, SCR_H);
+    }
+}
+
+/* the close-up of whoever is speaking (g_speaker), in this room */
+static int show_face(void)
+{
+    const RvRoom __far *r = dat_room(g_scene.room);
+    if (r->closeup_part == 0xFFFF || g_speaker < 0)
+        return 0;
+    g_close_room = g_scene.room;
+    g_close_back = g_mode;
+    vid_fade(0);
+    gfx_use_part(r->closeup_part, 1);
+    gfx_use_part(dat_person(g_speaker)->palpart, 0);
+    g_scene.full = talk_full;
+    g_scene.no_room = 1;
+    vid_dirty(0, SCR_H);
+    scene_draw();
+    vid_fade(64);
+    return 1;
 }
 
 static void open_talk(int person, const char __far *line)
 {
-    const RvRoom __far *r = dat_room(g_scene.room);
-    if (r->closeup_part == 0xFFFF)
+    if (dat_room(g_scene.room)->closeup_part == 0xFFFF)
         return;
-    g_close_room = g_scene.room;
-    vid_fade(0);
-    gfx_use_part(r->closeup_part, 1);
-    gfx_use_part(dat_person(person)->palpart, 0);
     say(person, line);
-    g_scene.full = talk_full;
+    if (!show_face())
+        return;
     g_mode = MODE_TALK;
     music_cue(room_song(g_close_room), 150);     /* (the room's own: the same song goes on) */
-    vid_dirty(0, SCR_H);
-    scene_draw();
-    vid_fade(64);
 }
 
 static void close_talk(void)
 {
     g_scene.full = 0;
+    g_scene.no_room = 0;
     vid_fade(0);
     gfx_use_palette(dat_room(g_scene.room)->palette);
-    g_mode = MODE_ROOM;
+    g_mode = g_close_back;
     vid_dirty(0, SCR_H);
     scene_draw();
     vid_fade(64);
@@ -309,6 +470,16 @@ static const char __far *line_of(int person)
 
 static int g_stage, g_xo_close;
 static unsigned long g_stage_at;
+
+/* the people.csv row of whoever has this role (the XO), or -1 */
+static int person_of(int role)
+{
+    int i;
+    for (i = 0; i < (int)g_npilots; i++)
+        if (g_pilots[i].role == role)
+            return i;
+    return -1;
+}
 
 static void situation_display(int y0, int y1)
 {
@@ -413,14 +584,6 @@ static void brief_overlay(int y0, int y1)
     }
 }
 
-static void xo_close_full(int y0, int y1)
-{
-    const RvSpeaker __far *s = &dat_room(RV_R_BRIEFING)->speaker;
-    int mouth = s->mouth_of_viseme[mouth_now()];
-    gfx_image(s->closeup_back, 0, 0, y0, y1);
-    gfx_sprite(s->big0 + g_gesture * s->nmouths + mouth, 0, 0, y0, y1);
-}
-
 static void start_briefing(int debrief)
 {
     vid_fade(0);
@@ -430,8 +593,7 @@ static void start_briefing(int debrief)
     g_mode = debrief ? MODE_DEBRIEF : MODE_BRIEF;
     g_stage = 0;
     g_xo_close = 0;
-    say(RV_PILOTS, debrief ? (g_won ? g_m.win : g_m.lose) : g_m.briefing);
-    g_speaker = -1;
+    say(person_of(RV_ROLE_XO), debrief ? (g_won ? g_m.win : g_m.lose) : g_m.briefing);
     if (!debrief)
         briefingStarted();
     music_cue(debrief ? (g_won ? RV_MUSIC_WIN : RV_MUSIC_LOSE) : RV_MUSIC_BRIEFING, 250);
@@ -451,20 +613,20 @@ static void brief_tick(void)
     g = sentences == 0 ? 0 : 1 + (sentences - 1) % 2;
     if (speech_done())
         g = 0;
+    if (g_xo_close) {                           /* (her close-up: face_tick) */
+        g_gesture = g;
+        return;
+    }
     if (g != g_gesture || mouth_now() != g_mouth) {
         const RvSpeaker __far *s = &dat_room(RV_R_BRIEFING)->speaker;
         const RvAsset __far *a = dat_asset(s->cell0);
         g_gesture = g;
         g_mouth = mouth_now();
-        if (g_xo_close)
-            vid_dirty(0, SCR_H);
-        else
-            vid_dirty(a->y, a->y + a->h);
+        vid_dirty(a->y, a->y + a->h);
     }
     if (chars != g_shown_chars) {
         g_shown_chars = chars;
-        if (!g_xo_close)
-            vid_dirty(292, 378);
+        vid_dirty(292, 378);
     }
 }
 
@@ -825,21 +987,17 @@ static void hot_action(const SceneAction *a)
         g_scene.overlay = log_overlay;
         vid_dirty(20, 370);
         break;
-    case RV_ACT_SCORES: message("The tally board: every pilot's splash count, kept by Tally in chalk."); break;
+    case RV_ACT_SCORES: open_board(); break;
     case RV_ACT_SIMULATOR: message("The simulator is down for refit. Tally's record stands, for now."); break;
     case RV_ACT_MEDALS: message("Your medal case. Medals and ribbons go here as you earn them."); break;
     case RV_ACT_LETTERS: message("Letters from home, read until the folds wore through."); break;
     case RV_ACT_PHOTOS: message("Photographs from before the war."); break;
     case RV_ACT_KILLS: message("Your flight record: kills and missions, one tally mark at a time."); break;
     case RV_ACT_CLOSEUP:
-        g_xo_close = 1;
-        vid_fade(0);
-        gfx_use_palette(dat_room(RV_R_BRIEFING)->speaker.closeup_pal);
-        g_scene.full = xo_close_full;
-        g_mode = MODE_XOCLOSE;
-        vid_dirty(0, SCR_H);
-        scene_draw();
-        vid_fade(64);
+        if (show_face()) {
+            g_xo_close = 1;
+            g_mode = MODE_XOCLOSE;
+        }
         break;
     case RV_ACT_CUSTOMIZE: customize(); break;
     case RV_ACT_LAUNCH: launch(); break;
@@ -886,11 +1044,7 @@ int game_run(void)
             }
             break;
         case MODE_TALK:
-            if (mouth_now() != g_mouth || g_now % 4 == 0) {
-                g_mouth = mouth_now();
-                vid_dirty(FACE_Y, SCR_H);
-                vid_dirty(190, 300);
-            }
+            face_tick();
             if (in.clicked || in.key == KEY_ENTER || in.key == KEY_ESC)
                 close_talk();
             break;
@@ -934,16 +1088,15 @@ int game_run(void)
             break;
         case MODE_XOCLOSE:
             brief_tick();
+            face_tick();
             if (in.clicked || in.key == KEY_ENTER || in.key == KEY_ESC) {
                 g_xo_close = 0;
-                g_scene.full = 0;
-                vid_fade(0);
-                gfx_use_palette(dat_room(RV_R_BRIEFING)->palette);
-                g_mode = MODE_BRIEF;
-                vid_dirty(0, SCR_H);
-                scene_draw();
-                vid_fade(64);
+                close_talk();                       /* (back to the briefing or the debrief) */
             }
+            break;
+        case MODE_BOARD:
+            if (in.clicked || in.key == KEY_ENTER || in.key == KEY_ESC)
+                close_board();
             break;
         case MODE_DECK:
             deck_tick();

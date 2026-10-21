@@ -17,11 +17,11 @@ static unsigned char __far g_mix[3][3][256];   /* (far: DGROUP is nearly full) *
 static const unsigned char g_text_colour[3] = { UI_WHITE, UI_AMBER4, UI_GREY5 };
 
 typedef struct {
-    unsigned char height, ascent, first, count;
+    unsigned char height, ascent, first, count, packed;     /* packed: 4 pixels a byte, the first lowest */
     unsigned char __far *table;        /* count x (offset word, width, advance) */
     unsigned char __far *bits;
 } Font;
-static Font g_font[2];
+static Font g_font[3];                  /* body, title, and the chalk while the tally board shows */
 
 static void need_scratch(void)
 {
@@ -240,38 +240,59 @@ void gfx_mix_to_black(int x, int y, int w, int h, int y0, int y1)
 
 /* --- text --- */
 
-int gfx_font_load(void)
+static void font_free(int i)
 {
-    const RvDatHeader __far *hd = dat_header();
-    unsigned ids[2], i;
-    ids[0] = hd->font_body;
-    ids[1] = hd->font_title;
-    for (i = 0; i < 2; i++) {
-        const RvAsset __far *as = dat_asset(ids[i]);
-        unsigned char __far *p;
-        if (g_font[i].table)
-            _ffree(g_font[i].table - 4);       /* a new base brings its own */
-        p = (unsigned char __far *)_fmalloc((size_t)as->size + 1);
-        RV_ASSERT(p != 0 && as->kind == RV_KIND_FONT);
-        dat_read(as->at, p, as->size);
-        g_font[i].height = p[0];
-        g_font[i].ascent = p[1];
-        g_font[i].first = p[2];
-        g_font[i].count = p[3];
-        g_font[i].table = p + 4;
-        g_font[i].bits = p + 4 + 4 * p[3];
-    }
+    if (g_font[i].table)
+        _ffree(g_font[i].table - 4);
+    g_font[i].table = 0;
+}
+
+static int font_read(int i, unsigned id)
+{
+    const RvAsset __far *as = dat_asset(id);
+    unsigned char __far *p;
+    font_free(i);                           /* a new base brings its own */
+    RV_ASSERT(as->kind == RV_KIND_FONT);
+    p = (unsigned char __far *)_fmalloc((size_t)as->size + 1);
+    if (!p)
+        return 0;
+    dat_read(as->at, p, as->size);
+    g_font[i].packed = as->w == 2;
+    g_font[i].height = p[0];
+    g_font[i].ascent = p[1];
+    g_font[i].first = p[2];
+    g_font[i].count = p[3];
+    g_font[i].table = p + 4;
+    g_font[i].bits = p + 4 + 4 * p[3];
     return 1;
 }
 
-int gfx_font_height(int font) { RV_CHECK(font, 2); return g_font[font].height; }
+int gfx_font_load(void)
+{
+    RV_ASSERT(font_read(FONT_BODY, dat_header()->font_body) && font_read(FONT_TITLE, dat_header()->font_title));
+    return 1;
+}
+
+/* the chalk hand (13 KB) is in memory only while the tally board shows;
+ * 0 if there was no room for it */
+int gfx_font_chalk(int on)
+{
+    if (on && !g_font[FONT_CHALK].table)
+        return font_read(FONT_CHALK, dat_header()->font_chalk);
+    if (!on)
+        font_free(FONT_CHALK);
+    return 1;
+}
+
+int gfx_font_height(int font) { RV_CHECK(font, 3); return g_font[font].height; }
 
 int gfx_text_width(int font, const char *s)
 {
     Font *f;
     int w = 0;
-    RV_CHECK(font, 2);
+    RV_CHECK(font, 3);
     f = &g_font[font];
+    RV_ASSERT(f->table != 0);
     for (; *s; s++) {
         unsigned c = (unsigned char)*s - f->first;
         if (c < f->count)
@@ -280,13 +301,15 @@ int gfx_text_width(int font, const char *s)
     return w;
 }
 
-/* colour: RV_TEXT_*, plus 0x10 for a drop shadow */
+/* colour: RV_TEXT_*, plus 0x10 for a drop shadow, or TEXT_CHALK: never solid,
+ * each coverage a step lighter (the slate shows through) */
 int gfx_text(int font, int x, int y, const char *s, int colour, int y0, int y1)
 {
     Font *f;
     int start = x, pass;
-    RV_CHECK(font, 2);
+    RV_CHECK(font, 3);
     f = &g_font[font];
+    RV_ASSERT(f->table != 0);
     if (y + f->height <= y0 || y >= y1)
         return gfx_text_width(font, s);
     for (pass = (colour & 0x10) ? 0 : 1; pass < 2; pass++) {
@@ -311,13 +334,15 @@ int gfx_text(int font, int x, int y, const char *s, int colour, int y0, int y1)
                     continue;
                 row = vid_row(ry);
                 for (gx = 0; gx < w; gx++) {
-                    unsigned v = g[gy * w + gx];
+                    unsigned k = gy * w + gx, v = f->packed ? (g[k >> 2] >> ((k & 3) * 2)) & 3 : g[k];
                     int rx = x + ox + (int)gx;
                     if (!v || rx < 0 || rx >= SCR_W)
                         continue;
                     if (!pass) {
                         if (v >= 2)
                             row[rx] = g_shade[g_shade[row[rx]]];
+                    } else if (colour & TEXT_CHALK) {
+                        row[rx] = g_mix[c3][v - 1][row[rx]];
                     } else if (v == 3) {
                         row[rx] = solid;
                     } else {
@@ -364,6 +389,50 @@ static void plot(int x, int y, unsigned char c, int y0, int y1)
 {
     if (x >= 0 && x < SCR_W && y >= y0 && y < y1 && y >= 0 && y < SCR_H)
         vid_row(y)[x] = c;
+}
+
+/* chalk: each pixel of a stroke mixed toward the text colour a quarter, a
+ * half or three quarters, or left bare, by a hash of where it is (the same
+ * every redraw), so the slate shows through as it does through chalk; a
+ * broad stroke's middle is pressed harder */
+static void chalk_dot(int x, int y, int c3, int core, int y0, int y1)
+{
+    unsigned h;
+    if (x < 0 || x >= SCR_W || y < y0 || y >= y1 || y < 0 || y >= SCR_H)
+        return;
+    h = (unsigned)x * 0x9E37u ^ (unsigned)y * 0x85EBu;
+    h ^= h >> 7;
+    h *= 0x2C1Bu;
+    h = (h ^ (h >> 9)) & 7;
+    if (core)
+        vid_row(y)[x] = g_mix[c3][h < 2 ? 1 : 2][vid_row(y)[x]];
+    else if (h)
+        vid_row(y)[x] = g_mix[c3][h < 2 ? 0 : h < 4 ? 1 : 2][vid_row(y)[x]];
+}
+
+/* a stroke `width` pixels across: a span across the line at each step, so no
+ * pixel is chalked twice */
+void gfx_chalk(int xa, int ya, int xb, int yb, int width, int colour, int y0, int y1)
+{
+    int dx = xb > xa ? xb - xa : xa - xb, sx = xa < xb ? 1 : -1;
+    int dy = yb > ya ? ya - yb : yb - ya, sy = ya < yb ? 1 : -1;
+    int err = dx + dy, steep = -dy > dx, c3 = colour & 3, i;
+    if ((ya < y0 - width && yb < y0 - width) || (ya >= y1 + width && yb >= y1 + width))
+        return;
+    for (;;) {
+        for (i = 0; i < width; i++)
+            if (steep)
+                chalk_dot(xa + i - width / 2, ya, c3, width >= 3 && i == width / 2, y0, y1);
+            else
+                chalk_dot(xa, ya + i - width / 2, c3, width >= 3 && i == width / 2, y0, y1);
+        if (xa == xb && ya == yb)
+            break;
+        {
+            int e2 = 2 * err;
+            if (e2 >= dy) { err += dy; xa += sx; }
+            if (e2 <= dx) { err += dx; ya += sy; }
+        }
+    }
 }
 
 /* a line; dash > 0 draws dash pixels on, dash off */

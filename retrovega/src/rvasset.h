@@ -2,7 +2,7 @@
 #ifndef RVASSET_H
 #define RVASSET_H
 
-#define RVDAT_VERSION 1
+#define RVDAT_VERSION 2
 
 #define RV_HOTS 8
 #define RV_POSES 12
@@ -111,6 +111,9 @@ typedef struct {
     unsigned short ncockpits;
     unsigned long cockpits_at;
     unsigned short cockpit_size;
+    unsigned short font_chalk;          /* the tally board's hand (packed: 4 pixels a byte), loaded while it shows */
+    unsigned short chalk_pal, chalk_back;   /* the bar's chalkboard up close: its palette, the picture */
+    short chalk_slate[4];               /* the slate in that picture: x, y, w, h */
     unsigned char reserved[10];
 } RvDatHeader;
 typedef struct {
@@ -137,7 +140,7 @@ typedef struct {
 } RvActor;
 typedef struct {
     unsigned char ngestures, nmouths, pad0, pad1;
-    unsigned short cell0, closeup_pal, closeup_back, big0;
+    unsigned short cell0;
     unsigned char mouth_of_viseme[9], pad2;
     unsigned short stage[2], stage_ticks;
 } RvSpeaker;
@@ -198,7 +201,7 @@ typedef struct {
 } RvCockpit;
 #pragma pack()
 
-#define RV_ROOM_SIZE 562
+#define RV_ROOM_SIZE 556
 #define RV_PERSON_SIZE 20
 #define RV_COCKPIT_SIZE 224
 

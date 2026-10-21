@@ -202,6 +202,26 @@
   }
  },
  "hotspots": {
+  "hatch": {
+   "rect": [
+    125,
+    112,
+    42,
+    81
+   ],
+   "does": "goto:briefing",
+   "label": "Briefing room"
+  },
+  "lounge": {
+   "rect": [
+    167,
+    362,
+    307,
+    38
+   ],
+   "does": "goto:lounge",
+   "label": "Crew lounge"
+  },
   "simulator": {
    "rect": [
     438,
@@ -209,7 +229,8 @@
     188,
     196
    ],
-   "does": "simulator"
+   "does": "simulator",
+   "label": "Simulator"
   },
   "chalkboard": {
    "rect": [
@@ -218,16 +239,8 @@
     103,
     61
    ],
-   "does": "scores"
-  },
-  "hatch": {
-   "rect": [
-    125,
-    112,
-    42,
-    81
-   ],
-   "does": "exit"
+   "does": "scores",
+   "label": "Tally board"
   }
  },
  "boards": {
@@ -243,5 +256,16 @@
    78,
    46
   ]
+ },
+ "zoom": {
+  "chalkboard": {
+   "file": "zoom-chalkboard.png",
+   "board": [
+    64,
+    56,
+    511,
+    282
+   ]
+  }
  }
 }

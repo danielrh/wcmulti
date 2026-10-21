@@ -93,8 +93,11 @@ Tally's frames:
 - **Talking:** her mouth follows `lipsync.py`, its nine shapes folded onto
   her three (`mouth_of_viseme`). Her gesture changes with each sentence.
   place.json carries each line as `[gesture, mouth, ms]` steps.
-- **Close-up:** a click on her draws the same cells large over a blurred,
-  enlarged crop of the stage.
+- **Close-up:** a click on her opens her talking face, like every pilot's
+  (her portrait's nine mouths and blinks, over the room blurred), and the
+  briefing goes on there. The sheet's cells drawn large twitched from one
+  gesture to the next, so the game no longer packs them (the user's call,
+  2026-10-21); the tool still makes them (closeup.png) for the preview.
 - **Not used:** the pack's GIF of her talking. Its crossfades won't survive
   256 colours.
 
@@ -112,7 +115,7 @@ rectangles.
 
 | room | hotspots |
 |---|---|
-| bar | simulator, chalkboard (scores), hatch (exit) |
+| bar | simulator, chalkboard (the tally board up close), hatch (exit) |
 | lounge | hatch (exit), bunks (to the quarters) |
 | quarters | bunk (save and load), locker, desk (log), door (exit) |
 | locker | medals, letters, photos, helmet (kills), back (exit) |
@@ -120,8 +123,13 @@ rectangles.
 
 **Boards** are rectangles the engine writes or draws on:
 
-- **bar:** the chalkboard (high scores, splash count) and the simulator's
-  screen;
+- **bar:** the chalkboard and the simulator's screen. From across the
+  room the board shows only chalk scribbles (a heading, the top four's
+  names, their tally marks), since printed text looked out of place on it;
+  a click shows it **up close** (`zoom` in data/places.json: a 16:10 crop
+  of the plate around the board, scaled to the screen with its own
+  palette), every pilot in a chalk hand (Caveat, SIL OFL) with tally marks
+  and the count;
 - **briefing:** the big screen (the mission map);
 - **locker:** the medal case.
 
@@ -138,6 +146,8 @@ Everything is in screen pixels.
   atlas).
 - **stages:** each pose's sprite and corner.
 - **hotspots** and **boards**.
+- **zoom:** a board up close: its picture (zoom-BOARD.png) and where the
+  board's rectangle lands in it.
 
 ## The launch deck
 

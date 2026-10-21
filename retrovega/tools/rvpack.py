@@ -50,13 +50,14 @@ sys.path.insert(0, HERE)
 import cockpits  # noqa: E402
 import places  # noqa: E402
 
-VERSION = 1
+VERSION = 2
 SCREEN = (640, 400)
 ROOMS = ['bar', 'lounge', 'briefing', 'quarters', 'locker', 'deck']
 FACE = 352                      # close-up face size (the 256 px faces scaled 1.375)
 # Orbitron (SIL OFL 1.1, art/fonts/), the user's pick for the futuristic look:
 # bold for body text, black for titles.  (file, pixels, weight)
 FONT_FILES = {'body': ('Orbitron.ttf', 13, 700), 'title': ('Orbitron.ttf', 22, 900)}
+CHALK_FONT = ('Caveat.ttf', 30, 700)     # the tally board's hand (SIL OFL), loaded only while it shows
 FONT_DIR = os.path.join(ROOT, 'art', 'fonts')
 
 UI = [(0, 0, 0), (28, 28, 30), (60, 60, 64), (100, 100, 104), (140, 140, 144), (180, 180, 184),
@@ -313,6 +314,19 @@ def closeup_mix(colours):
     return out
 
 
+SPEAKER_FMT = '<4BH9BBHHH'
+
+
+def pack_zoom(pack, place, d):
+    """The bar's chalkboard up close: its own palette (UI + 240) with text
+    tables over every colour, the picture, where the slate is."""
+    z = place['zoom']['chalkboard']
+    im = Image.open(os.path.join(d, z['file'])).convert('RGB')
+    pal = Palette(UI + make_palette([im], 240, 16))
+    return (add_palette(pack, 'pal_chalk', pal, list(range(256))),
+            add_image(pack, 'chalk_board', im, pal, allowed=list(range(16, 256))), z['board'])
+
+
 def pack_briefing(pack, rec, pal, place, d):
     s = place['speaker']
     atlas = Image.open(os.path.join(d, s['atlas']))
@@ -328,21 +342,10 @@ def pack_briefing(pack, rec, pal, place, d):
         if st:
             stages.append(add_sprite(pack, 'crowd_' + name, Image.open(os.path.join(d, st['file'])), pal,
                                      st['x'], st['y']))
-    c = s['closeup']
-    cback = Image.open(os.path.join(d, c['back']))
-    big = Image.open(os.path.join(d, c['atlas']))
-    cw, ch = c['size']
-    bigcells = [big.crop(((k % c['columns']) * cw, (k // c['columns']) * ch,
-                          (k % c['columns'] + 1) * cw, (k // c['columns'] + 1) * ch)) for k in range(len(cells))]
-    cpal = Palette(UI + make_palette([cback], 48, 16) + make_palette(bigcells, 192, 64))
-    cpal_i = pack.add('pal_xoclose', 'PAL', vga(cpal.colours) + mix_tables(cpal.colours, list(range(64))))
-    cback_i = add_image(pack, 'xoclose_back', cback, cpal, allowed=list(range(64)))
-    big0 = None
-    for k, im in enumerate(bigcells):
-        i = add_sprite(pack, 'xo_big%d' % k, im, cpal, max(0, c['x']), c['y'], allowed=[0] + list(range(64, 256)))
-        big0 = i if big0 is None else big0
+    # (her close-up is her talking face, as everyone's is: the sheet's large
+    # gestures twitched at that size - the user's call, 2026-10-21)
     mov = s['mouth_of_viseme']
-    return struct.pack('<4BHHHH9BBHHH', len(s['gestures']), s['columns'], 0, 0, cells[0], cpal_i, cback_i, big0,
+    return struct.pack(SPEAKER_FMT, len(s['gestures']), s['columns'], 0, 0, cells[0],
                        *mov, 0, stages[0] if stages else 0xFFFF, stages[1] if len(stages) > 1 else 0xFFFF,
                        place['stages']['ms'] // 55 or 1)
 
@@ -541,7 +544,10 @@ def pack_people(pack, keys):
 
 # --- font and pointer ------------------------------------------------------------
 
-def pack_font(pack, name, file, px, weight):
+def pack_font(pack, name, file, px, weight, grain=0.0, packed=False):
+    """95 glyphs at 2 bits a pixel, a byte each or (packed: the asset's w is 2)
+    four to a byte, the first in the low bits; grain knocks that share of the
+    inked pixels down a level, the same way every build: chalk."""
     font = ImageFont.truetype(os.path.join(FONT_DIR, file), px)
     font.set_variation_by_axes([weight])
     ascent, descent = font.getmetrics()
@@ -550,21 +556,28 @@ def pack_font(pack, name, file, px, weight):
     for ch in range(32, 127):
         c = chr(ch)
         adv = int(round(font.getlength(c)))
-        w = max(1, adv + 2)
+        w = max(1, adv + 2, font.getbbox(c)[2] + 1)     # (a hand's strokes run on into the next letter)
         im = Image.new('L', (w, height), 0)
         ImageDraw.Draw(im).text((0, 0), c, font=font, fill=255)
         a = np.asarray(im)
         cov = np.clip((a.astype(np.int32) + 32) // 72, 0, 3).astype(np.uint8)
+        if grain:
+            knock = np.random.default_rng(ch).random(cov.shape) < grain
+            cov = np.where(knock & (cov > 0), cov - 1, cov).astype(np.uint8)
         cols = np.nonzero(cov.any(axis=0))[0]
         if len(cols):
             cov = cov[:, :cols[-1] + 1]
         else:
             cov = cov[:, :1] * 0
         table.append(struct.pack('<HBB', at, cov.shape[1], adv))
-        glyphs.append(bytes(cov.reshape(-1)))
-        at += cov.size
+        flat = cov.reshape(-1)
+        if packed:
+            flat = np.concatenate([flat, np.zeros(-len(flat) % 4, np.uint8)]).reshape(-1, 4)
+            flat = flat[:, 0] | flat[:, 1] << 2 | flat[:, 2] << 4 | flat[:, 3] << 6
+        glyphs.append(bytes(flat.astype(np.uint8)))
+        at += len(glyphs[-1])
     payload = struct.pack('<BBBB', height, ascent, 32, 95) + b''.join(table) + b''.join(glyphs)
-    return pack.add(name, 'FONT', payload, 0, height)
+    return pack.add(name, 'FONT', payload, 2 if packed else 0, height)
 
 
 def pack_pointers(pack, pal):
@@ -607,13 +620,16 @@ def main():
     ui_i = add_palette(pack, 'pal_ui', ui_pal, list(range(16)))
     body = pack_font(pack, 'font_body', *FONT_FILES['body'])
     title = pack_font(pack, 'font_title', *FONT_FILES['title'])
+    chalk = pack_font(pack, 'font_chalk', *CHALK_FONT, grain=0.3, packed=True)
+    chalk_pal = chalk_back = 0xFFFF
+    slate = [0, 0, 0, 0]
     arrow, door = pack_pointers(pack, ui_pal)
     rooms = []
     for key in ROOMS:
         d = os.path.join(ROOT, 'art', 'places', key)
         place = json.load(open(os.path.join(d, 'place.json')))
         cfg = table[key]
-        speaker = b'\0' * struct.calcsize('<4BHHHH9BBHHH')
+        speaker = b'\0' * struct.calcsize(SPEAKER_FMT)
         deck = b'\0' * (struct.calcsize('<BBH3H3B3B3H4h') + 4 * LIMITS['DECK_SHIPS'])
         if key == 'deck':
             rec, deck = pack_deck(pack, place, d, ships_csv)
@@ -623,6 +639,8 @@ def main():
                        closeup_part=0xFFFF, closeup_back=0xFFFF)
         else:
             rec, pal = pack_room(pack, key, people_idx, cfg, place, d)
+            if place.get('zoom', {}).get('chalkboard'):
+                chalk_pal, chalk_back, slate = pack_zoom(pack, place, d)
             if key == 'briefing':
                 speaker = pack_briefing(pack, rec, pal, place, d)
         boards = b''
@@ -640,7 +658,7 @@ def main():
     cockpits_recs, previews = pack_cockpits(pack, ships_csv)
     preview_cockpits(previews, os.path.join(ROOT, 'docs', 'cockpits-packed.png'))
     # lay out: header, directory, rooms, people, cockpits, payloads
-    hdr_fmt = '<8sHHLHLHLHHHHHHHHLH10s'
+    hdr_fmt = '<8sHHLHLHLHHHHHHHHLHHHH4h10s'
     hsize = struct.calcsize(hdr_fmt)
     dir_at = hsize
     dsize = 40
@@ -657,7 +675,7 @@ def main():
             blobs.append(b'\0')
     head = struct.pack(hdr_fmt, b'RVDAT', VERSION, len(pack.assets), dir_at, len(rooms), rooms_at, len(persons),
                        people_at, len(rooms[0]), len(persons[0]), body, title, arrow, door, ui_i,
-                       len(cockpits_recs), cockpits_at, len(cockpits_recs[0]), b'')
+                       len(cockpits_recs), cockpits_at, len(cockpits_recs[0]), chalk, chalk_pal, chalk_back, *slate, b'')
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, 'wb') as f:
         f.write(head + b''.join(directory) + b''.join(rooms) + b''.join(persons) + b''.join(cockpits_recs)
@@ -707,6 +725,9 @@ def header(room_size, person_size, cockpit_size):
     unsigned short ncockpits;
     unsigned long cockpits_at;
     unsigned short cockpit_size;
+    unsigned short font_chalk;          /* the tally board's hand (packed: 4 pixels a byte), loaded while it shows */
+    unsigned short chalk_pal, chalk_back;   /* the bar's chalkboard up close: its palette, the picture */
+    short chalk_slate[4];               /* the slate in that picture: x, y, w, h */
     unsigned char reserved[10];
 } RvDatHeader;
 typedef struct {
@@ -733,7 +754,7 @@ typedef struct {
 } RvActor;
 typedef struct {
     unsigned char ngestures, nmouths, pad0, pad1;
-    unsigned short cell0, closeup_pal, closeup_back, big0;
+    unsigned short cell0;
     unsigned char mouth_of_viseme[9], pad2;
     unsigned short stage[2], stage_ticks;
 } RvSpeaker;

@@ -188,6 +188,14 @@
         "label": "Tally board"
       }
     },
+    "zoom": {
+      "chalkboard": [
+        421,
+        288,
+        693,
+        458
+      ]
+    },
     "boards": {
       "chalkboard": [
         448,
