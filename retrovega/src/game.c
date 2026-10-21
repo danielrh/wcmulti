@@ -553,6 +553,8 @@ static void launch(void)
 /* --- the bunks --- */
 
 static int g_bunk_sel = -1;
+int g_can_quit = 1;                     /* RV.EXE /noquit clears it: no Q in the bunk menu (the page) */
+static int g_quit_asked;
 static RvSave __far g_bunk_info[BUNKS];
 static int g_bunk_full[BUNKS];
 static char g_name[24];
@@ -600,8 +602,9 @@ static void bunk_overlay(int y0, int y1)
     }
     if (g_mode != MODE_NAME)
         talk_speed_row(y0, y1);
-    gfx_text(FONT_BODY, 110, 318, g_bunk_sel < 0 ? "pick a bunk; Esc to close"
-             : g_mode == MODE_NAME ? "name it, then Enter" : "S save here    L load    Esc back", RV_TEXT_AMBER, y0, y1);
+    gfx_text(FONT_BODY, 110, 318, g_bunk_sel < 0 ? (g_can_quit ? "pick a bunk; Esc to close; Q quits to DOS" : "pick a bunk; Esc to close")
+             : g_mode == MODE_NAME ? "name it, then Enter"
+             : g_can_quit ? "S save here    L load    Q quit    Esc back" : "S save here    L load    Esc back", RV_TEXT_AMBER, y0, y1);
     if (g_mode == MODE_NAME) {
         char s[40];
         sprintf(s, "name: %s_", g_name);
@@ -634,6 +637,10 @@ static void bunk_input(const Input *in)
     if (in->key == KEY_ESC) {
         if (g_bunk_sel >= 0) g_bunk_sel = -1; else close_bunks();
         vid_dirty(30, 350);
+        return;
+    }
+    if (g_can_quit && in->key == KEY_CHAR && (in->ch == 'q' || in->ch == 'Q') && g_mode != MODE_NAME) {
+        g_quit_asked = 1;               /* the one way out of a DOS install: from the bunk, deliberately */
         return;
     }
     /* the talk speed: T for the next, or a click on one */
@@ -857,10 +864,11 @@ int game_run(void)
         music_poll();
         if (in.key == KEY_F12)
             shot_save("RVSHOT");
-        if (in.key == KEY_ESC && (in.ch == 'q' || g_mode == MODE_ROOM || g_mode == MODE_ENDING)) {
-            if (g_mode == MODE_ROOM || g_mode == MODE_ENDING || script_active())
-                break;
-        }
+        /* Esc never quits (the user's rule, 2026-10-20: it is the browser's key, for leaving full screen);
+         * a test script's quit, and the bunk menu's Q where RV.EXE runs without /noquit (a DOS install:
+         * the page passes it, where the player would just reload), are the only ways out */
+        if ((in.key == KEY_ESC && in.ch == 'q' && script_active()) || g_quit_asked)
+            break;
         scene_update(&in, &act);
         switch (g_mode) {
         case MODE_ROOM:

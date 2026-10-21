@@ -233,6 +233,17 @@ mission lands in the briefing room for the debrief.
 
 ## Input: mouse and keys together
 
+**Escape never quits** (the user's rule, 2026-10-20: "that key is for
+interacting with the browser" — leaving full screen must not end the
+game). Esc closes what is open (a close-up, a dialogue, a briefing page)
+and does nothing else; in flight the player's Esc is ignored (a test
+script's still ends the flight: `script_active()`). The game is not meant
+to be quit from the browser at all — the player reloads the page — so the
+page runs `RV.EXE /noquit`; a DOS install, run without it, has Q in the
+bunk menu ("Q quits to DOS"), the one deliberate way out. A test script's
+`quit` works everywhere. If a flight hotkey is ever wanted, the user named
+Alt-X, "so it's rare".
+
 - **Mouse:** the pointer moves freely; anything under it lights up.
 - **Arrow keys:** they steer the pointer like a mouse, slowly at first
   (150 pixels a second) and faster the longer they are held (up to 700),
@@ -466,6 +477,18 @@ by XMS moves that cost the emulated CPU a few instructions. On a real
 bus); in DOSBox the sprites are.
 
 ### The benchmark
+
+Off by default since 2026-10-20 (`g_bench_wanted` 0): the copies tiled the
+sky in the player's first flight ("many Aera fighters like a benchmark").
+`RV.EXE /bench -1` is the adapting measurement the tests quote (tests
+pass it to tests/flight.txt), `/bench N` a fixed count. Without it the
+left MFD shows the controls instead of the readout — ARROWS TURN, Q E
+ROLL, + - F S SPD — which is how the player learns to roll. Turning it off
+exposed that nothing else capped the frame rate: the simulation is per
+frame (a kps is 12.8 units a frame), and a bare flight ran at ~95 fps
+natively, three times too fast; `flight_frame` now waits out the frame to
+FPS_WANT (30) on the 240 Hz clock (the adapting benchmark runs uncapped,
+since it measures the rate).
 
 `tests/run.sh tests/flight.txt` flies the first mission for 20 seconds
 (F01START..F05DEBR.BMP): the biggest band view of the first enemy type

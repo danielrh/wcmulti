@@ -18,7 +18,7 @@
 #include "ships.h"
 
 char g_people_names[16][28];
-extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky;
+extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -77,6 +77,8 @@ int main(int argc, char **argv)
             g_zoom = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/sky"))              /* tests: three ship views painted on the sky, to roll and turn round */
             g_sky = 1;
+        else if (!strcmp(argv[i], "/noquit"))           /* the page: no Q in the bunk menu (reload is the way out) */
+            g_can_quit = 0;
         else if (!strcmp(argv[i], "/nomusic"))
             music_device(MUSIC_OFF);
     }

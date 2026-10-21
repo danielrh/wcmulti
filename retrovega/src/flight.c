@@ -26,7 +26,8 @@
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
-int g_bench_wanted = -1;                /* RV.EXE /bench N: that many copies, no adapting; 0 none; -1 adapt */
+int g_bench_wanted = 0;                 /* RV.EXE /bench N: that many copies, no adapting; 0 none (the default: the
+                                           copies tiled the sky for the user); -1 adapt, the measurement */
 int g_record = 0;                       /* RV.EXE /record N: a screenshot (Rnnnnn.BMP) every N frames of flight */
 int g_capital = 0;                      /* RV.EXE /capital: the carrier in the flight (a test aid) */
 int g_sky = 0;                          /* RV.EXE /sky: three ship views painted on the sky, to roll and turn round (a test aid) */
@@ -543,9 +544,15 @@ static void gather(void)
     }
     g_st.ncontacts = n;
     (void)c;
-    sprintf(g_mfd[0][0], "SPRITES %d", g_nbench);
-    sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
-    sprintf(g_mfd[0][2], "%dx%d VIEW", g_bench_w, g_bench_h);
+    if (g_nbench) {                     /* the benchmark's readout; else the controls (the user asked how to roll) */
+        sprintf(g_mfd[0][0], "SPRITES %d", g_nbench);
+        sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
+        sprintf(g_mfd[0][2], "%dx%d VIEW", g_bench_w, g_bench_h);
+    } else {
+        strcpy(g_mfd[0][0], "ARROWS TURN");
+        strcpy(g_mfd[0][1], "Q E ROLL");
+        strcpy(g_mfd[0][2], "+ - F S SPD");
+    }
     sprintf(g_mfd[0][3], "T-%lu", (FLIGHT_TICKS - (clock240() - g_t0) + 239) / 240);
     g_st.mfd_text[0][0] = g_mfd[0][0];
     g_st.mfd_text[0][1] = g_mfd[0][1];
@@ -738,8 +745,8 @@ unsigned short __far __cdecl flight_keys(void)
     in_poll(&in);
     if (in.key == KEY_F12)
         shot_save("RVSHOT");
-    if (in.key == KEY_ESC)
-        return 5;                       /* exit: the flight is over */
+    if (in.key == KEY_ESC && script_active())
+        return 5;                       /* a test script ends the flight; the player's Esc is the browser's key, ignored */
     if (in.key == KEY_CHAR) {
         if (in.ch == '+' || in.ch == '=') setSpeed[0] += g_st.max_speed / 10;
         if (in.ch == '-') setSpeed[0] = setSpeed[0] > (unsigned long)g_st.max_speed / 10 ? setSpeed[0] - g_st.max_speed / 10 : 0;
@@ -827,6 +834,12 @@ void __far __cdecl flight_frame(void)
     rvFrameDone();
     if (now - g_t0 >= FLIGHT_TICKS)
         missionStatus = 1;              /* landed */
+    /* the frame rate capped at FPS_WANT: the simulation is per frame (a kps is 12.8 units a frame), so
+     * without the cap a bare flight ran three times too fast natively (the adapting benchmark had been
+     * holding it at 30 by loading it; off by default now) */
+    if (g_bench_wanted >= 0)            /* (the adapting benchmark measures the uncapped rate) */
+        while (clock240() - now < 240 / FPS_WANT)
+            ;
 }
 
 void __far __cdecl flight_music(void)

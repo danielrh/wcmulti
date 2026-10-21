@@ -229,7 +229,7 @@ export const GAMES = [
   // universe, open data, built into the page.  It wants 32 MB of XMS, VESA
   // 640x400 and the Sound Blaster's OPL3.  Its saved games are the eight
   // bunks.  No flight yet: in a room everyone walks the carrier on their own.
-  { id: "rv", tag: "RV", title: "RetroVega", detect: ["RV.EXE"], run: "rv", multiplayer: true,
+  { id: "rv", tag: "RV", title: "RetroVega", detect: ["RV.EXE"], run: "rv /noquit", multiplayer: true,
     builtin: "retrovega.tar.gz", noFlight: true,
     build: { rvhook: true, off: 0x0400, text: "Loading RETROVEGA" },
     saves: ["BUNK01.SAV", "BUNK02.SAV", "BUNK03.SAV", "BUNK04.SAV", "BUNK05.SAV", "BUNK06.SAV", "BUNK07.SAV", "BUNK08.SAV",
