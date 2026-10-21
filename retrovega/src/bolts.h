@@ -22,7 +22,8 @@ LzBolt __far *bolts_pool(void);
 void bolts_set_count(int n);            /* how many of the pool fly */
 int bolts_count(void);
 
-void bolts_move(long k);                /* every bolt flies k positions per sixteenth of a km of its half axis */
+void bolts_move(long k);
+void bolts_set_shape(int shape);        /* the near bolts' shape: LZ_SHAPE_CAPSULE (the default), _AXIS, _RECT, _HEX */                /* every bolt flies k positions per sixteenth of a km of its half axis */
 
 /* once a frame: through the camera (its position and basis), the view's
  * centre and focal length; the bolts may show in rows y0 .. y1-1.  The line

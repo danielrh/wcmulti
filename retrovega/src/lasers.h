@@ -21,18 +21,6 @@
 #define LZ_FAR __far
 #else
 #define LZ_FAR
-#ifdef __WATCOMC__
-/* lasers.asm: the same, fast */
-int __far __cdecl rv_bolts_place(const LzBolt __far *b, int n, const LzCam __far *cam, LzLine __far *lines,
-                                 int maxlines, LzFat __far *fats, int maxfats, int __far *nfats);
-void __far __cdecl rv_lines_draw(const LzLine __far *l, int n, int colour, unsigned char __far *band, int band_y0,
-                                 int y0, int y1, const short __far *ext, int ext_y0);
-void __far __cdecl rv_pass_draw(const LzPass __far *p, unsigned char __far *band, int band_y0, int y0, int y1,
-                                const short __far *ext, int ext_y0, const unsigned char __far *roots);
-void __far __cdecl rv_bolts_move(LzBolt __far *b, int n, long k);
-int __far __cdecl rv_fat_setup(const LzFat __far *f, const LzStyle __far *st, LzPass __far *pass, LzLine __far *core,
-                               int __far *core_line);
-#endif
 
 #endif
 
@@ -86,6 +74,23 @@ typedef struct {
     short r, pad;                       /* 36: the radius x16 */
 } LzPass;
 
+/* a convex polygon on screen (40 bytes; the asm reads this layout): n
+ * vertices x16 in order round it, rows top .. bot-1 (those whose centres it
+ * covers), one colour.  The simpler bolts (lz_slab_setup) are two of these,
+ * a red outline and a white middle painted over it, or lines. */
+#define LZ_POLY_MAX 8
+typedef struct {
+    short n, colour;                    /* 0 */
+    short top, bot;                     /* 4 */
+    short x[LZ_POLY_MAX], y[LZ_POLY_MAX];   /* 8, 24 */
+} LzPoly;
+
+/* the shapes of the near bolts */
+#define LZ_SHAPE_CAPSULE 0              /* the nested capsules (lz_fat_setup) */
+#define LZ_SHAPE_AXIS 1                 /* ends level for a steep bolt, upright for a shallow one: no root */
+#define LZ_SHAPE_RECT 2                 /* the rectangle square to its flight */
+#define LZ_SHAPE_HEX 3                  /* the rectangle with pointed ends: an angular pill */
+
 /* the look */
 typedef struct {
     unsigned char line, rim, body, core;   /* palette indices: far lines; the fat bolt's rim, body, core */
@@ -115,6 +120,13 @@ int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, 
 /* every bolt flies k positions for each sixteenth of a km of its half axis (rv_bolts_move's reference) */
 void lz_move(LzBolt LZ_FAR *b, int n, long k);
 
+/* a fat bolt as polygons (LZ_SHAPE_AXIS, _RECT, _HEX): wider than 3 px, the
+ * red outline and the white middle (half as wide) to paint over it, returns 2;
+ * narrower, three lines side by side (red, white, red) in lines[], returns 0
+ * with *nlines 3 */
+int lz_slab_setup(const LzFat LZ_FAR *f, int shape, const LzStyle *st, LzPoly LZ_FAR *poly, LzLine LZ_FAR *lines,
+                  int *nlines);
+
 /* a line through two points x16 (a fat bolt's core) */
 void lz_line_of(int ax, int ay, int bx, int by, LzLine LZ_FAR *out);
 
@@ -123,6 +135,8 @@ void lz_line_of(int ax, int ay, int bx, int by, LzLine LZ_FAR *out);
  * (k = y - ext_y0, rows ext_y0 .. ext_y0+ext_rows-1; NULL: the whole width) */
 void lz_lines_draw(const LzLine LZ_FAR *l, int n, unsigned char colour, unsigned char LZ_FAR *band, int band_y0,
                    int y0, int y1, const short LZ_FAR *ext, int ext_y0, int ext_rows);
+void lz_poly_draw(const LzPoly LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1,
+                  const short LZ_FAR *ext, int ext_y0, int ext_rows);
 void lz_pass_draw(const LzPass LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1, const short LZ_FAR *ext,
                   int ext_y0, int ext_rows);
 
@@ -135,6 +149,10 @@ void __far __cdecl rv_lines_draw(const LzLine __far *l, int n, int colour, unsig
 void __far __cdecl rv_pass_draw(const LzPass __far *p, unsigned char __far *band, int band_y0, int y0, int y1,
                                 const short __far *ext, int ext_y0, const unsigned char __far *roots);
 void __far __cdecl rv_bolts_move(LzBolt __far *b, int n, long k);
+int __far __cdecl rv_slab_setup(const LzFat __far *f, int shape, const LzStyle __far *st, LzPoly __far *poly,
+                                LzLine __far *lines, int __far *nlines);
+void __far __cdecl rv_poly_draw(const LzPoly __far *p, unsigned char __far *band, int band_y0, int y0, int y1,
+                                const short __far *ext, int ext_y0);
 int __far __cdecl rv_fat_setup(const LzFat __far *f, const LzStyle __far *st, LzPass __far *pass, LzLine __far *core,
                                int __far *core_line);
 #endif

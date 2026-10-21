@@ -365,3 +365,137 @@ void lz_pass_draw(const LzPass LZ_FAR *p, unsigned char LZ_FAR *band, int band_y
             span(band + (unsigned)(y - band_y0) * 640, xs, xe, y, (unsigned char)p->colour, ext, ext_y0);
     }
 }
+
+/* --- the simpler bolts: polygons --- */
+
+static void poly_rows(LzPoly LZ_FAR *p)
+{
+    int i, lo = p->y[0], hi = p->y[0];
+    for (i = 1; i < p->n; i++) {
+        if (p->y[i] < lo) lo = p->y[i];
+        if (p->y[i] > hi) hi = p->y[i];
+    }
+    p->top = (short)((lo + 7) >> 4);    /* the first row whose centre is at or below the top */
+    p->bot = (short)(((hi - 8) >> 4) + 1);
+}
+
+static void poly4(LzPoly LZ_FAR *p, int colour, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3)
+{
+    p->n = 4;
+    p->colour = (short)colour;
+    p->x[0] = (short)x0; p->y[0] = (short)y0;
+    p->x[1] = (short)x1; p->y[1] = (short)y1;
+    p->x[2] = (short)x2; p->y[2] = (short)y2;
+    p->x[3] = (short)x3; p->y[3] = (short)y3;
+    poly_rows(p);
+}
+
+/* the bolt's outline at half width w (x16) */
+static void slab_of(const LzFat LZ_FAR *f, int shape, int w, int colour, LzPoly LZ_FAR *p)
+{
+    int ax = f->ax, ay = f->ay, bx = f->bx, by = f->by;
+    long dx = (long)bx - ax, dy = (long)by - ay, adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
+    long len = adx > ady ? adx + ady * 3 / 8 : ady + adx * 3 / 8;   /* the length within 7 %: no root */
+    if (shape == LZ_SHAPE_AXIS || len < 16) {
+        /* ends level for a steep bolt, upright for a shallow one, each pushed out by w along the bolt so a
+         * bolt end on is a square 2w across */
+        if (ady >= adx)
+            poly4(p, colour, ax - w, ay - w, ax + w, ay - w, bx + w, by + w, bx - w, by + w);
+        else if (dx >= 0)
+            poly4(p, colour, ax - w, ay - w, bx + w, by - w, bx + w, by + w, ax - w, ay + w);
+        else
+            poly4(p, colour, ax + w, ay - w, ax + w, ay + w, bx - w, by + w, bx - w, by - w);
+        return;
+    }
+    {
+        int nx = (int)(-dy * w / len), ny = (int)(dx * w / len);   /* w across the bolt */
+        if (shape == LZ_SHAPE_RECT) {
+            poly4(p, colour, ax + nx, ay + ny, bx + nx, by + ny, bx - nx, by - ny, ax - nx, ay - ny);
+        } else {
+            int tx = (int)(dx * w / len), ty = (int)(dy * w / len);   /* w along it: the points */
+            p->n = 6;
+            p->colour = (short)colour;
+            p->x[0] = (short)(ax - tx); p->y[0] = (short)(ay - ty);
+            p->x[1] = (short)(ax + nx); p->y[1] = (short)(ay + ny);
+            p->x[2] = (short)(bx + nx); p->y[2] = (short)(by + ny);
+            p->x[3] = (short)(bx + tx); p->y[3] = (short)(by + ty);
+            p->x[4] = (short)(bx - nx); p->y[4] = (short)(by - ny);
+            p->x[5] = (short)(ax - nx); p->y[5] = (short)(ay - ny);
+            poly_rows(p);
+        }
+    }
+}
+
+int lz_slab_setup(const LzFat LZ_FAR *f, int shape, const LzStyle *st, LzPoly LZ_FAR *poly, LzLine LZ_FAR *lines,
+                  int *nlines)
+{
+    if (f->r > 24) {                    /* wider than 3 px: the outline, and the middle half as wide */
+        slab_of(f, shape, f->r, st->body, &poly[0]);
+        slab_of(f, shape, f->r / 2, st->core, &poly[1]);
+        *nlines = 0;
+        return 2;
+    }
+    {
+        /* three lines a pixel apart across the bolt: red, white (the middle, lines[1]), red */
+        long dx = (long)f->bx - f->ax, dy = (long)f->by - f->ay;
+        int ox = 0, oy = 0;
+        if ((dy < 0 ? -dy : dy) >= (dx < 0 ? -dx : dx))
+            ox = 16;
+        else
+            oy = 16;
+        lz_line_of(f->ax, f->ay, f->bx, f->by, &lines[1]);
+        lz_line_of(f->ax - ox, f->ay - oy, f->bx - ox, f->by - oy, &lines[0]);
+        lz_line_of(f->ax + ox, f->ay + oy, f->bx + ox, f->by + oy, &lines[2]);
+        *nlines = 3;
+        return 0;
+    }
+}
+
+/* a chain of edges from vertex *idx going way dir: on to the edge that holds the row centre yc (its lower
+ * end below yc), its x there (16.16 px) and per row; 0 when the chain has turned back up (past the bottom) */
+static int chain_at(const LzPoly LZ_FAR *p, int *idx, int dir, int yc, long *x, long *m, int *yend)
+{
+    for (;;) {
+        int i = *idx, j = i + dir;
+        if (j == p->n) j = 0;
+        if (j < 0) j = p->n - 1;
+        if (p->y[j] < p->y[i])
+            return 0;
+        if (p->y[j] > yc) {
+            long dx = (long)p->x[j] - p->x[i], dy = (long)p->y[j] - p->y[i];
+            *m = (dx << 16) / dy;
+            *x = ((long)p->x[i] << 12) + muldiv(((long)yc - p->y[i]) * dx, 4096, dy);
+            *yend = p->y[j];
+            return 1;
+        }
+        *idx = j;
+    }
+}
+
+void lz_poly_draw(const LzPoly LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1,
+                  const short LZ_FAR *ext, int ext_y0, int ext_rows)
+{
+    int ys = p->top > y0 ? p->top : y0, ye = p->bot < y1 ? p->bot : y1, y, yc, t = 0, i, ia, ib, ea, eb;
+    long xa, xb, ma, mb;
+    if (!clip_rows(&ys, &ye, ext_y0, ext_rows, ext))
+        return;
+    for (i = 1; i < p->n; i++)
+        if (p->y[i] < p->y[t])
+            t = i;
+    ia = ib = t;
+    yc = ys * 16 + 8;
+    if (!chain_at(p, &ia, 1, yc, &xa, &ma, &ea) || !chain_at(p, &ib, -1, yc, &xb, &mb, &eb))
+        return;
+    for (y = ys; y < ye; y++, yc += 16) {
+        long L = xa < xb ? xa : xb, R = xa < xb ? xb : xa;
+        int xs = (int)((L + 0x7FFF) >> 16), xe = (int)((R + 0x8000) >> 16);
+        if (xs < xe)
+            span(band + (unsigned)(y - band_y0) * 640, xs, xe, y, (unsigned char)p->colour, ext, ext_y0);
+        xa += ma;
+        xb += mb;
+        if (yc + 16 >= ea && !chain_at(p, &ia, 1, yc + 16, &xa, &ma, &ea))
+            break;
+        if (yc + 16 >= eb && !chain_at(p, &ib, -1, yc + 16, &xb, &mb, &eb))
+            break;
+    }
+}

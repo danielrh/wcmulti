@@ -172,6 +172,48 @@ int main(int argc, char **argv)
         CHECK(asym * 200 < drawn, "the mirror images agree but for under 0.5%% of pixels (%d of %d)", asym, drawn);
     }
 
+    /* the polygons against brute force: a pixel is drawn iff its centre is inside, but for those within a
+     * tenth of a pixel of an edge; every shape, random bolts */
+    {
+        int wrong = 0, edge = 0, total = 0, shape;
+        srand(13);
+        for (shape = LZ_SHAPE_AXIS; shape <= LZ_SHAPE_HEX; shape++)
+            for (k = 0; k < 1500; k++) {
+                int ax = 3200 + rand() % 3200, ay = 1600 + rand() % 3200, len = rand() % 600, ang = rand();
+                int bx = ax + (int)(len * cos(ang)), by = ay + (int)(len * sin(ang)), x, j, n;
+                LzFat fa;
+                LzPoly pl[2];
+                LzLine ln[3];
+                if (by < ay || (by == ay && bx < ax)) { int t = ax; ax = bx; bx = t; t = ay; ay = by; by = t; }
+                fa.ax = ax; fa.ay = ay; fa.bx = bx; fa.by = by; fa.r = 25 + rand() % 40;
+                n = lz_slab_setup(&fa, shape, &g_style, pl, ln, &j);
+                if (n != 2) { wrong++; continue; }
+                memset(g_band, 0, sizeof g_band);
+                lz_poly_draw(&pl[0], g_band, 0, 0, 400, 0, 0, 0);
+                for (y = pl[0].top - 2; y < pl[0].bot + 2; y++)
+                    for (x = 0; x < 640; x++) {
+                        double px = x + 0.5, py = y + 0.5, dmin = 1e9;
+                        int i, pos = 0, neg = 0, in = g_band[y * 640 + x] != 0;
+                        for (i = 0; i < pl[0].n; i++) {
+                            double x0 = pl[0].x[i] / 16.0, y0 = pl[0].y[i] / 16.0;
+                            double x1 = pl[0].x[(i + 1) % pl[0].n] / 16.0, y1 = pl[0].y[(i + 1) % pl[0].n] / 16.0;
+                            double l = hypot(x1 - x0, y1 - y0), d;
+                            if (l < 1e-9) continue;
+                            d = ((x1 - x0) * (py - y0) - (y1 - y0) * (px - x0)) / l;
+                            if (d > 0) pos++; else if (d < 0) neg++;
+                            if (fabs(d) < dmin) dmin = fabs(d);
+                        }
+                        if (!in && dmin > 30) continue;
+                        total++;
+                        if (dmin < 0.1) { edge++; continue; }
+                        if (in != (pos == 0 || neg == 0))
+                            wrong++;
+                    }
+            }
+        CHECK(wrong == 0, "4500 polygons (three shapes): no pixel off the brute force (%d wrong, %d at an edge, of %d)",
+              wrong, edge, total);
+    }
+
     /* the preview: sizes along, angles down; then a field of bolts in perspective */
     if (argc > 1) {
         memset(g_band, 0, sizeof g_band);
@@ -218,6 +260,37 @@ int main(int argc, char **argv)
             printf("     the field: %d lines, %d fat\n", nl, nf);
         }
         write_ppm(argv[1], 640, 400);
+    }
+    if (argc > 2) {
+        /* the shapes: capsules, level/upright ends, rectangles, hexagons; a column each, radius growing down
+         * the column's pairs, angles across */
+        int shape, a;
+        memset(g_band, 0, sizeof g_band);
+        for (shape = 0; shape < 4; shape++)
+            for (k = 0; k < 6; k++) {         /* radius x16: 16, 24 (the lines), 32, 44, 54, 64 */
+                int rr = k == 0 ? 16 : k == 1 ? 24 : k == 2 ? 32 : k == 3 ? 44 : k == 4 ? 54 : 64;
+                for (a = 0; a < 4; a++) {
+                    double ang = a * M_PI / 7 + 0.05;
+                    int cx = 22 + shape * 160 + a * 38, cy = 34 + k * 62, half = rr * 4;
+                    LzFat fa;
+                    int ax = (int)(cx * 16 - half * cos(ang)), ay = (int)(cy * 16 - half * sin(ang));
+                    int bx = (int)(cx * 16 + half * cos(ang)), by = (int)(cy * 16 + half * sin(ang));
+                    if (by < ay || (by == ay && bx < ax)) { int t = ax; ax = bx; bx = t; t = ay; ay = by; by = t; }
+                    fa.ax = ax; fa.ay = ay; fa.bx = bx; fa.by = by; fa.r = rr;
+                    if (shape == 0) {
+                        draw_fat(&fa, 0, 400);
+                    } else {
+                        LzPoly pl[2];
+                        LzLine ln[3];
+                        int nl2, n = lz_slab_setup(&fa, shape, &g_style, pl, ln, &nl2), j;
+                        for (j = 0; j < n; j++)
+                            lz_poly_draw(&pl[j], g_band, 0, 0, 400, 0, 0, 0);
+                        for (j = 0; j < nl2; j++)
+                            lz_lines_draw(&ln[j], 1, j == 1 ? C_CORE : C_BODY, g_band, 0, 0, 400, 0, 0, 0);
+                    }
+                }
+            }
+        write_ppm(argv[2], 640, 400);
     }
     printf(fails ? "LZ FAILED (%d)\n" : "LZ OK\n", fails);
     return fails != 0;

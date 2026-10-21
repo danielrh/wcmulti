@@ -1018,3 +1018,507 @@ isqrt32:
 .next:  shr ebx,2
         jmp .loop
 .done:  ret
+
+; void rv_poly_draw(const LzPoly far *p, unsigned char far *band, int band_y0, int y0, int y1,
+;                   const short far *ext, int ext_y0)
+; lz_poly_draw: a convex polygon in one colour into the band, rows y0 .. y1-1
+; (cut by the caller to the opening's), each row the span between its two
+; chains of edges walked down from the top vertex, clipped to the row's
+; extent.  The vertices are read with 32-bit addressing ([esi+ecx*2]).
+%define QROW  [bp-2]
+%define QROWS [bp-4]
+%define QYC   [bp-6]                    ; the row's centre, x16
+%define QEXT  [bp-8]                    ; the row's extent (fs)
+%define QA    -20                       ; chain a's locals (di = QA): index, way, end, x, m
+%define QB    -36
+%define QAX   [bp-28]
+%define QAM   [bp-32]
+%define QAE   [bp-24]
+%define QBX   [bp-44]
+%define QBM   [bp-48]
+%define QBE   [bp-40]
+%define QDY   [bp-52]
+%define QDX   [bp-56]
+%define QFRAME 56
+%define CIDX [bp+di]
+%define CDIR [bp+di-2]
+%define CEY  [bp+di-4]
+%define CXX  [bp+di-8]
+%define CMM  [bp+di-12]
+        global _rv_poly_draw
+_rv_poly_draw:
+        push bp
+        mov bp,sp
+        sub sp,QFRAME
+        push si
+        push di
+        push ds
+        cld
+        lds si,[bp+6]
+        movzx esi,si
+        mov ax,[si+4]               ; ys = max(top, y0)
+        cmp ax,[bp+16]
+        jge .s
+        mov ax,[bp+16]
+.s:     mov cx,[si+6]               ; ye = min(bot, y1)
+        cmp cx,[bp+18]
+        jle .e
+        mov cx,[bp+18]
+.e:     sub cx,ax
+        jle .done
+        mov QROWS,cx
+        mov dx,ax
+        sub dx,[bp+14]
+        imul dx,dx,640
+        add dx,[bp+10]
+        mov QROW,dx
+        mov bx,ax
+        sub bx,[bp+24]
+        shl bx,2
+        add bx,[bp+20]
+        mov QEXT,bx
+        shl ax,4
+        add ax,8
+        mov QYC,ax
+        ; the top vertex (the first of the highest)
+        xor ebx,ebx
+        mov ecx,1
+.top:   cmp cx,[si]
+        jge .found
+        mov ax,[esi+ecx*2+24]
+        cmp ax,[esi+ebx*2+24]
+        jge .not
+        mov bx,cx
+.not:   inc cx
+        jmp .top
+.found: mov [bp+QA],bx
+        mov [bp+QB],bx
+        mov word [bp+QA-2],1
+        mov word [bp+QB-2],-1
+        mov di,QA
+        call chain_at
+        jc .done
+        mov di,QB
+        call chain_at
+        jc .done
+        mov es,[bp+12]
+        mov fs,[bp+22]
+.row:
+        mov eax,QAX
+        mov edx,QBX
+        cmp eax,edx
+        jle .ord
+        xchg eax,edx
+.ord:   add eax,0x7FFF
+        sar eax,16                  ; xs: the first pixel whose centre is at or right of the left edge
+        add edx,0x8000
+        sar edx,16                  ; xe: past the last whose centre is at or left of the right edge
+        mov bx,QEXT
+        cmp ax,[fs:bx]
+        jge .lo
+        mov ax,[fs:bx]
+.lo:    cmp dx,[fs:bx+2]
+        jle .hi
+        mov dx,[fs:bx+2]
+.hi:    sub dx,ax
+        jle .skip
+        mov di,QROW
+        add di,ax
+        mov cx,dx
+        mov al,[si+2]
+        rep stosb
+.skip:  add word QROW,640
+        add word QEXT,4
+        mov eax,QAM
+        add QAX,eax
+        mov eax,QBM
+        add QBX,eax
+        add word QYC,16
+        dec word QROWS
+        jz .done
+        mov ax,QYC
+        cmp ax,QAE
+        jl .b
+        mov di,QA
+        call chain_at
+        jc .done
+.b:     mov ax,QYC
+        cmp ax,QBE
+        jl .row
+        mov di,QB
+        call chain_at
+        jc .done
+        jmp .row
+.done:
+        pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
+
+; the chain whose locals are at bp+di on to the edge holding the row centre
+; QYC: its x there (16.16 px), per row, its lower end; CF when the chain has
+; turned back up (past the bottom).  ds:esi the polygon.  Uses eax ebx ecx edx.
+chain_at:
+.next:  movzx ebx,word CIDX         ; i
+        mov cx,bx
+        add cx,CDIR                 ; j = i + way, round the polygon
+        cmp cx,[si]
+        jl .lo
+        xor cx,cx
+.lo:    or cx,cx
+        jge .ok
+        mov cx,[si]
+        dec cx
+.ok:    movzx ecx,cx
+        mov ax,[esi+ecx*2+24]       ; y[j]
+        cmp ax,[esi+ebx*2+24]
+        jl .up
+        cmp ax,QYC
+        jg .edge
+        mov CIDX,cx                 ; the edge ends at or above the row: the next
+        jmp .next
+.up:    stc
+        ret
+.edge:  mov CEY,ax
+        movsx eax,ax
+        movsx edx,word [esi+ebx*2+24]
+        sub eax,edx
+        mov QDY,eax                 ; dy
+        movsx eax,word [esi+ecx*2+8]
+        movsx edx,word [esi+ebx*2+8]
+        sub eax,edx
+        mov QDX,eax                 ; dx
+        shl eax,16
+        cdq
+        idiv dword QDY
+        mov CMM,eax                 ; m = dx / dy, 16.16 a row
+        movsx eax,word QYC
+        movsx edx,word [esi+ebx*2+24]
+        sub eax,edx
+        imul eax,QDX                ; (yc - y[i]) dx
+        mov edx,4096
+        imul edx
+        idiv dword QDY
+        movsx edx,word [esi+ebx*2+8]
+        shl edx,12
+        add eax,edx
+        mov CXX,eax                 ; x at the row: x[i] + (yc - y[i]) dx / dy
+        clc
+        ret
+
+; int rv_slab_setup(const LzFat far *f, int shape, const LzStyle far *st, LzPoly far *poly, LzLine far *lines,
+;                   int far *nlines)
+; lz_slab_setup: the outline and the white middle (or three lines) of a fat
+; bolt in shape LZ_SHAPE_AXIS (1), _RECT (2) or _HEX (3), to the bit.
+%define SAX  [bp-2]
+%define SAY  [bp-4]
+%define SBX  [bp-6]
+%define SBY  [bp-8]
+%define SR   [bp-10]
+%define SDX  [bp-14]                    ; dwords
+%define SDY  [bp-18]
+%define SADX [bp-22]
+%define SADY [bp-26]
+%define SLEN [bp-30]
+%define SW   [bp-32]                    ; the half width being made
+%define SCOL [bp-34]
+%define SNX  [bp-36]
+%define SNY  [bp-38]
+%define STX  [bp-40]
+%define STY  [bp-42]
+%define SFRAME 44
+        global _rv_slab_setup
+_rv_slab_setup:
+        push bp
+        mov bp,sp
+        sub sp,SFRAME
+        push si
+        push di
+        push ds
+        lds si,[bp+6]
+        mov ax,[si]
+        mov SAX,ax
+        mov ax,[si+2]
+        mov SAY,ax
+        mov ax,[si+4]
+        mov SBX,ax
+        mov ax,[si+6]
+        mov SBY,ax
+        mov ax,[si+8]
+        mov SR,ax
+        movsx eax,word SBX
+        movsx edx,word SAX
+        sub eax,edx
+        mov SDX,eax
+        mov ecx,eax
+        sar ecx,31
+        xor eax,ecx
+        sub eax,ecx
+        mov SADX,eax                ; |dx|
+        movsx eax,word SBY
+        movsx edx,word SAY
+        sub eax,edx
+        mov SDY,eax
+        mov ecx,eax
+        sar ecx,31
+        xor eax,ecx
+        sub eax,ecx
+        mov SADY,eax                ; |dy|
+        ; the length within 7 %: the larger plus 3/8 of the smaller
+        mov eax,SADX
+        mov edx,SADY
+        cmp eax,edx
+        jg .lx
+        xchg eax,edx
+.lx:    imul edx,edx,3
+        mov ecx,edx
+        sar ecx,31
+        and ecx,7
+        add edx,ecx                 ; (C's / rounds toward zero: the smaller is not negative, but as C does)
+        sar edx,3
+        add eax,edx
+        mov SLEN,eax
+        lds si,[bp+12]              ; the style
+        les di,[bp+16]              ; the polygons out
+        cmp word SR,24
+        jle .lines
+        mov ax,SR
+        mov SW,ax
+        movzx ax,byte [si+2]        ; body: the outline
+        mov SCOL,ax
+        call slab_of
+        add di,40
+        mov ax,SR
+        cwd
+        mov cx,2
+        idiv cx
+        mov SW,ax                   ; r / 2
+        movzx ax,byte [si+3]        ; core: the middle
+        mov SCOL,ax
+        call slab_of
+        lds si,[bp+24]
+        mov word [si],0
+        mov ax,2
+        jmp .out
+.lines:
+        ; three lines a pixel apart across it: lines[1] the middle, [0] less, [2] more
+        les di,[bp+20]
+        add di,20
+        LINE_OF SAX,SAY,SBX,SBY
+        mov eax,SADY
+        cmp eax,SADX
+        jl .shallow
+        sub word SAX,16
+        sub word SBX,16
+        les di,[bp+20]
+        LINE_OF SAX,SAY,SBX,SBY
+        add word SAX,32
+        add word SBX,32
+        les di,[bp+20]
+        add di,40
+        LINE_OF SAX,SAY,SBX,SBY
+        jmp .three
+.shallow:
+        sub word SAY,16
+        sub word SBY,16
+        les di,[bp+20]
+        LINE_OF SAX,SAY,SBX,SBY
+        add word SAY,32
+        add word SBY,32
+        les di,[bp+20]
+        add di,40
+        LINE_OF SAX,SAY,SBX,SBY
+.three: lds si,[bp+24]
+        mov word [si],3
+        xor ax,ax
+.out:   pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
+
+; one outline at half width SW, colour SCOL, into es:di (lasers.c's slab_of; the shape at [bp+10])
+%macro VTX 3                            ; vertex %1: x %2, y %3 (words in registers or memory)
+        mov ax,%2
+        mov [es:di+8+2*%1],ax
+        mov ax,%3
+        mov [es:di+24+2*%1],ax
+%endmacro
+slab_of:
+        mov ax,SCOL
+        mov [es:di+2],ax
+        cmp word [bp+10],1          ; LZ_SHAPE_AXIS
+        je .axis
+        cmp dword SLEN,16
+        jge .slant
+.axis:  mov word [es:di],4
+        mov bx,SW
+        mov eax,SADY
+        cmp eax,SADX
+        jl .shal
+        ; steep: level ends, pushed out by w
+        mov cx,SAX
+        sub cx,bx
+        mov dx,SAY
+        sub dx,bx
+        VTX 0,cx,dx
+        mov cx,SAX
+        add cx,bx
+        VTX 1,cx,dx
+        mov cx,SBX
+        add cx,bx
+        mov dx,SBY
+        add dx,bx
+        VTX 2,cx,dx
+        mov cx,SBX
+        sub cx,bx
+        VTX 3,cx,dx
+        jmp poly_rows
+.shal:  cmp dword SDX,0
+        jl .left
+        mov cx,SAX
+        sub cx,bx
+        mov dx,SAY
+        sub dx,bx
+        VTX 0,cx,dx
+        mov cx,SBX
+        add cx,bx
+        mov dx,SBY
+        sub dx,bx
+        VTX 1,cx,dx
+        mov dx,SBY
+        add dx,bx
+        VTX 2,cx,dx
+        mov cx,SAX
+        sub cx,bx
+        mov dx,SAY
+        add dx,bx
+        VTX 3,cx,dx
+        jmp poly_rows
+.left:  mov cx,SAX
+        add cx,bx
+        mov dx,SAY
+        sub dx,bx
+        VTX 0,cx,dx
+        mov dx,SAY
+        add dx,bx
+        VTX 1,cx,dx
+        mov cx,SBX
+        sub cx,bx
+        mov dx,SBY
+        add dx,bx
+        VTX 2,cx,dx
+        mov dx,SBY
+        sub dx,bx
+        VTX 3,cx,dx
+        jmp poly_rows
+.slant: ; w across the bolt (nx, ny) and, for the hexagon, along it (tx, ty): (-dy w / len, dx w / len)
+        movsx ecx,word SW
+        mov eax,SDY
+        neg eax
+        imul eax,ecx
+        cdq
+        idiv dword SLEN
+        mov SNX,ax
+        mov eax,SDX
+        imul eax,ecx
+        cdq
+        idiv dword SLEN
+        mov SNY,ax
+        cmp word [bp+10],2
+        jne .hex
+        mov word [es:di],4
+        mov cx,SAX
+        add cx,SNX
+        mov dx,SAY
+        add dx,SNY
+        VTX 0,cx,dx
+        mov cx,SBX
+        add cx,SNX
+        mov dx,SBY
+        add dx,SNY
+        VTX 1,cx,dx
+        mov cx,SBX
+        sub cx,SNX
+        mov dx,SBY
+        sub dx,SNY
+        VTX 2,cx,dx
+        mov cx,SAX
+        sub cx,SNX
+        mov dx,SAY
+        sub dx,SNY
+        VTX 3,cx,dx
+        jmp poly_rows
+.hex:   mov eax,SDX
+        imul eax,ecx
+        cdq
+        idiv dword SLEN
+        mov STX,ax
+        mov eax,SDY
+        imul eax,ecx
+        cdq
+        idiv dword SLEN
+        mov STY,ax
+        mov word [es:di],6
+        mov cx,SAX
+        sub cx,STX
+        mov dx,SAY
+        sub dx,STY
+        VTX 0,cx,dx
+        mov cx,SAX
+        add cx,SNX
+        mov dx,SAY
+        add dx,SNY
+        VTX 1,cx,dx
+        mov cx,SBX
+        add cx,SNX
+        mov dx,SBY
+        add dx,SNY
+        VTX 2,cx,dx
+        mov cx,SBX
+        add cx,STX
+        mov dx,SBY
+        add dx,STY
+        VTX 3,cx,dx
+        mov cx,SBX
+        sub cx,SNX
+        mov dx,SBY
+        sub dx,SNY
+        VTX 4,cx,dx
+        mov cx,SAX
+        sub cx,SNX
+        mov dx,SAY
+        sub dx,SNY
+        VTX 5,cx,dx
+        ; (falls into poly_rows)
+
+; the polygon at es:di's rows: top = (min y + 7) >> 4, bot = ((max y - 8) >> 4) + 1
+poly_rows:
+        push si
+        mov cx,[es:di]
+        mov ax,[es:di+24]           ; lo
+        mov dx,ax                   ; hi
+        lea bx,[di+26]
+.r:     dec cx
+        jz .done
+        mov si,[es:bx]
+        cmp si,ax
+        jge .nlo
+        mov ax,si
+.nlo:   cmp si,dx
+        jle .nhi
+        mov dx,si
+.nhi:   add bx,2
+        jmp .r
+.done:  add ax,7
+        sar ax,4
+        mov [es:di+4],ax
+        sub dx,8
+        sar dx,4
+        inc dx
+        mov [es:di+6],dx
+        pop si
+        ret

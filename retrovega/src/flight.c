@@ -43,6 +43,7 @@ int g_lasers = 0;                       /* RV.EXE /lasers N: the laser benchmark
 int g_near_bolts = 12;                  /* RV.EXE /near N: the bolts kept near the camera in it */
 int g_far_ships = 16;                   /* RV.EXE /farships N: its small far ships */
 int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
+int g_bolt_shape = 0;                   /* RV.EXE /boltshape N: the near bolts' shape (LZ_SHAPE_*: 0 capsules) */
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
  * at draw time, sixteen cycles a pixel) while their pixels fit this budget
  * a frame and they are big enough for the steps to show; the rest are
@@ -779,6 +780,7 @@ static void lasers_pool(void)
     }
     _fheapshrink();                     /* (what the checks took back to DOS) */
     g_lz_cap = bolts_init(3200, 12);    /* 12 KB kept for what the flight takes later */
+    bolts_set_shape(g_bolt_shape);
     g_lz_life = g_lz_cap ? (unsigned char __far *)_fmalloc(g_lz_cap) : 0;
     if (!g_lz_life)
         g_lz_cap = 0;
@@ -880,8 +882,9 @@ static void lasers_report(void)
     bolts_ticks(t);
     bolts_on_screen(&lines, &fats);
     rv_log("lasers: %ld far bolts and %d near held %d fps (the settled half's average; %d lines and %d fat on screen at "
-           "the end), beside %d big ships drawn exactly and %d far ones", g_lz_frames ? g_lz_sum / g_lz_frames : 0L,
-           g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships);
+           "the end), beside %d big ships drawn exactly and %d far ones; near bolts' shape %d",
+           g_lz_frames ? g_lz_sum / g_lz_frames : 0L, g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships,
+           g_bolt_shape);
     rv_log("lasers: ms a frame: bolts placed %lu.%02lu, far bolts drawn %lu.%02lu, near %lu.%02lu, flown and fired "
            "%lu.%02lu; big ships %lu.%02lu, far ships %lu.%02lu (the slots' from the sets %lu.%02lu); stars %lu.%02lu; "
            "the whole picture %lu.%02lu",

@@ -825,6 +825,38 @@ So one algorithm for every bolt would cost three times the line for the far
 ones: the split pays. The near bolts' set-up was 87 µs in C (Watcom's 64-bit
 helpers) before `rv_fat_setup`.
 
+**Simpler near bolts** (2026-10-21, the user's alternatives; `RV.EXE /boltshape
+N`, 0 the capsules by default). A near bolt as two convex polygons painted
+over each other, a red outline and a white middle half as wide (the "step up
+then down"), set up by `rv_slab_setup` and filled by `rv_poly_draw` (one span
+a row between two chains of edges walked down from the top vertex; both
+checked against lasers.c, the filler against brute force in tests/host), or,
+up to 3 px across, three lines side by side (red, white, red), and one line
+under 1.5 px as before. Shapes: 1 the user's level/upright ends (steep bolts
+end level, shallow ones upright, pushed out by the half width so a bolt end
+on is a square: no root, only additions), 2 the rectangle square to the
+flight, 3 the rectangle with pointed ends. `LZ_SHAPES=FILE.ppm` with
+`LZ_SHEET` draws the four side by side (tests/host/run.sh). Cost a near bolt
+(the same twelve, 1.7-3.4 px of radius, at 40,000 cycles):
+
+| | set up | draw | in all |
+|---|---|---|---|
+| capsules (rim, body, core: three passes) | 13.8 µs | 23.8 | 37.6 |
+| level/upright ends (two polygons) | 6.6 | 26.1 | 32.7 |
+| rectangle | 7.0 | 24.8 | 31.8 |
+| pointed rectangle | 8.3 | 27.9 | 36.2 |
+| the same capsules pre-rendered, a sprite each, copied a row at a time (`rv_blit_row`, as the ships are) | — | 19.2 | 19.2 + finding and fetching the sprite |
+
+The draw is the same whatever the shape: under DOSBox's instruction-a-cycle
+rule a bolt costs per row (stepping the edges, rounding, clipping to the
+opening, starting a fill: ~25 instructions a row a pass), not per pixel nor
+per shape's maths, and a capsule's three passes cost what two polygons' do.
+A pre-rendered sprite halves the draw but needs a set of them by angle, size
+and length in XMS, and the choosing and fetching. In the frame the twelve
+near bolts take ~0.3-0.5 ms of 33 whatever their shape, and the far ones are
+lines in every design: the near bolts' shape is a matter of looks and of code
+(the polygons need no root table and about half the asm), not of speed.
+
 **The benchmark.** `RV.EXE /lasers N` flies the first mission's launch into a
 still scene: two big ships 1,500 and 2,100 km ahead, rolling and turning so
 they are drawn exactly (`/bigships`, 2), small ships 5,000-15,000 km out
