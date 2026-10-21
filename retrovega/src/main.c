@@ -2,7 +2,7 @@
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
  *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo] [/flames]
- *          [/balls N [/nearballs N]] [/balldemo]
+ *          [/balls N [/nearballs N]] [/balldemo] [/missiledemo]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -24,7 +24,7 @@
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
-    g_ball_demo;
+    g_ball_demo, g_missile_demo;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -95,6 +95,11 @@ int main(int argc, char **argv)
             g_ball_demo = 1;
             g_balls = 1;
             g_near_balls = 0;
+            g_lasers = 1;
+            g_near_bolts = 0;
+            g_big_ships = g_far_ships = 0;
+        } else if (!strcmp(argv[i], "/missiledemo")) {  /* tests: six missiles seen every way */
+            g_missile_demo = 1;
             g_lasers = 1;
             g_near_bolts = 0;
             g_big_ships = g_far_ships = 0;

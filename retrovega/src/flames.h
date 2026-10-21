@@ -46,6 +46,11 @@ void flames_frame(void);                /* a new frame: no flames yet */
 void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int scale256, int burn, int slot,
                 FlameSet __far *out);
 
+/* a flame of its own (a missile's): its nozzle on screen and its tail's way and length there (x16), its root's
+ * radius (x16), the afterburner's look or not, a number of its own (its noise's); *out as flames_add's (its
+ * `front` the caller's to set) */
+void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned id, FlameSet __far *out);
+
 /* a ship's flames into this band, rows y0 .. y1-1, clipped to the extents as the ships are */
 void flames_draw(const FlameSet __far *f, int y0, int y1, const short __far *ext, int ext_y0, int ext_rows);
 

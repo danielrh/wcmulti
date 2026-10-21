@@ -146,6 +146,17 @@ void lz_camera(LzCam LZ_FAR *c, long px, long py, long pz, const long *front, co
                int cx, int cy, int focal, long radius16, long zmin_km, long zmax_km, int rmax16, int line16,
                int y0, int y1);
 
+/* one bolt (or anything of its shape: a missile's body, its nose, its flame) through the camera, as lz_place
+ * puts each: 0 when it is not drawn (past the far cull, wholly before the near plane, off the screen); else its
+ * ends on screen x16, the head's (b + h) and the tail's (an end before the near plane brought to it along the
+ * bolt), their depths (camera units) and the radius x16 (at the middle's depth, at most rmax16) */
+typedef struct {
+    long hx, hy, tx, ty;
+    long zh, zt;
+    long r16;
+} LzEnds;
+int lz_project(const LzBolt LZ_FAR *b, const LzCam LZ_FAR *c, LzEnds LZ_FAR *e);
+
 /* the bolts through the camera: lines and fat ones out, the counts back.
  * The reference of rv_bolts_place (lowlevel.asm), which does the same to the bit. */
 void lz_place(const LzBolt LZ_FAR *b, int n, const LzCam LZ_FAR *c, LzLine LZ_FAR *lines, int *nlines, int maxlines,

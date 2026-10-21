@@ -27,6 +27,7 @@
 #include "bolts.h"
 #include "flames.h"
 #include "balls.h"
+#include "missiles.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -51,6 +52,7 @@ int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser b
                                            30 fps) and g_near_balls near */
 int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept near the camera in it */
 int g_ball_demo = 0;                    /* RV.EXE /balldemo: the four kinds of ball flying at the eye (a test aid) */
+int g_missile_demo = 0;                 /* RV.EXE /missiledemo: six missiles seen every way (a test aid) */
 static unsigned char __far *__far g_bl_life;   /* the balls' frames left each */
 static int __far g_bl_far, __far g_bl_cap, __far g_bl_n, __far g_bl_frames;   /* (far: DGROUP is nearly full) */
 static long __far g_bl_sum;
@@ -611,6 +613,7 @@ static void draw_world(int y0, int y1)
         bolts_draw_near(y0, y1, ext, ey0, rows);
     if (g_bl_cap)
         balls_draw_near(y0, y1, ext, ey0, rows);
+    missiles_draw(y0, y1, ext, ey0, rows);
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
@@ -623,7 +626,7 @@ static void __far __cdecl draw_pointer_body(void)
 {
     /* the steering cross where the pointer is, in mouse mode */
     int x = g_scene.px, y = g_scene.py;
-    if (g_keyboard_steer || g_bolt_demo || g_ball_demo)   /* (the demo's middle bolt is where the cross would be) */
+    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo)   /* (the demo's middle bolt is where the cross would be) */
         return;
     gfx_fill(x - 5, y, 11, 1, UI_WHITE, g_ptr_y0, g_ptr_y1);
     gfx_fill(x, y - 5, 1, 11, UI_WHITE, g_ptr_y0, g_ptr_y1);
@@ -710,6 +713,12 @@ static void gather(void)
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
+    } else if (g_missile_demo) {        /* the demo's readout: the time in its round */
+        static const char __far name[] = "MISSILES";
+        int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
+        _fstrcpy((char __far *)g_mfd[0][0], name);
+        sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
+        g_mfd[0][2][0] = 0;
     } else if (g_ball_demo) {           /* the demo's readout: the time in its round */
         static const char __far name[] = "BALLS";
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
@@ -851,6 +860,68 @@ static void lz_spawn_far(int i)
 }
 
 static int lasers_far(void) { return g_lz_far; }
+
+/* --- the missile demo (RV.EXE /missiledemo): missiles seen every way ---
+ *
+ * The user's (2026-10-21): missiles drawn with the bolts' code, four in
+ * flight at a time expected, six at most.  Six here, each on a round of its
+ * own, placed from the frame's number (the player stands still): two fired
+ * from under the wings, seen from behind as they speed away; one crossing
+ * 700 km ahead, side on; one 2,500 km out the other way, turned a little
+ * toward the camera; one coming at the camera nose first from 6,000 km,
+ * passing beside it; one far (9,000 km) climbing across, a line.  Ten
+ * seconds (DEMO_FRAMES), then the flight lands. */
+static const struct {
+    short a, b, c;                      /* where it starts: km ahead, right, up of the player */
+    signed char fx, fr, fu;             /* its way in the player's frame (64 = 1.0) */
+    unsigned char speed, accel, period, delay;   /* km a frame, + accel/16 km a frame each frame; its round's frames;
+                                           its first start */
+} __far g_md[MISSILE_MAX] = {
+    { 0, -40, -30, 64, 0, 0, 4, 8, 150, 0 },
+    { 0, 40, -30, 64, 0, 0, 4, 8, 150, 20 },
+    { 700, -650, 60, 0, 64, 0, 12, 0, 110, 0 },
+    { 2500, 1400, -150, -16, -62, 0, 30, 0, 100, 30 },
+    { 6000, 260, 90, -64, 0, 0, 32, 0, 190, 0 },
+    { 9000, -3800, -1200, 0, 45, 45, 60, 0, 140, 10 },
+};
+
+static void missile_demo_step(void)
+{
+    const RvVec3 *f = &gOrientationFrontVector[0], *r = &gOrientationRightVector[0], *u = &gOrientationUpVector[0];
+    Missile __far *m = missiles_pool();
+    int i;
+    for (i = 0; i < MISSILE_MAX; i++) {
+        long t = (long)g_demo_frame - g_md[i].delay, a, b, c, d;
+        if (t < 0) {
+            m[i].live = 0;
+            continue;
+        }
+        t %= g_md[i].period;
+        d = g_md[i].speed * t + (long)g_md[i].accel * t * t / 32;   /* km flown */
+        a = g_md[i].a + d * g_md[i].fx / 64;
+        b = g_md[i].b + d * g_md[i].fr / 64;
+        c = g_md[i].c + d * g_md[i].fu / 64;
+        m[i].x = gPositionVector[0].x + f->x * a + r->x * b + u->x * c;
+        m[i].y = gPositionVector[0].y + f->y * a + r->y * b + u->y * c;
+        m[i].z = gPositionVector[0].z + f->z * a + r->z * b + u->z * c;
+        m[i].dx = (short)((f->x * g_md[i].fx + r->x * g_md[i].fr + u->x * g_md[i].fu) / 64);
+        m[i].dy = (short)((f->y * g_md[i].fx + r->y * g_md[i].fr + u->y * g_md[i].fu) / 64);
+        m[i].dz = (short)((f->z * g_md[i].fx + r->z * g_md[i].fr + u->z * g_md[i].fu) / 64);
+        m[i].live = 1;
+        m[i].burn = 1;
+    }
+    if (++g_demo_frame >= DEMO_FRAMES)
+        missionStatus = 1;              /* landed */
+}
+
+static void missiles_frame(void)
+{
+    LfBasis cam;
+    const RvCockpit __far *c = cockpit_record();
+    basis_of(0, &cam);
+    missiles_place(gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, &cam, SCR_W / 2, g_cam_cy, 400,
+                   c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H);
+}
 
 /* --- the balls in the laser benchmark (RV.EXE /balls N) ---
  *
@@ -1413,6 +1484,7 @@ void __far __cdecl flight_startup(void)
     cockpit_palette();                  /* only now: the deck kept its own palette while all that loaded (seconds in the
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
+    missiles_init();
     g_t_flames = g_t_flames_set = g_t_plan = 0;
     g_t_exact = g_t_sets = g_t_draw = g_t_wait = 0;
 }
@@ -1490,11 +1562,14 @@ void __far __cdecl flight_frame(void)
     if (g_lasers) {
         if (g_bolt_demo)
             demo_step();
+        else if (g_missile_demo)
+            missile_demo_step();
         else if (!g_ball_demo)
             lasers_step();
         balls_step();
         lasers_place();
     }
+    missiles_frame();                   /* (after the plan: the ships' flames are the frame's first) */
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];
     g_frame_t[k] = now;
@@ -1579,6 +1654,15 @@ int flight_fly(const RvMission __far *m)
                per_frame(g_t_draw, f) / 100, per_frame(g_t_draw, f) % 100, per_frame(g_t_exact, f) / 100,
                per_frame(g_t_exact, f) % 100, per_frame(g_t_sets, f) / 100, per_frame(g_t_sets, f) % 100,
                per_frame(frame, f) / 100, per_frame(frame, f) % 100);
+    }
+    {
+        static const char __far s_m[] = "flight: the missiles took %lu.%02lu ms a frame to place and %lu.%02lu to draw "
+            "(the %lu frames with any flying)";
+        unsigned long t[3];
+        missiles_ticks(t);
+        if (t[2])
+            rv_logf(s_m, per_frame(t[0], (unsigned)t[2]) / 100, per_frame(t[0], (unsigned)t[2]) % 100,
+                    per_frame(t[1], (unsigned)t[2]) / 100, per_frame(t[1], (unsigned)t[2]) % 100, t[2]);
     }
     rv_log("flight: the engines' flames took %lu.%02lu ms a frame (%lu.%02lu of it set up)",
            g_t_flames * 1000 / 240 / (frameCounter ? frameCounter : 1),

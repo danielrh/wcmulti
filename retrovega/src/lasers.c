@@ -97,67 +97,77 @@ void lz_line_of(int ax, int ay, int bx, int by, LzLine LZ_FAR *out)
     }
 }
 
+int lz_project(const LzBolt LZ_FAR *b, const LzCam LZ_FAR *c, LzEnds LZ_FAR *e)
+{
+    long rx, ry, rz, X, Y, Z, HX, HY, HZ, xh, yh, zh, xt, yt, zt, r16, sxh, syh, sxt, syt, lo, hi;
+    /* the middle relative to the camera, in sixteenths of a km; beyond 2^20 (65,536 km) on an axis: gone */
+    rx = b->x - c->bx;
+    ry = b->y - c->by;
+    rz = b->z - c->bz;
+    if ((unsigned long)rx >= 0x2000000UL || (unsigned long)ry >= 0x2000000UL || (unsigned long)rz >= 0x2000000UL)
+        return 0;
+    rx = (rx >> 4) - 0x100000L;
+    ry = (ry >> 4) - 0x100000L;
+    rz = (rz >> 4) - 0x100000L;
+    Z = rx * c->f[0] + ry * c->f[1] + rz * c->f[2];
+    if (Z > c->zmax)
+        return 0;
+    X = rx * c->r[0] + ry * c->r[1] + rz * c->r[2];
+    Y = rx * c->u[0] + ry * c->u[1] + rz * c->u[2];
+    HX = (long)b->hx * c->r[0] + (long)b->hy * c->r[1] + (long)b->hz * c->r[2];
+    HY = (long)b->hx * c->u[0] + (long)b->hy * c->u[1] + (long)b->hz * c->u[2];
+    HZ = (long)b->hx * c->f[0] + (long)b->hy * c->f[1] + (long)b->hz * c->f[2];
+    xh = X + HX; yh = Y + HY; zh = Z + HZ;
+    xt = X - HX; yt = Y - HY; zt = Z - HZ;
+    /* the near plane: an end behind it is brought to it along the bolt */
+    if (zh < c->zmin) {
+        if (zt < c->zmin)
+            return 0;
+        xh = xt + muldiv(xh - xt, c->zmin - zt, zh - zt);
+        yh = yt + muldiv(yh - yt, c->zmin - zt, zh - zt);
+        zh = c->zmin;
+    } else if (zt < c->zmin) {
+        xt = xh + muldiv(xt - xh, c->zmin - zh, zt - zh);
+        yt = yh + muldiv(yt - yh, c->zmin - zh, zt - zh);
+        zt = c->zmin;
+    }
+    r16 = c->rf / ((zh + zt) >> 1);
+    if (r16 > c->rmax16)
+        r16 = c->rmax16;
+    sxh = c->cx16 + muldiv(xh, c->f16, zh);
+    syh = c->cy16 - muldiv(yh, c->f16, zh);
+    sxt = c->cx16 + muldiv(xt, c->f16, zt);
+    syt = c->cy16 - muldiv(yt, c->f16, zt);
+    /* kept if its box (with the radius) touches the screen's */
+    lo = sxh < sxt ? sxh : sxt;
+    hi = sxh < sxt ? sxt : sxh;
+    if (hi + r16 < c->xmin16 || lo - r16 >= c->xmax16)
+        return 0;
+    lo = syh < syt ? syh : syt;
+    hi = syh < syt ? syt : syh;
+    if (hi + r16 < c->ymin16 || lo - r16 >= c->ymax16)
+        return 0;
+    e->hx = sxh; e->hy = syh; e->tx = sxt; e->ty = syt;
+    e->zh = zh; e->zt = zt; e->r16 = r16;
+    return 1;
+}
+
 void lz_place(const LzBolt LZ_FAR *b, int n, const LzCam LZ_FAR *c, LzLine LZ_FAR *lines, int *nlines, int maxlines,
               LzFat LZ_FAR *fats, int *nfats, int maxfats)
 {
     int i, nl = 0, nf = 0;
     for (i = 0; i < n; i++, b++) {
-        long rx, ry, rz, X, Y, Z, HX, HY, HZ, xh, yh, zh, xt, yt, zt, r16, sxh, syh, sxt, syt, lo, hi;
+        LzEnds e;
         int ax, ay, bx, by;
-        /* the middle relative to the camera, in sixteenths of a km; beyond 2^20 (65,536 km) on an axis: gone */
-        rx = b->x - c->bx;
-        ry = b->y - c->by;
-        rz = b->z - c->bz;
-        if ((unsigned long)rx >= 0x2000000UL || (unsigned long)ry >= 0x2000000UL || (unsigned long)rz >= 0x2000000UL)
-            continue;
-        rx = (rx >> 4) - 0x100000L;
-        ry = (ry >> 4) - 0x100000L;
-        rz = (rz >> 4) - 0x100000L;
-        Z = rx * c->f[0] + ry * c->f[1] + rz * c->f[2];
-        if (Z > c->zmax)
-            continue;
-        X = rx * c->r[0] + ry * c->r[1] + rz * c->r[2];
-        Y = rx * c->u[0] + ry * c->u[1] + rz * c->u[2];
-        HX = (long)b->hx * c->r[0] + (long)b->hy * c->r[1] + (long)b->hz * c->r[2];
-        HY = (long)b->hx * c->u[0] + (long)b->hy * c->u[1] + (long)b->hz * c->u[2];
-        HZ = (long)b->hx * c->f[0] + (long)b->hy * c->f[1] + (long)b->hz * c->f[2];
-        xh = X + HX; yh = Y + HY; zh = Z + HZ;
-        xt = X - HX; yt = Y - HY; zt = Z - HZ;
-        /* the near plane: an end behind it is brought to it along the bolt */
-        if (zh < c->zmin) {
-            if (zt < c->zmin)
-                continue;
-            xh = xt + muldiv(xh - xt, c->zmin - zt, zh - zt);
-            yh = yt + muldiv(yh - yt, c->zmin - zt, zh - zt);
-            zh = c->zmin;
-        } else if (zt < c->zmin) {
-            xt = xh + muldiv(xt - xh, c->zmin - zh, zt - zh);
-            yt = yh + muldiv(yt - yh, c->zmin - zh, zt - zh);
-            zt = c->zmin;
-        }
-        r16 = c->rf / ((zh + zt) >> 1);
-        if (r16 > c->rmax16)
-            r16 = c->rmax16;
-        sxh = c->cx16 + muldiv(xh, c->f16, zh);
-        syh = c->cy16 - muldiv(yh, c->f16, zh);
-        sxt = c->cx16 + muldiv(xt, c->f16, zt);
-        syt = c->cy16 - muldiv(yt, c->f16, zt);
-        /* kept if its box (with the radius) touches the screen's */
-        lo = sxh < sxt ? sxh : sxt;
-        hi = sxh < sxt ? sxt : sxh;
-        if (hi + r16 < c->xmin16 || lo - r16 >= c->xmax16)
-            continue;
-        lo = syh < syt ? syh : syt;
-        hi = syh < syt ? syt : syh;
-        if (hi + r16 < c->ymin16 || lo - r16 >= c->ymax16)
+        if (!lz_project(b, c, &e))
             continue;
         /* a: the upper end (the left one when level) */
-        if (syh < syt || (syh == syt && sxh <= sxt)) {
-            ax = (int)sxh; ay = (int)syh; bx = (int)sxt; by = (int)syt;
+        if (e.hy < e.ty || (e.hy == e.ty && e.hx <= e.tx)) {
+            ax = (int)e.hx; ay = (int)e.hy; bx = (int)e.tx; by = (int)e.ty;
         } else {
-            ax = (int)sxt; ay = (int)syt; bx = (int)sxh; by = (int)syh;
+            ax = (int)e.tx; ay = (int)e.ty; bx = (int)e.hx; by = (int)e.hy;
         }
-        if (r16 < c->line16) {
+        if (e.r16 < c->line16) {
             if (nl >= maxlines || (long)bx - ax >= 16384 || (long)ax - bx >= 16384)
                 continue;
             {
@@ -170,7 +180,7 @@ void lz_place(const LzBolt LZ_FAR *b, int n, const LzCam LZ_FAR *c, LzLine LZ_FA
                 continue;
             fats[nf].ax = (short)ax; fats[nf].ay = (short)ay;
             fats[nf].bx = (short)bx; fats[nf].by = (short)by;
-            fats[nf].r = (short)r16;
+            fats[nf].r = (short)e.r16;
             fats[nf].pad = 0;
             nf++;
         }

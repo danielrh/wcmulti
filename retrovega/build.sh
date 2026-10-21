@@ -40,7 +40,7 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     s="$OUT/SHIP20.RVS"
     [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
 fi
-ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts balls flames cockpit flight game main"
+ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts balls missiles flames cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done

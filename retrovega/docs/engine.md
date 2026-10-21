@@ -1160,6 +1160,41 @@ The module's state and its log formats are far (`rv_logf` takes a far
 format): DGROUP is nearly full (Watcom's `__far` binds to one declarator:
 each in a list needs its own).
 
+### Missiles
+
+The user's brief (2026-10-21): missiles drawn with the bolts' code as far
+as possible, long and round with a flame out of the back like a fighter's,
+bigger than a bolt, a line when far; four in flight at a time expected, six
+at most. On the first recording: thicker, red toward the engine rather than
+at the front (the tip may be bright red too), fins if they cost nothing;
+not as exact as the ships, since a missile is seen for moments.
+
+`missiles.c`, `missiles.h`: a pool of `MISSILE_MAX` (6), each a position, a
+way (256 = 1.0) and whether it flies and its motor burns. Once a frame
+(`missiles_place`, after the plan has added the ships' flames) each is put
+through the camera as bolts are: `lz_project`, split out of `lz_place` (so
+the bolts' asm check still covers it), gives a bolt's ends on screen with
+its head kept, their depths and its radius. A missile is 60 km long and 4
+km in radius (a bolt is 24 and 2): under the bolts' line radius it is a
+gray line with the flame's pale violet on its tail's pixel; over it, three
+parts, each the bolts' two nested capsules (`rv_fat_setup`, the whole's
+radius): the rear quarter dark red with a red middle, the body dark gray
+with a lighter middle, the 4 km tip red with the brightest red middle,
+drawn farthest first (from behind, the rear hides the rest). Two fins are
+lines (`rv_lines_draw`) swept back from the body's edge 30% of the way from
+the tail to 2.3 radii out near it, a pair a fin from 4 px thick, none end
+on. The flame is a baked one (`flames_add_at`, split out of `flames_add`:
+the nearest of the afterburner's look to a nozzle, a tail's way and length
+on screen and a root's radius, the body's), 40 km, its rows mixed anew every
+frame; one pointing toward the camera is drawn last, one pointing away
+first. All in C (six at most): at 40,000 cycles the demo's six cost 0.48 ms
+a frame to place and 1.09 to draw. `RV.EXE /missiledemo`
+(`tests/boltdemo.txt`, `/record 1`): two fired from under the wings and
+seen from behind as they speed away, one crossing 700 km out side on,
+another 2,500 km out turned a little toward the camera, one coming nose
+first from 6,000 km, one far (9,000 km) climbing across as a line; ten
+seconds.
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the

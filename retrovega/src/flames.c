@@ -265,6 +265,49 @@ void flames_frame(void)
     g_frame++;
 }
 
+/* one flame into the frame's list: the baked one nearest it (its size, its foreshortening, its way by quadrant, a
+ * frame of noise at random), its nozzle on screen x16 (x16, y16), its tail's way and length on screen (tx, ty,
+ * x16), its root's radius x16, its look (1 the afterburner's), a number of its own for its noise: 0 when none fits */
+static int add_one(long x16, long y16, long tx, long ty, int r16, int look, unsigned id)
+{
+    BakedFlame b[BK_FRAMES];
+    long atx = tx < 0 ? -tx : tx, aty = ty < 0 ? -ty : ty, l;
+    int rho, ang, size, best, i;
+    if (g_nf >= FLAME_MAX)
+        return 0;
+    for (size = 0, best = 0x7FFF, i = 0; i < BK_SIZE; i++) {
+        int d = g_size16[i] > r16 ? g_size16[i] * 4 - r16 * 5 : r16 * 4 - g_size16[i] * 5;   /* (ratios: 5/4) */
+        if (d < best) { best = d; size = i; }
+    }
+    l = (long)lf_sqrt((unsigned long)(atx * atx + aty * aty)) * 2 / g_size16[size];   /* half radii */
+    for (rho = 0, best = 0x7FFF, i = 0; i < BK_RHO; i++) {
+        int d = (int)(l - g_rho[look][i] * 2);
+        if (d < 0) d = -d;
+        if (d < best) { best = d; rho = i; }
+    }
+    ang = rho ? (lf_atan2(aty, atx) + 16) / 32 : 0;
+    if (ang >= BK_ANG)
+        ang = BK_ANG - 1;
+    xms_get(g_bk_hdr, (unsigned long)bake_id(look, rho, ang, size, 0) * sizeof b[0], b, sizeof b);   /* (both frames) */
+    if (!b[0].w || !b[1].w)
+        return 0;
+    g_rand = g_rand * 25173U + 13849U;
+    g_fl[g_nf].seed = g_rand + id;
+    g_fl[g_nf].v.w = b[0].w;
+    g_fl[g_nf].v.h = b[0].h;
+    g_fl[g_nf].v.ox = b[0].ox;
+    g_fl[g_nf].v.oy = b[0].oy;
+    g_fl[g_nf].v.blk = g_bk_rows;
+    g_fl[g_nf].v.at = b[0].at;
+    g_fl[g_nf].v.len = 0;
+    g_fl[g_nf].at_b = b[1].at;
+    g_fl[g_nf].x = (short)(x16 >> 4);
+    g_fl[g_nf].y = (short)(y16 >> 4);
+    g_fl[g_nf].flags = (unsigned char)((tx < 0 ? BLIT_H : 0) | (ty < 0 ? BLIT_V : 0));
+    g_nf++;
+    return 1;
+}
+
 void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int scale256, int burn, int slot,
                 FlameSet __far *out)
 {
@@ -282,9 +325,8 @@ void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int
     lf_view_rot(p->view, nb, nh, &rot);
     for (k = 0; k < t->nengines && k < RV_ENGINES && g_nf < FLAME_MAX; k++) {
         const signed char __far *e = t->engine[k];
-        long ox, oy, oz, tx, ty, tz, len, atx, aty;
-        int r16 = (int)((unsigned char)e[3] * half16 / 1024), look = burn != 0, rho, ang, size, best, i;
-        BakedFlame b[BK_FRAMES];
+        long ox, oy, oz, tx, ty, tz, len;
+        int r16 = (int)((unsigned char)e[3] * half16 / 1024);
         len = (long)(unsigned char)e[3] * FLAME_LEN;
         if (len < FLAME_LEN_MIN)
             len = FLAME_LEN_MIN;
@@ -296,43 +338,16 @@ void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int
         lf_sprite_point(&rot, p->roll, e[0] * half16 / 127, e[1] * half16 / 127, e[2] * half16 / 127, &ox, &oy, &oz);
         lf_sprite_point(&rot, p->roll, 0, 0, -len * half16 / 1024, &tx, &ty, &tz);
         out->front = (unsigned char)(tz > 0);
-        /* the baked flame nearest it: its size, its foreshortening, its way (by quadrant), a frame at random */
-        for (size = 0, best = 0x7FFF, i = 0; i < BK_SIZE; i++) {
-            int d = g_size16[i] > r16 ? g_size16[i] * 4 - r16 * 5 : r16 * 4 - g_size16[i] * 5;   /* (ratios: 5/4) */
-            if (d < best) { best = d; size = i; }
-        }
-        atx = tx < 0 ? -tx : tx;
-        aty = ty < 0 ? -ty : ty;
-        {
-            long l = (long)lf_sqrt((unsigned long)(atx * atx + aty * aty)) * 2 / g_size16[size];   /* half radii */
-            for (rho = 0, best = 0x7FFF, i = 0; i < BK_RHO; i++) {
-                int d = (int)(l - g_rho[look][i] * 2);
-                if (d < 0) d = -d;
-                if (d < best) { best = d; rho = i; }
-            }
-        }
-        ang = rho ? (lf_atan2(aty, atx) + 16) / 32 : 0;
-        if (ang >= BK_ANG)
-            ang = BK_ANG - 1;
-        xms_get(g_bk_hdr, (unsigned long)bake_id(look, rho, ang, size, 0) * sizeof b[0], b, sizeof b);   /* (both frames) */
-        if (!b[0].w || !b[1].w)
-            continue;
-        g_rand = g_rand * 25173U + 13849U;
-        g_fl[g_nf].seed = g_rand + slot * 977U + k * 131U;
-        g_fl[g_nf].v.w = b[0].w;
-        g_fl[g_nf].v.h = b[0].h;
-        g_fl[g_nf].v.ox = b[0].ox;
-        g_fl[g_nf].v.oy = b[0].oy;
-        g_fl[g_nf].v.blk = g_bk_rows;
-        g_fl[g_nf].v.at = b[0].at;
-        g_fl[g_nf].v.len = 0;
-        g_fl[g_nf].at_b = b[1].at;
-        g_fl[g_nf].x = (short)((p->sx * 16L + 8 + ox) >> 4);
-        g_fl[g_nf].y = (short)((p->sy * 16L + 8 + oy) >> 4);
-        g_fl[g_nf].flags = (unsigned char)((tx < 0 ? BLIT_H : 0) | (ty < 0 ? BLIT_V : 0));
-        g_nf++;
+        add_one(p->sx * 16L + 8 + ox, p->sy * 16L + 8 + oy, tx, ty, r16, burn != 0, slot * 977U + k * 131U);
     }
     out->n = (unsigned char)(g_nf - out->first);
+}
+
+void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned id, FlameSet __far *out)
+{
+    out->first = (unsigned char)g_nf;
+    out->front = 0;
+    out->n = (unsigned char)(g_bk_hdr && add_one(x16, y16, tx16, ty16, r16, burn != 0, id));
 }
 
 void flames_draw(const FlameSet __far *f, int y0, int y1, const short __far *ext, int ext_y0, int ext_rows)
