@@ -19,6 +19,7 @@ import { readZip, extractInstaller, looksLikeInstaller, identifyGame, installFil
          saveGame, loadGames, forgetGame, totalSize, gameById, gameByTag, programsIn, knownBuild, GAMES } from "./gamefiles.js";
 import { newRoomCode, retagRoomCode, normalizeCode, roomTag, GAME_TAGS, MAX_CHARS } from "./chatfilter.js";
 import { initHall, OTHER_SERVER, serverDown } from "./hall.js";
+import { makeSet } from "./rvsprites.js";
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
@@ -1288,6 +1289,22 @@ async function start(fromGesture) {
     status(`Installing ${source.game.title} (${source.files.length} files)…`);
     installFiles(Module.FS, GAME_ROOT, source.files);
     log(`installed ${source.files.length} files of ${source.game.title} under ${GAME_ROOT}`);
+    // RetroVega's sprite sets (SHIPnn.RVS: every view at every size and roll
+    // step, retrovega/docs/engine.md "Flight") are made here from the views
+    // in SHIPnn.RV rather than downloaded: the same bytes the C tool makes.
+    if (gameInfo() && gameInfo().id === "rv") {
+      const t0 = performance.now();
+      const sets = [];
+      for (const f of source.files) {
+        const m = /^(SHIP[0-9A-F]{2})\.RV$/i.exec(f.path);
+        if (!m) continue;
+        status(`Making ${m[1]}'s sprite set…`);
+        try { sets.push({ path: f.path + "S", data: makeSet(f.data, 0, 4, 3) }); }
+        catch (e) { log(`${f.path}: no sprite set (${e.message})`); }
+      }
+      installFiles(Module.FS, GAME_ROOT, sets);
+      log(`made ${sets.length} sprite sets (${mb(totalSize(sets))}) in ${Math.round(performance.now() - t0)} ms`);
+    }
     // A program the page makes from the game (Special Operations 3): its
     // files come sealed from the site and open with the player's own copy.
     if (gameInfo() && gameInfo().addon === "so3") {

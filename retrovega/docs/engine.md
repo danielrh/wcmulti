@@ -556,10 +556,12 @@ the emulator.
   straight copy (`file_to_xms`), the index (a view table per block) sits in
   XMS too and is fetched twelve bytes at a time. `tools/rvsprites.c` makes a
   set in 40 ms on the host with lightfield.c's kernels (the same C will
-  build a DOS SETUP.EXE; the page's JavaScript is to make them at load,
-  since the files are 1.2 MB a fighter and are not shipped). Until then the
-  page has no sets and falls back to the .RV views, scaled and turned at
-  draw time.
+  build a DOS SETUP.EXE). The page makes them itself when RetroVega is
+  flown: `web/rvsprites.js` is the generator in JavaScript, byte for byte
+  the C tool's output (`scripts/rvsprites-check.mjs` compares every set
+  under node), 0.1-0.4 s a ship, so the 1.2 MB-a-fighter files are never
+  downloaded; a copy of RV.EXE without them falls back to the .RV views,
+  scaled and turned at draw time.
 - **Five stored turns give sixteen.** An upside-down copy (the rows in the
   other order, the same cost as a copy) turns a sprite by 180 − θ and
   mirrors its heading; a mirrored copy (`rv_blit_row_rev`, four pixels a
