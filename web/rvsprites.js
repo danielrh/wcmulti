@@ -92,18 +92,65 @@ function mirror(a) {
 }
 
 // the view at a size and turn, cropped to its painted box, as run-length rows with a row table
-function render(src, scale, roll) {
+// the picture turned by roll and scaled, by the flight's own kernel (every output pixel samples one source pixel)
+function turned(src, scale, roll) {
   const r = rotateSetup(src.w, src.h, src.ox, src.oy, roll, scale);
   const img = new Uint8Array(r.ow * r.oh);
-  let bx0 = r.ow, bx1 = 0, by0 = r.oh, by1 = 0;
-  for (let y = 0; y < r.oh; y++) {
+  for (let y = 0; y < r.oh; y++)
     rotateRow(src.px, src.w, src.h, r, y, 0, r.ow, img, y * r.ow);   // (the span is only a speed-up in C)
+  return { img, r };
+}
+
+const floor16 = (a) => Math.floor(a / 65536), floor8 = (a) => Math.floor(a / 256);
+
+// The smaller sizes: a picture shrunk by coverage, not by sampling, so a wing a pixel
+// wide survives as a line instead of dropping out.  Output pixel (x, y) owns the box
+// of source pixels whose centres fall in its footprint; it is drawn when enough of them
+// are ship (half from half size up, a quarter below half, an eighth below a quarter, any
+// below an eighth), with the colour of the ship pixel nearest the box's centre.  Byte
+// for byte the C tool's shrunk().
+function shrunk(img, tw, th, tcx, tcy, scale) {
+  const r = rotateSetup(tw, th, tcx, tcy, 0, scale);
+  const out = new Uint8Array(r.ow * r.oh);
+  for (let y = 0; y < r.oh; y++) {
+    const vc = r.v00 + y * r.drv, v0 = vc - idiv(r.drv, 2), v1 = v0 + r.drv;
+    const r0 = -floor16(32768 - v0), r1 = -floor16(32768 - v1);   // rows with centres in [v0, v1)
+    for (let x = 0; x < r.ow; x++) {
+      const uc = r.u00 + x * r.du, u0 = uc - idiv(r.du, 2), u1 = u0 + r.du;
+      const c0 = -floor16(32768 - u0), c1 = -floor16(32768 - u1);
+      const total = (c1 - c0) * (r1 - r0);
+      if (total <= 0) continue;
+      const need = scale >= 128 ? idiv(total + 1, 2) : scale >= 64 ? idiv(total + 3, 4) : scale >= 32 ? idiv(total + 7, 8) : 1;
+      let count = 0, best = -1, pick = 0;
+      for (let rr = r0 < 0 ? 0 : r0; rr < r1 && rr < th; rr++)
+        for (let c = c0 < 0 ? 0 : c0; c < c1 && c < tw; c++) {
+          const p = img[rr * tw + c];
+          if (!p) continue;
+          count++;
+          const dx = floor8(c * 65536 + 32768 - uc), dy = floor8(rr * 65536 + 32768 - vc);
+          const d = dx * dx + dy * dy;
+          if (best < 0 || d < best) { best = d; pick = p; }
+        }
+      if (count >= need) out[y * r.ow + x] = pick;
+    }
+  }
+  return { img: out, r };
+}
+
+function render(src, scale, roll) {
+  let img, r;
+  if (scale < 256) {
+    const big = turned(src, 256, roll);
+    ({ img, r } = shrunk(big.img, big.r.ow, big.r.oh, big.r.ocx, big.r.ocy, scale));
+  } else
+    ({ img, r } = turned(src, scale, roll));
+  let bx0 = r.ow, bx1 = 0, by0 = r.oh, by1 = 0;
+  for (let y = 0; y < r.oh; y++)
     for (let x = 0; x < r.ow; x++)
       if (img[y * r.ow + x]) {
         if (x < bx0) bx0 = x; if (x + 1 > bx1) bx1 = x + 1;
         if (y < by0) by0 = y; if (y + 1 > by1) by1 = y + 1;
       }
-  }
   if (bx1 <= bx0) { bx0 = by0 = 0; bx1 = by1 = 1; }
   const w = bx1 - bx0, h = by1 - by0, ox = r.ocx - bx0, oy = r.ocy - by0;
   const out = new Uint8Array(w * h * 2 + 4 * (h + 1) + 64);

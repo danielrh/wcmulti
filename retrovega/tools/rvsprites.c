@@ -100,6 +100,73 @@ static int decode(const unsigned char *d, long len, Dense *out)
 }
 
 /* the view at a size and turn, as run-length rows with a row table; returns the bytes */
+/* the picture turned by roll and scaled, by the flight's own kernel (every output pixel samples one source pixel) */
+static unsigned char *turned(const Dense *src, int scale, int roll, LfRot *r)
+{
+    unsigned char *img;
+    int y;
+    lf_rotate_setup(src->w, src->h, src->ox, src->oy, roll, scale, r);
+    img = calloc((size_t)r->ow * r->oh, 1);
+    for (y = 0; y < r->oh; y++) {
+        int xs, xe;
+        if (lf_rotate_span(r, src->w, src->h, y, 0, r->ow, &xs, &xe))
+            lf_rotate_row(src->px, src->w, src->h, r, y, xs, xe, img + (long)y * r->ow);
+    }
+    return img;
+}
+
+static long floor16(long a) { return a >= 0 ? a >> 16 : -((-a + 65535) >> 16); }
+static long floor8(long a) { return a >= 0 ? a >> 8 : -((-a + 255) >> 8); }
+
+/* The smaller sizes: a picture shrunk by coverage, not by sampling, so a
+ * wing a pixel wide survives as a line instead of dropping out (the user's
+ * complaint: ships collapsing at a distance look like a bug, hand-drawn
+ * sprites keep their lines).  Output pixel (x, y) owns the box of source
+ * pixels whose centres fall in its footprint (the boxes tile the source);
+ * it is drawn when enough of them are ship - the user's ladder: half from
+ * half size up, a quarter below half, an eighth below a quarter, any at
+ * all below an eighth - with the colour of the ship pixel nearest the
+ * box's centre.  The footprint is the one lf_rotate_setup gives at roll
+ * 0, so origins agree with the flight's. */
+static unsigned char *shrunk(const unsigned char *img, int tw, int th, int tcx, int tcy, int scale, LfRot *r)
+{
+    unsigned char *out;
+    int x, y;
+    lf_rotate_setup(tw, th, tcx, tcy, 0, scale, r);
+    out = calloc((size_t)r->ow * r->oh, 1);
+    for (y = 0; y < r->oh; y++) {
+        long vc = r->v00 + (long)y * r->drv, v0 = vc - r->drv / 2, v1 = v0 + r->drv;
+        long r0 = -floor16(32768L - v0), r1 = -floor16(32768L - v1);   /* rows with centres in [v0, v1) */
+        for (x = 0; x < r->ow; x++) {
+            long uc = r->u00 + (long)x * r->du, u0 = uc - r->du / 2, u1 = u0 + r->du;
+            long c0 = -floor16(32768L - u0), c1 = -floor16(32768L - u1);
+            long total = (c1 - c0) * (r1 - r0), count = 0, need, best = -1, c, rr;
+            unsigned char pick = 0;
+            if (total <= 0)
+                continue;
+            need = scale >= 128 ? (total + 1) / 2 : scale >= 64 ? (total + 3) / 4 : scale >= 32 ? (total + 7) / 8 : 1;
+            for (rr = r0 < 0 ? 0 : r0; rr < r1 && rr < th; rr++)
+                for (c = c0 < 0 ? 0 : c0; c < c1 && c < tw; c++) {
+                    unsigned char p = img[rr * tw + c];
+                    long dx, dy, d;
+                    if (!p)
+                        continue;
+                    count++;
+                    dx = floor8((c << 16) + 32768L - uc);
+                    dy = floor8((rr << 16) + 32768L - vc);
+                    d = dx * dx + dy * dy;
+                    if (best < 0 || d < best) {
+                        best = d;
+                        pick = p;
+                    }
+                }
+            if (count >= need)
+                out[(long)y * r->ow + x] = pick;
+        }
+    }
+    return out;
+}
+
 static unsigned char *render(const Dense *src, int scale, int roll, int *w, int *h, int *ox, int *oy, long *len)
 {
     LfRot r;
@@ -107,15 +174,20 @@ static unsigned char *render(const Dense *src, int scale, int roll, int *w, int 
     uint32_t *tab;                      /* (the host's long is 64 bits: the file's entries are 32) */
     long n = 0, cap;
     int y, x;
-    lf_rotate_setup(src->w, src->h, src->ox, src->oy, roll, scale, &r);
     unsigned char *img;
-    int bx0 = r.ow, bx1 = 0, by0 = r.oh, by1 = 0;
-    /* the turned picture, then its painted box: the margins would cost a row each when drawn */
-    img = calloc((size_t)r.ow * r.oh, 1);
-    for (y = 0; y < r.oh; y++) {
-        int xs, xe;
-        if (lf_rotate_span(&r, src->w, src->h, y, 0, r.ow, &xs, &xe))
-            lf_rotate_row(src->px, src->w, src->h, &r, y, xs, xe, img + (long)y * r.ow);
+    int bx0, bx1 = 0, by0, by1 = 0;
+    /* the turned picture (shrunk by coverage below full size), then its painted box: the
+     * margins would cost a row each when drawn */
+    if (scale < 256) {
+        LfRot full;
+        unsigned char *big = turned(src, 256, roll, &full);
+        img = shrunk(big, full.ow, full.oh, full.ocx, full.ocy, scale, &r);
+        free(big);
+    } else
+        img = turned(src, scale, roll, &r);
+    bx0 = r.ow;
+    by0 = r.oh;
+    for (y = 0; y < r.oh; y++)
         for (x = 0; x < r.ow; x++)
             if (img[(long)y * r.ow + x]) {
                 if (x < bx0) bx0 = x;
@@ -123,7 +195,6 @@ static unsigned char *render(const Dense *src, int scale, int roll, int *w, int 
                 if (y < by0) by0 = y;
                 if (y + 1 > by1) by1 = y + 1;
             }
-    }
     if (bx1 <= bx0) { bx0 = by0 = 0; bx1 = by1 = 1; }   /* (a blank view keeps one clear pixel) */
     *w = bx1 - bx0;
     *h = by1 - by0;

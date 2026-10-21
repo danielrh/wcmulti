@@ -631,6 +631,25 @@ rolls at nine sizes 1.4) instead of 2.5 with the full-size block resident
 and rolls at three, and a denser lattice for the exact draw now costs disk,
 not memory.
 
+**Shrinking by coverage** (2026-10-20): the user saw the fighters' wings
+collapse into nothing at a distance ("less hand drawn and intentional and
+more like a bug"): the generator made every smaller size by the flight's
+own kernel, one source sample per output pixel, so anything thinner than
+the sampling step dropped out. Both generators (`shrunk` in
+tools/rvsprites.c and web/rvsprites.js, byte for byte) now shrink by
+coverage: the picture is turned at full size first, then each small
+pixel owns the box of source pixels whose centres fall in its footprint
+(the boxes tile the source; the footprint is `lf_rotate_setup`'s at roll
+0, so origins agree with the flight's), is drawn when enough of them are
+ship — the user's ladder: half from half size up, a quarter below half,
+an eighth below a quarter, any at all below an eighth — and takes the
+colour of the ship pixel nearest the box's centre (no blending: the
+palette is indexed, and a real pixel's colour reads as drawn). Full size
+is untouched, so the exact path and block 0 are as before. A one-pixel
+wing now survives as a line down to an eighth; the page makes its 19
+sets in about 12 s under node (the box scan is a pass over the source
+per size) — see scripts/rvsprites-check.mjs's timing.
+
 **The player's roll on far ships** (2026-10-20): rolling the camera never
 switches a view (the direction to the camera in the ship's frame does not
 change), so a near ship turns smoothly on the exact path; a far one comes
