@@ -22,7 +22,7 @@ void __far __cdecl rv_xms(RvRegs *r);
 /* XMS (xms.c): blocks of extended memory, moved with the driver's function 0Bh.
  * A block belongs to a level and every level's blocks can be freed at once. */
 enum { XMS_RESIDENT, XMS_BASE, XMS_ROOM, XMS_MISSION, XMS_LEVELS };
-#define XMS_MAX_BLOCKS 48
+#define XMS_MAX_BLOCKS 320               /* a mission's sprite sets take a block per (size, roll) */
 typedef unsigned short XmsBlock;       /* index into the block table, 0 = none */
 int xms_init(unsigned long want_kb);   /* allocates one arena of want_kb; 0 on failure */
 unsigned long xms_free_kb(void);       /* free in the arena */
@@ -92,7 +92,7 @@ int in_init(void);
 void in_poll(Input *in);
 void in_warp(int x, int y);
 void in_steer(int on);                 /* the arrows steer the pointer (on unless a menu takes them) */
-int in_arrows(void);                   /* the arrows held: bit 0 left, 1 right, 2 up, 3 down (a script's holds too) */
+int in_arrows(void);                   /* held: bit 0 left, 1 right, 2 up, 3 down, 4 roll left (Q), 5 roll right (E) */
 int in_key_down(int scan);             /* a key held, by scan code */
 unsigned long ticks(void);             /* BIOS ticks, 18.2 a second */
 int script_open(const char *path);

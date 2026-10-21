@@ -15,7 +15,7 @@ void (__far *rv_xms_entry)(void);
 
 static unsigned short g_handle;
 static unsigned long g_size, g_top;
-static struct { unsigned long off, size; unsigned char level, used; } g_block[XMS_MAX_BLOCKS + 1];
+static struct { unsigned long off, size; unsigned char level, used; } __far g_block[XMS_MAX_BLOCKS + 1];
 static unsigned g_nblocks;
 
 #pragma pack(1)

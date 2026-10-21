@@ -27,6 +27,8 @@
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
 int g_bench_wanted = -1;                /* RV.EXE /bench N: that many copies, no adapting; 0 none; -1 adapt */
+int g_record = 0;                       /* RV.EXE /record N: a screenshot (Rnnnnn.BMP) every N frames of flight */
+int g_capital = 0;                      /* RV.EXE /capital: the carrier in the flight (a test aid) */
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
 /* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
 #define SHIELD(s, k) (((unsigned short *)curShield)[(s) * 2 + (k)])
@@ -50,7 +52,7 @@ static int g_set_enemy = -1, g_set_wing = -1;
 static const RvShipType __far *g_my_type;
 static CockpitState g_st;
 static char g_mfd[2][4][28];
-static int g_steer_x, g_steer_y;        /* -9..9 */
+static int g_steer_x, g_steer_y, g_steer_roll;   /* -9..9 */
 static int g_keyboard_steer;
 static int g_exit;
 static unsigned long g_damage_at;
@@ -147,15 +149,14 @@ static void ship_physics(int s)
     if (rvController[s] == 1) {
         yaw = g_steer_x;
         pitch = g_steer_y;
+        if (g_steer_roll)
+            rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(t->roll_dps, g_steer_roll));
     } else if (rvController[s] == 0 && commAnimInfo[s] == 0) {
-        /* a friendly stand-in keeps station off the player's right, 1,000 km out and 2,500 ahead */
-        const RvVec3 *r = &gOrientationRightVector[0], *f = &gOrientationFrontVector[0];
-        gOrientationFrontVector[s] = *f;
-        gOrientationRightVector[s] = *r;
-        gOrientationUpVector[s] = gOrientationUpVector[0];
-        gPositionVector[s].x = gPositionVector[0].x + (r->x * 1000 + f->x * 2500);
-        gPositionVector[s].y = gPositionVector[0].y + (r->y * 1000 + f->y * 2500);
-        gPositionVector[s].z = gPositionVector[0].z + (r->z * 1000 + f->z * 2500);
+        /* a friendly stand-in keeps station off the player's right, 1,000 km out and 2,500 ahead,
+         * flying level and straight (it does not roll with the player) */
+        gPositionVector[s].x = gPositionVector[0].x + 256L * 1000;
+        gPositionVector[s].y = gPositionVector[0].y;
+        gPositionVector[s].z = gPositionVector[0].z + 256L * 2500;
         speedLo[s] = speedLo[0];
         return;
     } else if (rvController[s] == 0) {
@@ -173,7 +174,9 @@ static void ship_physics(int s)
             yaw = dr > 0 ? 6 : dr < 0 ? -6 : 0;
             pitch = du > 0 ? -5 : du < 0 ? 5 : 0;
         } else {
+            /* passing: a slow turn, and a steady roll about its own axis */
             yaw = (int)((s & 1) ? 3 : -3);
+            rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(t->roll_dps, (s & 1) ? 4 : -4));
         }
     }
     if (yaw)
@@ -309,7 +312,7 @@ static void draw_world(int y0, int y1)
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
         LfVec rel;
         int set;
-        if (maybeEntityType[s] != 0xC)
+        if (maybeEntityType[s] != 0xC && maybeEntityType[s] != 0xD)
             continue;
         set = ships_find(gInstanceShipTypes[s]);
         if (set < 0)
@@ -511,16 +514,30 @@ void __far __cdecl flight_startup(void)
     }
     if (enemy_type < 0)
         enemy_type = 0x08;
+    if (g_capital && n <= RV_MAX_SHIP_SLOT) {
+        /* a test aid: the Vigilance off to the left, ahead, standing still */
+        spawn(n, 0x20, 0, 4, -256L * 3000, 0, 256L * 5000, 256);
+        maybeEntityType[n] = 0xD;
+        setSpeed[n] = speedLo[n] = 0;
+        ships_load(0x20);
+        n++;
+    }
     g_set_enemy = ships_load(enemy_type);
     g_set_wing = ships_load(g_camp.player_ship);
     for (i = 1; i < n; i++)
         ships_load(gInstanceShipTypes[i]);
+    {
+        /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
+        unsigned long free_kb = xms_free_kb(), taken;
+        taken = ships_load_blocks(free_kb > 1024 ? (free_kb - 1024) * 1024UL : 0);
+        rv_log("ships: %lu KB of blocks loaded, %lu KB of XMS left", taken / 1024, xms_free_kb());
+    }
     ships_set_camera(SCR_W / 2, cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2,
                      400);
     if (g_set_enemy >= 0) {
         /* the benchmark's sprite: the biggest of the type's band views */
         const ShipSet __far *set = ships_set(g_set_enemy);
-        long best = 0, paths[3];
+        long best = 0, paths[5];
         for (i = 1; i < 36; i++) {
             long area = (long)set->view[i].w * set->view[i].h;
             if (area > best) {
@@ -536,8 +553,8 @@ void __far __cdecl flight_startup(void)
             rv_log("lightfield: asm kernels %s the C ones (%ld pixels compared)", n < 0 ? "DISAGREE WITH" : "agree with", n);
         }
         ships_time_paths(g_set_enemy, g_bench_view, paths);
-        rv_log("lightfield: view %d (%dx%d): copy %ld px/ms, scaled to 3/4 %ld px/ms, turned 45 degrees at 3/4 %ld px/ms",
-               g_bench_view, g_bench_w, g_bench_h, paths[0], paths[1], paths[2]);
+        rv_log("lightfield: view %d (%dx%d): copy %ld px/ms, scaled to 3/4 %ld, turned 45 degrees at 3/4 %ld, copy upside down %ld, copy mirrored %ld",
+               g_bench_view, g_bench_w, g_bench_h, paths[0], paths[1], paths[2], paths[3], paths[4]);
     }
     g_nbench = 0;
     g_bench_sum = 0;
@@ -603,6 +620,7 @@ unsigned short __far __cdecl flight_keys(void)
         setSpeed[0] = g_st.max_speed;
     if (in_key_down(0x0D) || in_key_down(0x4E)) setSpeed[0] += 2;    /* = and keypad + held */
     if ((in_key_down(0x0C) || in_key_down(0x4A)) && setSpeed[0] >= 2) setSpeed[0] -= 2;
+    g_steer_roll = ((arrows >> 5) & 1) * 9 - ((arrows >> 4) & 1) * 9;
     /* steering: the arrows at full rate, else the pointer's distance from the middle */
     if (dx || dy) {
         g_keyboard_steer = 1;
@@ -656,6 +674,11 @@ void __far __cdecl flight_frame(void)
     gather();
     cockpit_dirty(&g_st);
     scene_draw();
+    if (g_record && frameCounter % g_record == 0) {
+        char name[12];
+        sprintf(name, "R%05u", frameCounter / g_record);
+        shot_save(name);
+    }
     rvFrameDone();
     if (now - g_t0 >= FLIGHT_TICKS)
         missionStatus = 1;              /* landed */

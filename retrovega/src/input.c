@@ -40,7 +40,7 @@ static int g_mouse, g_x = 320, g_y = 200, g_keyboard, g_slack, g_buttons;
 static int g_steer = 1;
 static unsigned long g_steer_at, g_held;    /* clock240: the last step; how long the arrows are held */
 static long g_fx, g_fy;                     /* the pointer while steering, in 1/256 pixel */
-static unsigned long g_hold_until[4];       /* a script's held arrows: until this BIOS tick */
+static unsigned long g_hold_until[6];       /* a script's held arrows (and rleft, rright): until this BIOS tick */
 
 /* int 9: which keys are down, by scan code; the BIOS's handler still runs */
 static void (__interrupt __far *g_old9)(void);
@@ -209,6 +209,8 @@ static void script_step(Input *in)
             int n, ch, k;
             if (sscanf(arg, "%15s %d", name, &n) == 2 && (k = key_named(name, &ch)) >= KEY_LEFT && k <= KEY_DOWN)
                 g_hold_until[k - KEY_LEFT] = ticks() + n;
+            else if (sscanf(arg, "%15s %d", name, &n) == 2 && (!strcmp(name, "rleft") || !strcmp(name, "rright")))
+                g_hold_until[!strcmp(name, "rleft") ? 4 : 5] = ticks() + n;   /* the flight's roll keys */
             else
                 rv_log("script: hold %s?", arg);
             continue;
@@ -235,13 +237,16 @@ static void script_step(Input *in)
     g_quit = 1;
 }
 
-/* the arrows held down: bit 0 left, 1 right, 2 up, 3 down */
+/* the arrows held down: bit 0 left, 1 right, 2 up, 3 down; and the flight's
+ * roll keys, 4 Q (roll left), 5 E (roll right) */
 static int arrows(void)
 {
     int i, m = 0;
     for (i = 0; i < 4; i++)
         if (g_script ? ticks() < g_hold_until[i] : g_down[g_arrow_scan[i]] != 0)
             m |= 1 << i;
+    if (g_script ? ticks() < g_hold_until[4] : g_down[0x10] != 0) m |= 16;
+    if (g_script ? ticks() < g_hold_until[5] : g_down[0x12] != 0) m |= 32;
     return m;
 }
 

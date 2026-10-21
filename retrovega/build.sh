@@ -20,8 +20,20 @@ CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq $OPT -i=src"
 nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
-# the fighters' views (tools/pack.py, copied into art/ships): beside RV.EXE
+# the fighters' views (tools/pack.py, copied into art/ships): beside RV.EXE, and
+# their pre-rendered sets (tools/rvsprites.c, the host build of lightfield.c)
 cp art/ships/SHIP*.RV "$OUT/" 2>/dev/null || true
+mkdir -p build/host
+gcc -std=gnu99 -O2 -I src -o build/host/rvsprites src/lightfield.c tools/rvsprites.c
+for f in art/ships/SHIP*.RV; do
+    s="$OUT/$(basename "${f%.RV}").RVS"
+    [ "$s" -nt "$f" ] && [ "$s" -nt tools/rvsprites.c ] && [ "$s" -nt src/lightfield.c ] || build/host/rvsprites "$f" "$s" > /dev/null
+done
+# the carrier (a test aid, RV.EXE /capital): from half size down, rolls at two sizes
+if [ -f build/rvdat/SHIP20.RV ]; then
+    s="$OUT/SHIP20.RVS"
+    [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
+fi
 ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"

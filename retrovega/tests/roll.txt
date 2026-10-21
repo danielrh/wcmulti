@@ -1,0 +1,29 @@
+# a roll through a full turn with the wingman and the carrier in view (run with /bench 0 /capital /record 2)
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 24
+hold rright 160
+wait 170
+hold rleft 80
+wait 100
+key esc
+wait 16
+log done

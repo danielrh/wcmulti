@@ -1,25 +1,32 @@
-/* ships.c: a ship type's views in XMS, and the blitter (ships.h).
+/* ships.c: a ship type's views in XMS, and the draw of one (ships.h).
  *
- * SHIPnn.RV (tools/pack.py) is a WC container: block 0 holds the views as
- * WC's run-length sprite code, block 1 the 'RVSH' record.  Each view is
- * decoded into a line buffer a row at a time and re-encoded as gfx.c's rows
- * (skip, count, pixels ... 0, 0) with a table of row offsets, into the
- * mission's XMS level.  A symmetric ship's 25 missing headings (210..330)
- * are the mirror images of 150..30, made here, so every set has 62 views
- * and the flight never flips a sprite.  A view's raw bytes sit in gfx.c's
- * scratch while it is decoded, twelve rows at a time, into a band buffer;
- * the rows go out through the scratch's free end.  Drawing fetches a view's
- * rows into the same scratch with one XMS move and hands each row to
- * rv_blit_row (lowlevel.asm), clipped to the cockpit opening's extent on
- * that row. */
+ * The flight draws from pre-rendered sets, SHIPnn.RVS (tools/rvsprites.c,
+ * made on the host from SHIPnn.RV, the "compressed" form: 37 or 62 views at
+ * full size): every view at 13 size steps, and at roll steps of 22.5
+ * degrees for the largest sizes, already in gfx.c's run-length row format,
+ * so a block of the file goes into XMS by a straight copy and every draw is
+ * a copy of rows.  A symmetric ship stores only the arc 0..90 degrees (five
+ * of the sixteen steps): an upside-down copy (the rows in the other order)
+ * turns a sprite by 180 - theta and mirrors its heading, a mirrored copy
+ * (each row backwards, rv_blit_row_rev) turns it by -theta and mirrors the
+ * heading, and both together turn it by 180; so the other eleven steps are
+ * those copies of the stored five, of this view or of the opposite
+ * heading's.  The set's index (a view table per block) sits in XMS too and
+ * is fetched twelve bytes at a time.  A mission opens its types' sets,
+ * loads their full-size blocks, then ships_load_blocks fills the ladder for
+ * every type and the rolls by size while the budget lasts; a draw that
+ * finds its block missing takes the unturned one at that size.
+ *
+ * Without a .RVS beside RV.EXE a type falls back to SHIPnn.RV decoded here
+ * (full size only, scaled or turned at draw time through the lightfield
+ * kernels, which costs nine times a copy): the page runs that way until its
+ * JavaScript makes the sets. */
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
 #include "ships.h"
 #include "lightfield.h"
 #include "music.h"
-#define RV_TABLES
-#include "rvdata.h"
 
 #define SCRATCH 32768U                  /* gfx.c's scratch: a view's raw bytes, then the rows going out */
 #define LINE 1024
@@ -33,7 +40,7 @@ static unsigned char __far *g_band;     /* BAND_ROWS x LINE pixels, 0 = clear (n
 /* the camera */
 static int g_cx = SCR_W / 2, g_cy = SCR_H / 2, g_focal = 400;
 
-/* one view expanded dense (w x h, pitch w) for the turned draw */
+/* one view expanded dense (w x h, pitch w) for the fallback's turned draw */
 #define DENSE_MAX 65024U
 static unsigned char __far *g_dense;
 static int g_dense_set = -1, g_dense_view = -1;
@@ -41,12 +48,13 @@ static unsigned short __far *g_cmap;    /* the scaled draw's column map, LINE en
 static unsigned char __far *g_line;     /* one source row expanded, LINE pixels */
 
 void __far __cdecl rv_blit_row(unsigned char __far *row, const unsigned char __far *spans, int left, int xa, int xb);
+void __far __cdecl rv_blit_row_rev(unsigned char __far *row, const unsigned char __far *spans, int right, int xa, int xb);
 void __far __cdecl rv_scale_row(const unsigned char __far *line, const unsigned short __far *map, int xa, int xb,
                                 unsigned char __far *out);
 void __far __cdecl rv_rotate_row(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs, int xe,
                                  unsigned char __far *out);
 
-/* --- loading --- */
+/* --- the .RV fallback: decoding WC's sprite code --- */
 
 static unsigned long rd32(FILE *f)
 {
@@ -142,35 +150,16 @@ static unsigned long encode_view(XmsBlock blk, unsigned long at, const unsigned 
     return at + n - start;
 }
 
-int ships_find(unsigned type)
+static int load_rv(ShipSet __far *s, const char *name)
 {
-    int i;
-    for (i = 0; i < g_nsets; i++)
-        if (g_set[i]->type == type)
-            return i;
-    return -1;
-}
-
-int ships_load(unsigned type)
-{
-    char name[16];
-    FILE *f;
+    FILE *f = fopen(name, "rb");
     unsigned long total, b0, b1, n, i, at, size, tab0[64];
     unsigned long __far *rowtab;
     unsigned char __far *raw = gfx_scratch();
-    ShipSet __far *s;
     unsigned char rec[12];
-    int found = ships_find(type), v;
-    if (found >= 0)
-        return found;
-    if (g_nsets >= SHIP_SETS)
-        return -1;
-    sprintf(name, "SHIP%02X.RV", type);
-    f = fopen(name, "rb");
-    if (!f) {
-        rv_log("ships: no %s", name);
-        return -1;
-    }
+    int v;
+    if (!f)
+        return 0;
     if (!g_band) g_band = (unsigned char __far *)_fmalloc((size_t)BAND_ROWS * LINE);
     RV_ASSERT(g_band != 0);
     fseek(f, 0, SEEK_END);
@@ -185,17 +174,11 @@ int ships_load(unsigned type)
     if (memcmp(rec, "RVSH", 4) != 0) {
         rv_log("ships: %s is not a ship file", name);
         fclose(f);
-        return -1;
+        return 0;
     }
-    s = (ShipSet __far *)_fmalloc(sizeof(ShipSet));
-    RV_ASSERT(s != 0);
-    _fmemset(s, 0, sizeof(ShipSet));
-    s->type = rec[4];
     s->nviews = rec[5];
     s->asym = rec[6] & 1;
-    s->livery = rec[7];
     s->lod0 = rec[8] | (rec[9] << 8);
-    /* block 0: the views' container */
     fseek(f, b0, SEEK_SET);
     total = rd32(f);
     n = (rd32(f) & 0xFFFFFFUL);
@@ -205,13 +188,11 @@ int ships_load(unsigned type)
     for (i = 0; i < n; i++)
         tab0[i] = b0 + (rd32(f) & 0xFFFFFFUL);
     if (s->nviews > n) s->nviews = (unsigned char)n;
-    /* the mission level: the file's size three times over covers the mirrored copies */
     s->blk = xms_alloc(size * 3 + 65536UL, XMS_MISSION);
     if (!s->blk) {
         rv_log("ships: no XMS for %s", name);
-        _ffree(s);
         fclose(f);
-        return -1;
+        return 0;
     }
     rowtab = (unsigned long __far *)_fmalloc(4 * 1025);
     RV_ASSERT(rowtab != 0);
@@ -224,7 +205,6 @@ int ships_load(unsigned type)
             rv_log("ships: %s view %d is %lu bytes, too big to decode", name, v, len);
             continue;
         }
-        /* the view's bytes into the scratch, 1 KB at a time (fread wants a near buffer) */
         fseek(f, tab0[v], SEEK_SET);
         for (k = 0; k < len; k += 1024) {
             unsigned part = len - k < 1024 ? (unsigned)(len - k) : 1024;
@@ -254,6 +234,7 @@ int ships_load(unsigned type)
             view->h = (unsigned short)h;
             view->ox = (short)(c ? w - 1 - (hdr[1] + 1) : hdr[1] + 1);
             view->oy = (short)(hdr[2] + 1);
+            view->blk = s->blk;
             view->at = at;
             at += 4UL * (h + 1);
             at += encode_view(s->blk, at, raw, len, w, h, hdr[1], hdr[2], c, rowtab);
@@ -265,9 +246,184 @@ int ships_load(unsigned type)
         s->nviews = SHIP_VIEWS;
     _ffree(rowtab);
     fclose(f);
-    rv_log("ships: %s, %d views, %lu KB in XMS", name, s->nviews, at / 1024);
+    s->nsizes = 1;
+    s->nrolls = 1;
+    s->scale[0] = 256;
+    rv_log("ships: %s decoded, %d views, %lu KB in XMS (no .RVS: scaled and turned at draw time)", name, s->nviews, at / 1024);
+    return 1;
+}
+
+/* --- the pre-rendered sets --- */
+
+/* a file's bytes [at, at+n) into an XMS block at `to` */
+static void file_to_xms(FILE *f, unsigned long at, unsigned long n, XmsBlock blk, unsigned long to)
+{
+    unsigned long k;
+    fseek(f, at, SEEK_SET);
+    for (k = 0; k < n; k += sizeof rv_filebuf) {
+        unsigned part = n - k < sizeof rv_filebuf ? (unsigned)(n - k) : sizeof rv_filebuf;
+        fread(rv_filebuf, 1, part, f);
+        xms_put(blk, to + k, rv_filebuf, part);
+    }
+}
+
+/* the view record (w, h, ox, oy, at) of view v in a block of a set: 1 when it is stored and loaded */
+static int set_view(const ShipSet __far *s, const SetBlock __far *b, int v, ShipView *out)
+{
+    unsigned char e[12];
+    if (!b || !b->loaded)
+        return 0;
+    xms_get(s->blk, b->index_at + 12UL * v, e, 12);
+    out->w = e[0] | (e[1] << 8);
+    out->h = e[2] | (e[3] << 8);
+    out->ox = (short)(e[4] | (e[5] << 8));
+    out->oy = (short)(e[6] | (e[7] << 8));
+    out->blk = b->blk;
+    out->at = e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24);
+    return out->w != 0;
+}
+
+static int load_block(ShipSet __far *s, SetBlock __far *b)
+{
+    FILE *f;
+    char name[16];                      /* (near: the file calls take near pointers) */
+    if (b->loaded)
+        return 1;
+    b->blk = xms_alloc(b->length + 2, XMS_MISSION);
+    if (!b->blk)
+        return 0;
+    sprintf(name, "SHIP%02X.RVS", s->type);
+    f = fopen(name, "rb");
+    if (!f)
+        return 0;
+    file_to_xms(f, b->at, b->length, b->blk, 0);
+    fclose(f);
+    b->loaded = 1;
+    return 1;
+}
+
+static int load_rvs(ShipSet __far *s, const char *name)
+{
+    FILE *f = fopen(name, "rb");
+    unsigned char hd[44];
+    unsigned long nblocks, i, index_len;
+    int k, v;
+    if (!f)
+        return 0;
+    fread(hd, 1, 44, f);
+    if (memcmp(hd, "RVSP", 4) != 0) {
+        rv_log("ships: %s is not a sprite set", name);
+        fclose(f);
+        return 0;
+    }
+    s->rvs = 1;
+    s->nviews = hd[5];
+    s->nsizes = hd[6];
+    s->nrolls = hd[7];
+    s->roll_sizes = hd[8];
+    s->asym = hd[9];
+    for (k = 0; k < 16; k++)
+        s->scale[k] = hd[12 + 2 * k] | (hd[13 + 2 * k] << 8);
+    nblocks = rd32(f);
+    RV_ASSERT(nblocks <= SET_BLOCKS && s->nviews <= SHIP_VIEWS && s->nrolls <= 16);
+    s->nblocks = (int)nblocks;
+    index_len = nblocks * (12 + 12UL * s->nviews);
+    s->blk = xms_alloc(index_len + 2, XMS_MISSION);
+    if (!s->blk) {
+        fclose(f);
+        return 0;
+    }
+    file_to_xms(f, 48, index_len, s->blk, 0);
+    for (i = 0; i < nblocks; i++) {
+        unsigned char bh[12];
+        SetBlock __far *b = &s->block[i];
+        unsigned long at = i * (12 + 12UL * s->nviews);
+        xms_get(s->blk, at, bh, 12);
+        b->size = bh[0];
+        b->roll = bh[1];
+        b->at = bh[4] | ((unsigned long)bh[5] << 8) | ((unsigned long)bh[6] << 16) | ((unsigned long)bh[7] << 24);
+        b->length = bh[8] | ((unsigned long)bh[9] << 8) | ((unsigned long)bh[10] << 16) | ((unsigned long)bh[11] << 24);
+        b->index_at = at + 12;
+        b->loaded = 0;
+    }
+    fclose(f);
+    /* the full-size unturned block now: it is the fallback for everything */
+    if (!load_block(s, &s->block[0]))
+        return 0;
+    for (v = 0; v < s->nviews; v++) {
+        ShipView one;
+        set_view(s, &s->block[0], v, &one);
+        s->view[v] = one;
+    }
+    rv_log("ships: %s, %d views, %d sizes, %d roll steps on the %d largest, %lu blocks", name, s->nviews, s->nsizes,
+           s->nrolls, s->roll_sizes, nblocks);
+    return 1;
+}
+
+int ships_find(unsigned type)
+{
+    int i;
+    for (i = 0; i < g_nsets; i++)
+        if (g_set[i]->type == type)
+            return i;
+    return -1;
+}
+
+int ships_load(unsigned type)
+{
+    char name[16];
+    ShipSet __far *s;
+    int found = ships_find(type), ok;
+    if (found >= 0)
+        return found;
+    if (g_nsets >= SHIP_SETS)
+        return -1;
+    s = (ShipSet __far *)_fmalloc(sizeof(ShipSet));
+    RV_ASSERT(s != 0);
+    _fmemset(s, 0, sizeof(ShipSet));
+    s->type = (unsigned char)type;
+    sprintf(name, "SHIP%02X.RVS", type);
+    ok = load_rvs(s, name);
+    if (!ok) {
+        sprintf(name, "SHIP%02X.RV", type);
+        ok = load_rv(s, name);
+    }
+    if (!ok) {
+        rv_log("ships: no set for type %02X", type);
+        _ffree(s);
+        return -1;
+    }
     g_set[g_nsets] = s;
     return g_nsets++;
+}
+
+/* the sets' other blocks: the ladder (every size, unturned) for every set,
+ * then the rolls, largest size first, while the budget lasts */
+unsigned long ships_load_blocks(unsigned long budget)
+{
+    unsigned long taken = 0;
+    int pass, i, k;
+    for (pass = 0; pass < 2; pass++)
+        for (k = 0; k < 16; k++)
+            for (i = 0; i < g_nsets; i++) {
+                ShipSet __far *s = g_set[i];
+                int b;
+                if (!s->rvs)
+                    continue;
+                for (b = 0; b < s->nblocks; b++) {
+                    SetBlock __far *blk = &s->block[b];
+                    if (blk->loaded || blk->size != k || (pass == 0) != (blk->roll == 0))
+                        continue;
+                    if (taken + blk->length > budget) {
+                        rv_log("ships: the budget is spent at type %02X size %d roll %d", s->type, k, blk->roll);
+                        return taken;
+                    }
+                    if (!load_block(s, blk))
+                        return taken;
+                    taken += blk->length;
+                }
+            }
+    return taken;
 }
 
 const ShipSet __far *ships_set(int i)
@@ -282,6 +438,7 @@ void ships_unload(void)
     for (i = 0; i < g_nsets; i++)
         _ffree(g_set[i]);
     g_nsets = 0;
+    g_dense_set = g_dense_view = -1;
 }
 
 /* --- drawing --- */
@@ -296,18 +453,17 @@ void ships_set_camera(int cx, int cy, int focal)
 /* rows r0 .. *r1-1 of a view into the scratch (one XMS move for the table,
  * one for the rows; *r1 comes down when they do not all fit): returns the
  * row table, offsets relative to row r0's data, which starts at *data */
-static unsigned long __far *fetch_rows(const ShipSet __far *s, const ShipView __far *view, int r0, int *r1,
-                                       unsigned char __far **data)
+static unsigned long __far *fetch_rows(const ShipView *view, int r0, int *r1, unsigned char __far **data)
 {
     unsigned char __far *scratch = gfx_scratch();
     unsigned long __far *tab = (unsigned long __far *)scratch;
     unsigned n = *r1 - r0 + 1, room;
-    xms_get(s->blk, view->at + 4UL * r0, tab, 4UL * n);
+    xms_get(view->blk, view->at + 4UL * r0, tab, 4UL * n);
     room = SCRATCH - 4 * n - 16;
     while (tab[*r1 - r0] - tab[0] > room && *r1 > r0 + 1)
         (*r1)--;
     *data = scratch + 4 * n;
-    xms_get(s->blk, view->at + 4UL * (view->h + 1) + tab[0], *data, tab[*r1 - r0] - tab[0]);
+    xms_get(view->blk, view->at + 4UL * (view->h + 1) + tab[0], *data, tab[*r1 - r0] - tab[0]);
     return tab;
 }
 
@@ -324,42 +480,52 @@ static int row_clip(int ry, int *ca, int *cb, const short __far *ext, int ext_y0
     return *ca < *cb;
 }
 
-/* path 1: the view's rows copied, span by span (rv_blit_row) */
-void ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
-                const short __far *ext, int ext_y0, int ext_rows)
+/* the copy: the view's rows, span by span; upside down (BLIT_V: the rows in
+ * the other order) and mirrored (BLIT_H: each row backwards) as asked */
+void ships_blit_view(const ShipView __far *fv, int flags, int x, int y, int y0, int y1, int xa, int xb,
+                     const short __far *ext, int ext_y0, int ext_rows)
 {
-    const ShipView __far *view;
-    int top, left, r0, r1;
-    RV_CHECK(v, SHIP_VIEWS);
-    view = &s->view[v];
-    if (!view->w)
+    ShipView view = *fv;
+    int top, left, right, r0, r1, h = view.h, w = view.w, flip = flags & BLIT_V, mir = flags & BLIT_H;
+    if (!w)
         return;
-    top = y - view->oy;
-    left = x - view->ox;
+    top = y - (flip ? h - 1 - view.oy : view.oy);
+    left = x - (mir ? w - 1 - view.ox : view.ox);
+    right = left + w;
     if (y0 < top) y0 = top;
-    if (y1 > top + (int)view->h) y1 = top + view->h;
+    if (y1 > top + h) y1 = top + h;
     if (y0 < 0) y0 = 0;
     if (y1 > SCR_H) y1 = SCR_H;
     if (xa < 0) xa = 0;
     if (xb > SCR_W) xb = SCR_W;
-    if (y0 >= y1 || left >= xb || left + (int)view->w <= xa)
+    if (y0 >= y1 || left >= xb || right <= xa)
         return;
-    r0 = y0 - top;
-    while (r0 < y1 - top) {
+    /* the sprite rows wanted: screen rows y0..y1-1 are sprite rows y0-top.. (or h-1-.. when flipped) */
+    r0 = flip ? h - (y1 - top) : y0 - top;
+    while (r0 < (flip ? h - (y0 - top) : y1 - top)) {
         unsigned long __far *tab;
-        unsigned char __far *data, __far *dst;
+        unsigned char __far *data;
         int r;
-        r1 = y1 - top;
-        tab = fetch_rows(s, view, r0, &r1, &data);
-        dst = vid_row(top + r0);
-        for (r = r0; r < r1; r++, dst += SCR_W) {
-            int ca = xa, cb = xb;
-            if (!row_clip(top + r, &ca, &cb, ext, ext_y0, ext_rows))
+        r1 = flip ? h - (y0 - top) : y1 - top;
+        tab = fetch_rows(&view, r0, &r1, &data);
+        for (r = r0; r < r1; r++) {
+            int ry = flip ? top + (h - 1 - r) : top + r, ca = xa, cb = xb;
+            if (!row_clip(ry, &ca, &cb, ext, ext_y0, ext_rows))
                 continue;
-            rv_blit_row(dst, data + (unsigned)(tab[r - r0] - tab[0]), left, ca, cb);
+            if (mir)
+                rv_blit_row_rev(vid_row(ry), data + (unsigned)(tab[r - r0] - tab[0]), right, ca, cb);
+            else
+                rv_blit_row(vid_row(ry), data + (unsigned)(tab[r - r0] - tab[0]), left, ca, cb);
         }
         r0 = r1;
     }
+}
+
+void ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
+                const short __far *ext, int ext_y0, int ext_rows)
+{
+    RV_CHECK(v, SHIP_VIEWS);
+    ships_blit_view(&s->view[v], 0, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
 }
 
 /* a run-length row expanded into a line of w pixels (0 where clear) */
@@ -388,13 +554,13 @@ static void need_buffers(void)
     RV_ASSERT(g_cmap && g_line);
 }
 
-/* path 2: the view scaled as it is copied: each output row expands its
- * source row once, then maps columns straight into the back buffer */
+/* the fallback's scaled copy: each output row expands its source row once,
+ * then maps columns straight into the back buffer */
 static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale256, int y0, int y1, int xa, int xb,
                         const short __far *ext, int ext_y0, int ext_rows)
 {
-    const ShipView __far *view = &s->view[v];
-    int w = view->w, h = view->h, ow, oh, top, left, oy, r0 = 0, r1 = 0;
+    ShipView view = s->view[v];
+    int w = view.w, h = view.h, ow, oh, top, left, oy, r0 = 0, r1 = 0;
     unsigned long __far *tab = 0;
     unsigned char __far *data = 0;
     if (!w)
@@ -405,8 +571,8 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
     if (ow < 1) ow = 1;
     if (oh < 1) oh = 1;
     if (ow > LINE) ow = LINE;
-    top = y - (int)((long)view->oy * scale256 / 256);
-    left = x - (int)((long)view->ox * scale256 / 256);
+    top = y - (int)((long)view.oy * scale256 / 256);
+    left = x - (int)((long)view.ox * scale256 / 256);
     if (y0 < top) y0 = top;
     if (y1 > top + oh) y1 = top + oh;
     if (y0 < 0) y0 = 0;
@@ -424,10 +590,9 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
         if (!row_clip(oy, &ca, &cb, ext, ext_y0, ext_rows))
             continue;
         if (sy >= r1) {
-            /* the next chunk of source rows, from the one wanted */
             r0 = sy;
             r1 = h;
-            tab = fetch_rows(s, view, r0, &r1, &data);
+            tab = fetch_rows(&view, r0, &r1, &data);
         }
         expand_row(data + (unsigned)(tab[sy - r0] - tab[0]), g_line, w);
         rv_scale_row(g_line, g_cmap, ca - left, cb - left, vid_row(oy) + left);
@@ -437,8 +602,8 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
 /* the whole view dense in g_dense: 0 when it does not fit */
 static int make_dense(const ShipSet __far *s, int set_i, int v)
 {
-    const ShipView __far *view = &s->view[v];
-    int w = view->w, h = view->h, r0 = 0;
+    ShipView view = s->view[v];
+    int w = view.w, h = view.h, r0 = 0;
     if (g_dense_set == set_i && g_dense_view == v)
         return 1;
     if (!w || (unsigned long)w * h > DENSE_MAX)
@@ -449,7 +614,7 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
         unsigned long __far *tab;
         unsigned char __far *data;
         int r1 = h, r;
-        tab = fetch_rows(s, view, r0, &r1, &data);
+        tab = fetch_rows(&view, r0, &r1, &data);
         for (r = r0; r < r1; r++)
             expand_row(data + (unsigned)(tab[r - r0] - tab[0]), g_dense + (unsigned)r * w, w);
         r0 = r1;
@@ -459,16 +624,16 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
     return 1;
 }
 
-/* path 3: the view turned and scaled by inverse mapping from a dense copy */
+/* the fallback's turned draw: inverse mapping from a dense copy */
 static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, int scale256, int roll, int y0, int y1,
                        int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
-    const ShipView __far *view = &s->view[v];
+    ShipView view = s->view[v];
     LfRot r;
     int top, left, oy;
     if (!make_dense(s, set_i, v))
         return 0;
-    lf_rotate_setup(view->w, view->h, view->ox, view->oy, roll, scale256, &r);
+    lf_rotate_setup(view.w, view.h, view.ox, view.oy, roll, scale256, &r);
     top = y - r.ocy;
     left = x - r.ocx;
     if (y0 < top) y0 = top;
@@ -485,19 +650,141 @@ static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, i
         int ca = xa, cb = xb, xs, xe;
         if (!row_clip(oy, &ca, &cb, ext, ext_y0, ext_rows))
             continue;
-        if (lf_rotate_span(&r, view->w, view->h, oy - top, ca - left, cb - left, &xs, &xe))
-            rv_rotate_row(g_dense, view->w, view->h, &r, oy - top, xs, xe, vid_row(oy) + left);
+        if (lf_rotate_span(&r, view.w, view.h, oy - top, ca - left, cb - left, &xs, &xe))
+            rv_rotate_row(g_dense, view.w, view.h, &r, oy - top, xs, xe, vid_row(oy) + left);
     }
     return 1;
 }
 
-/* the asm kernels against the C ones (lightfield.c), on a small picture at
- * several turns and scales: returns the pixels compared, or -1 on a mismatch */
+/* the opposite heading of a view: the one whose mirror image it is */
+static int pair_of(int v)
+{
+    int band, hh, k;
+    if (v == 0 || v == 36)
+        return v;
+    if (v <= 35) {
+        band = (v - 1) / 7;
+        hh = (v - 1) % 7;
+        if (hh == 0 || hh == 6)
+            return v;                   /* nose on, tail on: their own mirror */
+        return 37 + band * 5 + (5 - hh);
+    }
+    band = (v - 37) / 5;
+    k = (v - 37) % 5;
+    return 1 + band * 7 + (5 - k);
+}
+
+/* the set's block for a size and roll step, or NULL */
+static const SetBlock __far *block_of(const ShipSet __far *s, int size, int roll)
+{
+    int b;
+    for (b = 0; b < s->nblocks; b++)
+        if (s->block[b].size == size && s->block[b].roll == roll)
+            return &s->block[b];
+    return 0;
+}
+
+/* the size step nearest a wanted scale (0 for anything at or above full size) */
+static int size_step(const ShipSet __far *s, int scale256)
+{
+    int k;
+    for (k = 0; k + 1 < s->nsizes; k++)
+        if (scale256 >= (s->scale[k] + s->scale[k + 1]) / 2)
+            return k;
+    return s->nsizes - 1;
+}
+
+/* The sprite for view v turned by step r (of s->nrolls) at size step k,
+ * from what the set stores.  A symmetric set stores the arc 0..90 (steps
+ * 0..nrolls/4): the rest are flips of a stored step, of this view or of the
+ * opposite heading's: upside down turns by 180 - theta and mirrors the
+ * heading, mirrored turns by -theta and mirrors the heading, both turn by
+ * 180.  The top and bottom views are their own mirror, and their mirror is
+ * their 180 turn, so their table differs.  Returns the flags, -1 when not
+ * drawable from loaded blocks. */
+static int find_sprite(const ShipSet __far *s, int k, int v, int r, ShipView *out)
+{
+    int q = s->nrolls / 4, half = s->nrolls / 2, n = s->nrolls, src_v = v, src_r = r, flags = 0;
+    const SetBlock __far *b;
+    r %= n;
+    if ((b = block_of(s, k, r)) != 0 && set_view(s, b, v, out))
+        return 0;
+    if (s->asym)
+        return -1;
+    if (r <= q) {
+        return -1;                      /* stored but not loaded */
+    } else if (r <= half) {             /* 90 < theta <= 180 */
+        src_r = half - r;
+        if (v == 0 || v == 36) { flags = BLIT_H; src_v = v; }
+        else { flags = BLIT_V; src_v = pair_of(v); }
+    } else if (r <= half + q) {         /* 180 < theta <= 270 */
+        src_r = r - half;
+        flags = BLIT_V | BLIT_H;
+        src_v = v;
+    } else {                            /* 270 < theta < 360 */
+        src_r = n - r;
+        if (v == 0 || v == 36) { flags = BLIT_V; src_v = v; }
+        else { flags = BLIT_H; src_v = pair_of(v); }
+    }
+    if ((b = block_of(s, k, src_r)) != 0 && set_view(s, b, src_v, out))
+        return flags;
+    return -1;
+}
+
+int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
+               int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    LfPlace p;
+    int rq, k;
+    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, &p);
+    if (!p.on_screen || scale256 < 8)
+        return 0;
+    if (s->rvs) {
+        ShipView view;
+        int flags, step = 1024 / s->nrolls;
+        rq = ((p.roll + step / 2) & 1023) / step;
+        k = size_step(s, scale256);
+        /* the sprite as wanted; else a coarser roll; else unturned; else smaller */
+        if ((flags = find_sprite(s, k, p.view, rq, &view)) >= 0) {
+            ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+            return 1 + flags;
+        }
+        if ((rq & 1) && (flags = find_sprite(s, k, p.view, rq & ~1, &view)) >= 0) {
+            ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+            return 1 + flags;
+        }
+        for (; k < s->nsizes; k++)
+            if ((flags = find_sprite(s, k, p.view, 0, &view)) >= 0) {
+                ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+                return 5;
+            }
+        return 0;
+    }
+    rq = ((p.roll + 32) & 1023) / 64;   /* the fallback: sixteen steps, drawn at draw time */
+    if (rq == 0 && scale256 >= 256) {
+        ships_blit(s, p.view, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+        return 1;
+    }
+    if (rq == 0 || !draw_turned(s, set_i, p.view, p.sx, p.sy, scale256 > 256 ? 256 : scale256, rq * 64, y0, y1, xa, xb,
+                                ext, ext_y0, ext_rows)) {
+        draw_scaled(s, p.view, p.sx, p.sy, scale256 > 256 ? 256 : scale256, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+        return 6;
+    }
+    return 7;
+}
+
+/* --- the kernels checked, and the paths timed --- */
+
+/* the asm kernels against the C ones (lightfield.c) and a C mirror, on a
+ * small picture at several turns and scales: returns the pixels compared,
+ * or -1 on a mismatch */
 long ships_selftest(void)
 {
     static unsigned char __far pic[9 * 7];
     static unsigned char __far out_c[64], __far out_a[64];
     static unsigned short __far map[64];
+    static unsigned char __far spans[32];
     long compared = 0;
     int i, roll, sc, y, x;
     for (i = 0; i < 9 * 7; i++)
@@ -507,8 +794,10 @@ long ships_selftest(void)
     lf_scale_row(pic + 9 * 3, map, 2, 21, out_c);
     rv_scale_row(pic + 9 * 3, map, 2, 21, out_a);
     for (x = 0; x < 64; x++, compared++)
-        if (out_c[x] != out_a[x])
+        if (out_c[x] != out_a[x]) {
+            rv_log("selftest: scale row differs at %d (%d vs %d)", x, out_c[x], out_a[x]);
             return -1;
+        }
     for (roll = 0; roll < 1024; roll += 64)
         for (sc = 96; sc <= 320; sc += 112) {
             LfRot r;
@@ -522,67 +811,73 @@ long ships_selftest(void)
                 if (lf_rotate_span(&r, 9, 7, y, 0, r.ow, &xs, &xe))
                     rv_rotate_row(pic, 9, 7, &r, y, xs, xe, out_a);
                 for (x = 0; x < 64; x++, compared++)
-                    if (out_c[x] != out_a[x])
+                    if (out_c[x] != out_a[x]) {
+                        rv_log("selftest: turned row differs: roll %d scale %d row %d column %d (%d vs %d)", roll, sc, y, x, out_c[x], out_a[x]);
                         return -1;
+                    }
             }
         }
+    /* the mirrored row copy: a row of spans (3 at 2, 6 at 7, 1 at 20) drawn
+     * backwards with the right edge at column 30 (sprite 24 wide), clipped
+     * to [5, 28): column d takes pixel 23 - (d - 6) of the sprite */
+    {
+        static const unsigned char row[] = { 2, 3, 11, 12, 13, 2, 6, 21, 22, 23, 24, 25, 26, 7, 1, 31, 0, 0 };
+        unsigned char sprite[24];
+        int d;
+        _fmemcpy(spans, row, sizeof row);
+        memset(sprite, 0, sizeof sprite);
+        sprite[2] = 11; sprite[3] = 12; sprite[4] = 13;
+        for (i = 0; i < 6; i++) sprite[7 + i] = 21 + i;
+        sprite[20] = 31;
+        for (x = 0; x < 64; x++) out_c[x] = out_a[x] = (unsigned char)(200 + x);
+        for (d = 6; d < 30; d++)
+            if (d >= 5 && d < 28 && sprite[23 - (d - 6)])
+                out_c[d] = sprite[23 - (d - 6)];
+        rv_blit_row_rev(out_a, spans, 30, 5, 28);
+        for (x = 0; x < 64; x++, compared++)
+            if (out_c[x] != out_a[x]) {
+                rv_log("selftest: mirrored row differs at column %d (%d vs %d)", x, out_c[x], out_a[x]);
+                return -1;
+            }
+    }
     return compared;
 }
 
-int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
-               int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+void ships_time_paths(int set_i, int v, long out[5])
 {
     const ShipSet __far *s = ships_set(set_i);
-    LfPlace p;
-    int rq;
-    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, &p);
-    if (!p.on_screen || scale256 < 8)
-        return 0;
-    rq = ((p.roll + 32) & 1023) / 64;   /* sixteen steps of a turn */
-    if (rq == 0 && scale256 == 256) {
-        ships_blit(s, p.view, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-        return 1;
-    }
-    if (rq == 0 || !draw_turned(s, set_i, p.view, p.sx, p.sy, scale256, rq * 64, y0, y1, xa, xb, ext, ext_y0, ext_rows)) {
-        draw_scaled(s, p.view, p.sx, p.sy, scale256, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-        return 2;
-    }
-    return 3;
-}
-
-/* --- the benchmark of the paths --- */
-
-void ships_time_paths(int set_i, int v, long out[3])
-{
-    const ShipSet __far *s = ships_set(set_i);
-    const ShipView __far *view = &s->view[v];
+    ShipView view = s->view[v];
     int y0, y1, k, rows, i;
     long px;
     vid_dirty(0, 100);
     vid_dirty_band(&y0, &y1);
-    for (k = 0; k < 3; k++) {
-        int n = k == 0 ? 600 : k == 1 ? 240 : 120, scale = k == 0 ? 256 : 192;
+    for (k = 0; k < 5; k++) {
+        int n = k == 1 ? 240 : k == 2 ? 120 : 600, scale = k == 1 || k == 2 ? 192 : 256;
         unsigned long t0, dt;
         LfRot r;
         if (k == 2) {
-            lf_rotate_setup(view->w, view->h, view->ox, view->oy, 128, scale, &r);
+            lf_rotate_setup(view.w, view.h, view.ox, view.oy, 128, scale, &r);
             rows = r.oh < 100 ? r.oh : 100;
             px = (long)r.ow * rows;
         } else {
-            int ow = (int)((long)view->w * scale / 256), oh = (int)((long)view->h * scale / 256);
+            int ow = (int)((long)view.w * scale / 256), oh = (int)((long)view.h * scale / 256);
             rows = oh < 100 ? oh : 100;
             px = (long)ow * rows;
         }
         t0 = clock240();
         for (i = 0; i < n; i++) {
             /* the origin so that the sprite's top is row 0 */
-            int oy = k == 2 ? r.ocy : (int)((long)view->oy * scale / 256), ox = SCR_W / 2;
+            int oy = k == 2 ? r.ocy : k == 3 ? view.h - 1 - view.oy : (int)((long)view.oy * scale / 256), ox = SCR_W / 2;
             if (k == 0)
-                ships_blit(s, v, ox, oy, y0, y1, 0, SCR_W, 0, 0, 0);
+                ships_blit_view(&view, 0, ox, oy, y0, y1, 0, SCR_W, 0, 0, 0);
             else if (k == 1)
                 draw_scaled(s, v, ox, oy, scale, y0, y1, 0, SCR_W, 0, 0, 0);
-            else
+            else if (k == 2)
                 draw_turned(s, set_i, v, ox, oy, scale, 128, y0, y1, 0, SCR_W, 0, 0, 0);
+            else if (k == 3)
+                ships_blit_view(&view, BLIT_V, ox, oy, y0, y1, 0, SCR_W, 0, 0, 0);
+            else
+                ships_blit_view(&view, BLIT_H, ox, oy, y0, y1, 0, SCR_W, 0, 0, 0);
         }
         dt = clock240() - t0;
         out[k] = dt ? px * n * 24 / (long)(dt * 100) : 0;   /* pixels a millisecond: ticks are 1000/240 ms */

@@ -1,6 +1,6 @@
 ; lowlevel.asm: the few calls C cannot make with int86 (32-bit registers).
 ; Far cdecl, as the medium model calls them; SI DI BP DS kept.
-        cpu 386
+        cpu 486                     ; (bswap in the mirrored copy: the spec targets a 486)
 segment LOWLEVEL_TEXT public align=16 class=CODE use16
 
 ; void rv_xms(RvRegs near *r): call the XMS driver's entry (rv_xms_entry,
@@ -151,12 +151,12 @@ _rv_rotate_row:
         mov bp,sp
         push si
         push di
-        sub sp,8                    ; [bp-12] du, [bp-16] dv
+        sub sp,8                    ; [bp-12] du, [bp-8] dv (the frame: bp-12 .. bp-5)
         mov si,[bp+14]              ; r
         mov eax,[si+16]
         mov [bp-12],eax
         mov eax,[si+20]
-        mov [bp-16],eax
+        mov [bp-8],eax
         movsx eax,word [bp+16]      ; y
         imul eax,[si+24]            ; y * dru
         add eax,[si+8]              ; + u00
@@ -193,12 +193,99 @@ _rv_rotate_row:
         mov [es:bx],al
 .skip:
         add esi,[bp-12]
-        add edi,[bp-16]
+        add edi,[bp-8]
         inc bx
         dec cx
         jnz .loop
 .done:
         add sp,8
+        pop di
+        pop si
+        pop bp
+        retf
+
+; void rv_blit_row_rev(unsigned char far *row, const unsigned char far *spans,
+;                      int right, int xa, int xb)
+; A run-length row drawn mirrored: the span at sprite columns [c, c+n) lands
+; at screen columns [right-c-n, right-c) with its pixels in the other order,
+; inside [xa, xb).  Four pixels at a time through bswap (486), the odd ones
+; by hand.  Screen column d takes the span's pixel (right - c - 1 - d).
+        global _rv_blit_row_rev
+_rv_blit_row_rev:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        push ds
+        mov es,[bp+8]               ; row
+        lds si,[bp+10]              ; spans
+        xor bx,bx                   ; the span's sprite column c
+.next:
+        xor ax,ax
+        lodsb
+        mov dx,ax                   ; skip
+        lodsb                       ; count n
+        or ax,ax
+        jnz .have
+        or dx,dx
+        jz .done
+.have:
+        add bx,dx
+        mov cx,ax
+        jcxz .next
+        mov di,[bp+14]
+        sub di,bx                   ; e0 = right - c
+        mov dx,di
+        sub dx,cx                   ; s0 = e0 - n
+        cmp dx,[bp+16]
+        jge .a
+        mov dx,[bp+16]              ; a = max(s0, xa)
+.a:     mov ax,di
+        cmp ax,[bp+18]
+        jle .b
+        mov ax,[bp+18]              ; b = min(e0, xb)
+.b:     sub ax,dx                   ; len = b - a
+        jle .skip
+        push si
+        push cx
+        push bx
+        mov bx,di
+        sub bx,dx                   ; e0 - a
+        add si,bx                   ; one past the source run (its pixels come out backwards)
+        mov di,dx
+        add di,[bp+6]               ; dst = row + a
+        mov cx,ax
+        mov bx,ax
+        shr cx,2
+        jz .tail
+.four:
+        sub si,4
+        mov eax,[si]
+        bswap eax
+        mov [es:di],eax
+        add di,4
+        dec cx
+        jnz .four
+.tail:
+        and bx,3
+        jz .copied
+.one:
+        dec si
+        mov al,[si]
+        mov [es:di],al
+        inc di
+        dec bx
+        jnz .one
+.copied:
+        pop bx
+        pop cx
+        pop si
+.skip:
+        add si,cx                   ; past the span's pixels
+        add bx,cx
+        jmp .next
+.done:
+        pop ds
         pop di
         pop si
         pop bp
