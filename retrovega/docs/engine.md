@@ -791,12 +791,10 @@ across and 64 px long side on (bolts.h).
 **Two drawings, chosen by the radius on screen.** Under 3/4 px a bolt is a
 *line*: each row it crosses gets the pixels whose centres the segment passes
 over in that row (an x-major line's run), and a steep row with none gets the
-pixel under the row's middle, so every row shows. Above, it is *fat*: red
-(`UI_RED`) with a white middle (`UI_WHITE`) painted over it, drawn in one of
-three ways chosen when RV.EXE is built (`NEAR=` below; until 2026-10-21 the
-capsules also had a dark red rim, fire ramp 130, as a third colour). As
-capsules: the body, and from 32 x16 of radius a white core capsule 3/8 as
-wide, below that a white core line. Each capsule row is one span between its
+pixel under the row's middle, so every row shows. Above, it is *fat*: a red
+(`UI_RED`) capsule, and from 32 x16 of radius a white (`UI_WHITE`) core
+capsule 3/8 as wide painted over it, below that a white core line (until
+2026-10-21 there was also a dark red rim, fire ramp 130, as a third colour). Each capsule row is one span between its
 left and right boundary: a's arc, the straight stretch, b's arc, met at the
 tangent rows (rounded so the stretch is never used past them: on a nearly
 level bolt a sixteenth of a row there is pixels of x).
@@ -837,12 +835,10 @@ So one algorithm for every bolt would cost three times the line for the far
 ones: the split pays. The near bolts' set-up was 87 µs in C (Watcom's 64-bit
 helpers) before `rv_fat_setup`.
 
-**How the fat bolts are drawn: chosen at build time** (2026-10-21).
-`NEAR=capsule` (the default), `NEAR=octagon` or `NEAR=rect ./build.sh`
-defines lasers.h's `LZ_NEAR` for the C and lasers.asm, and only that drawing
-is compiled (its C reference, its asm, its buffers, its part of the
-self-test and the timings); `tests/host/run.sh` builds and checks all three.
-How we got there, the user's questions in turn:
+**Capsules, the user's pick** (2026-10-21). The fat bolts are capsules in
+two colours; the other drawings tried that day were deleted once the user
+had seen them (for a day they were a build-time choice, `NEAR=` in build.sh,
+measured below). How we got there, the user's questions in turn:
 
 - *Simpler near bolts?* A bolt as two convex polygons painted over each
   other, a red outline and a white middle half as wide (the "step up then
@@ -879,7 +875,7 @@ How we got there, the user's questions in turn:
   `LZ_RMAX16`) the table is 1,025 bytes (it was 4,097, for 8 px). Bytes of
   RV.EXE's image (the linker's "Memory size") and of the bolts' modules:
 
-| `NEAR=` | RV.EXE | lasers code (asm and C) | bolts.c code | far data | root table | bolts in all | near bolt, set up + draw |
+| build | RV.EXE | lasers code (asm and C) | bolts.c code | far data | root table | bolts in all | near bolt, set up + draw |
 |---|---|---|---|---|---|---|---|
 | `capsule` | 261,856 | 8,608 | 7,579 | 5,370 | 1,025 | 22,582 | 13.2 + 30.0 = 43.2 µs |
 | `octagon` | 261,696 | 8,928 | 7,684 | 5,850 | — | 22,462 | 13.3 + 46.9 = 60.2 µs |
@@ -888,8 +884,9 @@ How we got there, the user's questions in turn:
 The three are within 160 bytes of each other: the capsules' code is the
 smallest and their table the difference, so counted as shared state (a
 square root by table that the AI could use too) the capsules take the
-least. Until 2026-10-21 every shape was in the build at once (280,608
-bytes, 3-colour capsules the default).
+least. The user kept the capsules (RV.EXE 261,824 bytes with them alone);
+until 2026-10-21 every shape was in the build at once (280,608 bytes,
+3-colour capsules the default).
 
 A pre-rendered sprite a bolt (`rv_blit_row`, as the ships are) is no
 faster at these sizes: 31 µs a bolt to copy (the runs' bookkeeping) before
@@ -905,7 +902,7 @@ is taken as 32 km of the flight's units (a fighter's 128 px view is full size
 at 2,500 km: 800 km for a 25-30 m hull), so a bolt is 12 cm thick and 75 cm
 long and the near plane is 6 m out. They fly 6.75 km a frame, the eye to the
 line drawing (1,067 km) in about five seconds; the round is ten seconds,
-drawn as the build draws fat bolts, then the flight lands.
+then the flight lands.
 `tests/boltdemo.txt` with `/boltdemo /record 1 /flight 900` saves every
 frame (`CYCLES=max`, a few minutes; the motion is per frame, so the
 recording is exact however slowly it runs; stop DOSBox when RVLOG.TXT says

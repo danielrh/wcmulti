@@ -583,13 +583,7 @@ static void gather(void)
     g_st.ncontacts = n;
     (void)c;
     if (g_bolt_demo) {                  /* the demo's readout: the drawing, the time in its round, where the bolts are */
-#if LZ_NEAR == LZ_NEAR_CAPSULE
         static const char __far name[] = "CAPSULES";
-#elif LZ_NEAR == LZ_NEAR_OCTAGON
-        static const char __far name[] = "OCTAGONS";
-#else
-        static const char __far name[] = "RECTANGLES";
-#endif
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
@@ -950,7 +944,7 @@ static void lasers_report(void)
     bolts_ticks(t);
     bolts_on_screen(&lines, &fats);
     rv_log("lasers: %ld far bolts and %d near held %d fps (the settled half's average; %d lines and %d fat on screen at "
-           "the end), beside %d big ships drawn exactly and %d far ones; near bolts " LZ_NEAR_NAME,
+           "the end), beside %d big ships drawn exactly and %d far ones",
            g_lz_frames ? g_lz_sum / g_lz_frames : 0L, g_near_bolts, FPS_WANT, lines, fats, g_big_ships, g_far_ships);
     rv_log("lasers: ms a frame: bolts placed %lu.%02lu, far bolts drawn %lu.%02lu, near %lu.%02lu, flown and fired "
            "%lu.%02lu; big ships %lu.%02lu, far ships %lu.%02lu (the slots' from the sets %lu.%02lu); stars %lu.%02lu; "

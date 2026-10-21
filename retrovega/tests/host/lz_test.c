@@ -1,6 +1,5 @@
 /* lz_test.c: the laser bolts' module against brute force, on the host
- * (tests/host/run.sh, built once for each of lasers.h's LZ_NEAR), and preview
- * sheets: lz_test SHEET.ppm draws bolts at every size and a few angles in the
+ * (tests/host/run.sh), and preview sheets: lz_test SHEET.ppm draws bolts at every size and a few angles in the
  * flight palette's colours, lz_test SHEET.ppm SHAPES.ppm also the fat ones
  * at every size and angle, the last of each row end on. */
 #include <stdio.h>
@@ -24,16 +23,6 @@ static const LzStyle g_style = { C_LINE, C_BODY, C_CORE, 0, 12 };
 static void draw_fat(const LzFat *f, int y0, int y1)
 {
     int k, n;
-#if LZ_POLYGONS
-    LzPoly pl[2];
-    LzLine ln[3];
-    int nl;
-    n = lz_slab_setup(f, &g_style, pl, ln, &nl);
-    for (k = 0; k < n; k++)
-        lz_poly_draw(&pl[k], g_band, 0, y0, y1, 0, 0, 0);
-    for (k = 0; k < nl; k++)
-        lz_lines_draw(&ln[k], 1, k == 1 || nl == 1 ? C_CORE : C_BODY, g_band, 0, y0, y1, 0, 0, 0);
-#else
     LzPass p[2];
     LzLine core;
     int cl;
@@ -42,10 +31,8 @@ static void draw_fat(const LzFat *f, int y0, int y1)
         lz_pass_draw(&p[k], g_band, 0, y0, y1, 0, 0, 0);
     if (cl)
         lz_lines_draw(&core, 1, C_CORE, g_band, 0, y0, y1, 0, 0, 0);
-#endif
 }
 
-#if LZ_NEAR == LZ_NEAR_CAPSULE
 /* the distance from a pixel's centre to the segment, in pixels */
 static double seg_dist(double px, double py, double ax, double ay, double bx, double by)
 {
@@ -54,7 +41,6 @@ static double seg_dist(double px, double py, double ax, double ay, double bx, do
     if (t > 1) t = 1;
     return hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
-#endif
 
 static void basis_identity(long *f, long *r, long *u)
 {
@@ -85,12 +71,9 @@ int main(int argc, char **argv)
     LzLine lines[64];
     LzFat fats[64];
     int nl, nf, i, k, y;
-    printf("     fat bolts drawn as " LZ_NEAR_NAME "\n");
     lz_init();
-#if LZ_NEAR == LZ_NEAR_CAPSULE
     CHECK(lz_sqrt16[0] == 1 && lz_sqrt16[4] == 4 && lz_sqrt16[LZ_SQRT_N - 1] == LZ_RMAX16,
           "the root table (sqrt 16 = 4, sqrt %d = %d)", LZ_RMAX16 * LZ_RMAX16, LZ_RMAX16);
-#endif
 
     /* the camera at the origin looking down +z; bolts 2 km in radius, 6 km half length */
     basis_identity(f, r, u);
@@ -146,7 +129,6 @@ int main(int argc, char **argv)
         CHECK(bad_gap == 0, "4000 lines: each row's run touches the last (%d gaps)", bad_gap);
     }
 
-#if LZ_NEAR == LZ_NEAR_CAPSULE
     /* the capsule against brute force: a pixel is drawn iff its centre is within r of the segment, but for
      * those within a sixteenth of a pixel of the edge (the table and the truncations) */
     {
@@ -193,49 +175,6 @@ int main(int argc, char **argv)
         CHECK(wrong == 0, "3000 capsules: no pixel off the brute force (%d wrong, %d at the edge, of %d)", wrong, edge, total);
         CHECK(asym * 200 < drawn, "the mirror images agree but for under 0.5%% of pixels (%d of %d)", asym, drawn);
     }
-#else
-
-    /* the polygons against brute force: a pixel is drawn iff its centre is inside, but for those within a
-     * tenth of a pixel of an edge; random bolts, some end on */
-    {
-        int wrong = 0, edge = 0, total = 0;
-        srand(13);
-        for (k = 0; k < 3000; k++) {
-            int ax = 3200 + rand() % 3200, ay = 1600 + rand() % 3200, len = k % 8 ? rand() % 600 : k % 24, ang = rand();
-            int bx = ax + (int)(len * cos(ang)), by = ay + (int)(len * sin(ang)), x, j, n;
-            LzFat fa;
-            LzPoly pl[2];
-            LzLine ln[3];
-            if (by < ay || (by == ay && bx < ax)) { int t = ax; ax = bx; bx = t; t = ay; ay = by; by = t; }
-            fa.ax = ax; fa.ay = ay; fa.bx = bx; fa.by = by; fa.r = 25 + rand() % 40;
-            n = lz_slab_setup(&fa, &g_style, pl, ln, &j);
-            if (n != 2) { wrong++; continue; }
-            memset(g_band, 0, sizeof g_band);
-            lz_poly_draw(&pl[0], g_band, 0, 0, 400, 0, 0, 0);
-            for (y = pl[0].top - 2; y < pl[0].bot + 2; y++)
-                for (x = 0; x < 640; x++) {
-                    double px = x + 0.5, py = y + 0.5, dmin = 1e9;
-                    int i, pos = 0, neg = 0, in = g_band[y * 640 + x] != 0;
-                    for (i = 0; i < pl[0].n; i++) {
-                        double x0 = pl[0].x[i] / 16.0, y0 = pl[0].y[i] / 16.0;
-                        double x1 = pl[0].x[(i + 1) % pl[0].n] / 16.0, y1 = pl[0].y[(i + 1) % pl[0].n] / 16.0;
-                        double l = hypot(x1 - x0, y1 - y0), d;
-                        if (l < 1e-9) continue;
-                        d = ((x1 - x0) * (py - y0) - (y1 - y0) * (px - x0)) / l;
-                        if (d > 0) pos++; else if (d < 0) neg++;
-                        if (fabs(d) < dmin) dmin = fabs(d);
-                    }
-                    if (!in && dmin > 30) continue;
-                    total++;
-                    if (dmin < 0.1) { edge++; continue; }
-                    if (in != (pos == 0 || neg == 0))
-                        wrong++;
-                }
-        }
-        CHECK(wrong == 0, "3000 polygons: no pixel off the brute force (%d wrong, %d at an edge, of %d)", wrong, edge,
-              total);
-    }
-#endif
 
     /* the preview: sizes along, angles down; then a field of bolts in perspective */
     if (argc > 1) {
@@ -304,6 +243,6 @@ int main(int argc, char **argv)
         }
         write_ppm(argv[2], 640, 400);
     }
-    printf(fails ? "LZ FAILED (%d, " LZ_NEAR_NAME ")\n" : "LZ OK (" LZ_NEAR_NAME ")\n", fails);
+    printf(fails ? "LZ FAILED (%d)\n" : "LZ OK\n", fails);
     return fails != 0;
 }

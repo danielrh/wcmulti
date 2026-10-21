@@ -1,9 +1,7 @@
 /* lasers.c: laser bolts through the camera and onto the screen (lasers.h).
  *
  * The reference: lasers.asm's rv_* do what the lz_* do here, to the bit (the
- * flight compares them at its start, tests/host checks these).  The fat
- * bolts are drawn one way, chosen at build time (LZ_NEAR): capsules, or two
- * polygons (a swept octagon or a rectangle); only that one is compiled.
+ * flight compares them at its start, tests/host checks these).
  *
  * The capsule.  Its ends a (upper) and b, radius r: the boundary of each side
  * is an arc of a's circle, a straight stretch (the segment moved out by r
@@ -19,7 +17,6 @@
  * row's middle, so every row it crosses shows. */
 #include "lasers.h"
 
-#if LZ_NEAR == LZ_NEAR_CAPSULE
 unsigned char LZ_FAR lz_sqrt16[LZ_SQRT_N];
 
 static unsigned long isqrt(unsigned long v)
@@ -47,9 +44,6 @@ void lz_init(void)
         lz_sqrt16[k] = (unsigned char)((s + 1) / 2);
     }
 }
-#else
-void lz_init(void) {}
-#endif
 
 /* a x b / c, the product taken whole (the asm's imul into edx:eax, then idiv) */
 #ifdef __WATCOMC__
@@ -194,7 +188,6 @@ void lz_move(LzBolt LZ_FAR *b, int n, long k)
     }
 }
 
-#if LZ_NEAR == LZ_NEAR_CAPSULE
 /* --- a fat bolt's passes --- */
 
 /* a segment's length x16 with sh more bits (len << sh), sh as large as keeps the square in 31 bits: a
@@ -263,7 +256,6 @@ int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, 
     }
     return n;
 }
-#endif
 
 /* --- the draws --- */
 
@@ -324,7 +316,6 @@ void lz_lines_draw(const LzLine LZ_FAR *l, int n, unsigned char colour, unsigned
     }
 }
 
-#if LZ_NEAR == LZ_NEAR_CAPSULE
 /* the root table's index for half a chord at d from the middle (x16): (r^2 - d^2) / 4, never below 0 */
 static int root_index(int r2, int d)
 {
@@ -368,167 +359,3 @@ void lz_pass_draw(const LzPass LZ_FAR *p, unsigned char LZ_FAR *band, int band_y
     }
 }
 
-#else
-/* --- the polygons --- */
-
-static void poly_rows(LzPoly LZ_FAR *p)
-{
-    int i, lo = p->y[0], hi = p->y[0];
-    for (i = 1; i < p->n; i++) {
-        if (p->y[i] < lo) lo = p->y[i];
-        if (p->y[i] > hi) hi = p->y[i];
-    }
-    p->top = (short)((lo + 7) >> 4);    /* the first row whose centre is at or below the top */
-    p->bot = (short)(((hi - 8) >> 4) + 1);
-}
-
-#if LZ_NEAR == LZ_NEAR_OCTAGON
-/* an octagon (flats at w, corners at 1.08 w) swept from a to b, its sum with
- * the segment.  Octagon edge k, from vertex k to k + 1, faces (1,0), (1,1),
- * (0,1), (-1,1), (-1,0), (-1,-1), (0,-1), (1,-1): it is the outline's edge at
- * b where that . (b - a) > 0, else at a; where two edges in a row take
- * different ends, the long side along the bolt joins them at the vertex
- * between.  At most ten vertices; end on (b = a), the octagon, which at a few
- * pixels covers a circle's pixels.  No root, no division. */
-static void slab_of(const LzFat LZ_FAR *f, int w, int colour, LzPoly LZ_FAR *p)
-{
-    int s = w * 53 >> 7, k, n = 0, last, side[8];
-    int vx[8], vy[8];
-    long dx = (long)f->bx - f->ax, dy = (long)f->by - f->ay, dot[4];
-    vx[0] = w; vy[0] = -s; vx[1] = w; vy[1] = s; vx[2] = s; vy[2] = w; vx[3] = -s; vy[3] = w;
-    vx[4] = -w; vy[4] = s; vx[5] = -w; vy[5] = -s; vx[6] = -s; vy[6] = -w; vx[7] = s; vy[7] = -w;
-    dot[0] = dx; dot[1] = dx + dy; dot[2] = dy; dot[3] = dy - dx;
-    for (k = 0; k < 4; k++) {
-        side[k] = dot[k] > 0;
-        side[k + 4] = dot[k] < 0;
-    }
-    last = side[7];
-    for (k = 0; k < 8; k++) {
-        if (side[k] != last) {          /* the long side: from the end the last edge took */
-            p->x[n] = (short)((last ? f->bx : f->ax) + vx[k]);
-            p->y[n] = (short)((last ? f->by : f->ay) + vy[k]);
-            n++;
-            last = side[k];
-        }
-        p->x[n] = (short)((last ? f->bx : f->ax) + vx[k]);
-        p->y[n] = (short)((last ? f->by : f->ay) + vy[k]);
-        n++;
-    }
-    p->n = (short)n;
-    p->colour = (short)colour;
-    poly_rows(p);
-}
-#else
-static void poly4(LzPoly LZ_FAR *p, int colour, int x0, int y0, int x1, int y1, int x2, int y2, int x3, int y3)
-{
-    p->n = 4;
-    p->colour = (short)colour;
-    p->x[0] = (short)x0; p->y[0] = (short)y0;
-    p->x[1] = (short)x1; p->y[1] = (short)y1;
-    p->x[2] = (short)x2; p->y[2] = (short)y2;
-    p->x[3] = (short)x3; p->y[3] = (short)y3;
-    poly_rows(p);
-}
-
-/* the rectangle at half width w (x16): its sides w either side of the bolt,
- * its ends pushed out by w along it, so end on it is a square; a bolt under
- * a pixel long (its way unknown) is a square 2w across round its ends */
-static void slab_of(const LzFat LZ_FAR *f, int w, int colour, LzPoly LZ_FAR *p)
-{
-    int ax = f->ax, ay = f->ay, bx = f->bx, by = f->by;
-    long dx = (long)bx - ax, dy = (long)by - ay, adx = dx < 0 ? -dx : dx, ady = dy < 0 ? -dy : dy;
-    long len = adx > ady ? adx + ady * 3 / 8 : ady + adx * 3 / 8;   /* the length within 7 %: no root */
-    if (len < 16) {
-        poly4(p, colour, ax - w, ay - w, ax + w, ay - w, bx + w, by + w, bx - w, by + w);
-        return;
-    }
-    {
-        int nx = (int)(-dy * w / len), ny = (int)(dx * w / len);   /* w across the bolt; (ny, -nx) along it */
-        poly4(p, colour, ax - ny + nx, ay + nx + ny, bx + ny + nx, by - nx + ny, bx + ny - nx, by - nx - ny,
-              ax - ny - nx, ay + nx - ny);
-    }
-}
-#endif
-
-int lz_slab_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPoly LZ_FAR *poly, LzLine LZ_FAR *lines, int *nlines)
-{
-    if (f->r > 24) {                    /* wider than 3 px: the outline, and the middle half as wide */
-        slab_of(f, f->r, st->body, &poly[0]);
-        slab_of(f, f->r / 2, st->core, &poly[1]);
-        *nlines = 0;
-        return 2;
-    }
-#if LZ_NEAR == LZ_NEAR_OCTAGON
-    /* narrower: the outline and a white core line, as the capsules have under 2 px (end on, a red dot round a
-     * white pixel; three lines side by side would be a dash) */
-    slab_of(f, f->r, st->body, &poly[0]);
-    lz_line_of(f->ax, f->ay, f->bx, f->by, &lines[0]);
-    *nlines = 1;
-    return 1;
-#else
-    {
-        /* three lines a pixel apart across the bolt: red, white (the middle, lines[1]), red */
-        long dx = (long)f->bx - f->ax, dy = (long)f->by - f->ay;
-        int ox = 0, oy = 0;
-        if ((dy < 0 ? -dy : dy) >= (dx < 0 ? -dx : dx))
-            ox = 16;
-        else
-            oy = 16;
-        lz_line_of(f->ax, f->ay, f->bx, f->by, &lines[1]);
-        lz_line_of(f->ax - ox, f->ay - oy, f->bx - ox, f->by - oy, &lines[0]);
-        lz_line_of(f->ax + ox, f->ay + oy, f->bx + ox, f->by + oy, &lines[2]);
-        *nlines = 3;
-        return 0;
-    }
-#endif
-}
-
-/* a chain of edges from vertex *idx going way dir: on to the edge that holds the row centre yc (its lower
- * end below yc), its x there (16.16 px) and per row; 0 when the chain has turned back up (past the bottom) */
-static int chain_at(const LzPoly LZ_FAR *p, int *idx, int dir, int yc, long *x, long *m, int *yend)
-{
-    for (;;) {
-        int i = *idx, j = i + dir;
-        if (j == p->n) j = 0;
-        if (j < 0) j = p->n - 1;
-        if (p->y[j] < p->y[i])
-            return 0;
-        if (p->y[j] > yc) {
-            long dx = (long)p->x[j] - p->x[i], dy = (long)p->y[j] - p->y[i];
-            *m = (dx << 16) / dy;
-            *x = ((long)p->x[i] << 12) + muldiv(((long)yc - p->y[i]) * dx, 4096, dy);
-            *yend = p->y[j];
-            return 1;
-        }
-        *idx = j;
-    }
-}
-
-void lz_poly_draw(const LzPoly LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1,
-                  const short LZ_FAR *ext, int ext_y0, int ext_rows)
-{
-    int ys = p->top > y0 ? p->top : y0, ye = p->bot < y1 ? p->bot : y1, y, yc, t = 0, i, ia, ib, ea, eb;
-    long xa, xb, ma, mb;
-    if (!clip_rows(&ys, &ye, ext_y0, ext_rows, ext))
-        return;
-    for (i = 1; i < p->n; i++)
-        if (p->y[i] < p->y[t])
-            t = i;
-    ia = ib = t;
-    yc = ys * 16 + 8;
-    if (!chain_at(p, &ia, 1, yc, &xa, &ma, &ea) || !chain_at(p, &ib, -1, yc, &xb, &mb, &eb))
-        return;
-    for (y = ys; y < ye; y++, yc += 16) {
-        long L = xa < xb ? xa : xb, R = xa < xb ? xb : xa;
-        int xs = (int)((L + 0x7FFF) >> 16), xe = (int)((R + 0x8000) >> 16);
-        if (xs < xe)
-            span(band + (unsigned)(y - band_y0) * 640, xs, xe, y, (unsigned char)p->colour, ext, ext_y0);
-        xa += ma;
-        xb += mb;
-        if (yc + 16 >= ea && !chain_at(p, &ia, 1, yc + 16, &xa, &ma, &ea))
-            break;
-        if (yc + 16 >= eb && !chain_at(p, &ib, -1, yc + 16, &xb, &mb, &eb))
-            break;
-    }
-}
-#endif
