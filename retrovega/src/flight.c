@@ -370,6 +370,10 @@ static void plan_draws(void)
         detail = px[best] <= budget ? 1 : px[best] <= budget * 2 ? 2 : 4;
         g_plan[best].exact = (unsigned char)detail;
         budget -= px[best] / detail;
+        /* its full-size view streamed in now (the nearest first), if the frame's reads allow */
+        rel_of(g_plan[best].slot, &rel);
+        basis_of(g_plan[best].slot, &ship);
+        ships_prefetch(g_plan[best].set, &rel, &cam, &ship);
     }
     /* back to front */
     for (i = 1; i < g_nplan; i++)
@@ -395,10 +399,10 @@ static void draw_world(int y0, int y1)
         int s = g_plan[i].slot, set = g_plan[i].set;
         rel_of(s, &rel);
         basis_of(s, &ship);
-        if (g_plan[i].exact)
-            path = 8 + g_plan[i].exact * ships_draw_exact(set, &rel, &cam, &ship, g_plan[i].scale, g_plan[i].exact, y0, y1,
-                                                          0, SCR_W, ext, ey0, rows);
-        else
+        if (g_plan[i].exact && ships_draw_exact(set, &rel, &cam, &ship, g_plan[i].scale, g_plan[i].exact, y0, y1,
+                                                0, SCR_W, ext, ey0, rows))
+            path = 8 + g_plan[i].exact;
+        else                            /* (or its view is not streamed in yet: from the sets this frame) */
             path = ships_draw(set, &rel, &cam, &ship, g_plan[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
         if (y0 <= ey0 && (frameCounter % 100 == 1 || (g_record && frameCounter % g_record == 0))) {
             /* now and then, where each ship was put (tests/ships.txt reads it) */
@@ -413,7 +417,7 @@ static void draw_world(int y0, int y1)
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
-            ships_blit(bench, g_bench_view, g_bench[i].x, g_bench[i].y, y0, y1, 0, SCR_W, ext, ey0, rows);
+            ships_blit_size(bench, 1, g_bench_view, g_bench[i].x, g_bench[i].y, y0, y1, 0, SCR_W, ext, ey0, rows);
 }
 
 static int g_ptr_y0, g_ptr_y1;
@@ -445,8 +449,8 @@ static void mfd_draw(int which, const RvRect __far *r, int y0, int y1)
     set = ships_set(g_set_enemy);
     if (y1 <= r->y || y0 >= r->y + r->h)
         return;
-    ships_blit(set, 10, r->x + r->w / 2, r->y + r->h / 2, y0 > r->y ? y0 : r->y,
-               y1 < r->y + r->h ? y1 : r->y + r->h, r->x, r->x + r->w, 0, 0, 0);
+    ships_blit_size(set, 1, 10, r->x + r->w / 2, r->y + r->h / 2, y0 > r->y ? y0 : r->y,
+                    y1 < r->y + r->h ? y1 : r->y + r->h, r->x, r->x + r->w, 0, 0, 0);
 }
 
 /* the cockpit's state from the slots */
@@ -625,26 +629,30 @@ void __far __cdecl flight_startup(void)
     ships_set_camera(SCR_W / 2, cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2,
                      400);
     if (g_set_enemy >= 0) {
-        /* the benchmark's sprite: the biggest of the type's band views */
+        /* the benchmark's sprite: the biggest of the type's band views at the sets' first resident step (84 %) */
         const ShipSet __far *set = ships_set(g_set_enemy);
         long best = 0, paths[5];
+        int w, h, tv = 1;
         for (i = 1; i < 36; i++) {
-            long area = (long)set->view[i].w * set->view[i].h;
+            long area = ships_view_size(set, 1, i, &w, &h) ? (long)w * h : 0;
             if (area > best) {
                 best = area;
                 g_bench_view = i;
+                g_bench_w = w;
+                g_bench_h = h;
             }
         }
-        g_bench_w = set->view[g_bench_view].w;
-        g_bench_h = set->view[g_bench_view].h;
-        /* the kernels checked, then the three draw paths timed on it */
+        /* the kernels checked, then the three draw paths timed on a full-size view (streamed in for it) */
         {
             long n = ships_selftest();
             rv_log("lightfield: asm kernels %s the C ones (%ld pixels compared)", n < 0 ? "DISAGREE WITH" : "agree with", n);
         }
-        ships_time_paths(g_set_enemy, g_bench_view, paths);
+        for (i = 1; i < set->nviews; i++)
+            if ((long)set->view[i].w * set->view[i].h > (long)set->view[tv].w * set->view[tv].h)
+                tv = i;
+        ships_time_paths(g_set_enemy, tv, paths);
         rv_log("lightfield: view %d (%dx%d): copy %ld px/ms, scaled to 3/4 %ld, turned 45 degrees at 3/4 %ld, copy upside down %ld, copy mirrored %ld",
-               g_bench_view, g_bench_w, g_bench_h, paths[0], paths[1], paths[2], paths[3], paths[4]);
+               tv, set->view[tv].w, set->view[tv].h, paths[0], paths[1], paths[2], paths[3], paths[4]);
     }
     g_nbench = 0;
     g_bench_sum = 0;
@@ -737,6 +745,7 @@ void __far __cdecl flight_frame(void)
 {
     unsigned long now = clock240(), dt;
     int k = (int)(frameCounter % FPS_WINDOW);
+    ships_frame();
     sim_step();
     stars_move();
     plan_draws();
@@ -806,6 +815,7 @@ int flight_fly(const RvMission __far *m)
     g_scene.no_room = 0;
     g_scene.hide_pointer = 0;
     in_steer(1);
+    ships_stream_log();
     ships_unload();
     cockpit_unload();
     rv_hangar();

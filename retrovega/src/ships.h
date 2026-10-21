@@ -1,7 +1,8 @@
-/* ships.h: ship views for the flight (ships.c): a type's 62 views decoded from
- * SHIPnn.RV into XMS (the mission level) in gfx.c's run-length row format,
- * the mirrored headings made at load, and the draw of one as the camera
- * sees it, through the lightfield module's placement and kernels. */
+/* ships.h: ship views for the flight (ships.c): a type's pre-rendered set
+ * SHIPnn.RVS in XMS (the mission level) in gfx.c's run-length row format,
+ * its full-size views streamed from the file as the exact draw needs them,
+ * the mirrored headings made at draw time, and the draw of one as the
+ * camera sees it, through the lightfield module's placement and kernels. */
 #ifndef SHIPS_H
 #define SHIPS_H
 
@@ -14,8 +15,9 @@
 typedef struct {
     unsigned short w, h;
     short ox, oy;                       /* the ship's origin in the view */
-    XmsBlock blk;                       /* the XMS block holding it */
-    unsigned long at;                   /* offset of the row table (h + 1 dwords) in it, rows after */
+    XmsBlock blk;                       /* the XMS block holding it; 0: not resident, streamed from the file */
+    unsigned long at;                   /* offset of the row table (h + 1 dwords) in it, rows after; or in the file */
+    unsigned long len;                  /* its bytes, for the stream */
 } ShipView;
 
 #define SET_BLOCKS 48
@@ -37,25 +39,44 @@ typedef struct {
     unsigned short lod0;
     unsigned short scale[16];           /* the size steps, 256 = full */
     XmsBlock blk;                       /* .RV: the views; .RVS: the index */
+    int fd;                             /* .RVS: the file, open for the stream (-1 none) */
+    unsigned long max_len;              /* its longest full-size view */
     int nblocks;
     SetBlock block[SET_BLOCKS];
-    ShipView view[SHIP_VIEWS];          /* the full-size, unturned views (a .RVS set's block 0): a symmetric
-                                           ship's mirrored headings are empty and made from their pair */
+    ShipView view[SHIP_VIEWS];          /* the full-size, unturned views (a .RVS set's block 0, not resident:
+                                           blk 0, at and len in the file): a symmetric ship's mirrored
+                                           headings are empty and made from their pair */
 } ShipSet;
 
 /* the lattice a set's views are in: the exact draw's (block 0) or the copies' */
 void ships_lattice(int set, int exact, int *nb, int *nh);
 
-int ships_load(unsigned type);          /* a type's set: SHIPnn.RVS (its index and its full-size block), else
+int ships_load(unsigned type);          /* a type's set: SHIPnn.RVS (its index; the file stays open), else
                                            SHIPnn.RV decoded; -> set index, or -1 (no file, no room) */
-unsigned long ships_load_blocks(unsigned long budget);   /* every open set's remaining blocks, ladder first then
-                                           rolls by size, while they fit the budget (bytes): returns the bytes taken */
+unsigned long ships_load_blocks(unsigned long budget);   /* the stream's slots, then every open set's remaining
+                                           blocks, ladder first then rolls by size, while they fit the budget
+                                           (bytes): returns the bytes taken */
 int ships_find(unsigned type);          /* -> loaded set index, or -1 */
 const ShipSet __far *ships_set(int i);
 void ships_unload(void);                /* forgets every set (the mission level is freed by the caller) */
 
 /* the view the camera projects through: its centre on screen and its focal length */
 void ships_set_camera(int cx, int cy, int focal);
+
+/* The stream: a .RVS set's full-size views stay in the file; the one a
+ * draw needs is read into one of a few XMS slots (the nearest ships' views
+ * stay in them, least recently used out), at most `reads` a frame, and
+ * only in the frame's plan (ships_prefetch, before the draws): a draw that
+ * finds its view not in draws nothing and reports so, for the caller to
+ * draw from the sets that frame.  DOSBox serves the read at host speed, so
+ * it costs no frame time there; ships_stream_log says what it cost. */
+void ships_stream_config(int slots, int reads);        /* defaults 4 and 1; slots up to 8; -1 keeps a value */
+void ships_frame(void);                 /* at the top of each frame: a new read budget */
+/* the full-size view the camera sees a ship by (the exact draw's), brought in now when the budget allows;
+ * ships_prefetch_view a view by number (the MFD's, the benchmark's).  1 when it is in. */
+int ships_prefetch(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship);
+int ships_prefetch_view(int set, int v);
+void ships_stream_log(void);            /* the flight's tally: views read, ms a read, draws that had to wait */
 
 /* THE draw: the ship of set `set` at rel = ship - camera (positions, 256 = 1
  * km), with the camera's and the ship's bases, scale256 / 256 of its full
@@ -71,8 +92,8 @@ int ships_draw(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *shi
  * and scaled to the size wanted, by inverse mapping from a dense copy
  * (sixteen cycles a pixel: for the nearest ships only, see flight.c's
  * plan); detail 1 every pixel, 2 every other row copied to the next, 4
- * also 2 x 1 blocks.  Returns 0 when the view is too big for the dense
- * buffer. */
+ * also 2 x 1 blocks.  Returns 0 when the view is not in (not streamed yet)
+ * or too big for the dense buffer: the caller draws from the sets. */
 int ships_draw_exact(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int detail,
                      int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
 
@@ -80,9 +101,16 @@ int ships_draw_exact(int set, const LfVec *rel, const LfBasis *cam, const LfBasi
  * output pixels its full-size view would cover at scale256 (for the plan) */
 long ships_size_of(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, LfPlace *p);
 
-/* the plain copy of view v (full size, unturned) with the ship's origin at (x, y), clipped as above */
-void ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
-                const short __far *ext, int ext_y0, int ext_rows);
+/* the plain copy of view v (full size, unturned) with the ship's origin at (x, y), clipped as above:
+ * 0 when the view is not in (not prefetched) */
+int ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
+               const short __far *ext, int ext_y0, int ext_rows);
+/* the sets' copy of view v (of the copies' lattice) at size step k, unturned, the ship's origin at (x, y):
+ * resident, no slot taken (step 1, 84 %, is the first resident: step 0 is streamed); 0 when its block is not
+ * loaded.  ships_view_size tells its size the same way. */
+int ships_blit_size(const ShipSet __far *s, int k, int v, int x, int y, int y0, int y1, int xa, int xb,
+                    const short __far *ext, int ext_y0, int ext_rows);
+int ships_view_size(const ShipSet __far *s, int k, int v, int *w, int *h);
 /* the copy of any view record: flags 1 upside down (the rows in the other
  * order), 2 mirrored (each row's pixels in the other order), 3 both */
 #define BLIT_V 1

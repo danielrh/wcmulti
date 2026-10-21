@@ -15,6 +15,7 @@
 #include "campaign.h"
 #include "game.h"
 #include "music.h"
+#include "ships.h"
 
 char g_people_names[16][28];
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom;
@@ -60,6 +61,10 @@ int main(int argc, char **argv)
             g_record = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/onfly"))            /* the exact draws' pixel budget a frame (32000) */
             g_onfly_px = atol(argv[++i]);
+        else if (!strcmp(argv[i], "/stream"))           /* the stream's slots (4) */
+            ships_stream_config(atoi(argv[++i]), -1);
+        else if (!strcmp(argv[i], "/reads"))            /* the stream's reads a frame (1) */
+            ships_stream_config(-1, atoi(argv[++i]));
     }
     for (i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "/midilog"))               /* tests: what the music sent, and when */

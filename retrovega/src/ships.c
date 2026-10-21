@@ -13,9 +13,17 @@
  * those copies of the stored five, of this view or of the opposite
  * heading's.  The set's index (a view table per block) sits in XMS too and
  * is fetched twelve bytes at a time.  A mission opens its types' sets,
- * loads their full-size blocks, then ships_load_blocks fills the ladder for
- * every type and the rolls by size while the budget lasts; a draw that
- * finds its block missing takes the unturned one at that size.
+ * then ships_load_blocks fills the ladder for every type and the rolls by
+ * size while the budget lasts; a draw that finds its block missing takes
+ * the unturned one at that size.
+ *
+ * The full-size block (the exact draw's views, the densest lattice) is not
+ * loaded: the view a draw needs is streamed from the file into one of a
+ * few XMS slots when the frame's plan asks for it (ships_prefetch), at most
+ * a read or so a frame, the least recently used slot taken; a draw whose
+ * view is not in yet falls back to the sets for that frame.  So a lattice's
+ * density costs disk, not XMS: a fighter type keeps 1.7 MB resident at 15
+ * degrees instead of 2.5.
  *
  * Without a .RVS beside RV.EXE a type falls back to SHIPnn.RV decoded here
  * (full size only, scaled or turned at draw time through the lightfield
@@ -24,6 +32,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#include <io.h>
+#include <fcntl.h>
+#include <dos.h>
 #include "ships.h"
 #include "lightfield.h"
 #include "music.h"
@@ -50,6 +61,19 @@ static unsigned g_dense_used[DENSE_BUFS], g_dense_tick;
 static unsigned char __far *g_dense;    /* the one a draw is using */
 static unsigned short __far *g_cmap;    /* the scaled draw's column map, LINE entries */
 static unsigned char __far *g_line;     /* one source row expanded, LINE pixels */
+
+/* the stream's slots: a full-size view each, read from its set's file */
+#define STREAM_SLOTS 8
+static struct {
+    int set, view;                      /* what is in it (-1 none) */
+    unsigned used;                      /* for the least recently used */
+    unsigned frame;                     /* the frame it was last asked for: not taken in that frame */
+    XmsBlock blk;
+} g_slot[STREAM_SLOTS];
+static int g_nslots = 4, g_reads_frame = 1, g_reads_now;
+static unsigned g_slot_tick, g_frame = 1;
+static unsigned long g_slot_cap;        /* a slot's bytes: the longest view of the sets loaded */
+static unsigned long g_stream_reads, g_stream_ticks, g_stream_waits;
 
 void __far __cdecl rv_blit_row(unsigned char __far *row, const unsigned char __far *spans, int left, int xa, int xb);
 void __far __cdecl rv_blit_row_rev(unsigned char __far *row, const unsigned char __far *spans, int right, int xa, int xb);
@@ -277,7 +301,7 @@ static void file_to_xms(FILE *f, unsigned long at, unsigned long n, XmsBlock blk
 static int set_view(const ShipSet __far *s, const SetBlock __far *b, int v, ShipView *out)
 {
     unsigned char e[12];
-    if (!b || !b->loaded)
+    if (!b || b->loaded != 1)           /* (2: the streamed block, never resident) */
         return 0;
     xms_get(s->blk, b->index_at + 12UL * v, e, 12);
     out->w = e[0] | (e[1] << 8);
@@ -361,14 +385,41 @@ static int load_rvs(ShipSet __far *s, const char *name)
     }
     file_to_xms(f, 52, index_len, s->blk, 0);
     fclose(f);
-    /* the full-size unturned block now: it is the fallback for everything */
-    if (!load_block(s, &s->block[0]))
-        return 0;
-    for (v = 0; v < s->nviews; v++) {
-        ShipView one;
-        set_view(s, &s->block[0], v, &one);
-        s->view[v] = one;
+    /* the full-size unturned block stays in the file: its views' records,
+     * with where each is and its length (they lie in view order) */
+    {
+        SetBlock __far *b0 = &s->block[0];
+        int prev = -1;
+        RV_ASSERT(b0->size == 0 && b0->roll == 0);
+        b0->loaded = 2;
+        for (v = 0; v < s->nviews; v++) {
+            unsigned char e[12];
+            ShipView one;
+            xms_get(s->blk, b0->index_at + 12UL * v, e, 12);
+            one.w = e[0] | (e[1] << 8);
+            one.h = e[2] | (e[3] << 8);
+            one.ox = (short)(e[4] | (e[5] << 8));
+            one.oy = (short)(e[6] | (e[7] << 8));
+            one.blk = 0;
+            one.at = b0->at + (e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24));
+            one.len = 0;
+            if (one.w) {
+                if (prev >= 0)
+                    s->view[prev].len = one.at - s->view[prev].at;
+                prev = v;
+            }
+            s->view[v] = one;
+        }
+        if (prev >= 0)
+            s->view[prev].len = b0->at + b0->length - s->view[prev].at;
+        s->max_len = 0;
+        for (v = 0; v < s->nviews; v++)
+            if (s->view[v].len > s->max_len)
+                s->max_len = s->view[v].len;
     }
+    s->fd = open(name, O_RDONLY | O_BINARY);
+    if (s->fd < 0)
+        return 0;
     rv_log("ships: %s, %d views (%d x %d; the copies %d x %d), %d sizes, %d roll steps on %d sizes, %lu blocks", name,
            s->nviews, s->nb0, s->nh0, s->nb1, s->nh1, s->nsizes, s->nrolls, s->roll_sizes, nblocks);
     return 1;
@@ -396,6 +447,7 @@ int ships_load(unsigned type)
     RV_ASSERT(s != 0);
     _fmemset(s, 0, sizeof(ShipSet));
     s->type = (unsigned char)type;
+    s->fd = -1;
     sprintf(name, "SHIP%02X.RVS", type);
     ok = load_rvs(s, name);
     if (!ok) {
@@ -411,12 +463,30 @@ int ships_load(unsigned type)
     return g_nsets++;
 }
 
-/* the sets' other blocks: the ladder (every size, unturned) for every set,
- * then the rolls, largest size first, while the budget lasts */
+static void stream_measure(void);
+
+/* the stream's slots, then the sets' other blocks: the ladder (every size,
+ * unturned) for every set, then the rolls, largest size first, while the
+ * budget lasts */
 unsigned long ships_load_blocks(unsigned long budget)
 {
     unsigned long taken = 0;
     int pass, i, k;
+    g_slot_cap = 0;
+    for (i = 0; i < g_nsets; i++)
+        if (g_set[i]->max_len > g_slot_cap)
+            g_slot_cap = g_set[i]->max_len;
+    for (i = 0; i < g_nslots; i++) {
+        g_slot[i].set = g_slot[i].view = -1;
+        g_slot[i].blk = 0;
+        if (g_slot_cap && taken + g_slot_cap + 2 <= budget) {
+            g_slot[i].blk = xms_alloc(g_slot_cap + 2, XMS_MISSION);
+            if (g_slot[i].blk)
+                taken += g_slot_cap + 2;
+        }
+    }
+    g_stream_reads = g_stream_ticks = g_stream_waits = 0;
+    stream_measure();
     for (pass = 0; pass < 2; pass++)
         for (k = 0; k < 16; k++)
             for (i = 0; i < g_nsets; i++) {
@@ -449,11 +519,161 @@ const ShipSet __far *ships_set(int i)
 void ships_unload(void)
 {
     int i;
-    for (i = 0; i < g_nsets; i++)
+    for (i = 0; i < g_nsets; i++) {
+        if (g_set[i]->fd >= 0)
+            close(g_set[i]->fd);
         _ffree(g_set[i]);
+    }
     g_nsets = 0;
     for (i = 0; i < DENSE_BUFS; i++)
         g_dense_set[i] = g_dense_view[i] = -1;
+    for (i = 0; i < STREAM_SLOTS; i++) {
+        g_slot[i].set = g_slot[i].view = -1;
+        g_slot[i].blk = 0;              /* (the mission level frees the block) */
+    }
+}
+
+void ships_stream_config(int slots, int reads)
+{
+    if (slots >= 1 && slots <= STREAM_SLOTS)
+        g_nslots = slots;
+    if (reads >= 0)
+        g_reads_frame = reads;
+}
+
+void ships_frame(void)
+{
+    g_frame++;
+    g_reads_now = 0;
+}
+
+/* --- the stream --- */
+
+static int set_index(const ShipSet __far *s)
+{
+    int i;
+    for (i = 0; i < g_nsets; i++)
+        if (g_set[i] == s)
+            return i;
+    return -1;
+}
+
+/* a full-size view's record with its data: resident (a .RV set's), in a
+ * slot, or, when may_read and the frame's reads allow, read into the least
+ * recently used slot not asked for this frame.  0 when it is not in. */
+static const ShipView *stream_view(const ShipSet __far *s, int set_i, int v, int may_read, ShipView *out)
+{
+    int i, pick = -1;
+    unsigned long t0, k;
+    *out = s->view[v];
+    if (!out->w || out->blk)
+        return out;
+    for (i = 0; i < g_nslots; i++)
+        if (g_slot[i].set == set_i && g_slot[i].view == v) {
+            g_slot[i].frame = g_frame;
+            g_slot[i].used = ++g_slot_tick;
+            out->blk = g_slot[i].blk;
+            out->at = 0;
+            return out;
+        }
+    if (!may_read)
+        return 0;
+    if (g_reads_now >= g_reads_frame || out->len > g_slot_cap || s->fd < 0) {
+        g_stream_waits++;
+        return 0;
+    }
+    for (i = 0; i < g_nslots; i++)
+        if (g_slot[i].blk && g_slot[i].frame != g_frame && (pick < 0 || g_slot[i].used < g_slot[pick].used))
+            pick = i;
+    if (pick < 0) {
+        g_stream_waits++;
+        return 0;
+    }
+    g_reads_now++;
+    g_slot[pick].set = g_slot[pick].view = -1;
+    t0 = clock240();
+    lseek(s->fd, out->at, SEEK_SET);
+    for (k = 0; k < out->len; k += SCRATCH) {
+        unsigned part = out->len - k < SCRATCH ? (unsigned)(out->len - k) : SCRATCH, got;
+        if (_dos_read(s->fd, gfx_scratch(), part, &got) != 0 || got != part) {
+            rv_log("ships: type %02X view %d: the read failed at %lu", s->type, v, k);
+            return 0;
+        }
+        xms_put(g_slot[pick].blk, k, gfx_scratch(), part);
+    }
+    g_stream_ticks += clock240() - t0;
+    g_stream_reads++;
+    g_slot[pick].set = set_i;
+    g_slot[pick].view = v;
+    g_slot[pick].frame = g_frame;
+    g_slot[pick].used = ++g_slot_tick;
+    out->blk = g_slot[pick].blk;
+    out->at = 0;
+    return out;
+}
+
+/* the stored view behind v: itself, or a symmetric set's pair of a mirrored heading (then *flags gets BLIT_H) */
+static int stored_view(const ShipSet __far *s, int v, int *flags)
+{
+    *flags = 0;
+    if (!s->view[v].w && !s->asym) {
+        *flags = BLIT_H;
+        return lf_pair_of(v, s->nb0, s->nh0);
+    }
+    return v;
+}
+
+int ships_prefetch_view(int set_i, int v)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    ShipView view;
+    int flags;
+    RV_CHECK(v, SHIP_VIEWS);
+    return stream_view(s, set_i, stored_view(s, v, &flags), 1, &view) != 0;
+}
+
+int ships_prefetch(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    LfPlace p;
+    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
+    if (!p.on_screen)
+        return 1;
+    return ships_prefetch_view(set_i, p.view);
+}
+
+/* what a read costs here: the longest view of the first set, read into slot 0 256 times */
+static void stream_measure(void)
+{
+    const ShipSet __far *s;
+    int v, best = -1, i;
+    unsigned long t0;
+    if (!g_nsets || !g_slot[0].blk)
+        return;
+    s = g_set[0];
+    for (v = 0; v < s->nviews; v++)
+        if (s->view[v].len == s->max_len && !s->view[v].blk)
+            best = v;
+    if (best < 0)
+        return;
+    t0 = clock240();
+    for (i = 0; i < 256; i++) {
+        ShipView view;
+        g_slot[0].set = -1;
+        g_reads_now = 0;
+        stream_view(s, 0, best, 1, &view);
+    }
+    t0 = clock240() - t0;
+    rv_log("ships: the stream: %d slots of %lu bytes; a read of %lu bytes takes %lu.%03lu ms", g_nslots, g_slot_cap,
+           s->max_len, t0 * 1000 / 240 / 256, (t0 * 1000000 / 240 / 256) % 1000);
+    g_slot[0].set = -1;
+    g_stream_reads = g_stream_ticks = g_stream_waits = 0;
+}
+
+void ships_stream_log(void)
+{
+    rv_log("ships: the stream read %lu views in %lu.%02lu ms; %lu times a ship waited a frame for its view",
+           g_stream_reads, g_stream_ticks * 1000 / 240, (g_stream_ticks * 100000 / 240) % 100, g_stream_waits);
 }
 
 /* --- drawing --- */
@@ -545,14 +765,42 @@ void ships_blit_view(const ShipView __far *fv, int flags, int x, int y, int y0, 
     }
 }
 
-void ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
-                const short __far *ext, int ext_y0, int ext_rows)
+int ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,
+               const short __far *ext, int ext_y0, int ext_rows)
 {
+    ShipView view;
+    int flags;
     RV_CHECK(v, SHIP_VIEWS);
-    if (!s->view[v].w && !s->asym)      /* a mirrored heading not stored: its pair, mirrored */
-        ships_blit_view(&s->view[lf_pair_of(v, s->nb0, s->nh0)], BLIT_H, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-    else
-        ships_blit_view(&s->view[v], 0, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+    v = stored_view(s, v, &flags);      /* a mirrored heading not stored: its pair, mirrored */
+    if (!stream_view(s, set_index(s), v, 0, &view))
+        return 0;
+    ships_blit_view(&view, flags, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+    return 1;
+}
+
+static int find_sprite(const ShipSet __far *s, int k, int v, int r, ShipView *out);
+
+int ships_blit_size(const ShipSet __far *s, int k, int v, int x, int y, int y0, int y1, int xa, int xb,
+                    const short __far *ext, int ext_y0, int ext_rows)
+{
+    ShipView view;
+    int flags;
+    RV_CHECK(v, SHIP_VIEWS);
+    if (!s->rvs || (flags = find_sprite(s, k, v, 0, &view)) < 0)
+        return 0;
+    ships_blit_view(&view, flags, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+    return 1;
+}
+
+int ships_view_size(const ShipSet __far *s, int k, int v, int *w, int *h)
+{
+    ShipView view;
+    RV_CHECK(v, SHIP_VIEWS);
+    if (!s->rvs || find_sprite(s, k, v, 0, &view) < 0)
+        return 0;
+    *w = view.w;
+    *h = view.h;
+    return 1;
 }
 
 /* a run-length row expanded into a line of w pixels (0 where clear) */
@@ -586,10 +834,14 @@ static void need_buffers(void)
 static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale256, int y0, int y1, int xa, int xb,
                         const short __far *ext, int ext_y0, int ext_rows)
 {
-    ShipView view = s->view[v];
-    int w = view.w, h = view.h, ow, oh, top, left, oy, r0 = 0, r1 = 0;
+    ShipView view;
+    int w, h, ow, oh, top, left, oy, r0 = 0, r1 = 0;
     unsigned long __far *tab = 0;
     unsigned char __far *data = 0;
+    if (!stream_view(s, set_index(s), v, 0, &view))
+        return;
+    w = view.w;
+    h = view.h;
     if (!w)
         return;
     need_buffers();
@@ -630,14 +882,8 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
  * in or the least recently used): 0 when it does not fit */
 static int make_dense(const ShipSet __far *s, int set_i, int v)
 {
-    ShipView view = s->view[v];
-    int w = view.w, h = view.h, r0 = 0, i, pick = 0, mir = 0;
-    if (!w && !s->asym) {               /* a mirrored heading not stored: its pair, backwards */
-        view = s->view[lf_pair_of(v, s->nb0, s->nh0)];
-        w = view.w;
-        h = view.h;
-        mir = 1;
-    }
+    ShipView view;
+    int w, h, r0 = 0, i, pick = 0, mir, src;
     g_dense_tick++;
     for (i = 0; i < DENSE_BUFS; i++)
         if (g_dense_set[i] == set_i && g_dense_view[i] == v) {
@@ -645,6 +891,11 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
             g_dense_used[i] = g_dense_tick;
             return 1;
         }
+    src = stored_view(s, v, &mir);      /* a mirrored heading not stored: its pair, backwards */
+    if (!stream_view(s, set_i, src, 0, &view))
+        return 0;
+    w = view.w;
+    h = view.h;
     if (!w || (unsigned long)w * h > DENSE_MAX)
         return 0;
     for (i = 1; i < DENSE_BUFS; i++)
@@ -928,9 +1179,15 @@ long ships_selftest(void)
 void ships_time_paths(int set_i, int v, long out[5])
 {
     const ShipSet __far *s = ships_set(set_i);
-    ShipView view = s->view[v];
+    ShipView view;
     int y0, y1, k, rows, i;
     long px;
+    g_reads_now = 0;
+    if (!stream_view(s, set_i, v, 1, &view)) {
+        for (k = 0; k < 5; k++)
+            out[k] = 0;
+        return;
+    }
     vid_dirty(0, 100);
     vid_dirty_band(&y0, &y1);
     for (k = 0; k < 5; k++) {

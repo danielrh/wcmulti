@@ -571,10 +571,10 @@ the emulator.
   copies of the stored five, of the view or of the opposite heading's
   (`find_sprite`); the top and bottom views, their own mirror, have their
   own table; the asymmetric Convolution stores eight 45-degree steps.
-- **Loading** (`ships_load_blocks`): every type's full-size block, then the
+- **Loading** (`ships_load_blocks`): the stream's slots (below), then the
   ladder for every type, then the rolls size by size, while the mission
   budget lasts (1 MB of XMS kept back); a draw whose block is missing takes
-  the unturned sprite at that size.
+  the unturned sprite at that size. The full-size block is never loaded.
 - **The hybrid** (flight.c `plan_draws`, once a frame): the ships on
   screen are sorted back to front; the biggest, while their pixels fit a
   budget (`g_onfly_px`, 32,000 a frame; `RV.EXE /onfly N`) and they are
@@ -600,6 +600,35 @@ the engine makes a full-size one by expanding its pair backwards
 (`make_dense`) or copying it mirrored (`ships_blit`). The .RV record
 carries the lattice in its last two bytes (`pack.py`); capitals stay at
 30 degrees.
+
+**The stream** (2026-10-20, the user's design: "it doesn't impact the
+drawing and you just get jumpiness until it streams in", a few cache slots
+for the nearest ships, configurable). A set's full-size block (block 0, the
+dense lattice, 0.77 MB a fighter at 15 degrees) stays in the file: the
+engine keeps the .RVS open (`ShipSet.fd`) and each view's place and length
+in its record (`ShipView.blk` 0, `at` and `len` in the file; the views lie
+in index order, so a length is the gap to the next). `ships_load_blocks`
+takes a few XMS **slots** of the longest view (`RV.EXE /stream N`, four by
+default, up to eight; a fighter's biggest view is ~6.5 KB of run-length
+rows). Reads happen only in the frame's plan: `plan_draws` calls
+`ships_prefetch` for each ship it marks exact, nearest first, and
+`stream_view` brings its view into the least recently used slot not asked
+for this frame — at most `/reads N` reads a frame (one by default) — then
+every draw of that frame finds it (the four bands agree). A ship whose
+view is not in draws from the sets that frame (`ships_draw_exact` returns
+0 and `draw_world` falls back), which is the one-frame jumpiness; the
+tally is logged when the flight ends ("the stream read 104 views in 33 ms;
+2 times a ship waited a frame"). The MFD's target picture and the
+benchmark's sprite come from the ladder's first resident step (84%,
+`ships_blit_size`) so they take no slot. DOS has no asynchronous read and
+no DMA a program can drive, but DOSBox serves INT 21h at host speed with
+the emulated clock standing still: 256 reads of 6 KB did not move the 240
+Hz clock (under 16 µs a read), so the reads cost no frame time where this
+game runs; on real hardware they would be a few ms each, which `/reads 0`
+turns off (everything from the sets) and chunking would bound. What it
+buys: a fighter type keeps ~1.7 MB of XMS at 15 degrees instead of 2.5
+(about twelve types in a mission instead of eight), and a denser lattice
+for the exact draw now costs disk, not memory.
 
 **Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
 its sprites on the fly, continuously, which the earlier note here got
