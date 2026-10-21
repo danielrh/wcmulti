@@ -128,6 +128,10 @@ int ships_view_size(const ShipSet __far *s, int k, int v, int *w, int *h);
 void ships_blit_view(const ShipView __far *view, int flags, int x, int y, int y0, int y1, int xa, int xb,
                      const short __far *ext, int ext_y0, int ext_rows);
 
+/* the exact draw's two dense buffers (64 KB each, kept for good once taken) taken now, so that memory
+ * sized after (the laser bolts' pool) leaves them their room: 0 when they do not fit */
+int ships_dense_reserve(void);
+
 /* the asm kernels checked against lightfield.c's: pixels compared, -1 on a mismatch */
 long ships_selftest(void);
 

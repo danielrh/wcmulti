@@ -888,6 +888,24 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
     }
 }
 
+/* a dense buffer: upper memory first (both fit DOSBox's 128 KB of UMBs; each
+ * there is 64 KB more of the 640 for the rest), else conventional */
+static unsigned char __far *dense_alloc(void)
+{
+    unsigned char __far *p = (unsigned char __far *)rv_alloc_high(DENSE_MAX);
+    rv_log("ships: a dense buffer in %s memory", p ? "upper" : "conventional");
+    return p ? p : (unsigned char __far *)_fmalloc(DENSE_MAX);
+}
+
+int ships_dense_reserve(void)
+{
+    int i;
+    for (i = 0; i < DENSE_BUFS; i++)
+        if (!g_dense_buf[i])
+            g_dense_buf[i] = dense_alloc();
+    return g_dense_buf[DENSE_BUFS - 1] != 0;
+}
+
 /* the whole view dense in g_dense (one of the buffers, the one it is already
  * in or the least recently used): 0 when it does not fit */
 static int make_dense(const ShipSet __far *s, int set_i, int v)
@@ -911,7 +929,7 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
     for (i = 1; i < DENSE_BUFS; i++)
         if (g_dense_used[i] < g_dense_used[pick])
             pick = i;
-    if (!g_dense_buf[pick]) g_dense_buf[pick] = (unsigned char __far *)_fmalloc(DENSE_MAX);
+    if (!g_dense_buf[pick]) g_dense_buf[pick] = dense_alloc();
     RV_ASSERT(g_dense_buf[pick] != 0);
     g_dense = g_dense_buf[pick];
     while (r0 < h) {
