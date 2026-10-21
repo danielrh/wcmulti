@@ -72,12 +72,18 @@ void ships_set_camera(int cx, int cy, int focal);
  * finds its view not in draws nothing and reports so, for the caller to
  * draw from the sets that frame.  DOSBox serves the read at host speed, so
  * it costs no frame time there; ships_stream_log says what it cost. */
-void ships_stream_config(int slots, int reads);        /* defaults 4 and 1; slots up to 8; -1 keeps a value */
+void ships_stream_config(int slots, int reads);        /* defaults 6 and 2; slots up to 8; -1 keeps a value */
+int ships_stream_slots(void);           /* the stream's slots that have their XMS: the ships drawn exactly are fewer */
 void ships_frame(void);                 /* at the top of each frame: a new read budget */
 /* the full-size view the camera sees a ship by (the exact draw's), brought in now when the budget allows;
  * ships_prefetch_view a view by number (the MFD's, the benchmark's).  1 when it is in. */
 int ships_prefetch(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship);
 int ships_prefetch_view(int set, int v);
+/* the view a ship needs marked as wanted this frame, nothing read: the plan touches every exact ship's before it
+ * reads any, so a read takes a slot no ship needs now (else one ship's read evicted the next one's view, and that
+ * ship was drawn from the sets for a frame: a wobble) */
+int ships_touch(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship);   /* the view, -1 off screen */
+void ships_touch_view(int set, int v);  /* a view by number marked so (a turning ship's last: its fallback this frame) */
 void ships_stream_log(void);            /* the flight's tally: views read, ms a read, draws that had to wait */
 
 /* THE draw: the ship of set `set` at rel = ship - camera (positions, 256 = 1
@@ -125,6 +131,10 @@ int ships_view_size(const ShipSet __far *s, int k, int v, int *w, int *h);
  * order), 2 mirrored (each row's pixels in the other order), 3 both */
 #define BLIT_V 1
 #define BLIT_H 2
+/* two views of one size and origin (view's, and the one whose rows are at at_b in its block), each row from one or
+ * the other at random by seed: the engines' flames, two frames of noise mixed row by row */
+void ships_blit_mix(const ShipView __far *view, unsigned long at_b, unsigned seed, int flags, int x, int y, int y0,
+                    int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
 void ships_blit_view(const ShipView __far *view, int flags, int x, int y, int y0, int y1, int xa, int xb,
                      const short __far *ext, int ext_y0, int ext_rows);
 

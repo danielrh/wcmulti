@@ -573,21 +573,82 @@ emit_clip:
 ;                   const short far *ext, int ext_y0, const unsigned char far *roots)
 ; One capsule of a fat bolt into the band, rows y0 .. y1-1 (cut by the
 ; caller to the opening's), clipped to each row's extent.  roots: lz_sqrt16.
+; void rv_flame_draw(the same, const LzFlame far *f, const LzFlameLook far *look)
+; lz_flame_draw: an engine's flame through its footprint's rows and spans,
+; each pixel shaded (shade_span) where the capsule's are filled.
 %define PROW   [bp-2]                   ; ROWOFF
 %define PYC    [bp-4]                   ; the row's centre, x16
 %define PXS    [bp-6]
 %define PROWS  [bp-8]
 %define PC     [bp-12]                  ; the middle line's x at the row, 16.16 px
+%define PSH    [bp-14]                  ; 1: a flame, shaded
+%define QS00   [bp-18]                  ; the flame's numbers (LzFlame), dwords
+%define QSX    [bp-22]
+%define QSY    [bp-26]
+%define QE00   [bp-30]
+%define QEX    [bp-34]
+%define QEY    [bp-38]
+%define QKK    [bp-42]
+%define QMODE  [bp-44]
+%define QSEED  [bp-46]
+%define QLKS   [bp-48]                  ; the look's segment (its offset made 0)
+%define QN     [bp-50]                  ; the noise's index
+%define QPOFF  [bp-52]                  ; the row's first pixel's ramp: 256 (ramp_a) where x + y is odd, else 512
+%define QCNT   [bp-54]                  ; pixels left in the span
+%define QE     [bp-58]                  ; e at the pixel (dword)
+%define QSX2   [bp-62]                  ; the steps for two pixels (dwords)
+%define QEX2   [bp-66]
+%define PFRAME 66
+        global _rv_flame_draw
+_rv_flame_draw:
+        push bp
+        mov bp,sp
+        sub sp,PFRAME
+        mov word PSH,1
+        jmp pass_body
         global _rv_pass_draw
 _rv_pass_draw:
         push bp
         mov bp,sp
-        sub sp,12
+        sub sp,PFRAME
+        mov word PSH,0
+pass_body:
         push si
         push di
         push ds
         cld
-        lds si,[bp+6]
+        cmp word PSH,0
+        je .pass
+        lds si,[bp+30]              ; the flame's numbers into the frame
+        mov eax,[si]
+        mov QS00,eax
+        mov eax,[si+4]
+        mov QSX,eax
+        mov eax,[si+8]
+        mov QSY,eax
+        mov eax,[si+12]
+        mov QE00,eax
+        mov eax,[si+16]
+        mov QEX,eax
+        mov eax,[si+20]
+        mov QEY,eax
+        mov eax,[si+24]
+        mov QKK,eax
+        mov ax,[si+28]
+        mov QMODE,ax
+        mov ax,[si+30]
+        mov QSEED,ax
+        mov eax,QSX
+        shl eax,1
+        mov QSX2,eax
+        mov eax,QEX
+        shl eax,1
+        mov QEX2,eax
+        mov ax,[bp+34]              ; the look: seg + off / 16 (it is paragraph aligned)
+        shr ax,4
+        add ax,[bp+36]
+        mov QLKS,ax
+.pass:  lds si,[bp+6]
         mov ax,[si]                 ; ys = max(top, y0)
         cmp ax,[bp+16]
         jge .s
@@ -683,10 +744,14 @@ _rv_pass_draw:
 .hi:    sub ax,cx
         jle .skip
         mov di,PROW
+        cmp word PSH,0
+        jne .shade
         add di,cx
         mov cx,ax
         mov al,[si+22]
         rep stosb
+        jmp .skip
+.shade: call shade_span
 .skip:  add word PROW,640
         add bx,4
         add word PYC,16
@@ -701,6 +766,279 @@ _rv_pass_draw:
         mov sp,bp
         pop bp
         retf
+
+; void rv_flame_setup(int ax, int ay, int tx, int ty, int r16, int seed, LzFlame far *f, LzFat far *fp)
+; lz_flame_setup: an engine's flame's numbers and the capsule round it, to
+; the bit (C's 64-bit muldivs are an imul and an idiv here).
+%define GT2  [bp-4]                     ; dwords: tx^2 + ty^2, its root, len r16, r16
+%define GLEN [bp-8]
+%define GLR  [bp-12]
+%define GR   [bp-16]
+%macro MULDIV 2                         ; eax = eax x %1 / %2 (C's muldiv: the product whole, then divided)
+        mov ecx,%1
+        imul ecx
+        idiv dword %2
+%endmacro
+        global _rv_flame_setup
+_rv_flame_setup:
+        push bp
+        mov bp,sp
+        sub sp,16
+        push si
+        push di
+        push ds
+        les di,[bp+18]
+        movsx eax,word [bp+10]
+        imul eax,eax
+        movsx ecx,word [bp+12]
+        imul ecx,ecx
+        add eax,ecx
+        mov GT2,eax
+        call isqrt32
+        mov GLEN,eax
+        movsx eax,word [bp+14]
+        mov GR,eax
+        mov ax,[bp+16]
+        mov [es:di+30],ax           ; seed
+        mov eax,GLEN
+        shl eax,2
+        cmp eax,GR
+        jge .slant
+        ; end on, or nearly: a disc; s down and e across it, in radii
+        mov word [es:di+28],1
+        xor eax,eax
+        mov [es:di+4],eax           ; sx
+        mov [es:di+20],eax          ; ey
+        mov eax,16
+        MULDIV 65536,GR
+        mov [es:di+8],eax           ; sy
+        mov [es:di+16],eax          ; ex
+        movsx ecx,word [bp+8]
+        mov eax,8
+        sub eax,ecx
+        MULDIV 65536,GR
+        mov [es:di],eax             ; s00
+        movsx ecx,word [bp+6]
+        mov eax,8
+        sub eax,ecx
+        MULDIV 65536,GR
+        mov [es:di+12],eax          ; e00
+        mov dword [es:di+24],65536  ; kk
+        mov word [bp+10],0          ; (no length: the footprint a disc)
+        mov word [bp+12],0
+        jmp .foot
+.slant: mov word [es:di+28],0
+        movsx eax,word [bp+10]
+        shl eax,4
+        MULDIV 65536,GT2
+        mov [es:di+4],eax           ; sx = 16 tx / t2
+        movsx eax,word [bp+12]
+        shl eax,4
+        MULDIV 65536,GT2
+        mov [es:di+8],eax           ; sy
+        movsx ecx,word [bp+6]
+        mov eax,8
+        sub eax,ecx
+        movsx ecx,word [bp+10]
+        imul eax,ecx
+        mov ebx,eax                 ; (8 - ax) tx
+        movsx ecx,word [bp+8]
+        mov eax,8
+        sub eax,ecx
+        movsx ecx,word [bp+12]
+        imul eax,ecx                ; (8 - ay) ty
+        add eax,ebx
+        MULDIV 65536,GT2
+        mov [es:di],eax             ; s00
+        mov eax,GLEN
+        imul eax,GR
+        mov GLR,eax                 ; len r16
+        movsx eax,word [bp+12]
+        shl eax,4
+        MULDIV 65536,GLR
+        mov [es:di+16],eax          ; ex = 16 ty / (len r16)
+        movsx eax,word [bp+10]
+        shl eax,4
+        neg eax
+        MULDIV 65536,GLR
+        mov [es:di+20],eax          ; ey = -16 tx / (len r16)
+        movsx ecx,word [bp+6]
+        mov eax,8
+        sub eax,ecx
+        movsx ecx,word [bp+12]
+        imul eax,ecx
+        mov ebx,eax                 ; (8 - ax) ty
+        movsx ecx,word [bp+8]
+        mov eax,8
+        sub eax,ecx
+        movsx ecx,word [bp+10]
+        imul eax,ecx                ; (8 - ay) tx
+        sub ebx,eax
+        mov eax,ebx
+        MULDIV 65536,GLR
+        mov [es:di+12],eax          ; e00
+        mov eax,GLEN
+        MULDIV 65536,GR
+        mov [es:di+24],eax          ; kk = len / r16
+.foot:  les di,[bp+22]              ; the footprint: r16 9/8 + 2 (at most LZ_RMAX16), a the upper end
+        mov ax,[bp+14]
+        imul ax,ax,9
+        cwd
+        mov cx,8
+        idiv cx
+        add ax,2
+        cmp ax,128
+        jle .rf
+        mov ax,128
+.rf:    mov [es:di+8],ax
+        mov word [es:di+10],0
+        mov ax,[bp+6]
+        mov bx,[bp+8]
+        mov cx,ax
+        add cx,[bp+10]              ; ax + tx
+        mov dx,bx
+        add dx,[bp+12]              ; ay + ty
+        cmp word [bp+12],0
+        jl .swap
+        jg .keep
+        cmp word [bp+10],0
+        jge .keep
+.swap:  xchg ax,cx
+        xchg bx,dx
+.keep:  mov [es:di],ax
+        mov [es:di+2],bx
+        mov [es:di+4],cx
+        mov [es:di+6],dx
+        pop ds
+        pop di
+        pop si
+        mov sp,bp
+        pop bp
+        retf
+
+; a flame's span: cx its first column, ax how many, di the row's offset in
+; the band (es), the row's centre at PYC.  Two pixels at a time: their s and
+; e (linear, from the frame's QS00 .. QEY), r = |e| or the round root's
+; distance (max + 3/8 min), the profile's intensity at (s, r + the noise's
+; jitter), plus the noise, and the level's two colours of the stipple
+; (lasers.c's flame_span).  The noise's index in dl.
+shade_span:
+        push si
+        push bx
+        push fs
+        mov QCNT,ax
+        add di,cx                   ; es:di the first pixel
+        mov fs,QLKS
+        mov ax,PYC
+        sar ax,4                    ; y
+        mov bx,ax
+        imul bx,bx,7
+        mov dx,cx
+        imul dx,dx,13
+        add bx,dx
+        add bx,QSEED
+        and bx,255
+        mov QN,bx                   ; (y 7 + x 13 + seed) & 255
+        mov bx,ax
+        add bx,cx
+        and bx,1                    ; (y + x) & 1: odd, the first is ramp_a's (256), else ramp_b's (512)
+        shl bx,8
+        neg bx
+        add bx,512
+        mov QPOFF,bx
+        movsx eax,ax
+        movsx ecx,cx
+        mov esi,QSY
+        imul esi,eax
+        add esi,QS00
+        mov edx,QSX
+        imul edx,ecx
+        add esi,edx                 ; s = s00 + sy y + sx x
+        mov edx,QEY
+        imul edx,eax
+        add edx,QE00
+        mov eax,QEX
+        imul eax,ecx
+        add edx,eax
+        mov QE,edx                  ; e = e00 + ey y + ex x
+        movzx edx,word QN
+.px:    mov ecx,QE
+        mov eax,ecx
+        sar eax,31
+        xor ecx,eax
+        sub ecx,eax                 ; |e|
+        xor ebx,ebx                 ; the profile's row (s >> 12) x 16: 0 at the root
+        cmp word QMODE,0
+        jne .disc
+        or esi,esi
+        js .root
+        cmp esi,65536
+        jge .next
+        mov ebx,esi
+        shr ebx,12
+        shl bx,4
+        jmp .rr
+.disc:  mov eax,esi                 ; end on: c = |s|
+        push edx
+        mov edx,eax
+        sar edx,31
+        xor eax,edx
+        sub eax,edx
+        pop edx
+        jmp .oct
+.root:  mov eax,esi                 ; the round root: c = (-s kk) >> 16
+        neg eax
+        push edx
+        imul dword QKK
+        shrd eax,edx,16
+        pop edx
+.oct:   cmp ecx,eax                 ; r = max + 3/8 min
+        jge .emax
+        xchg ecx,eax
+.emax:  lea eax,[eax+eax*2]
+        sar eax,3
+        add ecx,eax
+.rr:    cmp ecx,19 << 12
+        jge .next
+        shr ecx,12
+        movsx ax,byte [fs:edx+768]  ; r's jitter
+        add cx,ax
+        jns .rpos
+        xor cx,cx
+.rpos:  cmp cx,16
+        jge .next
+        add bx,cx
+        movzx ax,byte [fs:ebx]      ; the profile
+        or ax,ax
+        jz .next
+        movsx cx,byte [fs:edx+1024] ; the intensity's noise
+        add ax,cx
+        jns .tpos
+        xor ax,ax
+.tpos:  cmp ax,255
+        jle .tok
+        mov ax,255
+.tok:   movzx ebx,ax
+        add bx,QPOFF
+        mov al,[fs:ebx]             ; the first pixel's colour
+        xor bx,768
+        mov ah,[fs:ebx]             ; the second's: the other ramp
+        cmp word QCNT,1
+        je .one
+        mov [es:di],ax
+        jmp .next
+.one:   mov [es:di],al
+.next:  add di,2
+        add esi,QSX2
+        mov eax,QEX2
+        add QE,eax
+        add dl,26
+        sub word QCNT,2
+        jg .px
+        pop fs
+        pop bx
+        pop si
+        ret
 
 ; ax = d (x16, the row's centre from an end's) -> ax = half the chord there:
 ; lz_sqrt16[max(r^2 - d^2, 0) / 4] (gs: the table, its offset at [bp+26])

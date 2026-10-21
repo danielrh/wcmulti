@@ -70,7 +70,7 @@ static struct {
     unsigned frame;                     /* the frame it was last asked for: not taken in that frame */
     XmsBlock blk;
 } g_slot[STREAM_SLOTS];
-static int g_nslots = 4, g_reads_frame = 1, g_reads_now;
+static int g_nslots = 6, g_reads_frame = 2, g_reads_now;   /* (6: up to five ships drawn exactly, one slot spare) */
 static unsigned g_slot_tick, g_frame = 1;
 static unsigned long g_slot_cap;        /* a slot's bytes: the longest view of the sets loaded */
 static unsigned long g_stream_reads, g_stream_ticks, g_stream_waits;
@@ -546,6 +546,14 @@ void ships_stream_config(int slots, int reads)
         g_reads_frame = reads;
 }
 
+int ships_stream_slots(void)
+{
+    int i, n = 0;
+    for (i = 0; i < g_nslots; i++)
+        n += g_slot[i].blk != 0;
+    return n;
+}
+
 void ships_frame(void)
 {
     g_frame++;
@@ -653,6 +661,25 @@ int ships_prefetch(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasi
     return ships_prefetch_view(set_i, p.view);
 }
 
+void ships_touch_view(int set_i, int v)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    ShipView view;
+    int flags;
+    stream_view(s, set_i, stored_view(s, v, &flags), 0, &view);
+}
+
+int ships_touch(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    LfPlace p;
+    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
+    if (!p.on_screen)
+        return -1;
+    ships_touch_view(set_i, p.view);
+    return p.view;
+}
+
 /* what a read costs here: the longest view of the first set, read into slot 0 256 times */
 static void stream_measure(void)
 {
@@ -706,18 +733,23 @@ void ships_lattice(int set_i, int exact, int *nb, int *nh)
 /* rows r0 .. *r1-1 of a view into the scratch (one XMS move for the table,
  * one for the rows; *r1 comes down when they do not all fit): returns the
  * row table, offsets relative to row r0's data, which starts at *data */
-static unsigned long __far *fetch_rows(const ShipView *view, int r0, int *r1, unsigned char __far **data)
+static unsigned long __far *fetch_rows_in(const ShipView *view, int r0, int *r1, unsigned char __far **data,
+                                         unsigned char __far *scratch, unsigned size)
 {
-    unsigned char __far *scratch = gfx_scratch();
     unsigned long __far *tab = (unsigned long __far *)scratch;
     unsigned n = *r1 - r0 + 1, room;
     xms_get(view->blk, view->at + 4UL * r0, tab, 4UL * n);
-    room = SCRATCH - 4 * n - 16;
+    room = size - 4 * n - 16;
     while (tab[*r1 - r0] - tab[0] > room && *r1 > r0 + 1)
         (*r1)--;
     *data = scratch + 4 * n;
     xms_get(view->blk, view->at + 4UL * (view->h + 1) + tab[0], *data, tab[*r1 - r0] - tab[0]);
     return tab;
+}
+
+static unsigned long __far *fetch_rows(const ShipView *view, int r0, int *r1, unsigned char __far **data)
+{
+    return fetch_rows_in(view, r0, r1, data, gfx_scratch(), SCRATCH);
 }
 
 /* a row's clip: [xa, xb) and the opening's extent on row ry; 0 when nothing is left */
@@ -771,6 +803,53 @@ void ships_blit_view(const ShipView __far *fv, int flags, int x, int y, int y0, 
                 rv_blit_row_rev(dst, data + (unsigned)(tab[r - r0] - tab[0]), right, ca, cb);
             else
                 rv_blit_row(dst, data + (unsigned)(tab[r - r0] - tab[0]), left, ca, cb);
+        }
+        r0 = r1;
+    }
+}
+
+/* two views of one size and origin, each row from one or the other as bit (row + seed) of a scramble says: the
+ * engines' flames, two frames of noise mixed row by row so a flame changes every frame */
+void ships_blit_mix(const ShipView __far *fa, unsigned long at_b, unsigned seed, int flags, int x, int y, int y0, int y1,
+                    int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    ShipView va = *fa, vb = *fa;
+    int top, left, right, r0, r1, rb, h = va.h, w = va.w, flip = flags & BLIT_V, mir = flags & BLIT_H;
+    if (!w)
+        return;
+    vb.at = at_b;
+    top = y - (flip ? h - 1 - va.oy : va.oy);
+    left = x - (mir ? w - 1 - va.ox : va.ox);
+    right = left + w;
+    if (y0 < top) y0 = top;
+    if (y1 > top + h) y1 = top + h;
+    if (y0 < 0) y0 = 0;
+    if (y1 > SCR_H) y1 = SCR_H;
+    if (xa < 0) xa = 0;
+    if (xb > SCR_W) xb = SCR_W;
+    if (y0 >= y1 || left >= xb || right <= xa)
+        return;
+    r0 = flip ? h - (y1 - top) : y0 - top;
+    while (r0 < (flip ? h - (y0 - top) : y1 - top)) {
+        unsigned long __far *ta, __far *tb;
+        unsigned char __far *da, __far *db, __far *dst;
+        int r;
+        r1 = flip ? h - (y0 - top) : y1 - top;
+        ta = fetch_rows_in(&va, r0, &r1, &da, gfx_scratch(), SCRATCH / 2);
+        rb = r1;
+        tb = fetch_rows_in(&vb, r0, &rb, &db, gfx_scratch() + SCRATCH / 2, SCRATCH / 2);
+        if (rb < r1)
+            r1 = rb;
+        dst = vid_row(flip ? top + (h - 1 - r0) : top + r0);
+        for (r = r0; r < r1; r++, dst += flip ? -SCR_W : SCR_W) {
+            int ry = flip ? top + (h - 1 - r) : top + r, ca = xa, cb = xb, b = ((unsigned)(r + seed) * 40503U >> 9) & 1;
+            const unsigned char __far *src = b ? db + (unsigned)(tb[r - r0] - tb[0]) : da + (unsigned)(ta[r - r0] - ta[0]);
+            if (!row_clip(ry, &ca, &cb, ext, ext_y0, ext_rows))
+                continue;
+            if (mir)
+                rv_blit_row_rev(dst, src, right, ca, cb);
+            else
+                rv_blit_row(dst, src, left, ca, cb);
         }
         r0 = r1;
     }
@@ -1110,11 +1189,50 @@ int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *s
     return 7;
 }
 
+/* a view of the dense lattice next to v (a band or a heading step either way, the headings round the circle)
+ * whose full-size copy is in a stream slot now: -1 when none.  While a turning ship's next view is being
+ * read, it is drawn from this one rather than from the sets' coarser lattice (the frame's single read went
+ * to another ship: a coarse view every other frame made it wobble) */
+static int resident_neighbour(const ShipSet __far *s, int set_i, int v)
+{
+    int nb = s->nb0, nh = s->nh0, full = 2 * (nh - 1), base = 2 + nb * nh, band, hh, db, dh, k;
+    if (v == 0 || v == 1 + nb * nh)
+        return -1;                      /* (a pole's neighbours are a whole band: the sets do) */
+    if (v < base) {
+        band = (v - 1) / nh;
+        hh = (v - 1) % nh;
+    } else {
+        band = (v - base) / (nh - 2);
+        hh = nh + (v - base) % (nh - 2);
+    }
+    for (k = 0; k < 4; k++) {
+        int b, h, c, stored, i;
+        db = k == 0 ? 0 : k == 1 ? 0 : k == 2 ? -1 : 1;
+        dh = k == 0 ? -1 : k == 1 ? 1 : 0;
+        b = band + db;
+        h = (hh + dh + full) % full;
+        if (b < 0 || b >= nb)
+            continue;
+        c = h <= nh - 1 ? 1 + b * nh + h : 2 + nb * nh + b * (nh - 2) + (h - nh);
+        if (!s->asym && c >= base)
+            stored = lf_pair_of(c, nb, nh);
+        else
+            stored = c;
+        if (s->view[stored].blk)
+            return c;                   /* (resident with the set) */
+        for (i = 0; i < g_nslots; i++)
+            if (g_slot[i].blk && g_slot[i].set == set_i && g_slot[i].view == stored)
+                return c;
+    }
+    return -1;
+}
+
 int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int detail,
                      int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
     const ShipSet __far *s = ships_set(set_i);
     LfPlace p;
+    int c;
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
     if (!p.on_screen || scale256 < 8)
         return 1;
@@ -1122,7 +1240,11 @@ int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBa
         ships_blit(s, p.view, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
         return 1;
     }
-    return draw_turned(s, set_i, p.view, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+    if (draw_turned(s, set_i, p.view, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows))
+        return 1;
+    c = resident_neighbour(s, set_i, p.view);
+    return c >= 0 && draw_turned(s, set_i, c, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0,
+                                 ext_rows);
 }
 
 int ships_draw_sky(int set_i, int v, const LfVec *dir, const LfVec *up, const LfBasis *cam, int scale256,

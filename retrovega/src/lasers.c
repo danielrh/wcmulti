@@ -330,39 +330,149 @@ static int root_index(int r2, int d)
     return k > 0 ? k >> 2 : 0;
 }
 
+/* row y's span of a pass, [*xs, *xe) before the extents; c the middle line's x there (16.16 px) */
+static void pass_span(const LzPass LZ_FAR *p, int y, long c, int *xs, int *xe)
+{
+    int yc = y * 16 + 8, d;
+    long L, R, hw = p->hw;
+    if (yc < p->la) {
+        d = yc - p->ay;
+        L = (long)(p->ax - lz_sqrt16[root_index(p->r2, d)]) << 12;
+    } else if (yc < p->lb) {
+        L = c - hw;
+    } else {
+        d = yc - p->by;
+        L = (long)(p->bx - lz_sqrt16[root_index(p->r2, d)]) << 12;
+    }
+    if (yc < p->ra) {
+        d = yc - p->ay;
+        R = (long)(p->ax + lz_sqrt16[root_index(p->r2, d)]) << 12;
+    } else if (yc < p->rb) {
+        R = c + hw;
+    } else {
+        d = yc - p->by;
+        R = (long)(p->bx + lz_sqrt16[root_index(p->r2, d)]) << 12;
+    }
+    *xs = (int)((L + 0x7FFF) >> 16);
+    *xe = (int)((R + 0x8000) >> 16);
+}
+
 void lz_pass_draw(const LzPass LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1, const short LZ_FAR *ext,
                   int ext_y0, int ext_rows)
 {
     int ys = p->top > y0 ? p->top : y0, ye = p->bot < y1 ? p->bot : y1, y;
-    long c, hw = p->hw;
+    long c;
     if (!clip_rows(&ys, &ye, ext_y0, ext_rows, ext))
         return;
     c = p->c0 + p->m * (ys - p->top);
     for (y = ys; y < ye; y++, c += p->m) {
-        int yc = y * 16 + 8, d, xs, xe;
-        long L, R;
-        if (yc < p->la) {
-            d = yc - p->ay;
-            L = (long)(p->ax - lz_sqrt16[root_index(p->r2, d)]) << 12;
-        } else if (yc < p->lb) {
-            L = c - hw;
-        } else {
-            d = yc - p->by;
-            L = (long)(p->bx - lz_sqrt16[root_index(p->r2, d)]) << 12;
-        }
-        if (yc < p->ra) {
-            d = yc - p->ay;
-            R = (long)(p->ax + lz_sqrt16[root_index(p->r2, d)]) << 12;
-        } else if (yc < p->rb) {
-            R = c + hw;
-        } else {
-            d = yc - p->by;
-            R = (long)(p->bx + lz_sqrt16[root_index(p->r2, d)]) << 12;
-        }
-        xs = (int)((L + 0x7FFF) >> 16);
-        xe = (int)((R + 0x8000) >> 16);
+        int xs, xe;
+        pass_span(p, y, c, &xs, &xe);
         if (xs < xe)
             span(band + (unsigned)(y - band_y0) * 640, xs, xe, y, (unsigned char)p->colour, ext, ext_y0);
+    }
+}
+
+/* --- the engines' flames --- */
+
+void lz_flame_setup(int ax, int ay, int tx, int ty, int r16, int seed, LzFlame LZ_FAR *f, LzFat LZ_FAR *fp)
+{
+    long t2 = (long)tx * tx + (long)ty * ty, len = (long)isqrt((unsigned long)t2), lr;
+    int rf = r16 * 9 / 8 + 2;           /* the footprint: the profile is at most 1 radius wide, its edge's noise 3/16 */
+    f->seed = (short)seed;
+    if (len * 4 < r16) {
+        /* end on, or nearly: a disc; s down and e across it, in radii */
+        f->mode = 1;
+        f->sx = 0;
+        f->sy = muldiv(16, 65536L, r16);
+        f->s00 = muldiv(8 - ay, 65536L, r16);
+        f->ex = f->sy;
+        f->ey = 0;
+        f->e00 = muldiv(8 - ax, 65536L, r16);
+        f->kk = 65536L;
+        tx = ty = 0;
+    } else {
+        f->mode = 0;
+        f->sx = muldiv(16L * tx, 65536L, t2);
+        f->sy = muldiv(16L * ty, 65536L, t2);
+        f->s00 = muldiv((long)(8 - ax) * tx + (long)(8 - ay) * ty, 65536L, t2);
+        lr = len * r16;
+        f->ex = muldiv(16L * ty, 65536L, lr);
+        f->ey = muldiv(-16L * tx, 65536L, lr);
+        f->e00 = muldiv((long)(8 - ax) * ty - (long)(8 - ay) * tx, 65536L, lr);
+        f->kk = muldiv(len, 65536L, r16);
+    }
+    if (rf > LZ_RMAX16)
+        rf = LZ_RMAX16;
+    /* the footprint, a capsule round the flame: a the upper end */
+    if (ty < 0 || (ty == 0 && tx < 0)) {
+        fp->ax = (short)(ax + tx); fp->ay = (short)(ay + ty); fp->bx = (short)ax; fp->by = (short)ay;
+    } else {
+        fp->ax = (short)ax; fp->ay = (short)ay; fp->bx = (short)(ax + tx); fp->by = (short)(ay + ty);
+    }
+    fp->r = (short)rf;
+    fp->pad = 0;
+}
+
+/* one row's pixels xs .. xe-1 of a flame, shaded two at a time: each pair of pixels shows its level's two colours
+ * (the stipple: the first ramp_a where x + y is odd), the noise is the pair's */
+static void flame_span(const LzFlame LZ_FAR *f, const LzFlameLook LZ_FAR *lk, unsigned char LZ_FAR *row, int y, int xs,
+                       int xe)
+{
+    long s = f->s00 + f->sy * y + f->sx * xs, e = f->e00 + f->ey * y + f->ex * xs, s2 = f->sx * 2, e2 = f->ex * 2;
+    unsigned n = (unsigned)(y * 7 + xs * 13 + f->seed) & 255;
+    int odd = (y + xs) & 1, x;
+    for (x = xs; x < xe; x += 2, s += s2, e += e2, n = (n + 26) & 255) {
+        long ae = e < 0 ? -e : e, r;
+        int sr = 0, ri, t;
+        if (f->mode || s < 0) {
+            /* the round root (or an end-on disc): the distance from the nozzle, max + 3/8 min */
+            long c = f->mode ? (s < 0 ? -s : s) : (long)(((lz_wide)-s * f->kk) >> 16);
+            r = ae > c ? ae + (c * 3 >> 3) : c + (ae * 3 >> 3);
+        } else {
+            if (s >= 65536L)
+                continue;
+            r = ae;
+            sr = (int)(s >> 12) * 16;
+        }
+        if (r >= 19L << 12)
+            continue;
+        ri = (int)(r >> 12) + lk->nr[n];
+        if (ri < 0)
+            ri = 0;
+        if (ri >= 16)
+            continue;
+        t = lk->lut[sr + ri];
+        if (!t)
+            continue;
+        t += lk->nv[n];
+        if (t < 0) t = 0;
+        if (t > 255) t = 255;
+        row[x] = odd ? lk->ramp_a[t] : lk->ramp_b[t];
+        if (x + 1 < xe)
+            row[x + 1] = odd ? lk->ramp_b[t] : lk->ramp_a[t];
+    }
+}
+
+void lz_flame_draw(const LzPass LZ_FAR *p, const LzFlame LZ_FAR *f, const LzFlameLook LZ_FAR *lk, unsigned char LZ_FAR *band,
+                   int band_y0, int y0, int y1, const short LZ_FAR *ext, int ext_y0, int ext_rows)
+{
+    int ys = p->top > y0 ? p->top : y0, ye = p->bot < y1 ? p->bot : y1, y;
+    long c;
+    if (!clip_rows(&ys, &ye, ext_y0, ext_rows, ext))
+        return;
+    c = p->c0 + p->m * (ys - p->top);
+    for (y = ys; y < ye; y++, c += p->m) {
+        int xs, xe, lo = 0, hi = 640;
+        pass_span(p, y, c, &xs, &xe);
+        if (ext) {
+            lo = ext[2 * (y - ext_y0)];
+            hi = ext[2 * (y - ext_y0) + 1];
+        }
+        if (xs < lo) xs = lo;
+        if (xe > hi) xe = hi;
+        if (xs < xe)
+            flame_span(f, lk, band + (unsigned)(y - band_y0) * 640, y, xs, xe);
     }
 }
 

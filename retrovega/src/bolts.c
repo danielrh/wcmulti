@@ -406,6 +406,58 @@ long bolts_selftest(void)
             bad = -1;
         }
     }
+    /* the engines' flames: rv_flame_draw against lz_flame_draw, random flames (some end on) through a scrambled
+     * look, band by band with the extents */
+    if (!bad) {
+        void __far *mem = _fmalloc(sizeof(LzFlameLook) + 16);
+        if (mem) {
+            unsigned long lin = ((unsigned long)FP_SEG(mem) << 4) + FP_OFF(mem) + 15;
+            LzFlameLook __far *lk = (LzFlameLook __far *)MK_FP((unsigned)(lin >> 4), 0);
+            for (k = 0; k < 256; k++) {
+                lk->lut[k] = (unsigned char)((k & 15) > 12 ? 0 : (k * 37 + 11) & 255);
+                lk->ramp_a[k] = (unsigned char)k;
+                lk->ramp_b[k] = (unsigned char)(255 - k);
+                lk->nr[k] = (signed char)(rnd(7) - 3);
+                lk->nv[k] = (signed char)(rnd(65) - 24);
+            }
+            for (w = 0; w < SCR_H / TEST_ROWS && !bad; w++) {
+                int y0 = w * TEST_ROWS, y1 = y0 + TEST_ROWS, cy0 = y0 < 12 ? 12 : y0, cy1 = y1 > 388 ? 388 : y1, pass;
+                unsigned long sum[2];
+                for (pass = 0; pass < 2; pass++) {
+                    _fmemset(band, 0, TEST_ROWS * SCR_W);
+                    for (i = 0; i < nfc; i++) {
+                        LzFlame fl;
+                        LzFat fp;
+                        LzPass pp;
+                        int tx = i % 4 == 3 ? 1 : fc[i].bx - fc[i].ax, ty = i % 4 == 3 ? 0 : fc[i].by - fc[i].ay;
+                        lz_flame_setup(fc[i].ax, fc[i].ay, tx * 3, ty * 3, fc[i].r * 3 / 2, i * 7, &fl, &fp);
+                        if (pass) {             /* (the asm's set-up must be the C's) */
+                            LzFlame fl2;
+                            LzFat fp2;
+                            rv_flame_setup(fc[i].ax, fc[i].ay, tx * 3, ty * 3, fc[i].r * 3 / 2, i * 7, &fl2, &fp2);
+                            if (_fmemcmp(&fl, &fl2, sizeof fl) || _fmemcmp(&fp, &fp2, sizeof fp)) {
+                                rv_log("bolts: rv_flame_setup differs for flame %d: mode %d/%d sx %ld/%ld s00 %ld/%ld "
+                                       "e00 %ld/%ld kk %ld/%ld fp r %d/%d", i, fl.mode, fl2.mode, fl.sx, fl2.sx, fl.s00,
+                                       fl2.s00, fl.e00, fl2.e00, fl.kk, fl2.kk, fp.r, fp2.r);
+                                bad = -1;
+                            }
+                        }
+                        lz_capsule_setup(&fp, 0, &pp);
+                        if (pass)
+                            rv_flame_draw(&pp, band, y0, cy0, cy1, ext + 2 * 12, 12, lz_sqrt16, &fl, lk);
+                        else
+                            lz_flame_draw(&pp, &fl, lk, band, y0, y0, y1, ext + 2 * 12, 12, 376);
+                    }
+                    sum[pass] = checksum(band, &drawn);
+                }
+                if (sum[0] != sum[1]) {
+                    rv_log("bolts: rv_flame_draw differs from lz_flame_draw in rows %d-%d", y0, y1);
+                    bad = -1;
+                }
+            }
+            _ffree(mem);
+        }
+    }
     /* the flight: rv_bolts_move against lz_move */
     if (!bad) {
         _fmemcpy(lc, b, sizeof(LzBolt) * 6);

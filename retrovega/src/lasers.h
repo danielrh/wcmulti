@@ -74,15 +74,39 @@ typedef struct {
     short r, pad;                       /* 36: the radius x16 */
 } LzPass;
 
+/* an engine's flame (lz_flame_setup; 32 bytes, the asm reads this layout).
+ * Where a pixel is in it is two numbers linear on the screen, 16.16 at pixel
+ * (0, 0) and per column and row: s along it (0 the nozzle, 65536 the tip)
+ * and e across it (65536 the root's radius); kk the flame's length over that
+ * radius, for the round root (s < 0).  Mode 1: end on, a disc (s down it and
+ * e across, both in radii).  seed: this frame's noise. */
+typedef struct {
+    long s00, sx, sy;                   /* 0 */
+    long e00, ex, ey;                   /* 12 */
+    long kk;                            /* 24 */
+    short mode, seed;                   /* 28 */
+} LzFlame;
+
+/* a flame's look (1,280 bytes, paragraph aligned for the asm, which reads
+ * this layout): the profile (s in sixteenths down, r in sixteenths of the
+ * radius across: intensity 1..255, 0 outside: tools/flamelut.py), the
+ * stipple (a pixel of intensity t is ramp_a[t] where x + y is odd, ramp_b[t]
+ * where even), and the noise: r's jitter in sixteenths and the intensity's */
+typedef struct {
+    unsigned char lut[256];             /* 0 */
+    unsigned char ramp_a[256], ramp_b[256];   /* 256, 512 */
+    signed char nr[256], nv[256];       /* 768, 1024 */
+} LzFlameLook;
+
 /* the look */
 typedef struct {
     unsigned char line, body, core, pad;   /* palette indices: far lines; the fat bolt's body, its middle */
     short body16;                       /* the core's radius x16 from which it is a capsule, not a line */
 } LzStyle;
 
-#define LZ_RMAX16 64                    /* the widest a fat bolt is drawn: 4 px of radius (x16) */
+#define LZ_RMAX16 128                   /* the widest capsule: 8 px of radius (x16; the engines' flames' footprints) */
 #define LZ_SQRT_N (LZ_RMAX16 * LZ_RMAX16 / 4 + 1)   /* lz_sqrt16[k] = sqrt(4 k + 1.5) rounded, for k = (r^2 - d^2) / 4
-                                                   (x16), up to r = LZ_RMAX16: 1,025 bytes */
+                                                   (x16), up to r = LZ_RMAX16: 4,097 bytes */
 extern unsigned char LZ_FAR lz_sqrt16[LZ_SQRT_N];
 void lz_init(void);                     /* the roots' table */
 
@@ -101,8 +125,13 @@ void lz_place(const LzBolt LZ_FAR *b, int n, const LzCam LZ_FAR *c, LzLine LZ_FA
  * how many; a core too thin for a capsule comes back as a line (*core_line 1) */
 int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, LzLine LZ_FAR *core, int *core_line);
 
-/* one capsule of f's ends and radius (at most LZ_RMAX16), in one colour: the engines' flames are made of these */
+/* one capsule of f's ends and radius (at most LZ_RMAX16), in one colour */
 void lz_capsule_setup(const LzFat LZ_FAR *f, int colour, LzPass LZ_FAR *p);
+
+/* an engine's flame: its nozzle (ax, ay) and its tail's way (tx, ty), x16 on the screen, its root's radius r16,
+ * this frame's noise seed: *f, and *fp the capsule round it (a footprint for lz_capsule_setup: its rows and spans
+ * are the pixels the flame's shading visits) */
+void lz_flame_setup(int ax, int ay, int tx, int ty, int r16, int seed, LzFlame LZ_FAR *f, LzFat LZ_FAR *fp);
 
 /* every bolt flies k positions for each sixteenth of a km of its half axis (rv_bolts_move's reference) */
 void lz_move(LzBolt LZ_FAR *b, int n, long k);
@@ -118,6 +147,10 @@ void lz_lines_draw(const LzLine LZ_FAR *l, int n, unsigned char colour, unsigned
                    int y0, int y1, const short LZ_FAR *ext, int ext_y0, int ext_rows);
 void lz_pass_draw(const LzPass LZ_FAR *p, unsigned char LZ_FAR *band, int band_y0, int y0, int y1, const short LZ_FAR *ext,
                   int ext_y0, int ext_rows);
+/* a flame through its footprint p's rows and spans, each pixel shaded (its place in the flame, the profile, the
+ * noise, the stipple) */
+void lz_flame_draw(const LzPass LZ_FAR *p, const LzFlame LZ_FAR *f, const LzFlameLook LZ_FAR *lk, unsigned char LZ_FAR *band,
+                   int band_y0, int y0, int y1, const short LZ_FAR *ext, int ext_y0, int ext_rows);
 
 #ifdef __WATCOMC__
 /* lasers.asm: the same, fast */
@@ -131,6 +164,10 @@ void __far __cdecl rv_pass_draw(const LzPass __far *p, unsigned char __far *band
 int __far __cdecl rv_fat_setup(const LzFat __far *f, const LzStyle __far *st, LzPass __far *pass, LzLine __far *core,
                                int __far *core_line);
 void __far __cdecl rv_capsule_setup(const LzFat __far *f, int colour, LzPass __far *pass);
+void __far __cdecl rv_flame_setup(int ax, int ay, int tx, int ty, int r16, int seed, LzFlame __far *f, LzFat __far *fp);
+void __far __cdecl rv_flame_draw(const LzPass __far *p, unsigned char __far *band, int band_y0, int y0, int y1,
+                                 const short __far *ext, int ext_y0, const unsigned char __far *roots,
+                                 const LzFlame __far *f, const LzFlameLook __far *look);
 #endif
 
 #endif

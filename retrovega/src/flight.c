@@ -65,8 +65,13 @@ typedef struct {
     long depth;
     int scale;
     FlameSet fl;                        /* its engines' flames this frame */
+    LfPlace p;                          /* where it is, in the exact draw's lattice (ships_size_of) */
 } PlanEntry;
-static PlanEntry g_plan[PLAN_MAX];
+static PlanEntry __far g_plan[PLAN_MAX];   /* (far: DGROUP is full) */
+#define EXACT_HOLD 45                   /* frames a ship demoted from the exact draw waits before it may be promoted */
+static unsigned char __far g_was_exact[RV_MAX_SHIP_SLOT + 1];   /* drawn exactly last frame */
+static unsigned char __far g_hold[RV_MAX_SHIP_SLOT + 1];   /* frames left before a demoted ship may be drawn exactly */
+static short __far g_last_view[RV_MAX_SHIP_SLOT + 1];   /* each exact ship's last view known to be in (-1 none) */
 static int g_nplan;
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
 /* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
@@ -420,7 +425,7 @@ static void plan_draws(void)
     LfVec rel;
     LfPlace p;
     long px[PLAN_MAX], budget = g_onfly_px;
-    int s, i, k;
+    int s, i, k, n_exact, order[PLAN_MAX], wanted[PLAN_MAX];
     g_nplan = 0;
     basis_of(0, &cam);
     for (s = 1; s <= RV_MAX_SHIP_SLOT && g_nplan < PLAN_MAX; s++) {
@@ -439,28 +444,64 @@ static void plan_draws(void)
         g_plan[g_nplan].slot = (unsigned char)s;
         g_plan[g_nplan].set = (unsigned char)set;
         g_plan[g_nplan].depth = p.depth;
+        g_plan[g_nplan].p = p;
         g_plan[g_nplan].exact = 0;
         g_nplan++;
     }
     /* the exact ones: the biggest first, while the budget holds; one too big
      * for what is left is drawn at half or quarter detail (rows copied, then
-     * 2 x 1 blocks) rather than from the sets or slower */
-    for (;;) {
+     * 2 x 1 blocks) rather than from the sets or slower.  At most one fewer
+     * than the stream has slots: with every slot asked for each frame, a ship
+     * turning onto its next view could not read it and fell back to the
+     * sets' coarser view every other frame (the user saw the flames scene's
+     * Gawain wobble, 2026-10-21).  And steady: the ships drawn exactly last
+     * frame are taken first, and a ship demoted waits EXACT_HOLD frames
+     * before it may be promoted (the user's rule: on the budget's line a ship
+     * went back and forth, its fine and coarse views in turn) */
+    for (n_exact = 0; n_exact < ships_stream_slots() - 1 && n_exact < PLAN_MAX; n_exact++) {
         int best = -1, detail;
-        for (i = 0; i < g_nplan; i++)
-            if (!g_plan[i].exact && g_plan[i].scale >= ONFLY_MIN_SCALE && px[i] > 0 && px[i] <= budget * 4
-                && (best < 0 || px[i] > px[best]))
+        for (i = 0; i < g_nplan; i++) {
+            int was = g_was_exact[g_plan[i].slot], bw = best >= 0 ? g_was_exact[g_plan[best].slot] : 0;
+            if (!g_plan[i].exact && !g_hold[g_plan[i].slot] && g_plan[i].scale >= ONFLY_MIN_SCALE && px[i] > 0
+                && px[i] <= budget * 4 && (best < 0 || was > bw || (was == bw && px[i] > px[best])))
                 best = i;
+        }
         if (best < 0)
             break;
         detail = px[best] <= budget ? 1 : px[best] <= budget * 2 ? 2 : 4;
         g_plan[best].exact = (unsigned char)detail;
         budget -= px[best] / detail;
-        /* its full-size view streamed in now (the nearest first), if the frame's reads allow */
-        rel_of(g_plan[best].slot, &rel);
-        basis_of(g_plan[best].slot, &ship);
-        ships_prefetch(g_plan[best].set, &rel, &cam, &ship);
+        order[n_exact] = best;
     }
+    for (s = 0; s <= RV_MAX_SHIP_SLOT; s++) {
+        int now = 0;
+        for (i = 0; i < n_exact; i++)
+            now |= g_plan[order[i]].slot == s;
+        if (!now)
+            g_last_view[s] = -1;
+        if (g_was_exact[s] && !now)
+            g_hold[s] = EXACT_HOLD;     /* demoted: held on the sets a while */
+        else if (g_hold[s])
+            g_hold[s]--;
+        g_was_exact[s] = (unsigned char)now;
+    }
+    /* their full-size views: every one already in marked as wanted first, then the missing ones read (the
+     * biggest first) as the frame's reads allow */
+    for (k = 0; k < 2; k++)
+        for (i = 0; i < n_exact; i++) {
+            rel_of(g_plan[order[i]].slot, &rel);
+            basis_of(g_plan[order[i]].slot, &ship);
+            if (k) {
+                if (ships_prefetch(g_plan[order[i]].set, &rel, &cam, &ship))
+                    g_last_view[g_plan[order[i]].slot] = (short)wanted[i];   /* (in: the one to keep from now) */
+            } else {
+                /* its view now, and its last one in (until the new one is read, that is drawn in its stead) */
+                int sl = g_plan[order[i]].slot;
+                wanted[i] = ships_touch(g_plan[order[i]].set, &rel, &cam, &ship);
+                if (g_last_view[sl] >= 0 && g_last_view[sl] != wanted[i])
+                    ships_touch_view(g_plan[order[i]].set, g_last_view[sl]);
+            }
+        }
     if (g_sky && g_set_enemy >= 0)      /* the sky scene's views, in before the draws */
         for (i = 0; i < 3; i++)
             ships_prefetch_view(g_set_enemy, g_sky_sprites[i].v);
@@ -478,11 +519,15 @@ static void plan_draws(void)
         for (i = g_nplan - 1; i >= 0; i--) {
             int nb, nh, sl = g_plan[i].slot;
             const RvShipType __far *t = type_of(sl);
-            rel_of(sl, &rel);
-            basis_of(sl, &ship);
             ships_lattice(g_plan[i].set, g_plan[i].exact != 0, &nb, &nh);
-            lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, nb, nh, &p);
-            flames_add(t, &p, nb, nh, g_plan[i].scale, burning(sl), &g_plan[i].fl);
+            if (g_plan[i].exact) {      /* (placed already, in that lattice) */
+                p = g_plan[i].p;
+            } else {
+                rel_of(sl, &rel);
+                basis_of(sl, &ship);
+                lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, nb, nh, &p);
+            }
+            flames_add(t, &p, nb, nh, g_plan[i].scale, burning(sl), sl, &g_plan[i].fl);
         }
         g_t_flames += clock240() - t0;
         g_t_flames_set += clock240() - t0;
@@ -640,7 +685,7 @@ static void gather(void)
     if (g_flames_demo) {
         strcpy(g_mfd[0][0], "FLAMES");
         strcpy(g_mfd[0][1], "2 4 6 BURN");
-        sprintf(g_mfd[0][2], "%s", g_flame_flicker ? "FLICKER" : "STATIC");
+        strcpy(g_mfd[0][2], "3 FRAMES");
     } else if (g_bolt_demo) {           /* the demo's readout: the drawing, the time in its round, where the bolts are */
         static const char __far name[] = "CAPSULES";
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
@@ -1042,6 +1087,9 @@ void __far __cdecl flight_startup(void)
     int i, k, n = 1, enemy_type = -1;
     unsigned long now;
     memset(maybeEntityType, 0, RV_SLOTS * 2);
+    _fmemset(g_was_exact, 0, sizeof g_was_exact);
+    _fmemset(g_hold, 0, sizeof g_hold);
+    _fmemset(g_last_view, 0xFF, sizeof g_last_view);
     if (g_lasers)
         rv_log("lasers: DOS memory free as the flight starts: %lu KB", bolts_dos_free() / 1024);
     missionStatus = 0;
@@ -1120,6 +1168,8 @@ void __far __cdecl flight_startup(void)
     {
         /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
         unsigned long free_kb = xms_free_kb(), taken, t0 = clock240();
+        flames_reserve();               /* (the baked flames' room first: the sets take what is left) */
+        free_kb = xms_free_kb();
         taken = ships_load_blocks(free_kb > 1024 ? (free_kb - 1024) * 1024UL : 0);
         rv_log("ships: %lu KB of blocks loaded in %lu ms, %lu KB of XMS left", taken / 1024, (clock240() - t0) * 1000 / 240,
                xms_free_kb());

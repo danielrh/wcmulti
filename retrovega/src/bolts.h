@@ -12,7 +12,7 @@
                                            doubled the length, 2026-10-21) */
 #define BOLT_ZMIN_KM 200                /* the near plane: a bolt nearer is cut there (so drawn at most 8 px across) */
 #define BOLT_ZMAX_KM 40000
-#define BOLT_RMAX16 LZ_RMAX16            /* the radius drawn at most: 4 px (the capsules' root table holds no more) */
+#define BOLT_RMAX16 64                  /* the radius drawn at most: 4 px */
 #define BOLT_LINE16 12                  /* under 3/4 px of radius a bolt is a line */
 
 void bolts_tables(void);                /* the capsules' root table and the whole width's extents: before any draw

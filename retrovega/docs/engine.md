@@ -1023,24 +1023,42 @@ tail's way (the renderer's -z) and whether it points toward the viewer.
 `view_matrix` (within 1/2 %: the views' angles are 1024ths of a turn, 30
 degrees is 85 1/3).
 
-**The flame** (src/flames.c). Three capsules from the nozzle, set up by
-`rv_capsule_setup` (one capsule of any colour, beside the bolts'
-`rv_fat_setup`; the self-test checks it against `lz_capsule_setup`) and
-drawn by `rv_pass_draw` as the near bolts are: a thin dark blue-violet tail
-the whole length (half the radius), a wide blue root over its first 7/16,
-a white core over the first quarter. A capsule is the same width all along,
-so the taper is the three together: white root, blue body, dark tip, as WC's
-flames are; end on, a blue disc with a white middle. The radius is the
-glow's (at least 3/4 px, at most 4 px: the root table's limit), the length
-five radii (at least 1/10 of the half box), the afterburner's twice that
-with a violet tail and a longer core (`burning()`: faster than the type's
-top speed). The colours are the flight palette's nearest to the user's
-pictures, picked when the flight starts: (45, 32, 218), (90, 86, 227),
-(220, 219, 248); the afterburner's tail (190, 50, 170). A flame pointing
-away from the camera is drawn before its ship, so the hull hides its root;
-one pointing toward it after. Set up once a frame (`plan_draws`, the nearest
-ships first, 96 capsules at most), drawn band by band with the ships.
-`RV.EXE /flicker`: every other frame a flame is 1/8 shorter.
+**The flame** (src/flames.c). The first version (2026-10-21) was three
+flat capsules (a thin dark tail, a wide blue root, a white core); the user
+found it cartoonish ("not nearly as fiery and hot") and asked for the
+pictures' full gradient and noise, with a stipple where the palette falls
+short. Now a flame is shaded pixel by pixel: `lz_flame_setup` /
+`rv_flame_setup` make two numbers linear on the screen, s along the flame
+(0 the nozzle, 1 the tip) and e across it (in root radii), and
+`lz_flame_draw` / `rv_flame_draw` walk a capsule's rows and spans round it
+(the bolts' row loop, `pass_body`, shared) and shade each pair of pixels:
+r = |e| (or the round root's distance, max + 3/8 min), the profile's
+intensity at (s, r + the noise's jitter) (`tools/flamelut.py`: a teardrop
+widest a third of the way along, a white root, a lavender middle, a blue
+body, violet edges), plus the noise, through nine stipple levels, each a
+pair of palette colours on alternate pixels (the palette has no saturated
+violet-blue: (63, 57, 222) is made of (76, 105, 250) and (113, 32, 170);
+the pairs were searched against the user's WC1 flames). The afterburner's
+look is whiter with magenta-violet edges, and twice as long. The asm is
+checked against the C at every laser flight's start, set-up and pixels.
+
+**Baked** (the user's idea: pre-baked noisy frames rather than shading every
+frame). Shaded live, six near ships' 18 flames cost 16.6 ms a frame at
+40,000 cycles; shading two pixels at once and the set-up in asm brought it
+to 9.4. So every flame is baked when the flight starts: 2 looks x 6
+foreshortenings (the tail's length over the root's radius: 0, end on, to 5,
+or 10 for the afterburner) x 9 ways (0 .. 90 degrees down-right; the rest
+mirrored and flipped as the ships' sprites are) x 6 sizes (1 .. 7 px of
+radius) x 2 frames of noise: 1,104 run-length sprites in the ships' format,
+260 KB of XMS (the mission level, reserved before the ships' sets take the
+rest), 0.7 s at 40,000 cycles. A frame takes the nearest, its nozzle at the
+sprite's origin, and draws it with `ships_blit_mix`: each row from one of
+the two frames at random (the user's idea again: two frames mixed row by
+row make a new flame every frame). The way snaps to 11.25 degrees, the size
+to steps of 1.5. Cost at 40,000 cycles: the six near ships' 18 flames
+3.45 ms a frame (1.80 of it the set-up in C: the sprite's frame, two sprite
+points and a header from XMS an engine; the blits 1.65), the laser
+benchmark's two big ships 0.52, a normal mission ~0.5-0.9.
 
 **The test scene.** `RV.EXE /flames` (`tests/flames.txt`): six ships in two
 rows of three 3,000-3,500 km ahead, standing, each yawing at its own rate
@@ -1048,13 +1066,21 @@ and the odd ones pitching too, so every view of their engines comes round;
 ships 2, 4 and 6 on the afterburner. With `/record 1` the flight lands
 after 450 frames (15 s at 30 fps), however slowly they are made.
 
-**Cost** (40,000 cycles): the scene's six near ships, 18 engines, 3.15 ms a
-frame, 2.29 of it the set-up (in C: the ship placed again, its view's turn,
-two sprite points an engine with Watcom's 32-bit multiply helpers, then the
-three capsules in asm) and 0.86 the drawing; the laser benchmark's two big
-ships 0.68. The set-up in asm (as the bolts' is) is the lever if it matters.
-RV.EXE grew by 7.7 KB (the 96 capsules' buffer, 3.8 KB, the code, the
-engines in the ship types).
+**Steadier exact draws** (found in that scene: the user saw its Gawain
+"wobbling back and forth"). Its full-size view, streamed for the exact
+draw, was often not in, so it was drawn from the sets that frame: their
+coarser lattice's view (30 degrees, against the exact draw's 15), every
+other frame (233 times in 450). The stream had 4 slots, one read a frame,
+and as many ships drawn exactly as slots: a read always evicted a view a
+ship needed. Now: 6 slots, 2 reads a frame, at most one fewer ship drawn
+exactly than there are slots; the plan marks every exact ship's view (and
+its last one in) as wanted before it reads any (`ships_touch`); a view not
+in yet is drawn from its last one, a lattice neighbour (`resident_neighbour`
+in `ships_draw_exact`); and a ship demoted from the exact draw waits 1.5 s
+before it may be promoted (the user's rule: on the budget's line two ships
+had gone back and forth), the ships drawn exactly last frame taken first.
+In the scene, with 6 slots or the old 4, no ship changes path after its
+first frame.
 
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
