@@ -54,7 +54,7 @@ static int g_cx = SCR_W / 2, g_cy = SCR_H / 2, g_focal = 400;
 /* two views expanded dense (w x h, pitch w) for the exact draw: the nearest
  * ships keep theirs from frame to frame */
 #define DENSE_MAX 65024U
-#define DENSE_BUFS 2
+#define DENSE_BUFS SHIPS_DENSE_BUFS
 static unsigned char __far *g_dense_buf[DENSE_BUFS];
 static int g_dense_set[DENSE_BUFS] = { -1, -1 }, g_dense_view[DENSE_BUFS] = { -1, -1 };
 static unsigned g_dense_used[DENSE_BUFS], g_dense_tick;

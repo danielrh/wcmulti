@@ -1082,6 +1082,20 @@ had gone back and forth), the ships drawn exactly last frame taken first.
 In the scene, with 6 slots or the old 4, no ship changes path after its
 first frame.
 
+**At most two ships drawn exactly** (the user: the scene ran at 20 fps with
+five; cap them, with hysteresis, to meet the frame). A frame's time, now
+logged for every flight (`flight: ms a frame: the plan ...; the picture ...
+(ships drawn exactly ..., from the sets ...); the whole frame ...`), showed
+three exact ships costing 25.6 ms of a 43.8 ms frame at 40,000 cycles: the
+turned draw works from a dense copy of the view, there are two dense buffers
+(64 KB each, all of upper memory), and with three ships each evicted
+another's copy, so every one re-expanded its view every frame. So the exact
+ships are at most `SHIPS_DENSE_BUFS` (2): the exact draws 11.2 ms, the frame
+28 ms, 28.7 fps (the 30 fps cap's waits aside); in the recording ships 3 and
+6 are exact all 15 s and the other four from the sets, no switch. More
+exact ships would need the dense copies sized to their views (a fighter's is
+~16 KB of the 64) rather than more memory.
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the

@@ -74,6 +74,8 @@ void ships_set_camera(int cx, int cy, int focal);
  * it costs no frame time there; ships_stream_log says what it cost. */
 void ships_stream_config(int slots, int reads);        /* defaults 6 and 2; slots up to 8; -1 keeps a value */
 int ships_stream_slots(void);           /* the stream's slots that have their XMS: the ships drawn exactly are fewer */
+#define SHIPS_DENSE_BUFS 2              /* the turned draw's dense copies (64 KB each, in upper memory): the ships drawn
+                                           exactly are no more, or each re-expands its view every frame */
 void ships_frame(void);                 /* at the top of each frame: a new read budget */
 /* the full-size view the camera sees a ship by (the exact draw's), brought in now when the budget allows;
  * ships_prefetch_view a view by number (the MFD's, the benchmark's).  1 when it is in. */

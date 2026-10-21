@@ -69,6 +69,10 @@ typedef struct {
 } PlanEntry;
 static PlanEntry __far g_plan[PLAN_MAX];   /* (far: DGROUP is full) */
 #define EXACT_HOLD 45                   /* frames a ship demoted from the exact draw waits before it may be promoted */
+#define EXACT_MAX SHIPS_DENSE_BUFS      /* ships drawn exactly at most: as many as the turned draw's dense buffers (2): a
+                                           third made every exact ship re-expand its view every frame (25.6 ms of a 43.8 ms
+                                           frame, the flames scene at 40,000 cycles; the user asked for a cap); the rest
+                                           from the sets */
 static unsigned char __far g_was_exact[RV_MAX_SHIP_SLOT + 1];   /* drawn exactly last frame */
 static unsigned char __far g_hold[RV_MAX_SHIP_SLOT + 1];   /* frames left before a demoted ship may be drawn exactly */
 static short __far g_last_view[RV_MAX_SHIP_SLOT + 1];   /* each exact ship's last view known to be in (-1 none) */
@@ -408,6 +412,7 @@ static void rel_of(int s, LfVec *rel)
 }
 
 static unsigned long g_t_flames, g_t_flames_set;   /* what the engines' flames cost: in all, and set up */
+static unsigned long g_t_plan;          /* the frame's plan (which ships, how drawn, their views, the flames set up) */
 
 /* a ship's afterburner: faster than its type's top speed (the flames scene: every other ship) */
 static int burning(int s)
@@ -450,15 +455,15 @@ static void plan_draws(void)
     }
     /* the exact ones: the biggest first, while the budget holds; one too big
      * for what is left is drawn at half or quarter detail (rows copied, then
-     * 2 x 1 blocks) rather than from the sets or slower.  At most one fewer
-     * than the stream has slots: with every slot asked for each frame, a ship
+     * 2 x 1 blocks) rather than from the sets or slower.  At most EXACT_MAX,
+     * and one fewer than the stream has slots: with every slot asked for each frame, a ship
      * turning onto its next view could not read it and fell back to the
      * sets' coarser view every other frame (the user saw the flames scene's
      * Gawain wobble, 2026-10-21).  And steady: the ships drawn exactly last
      * frame are taken first, and a ship demoted waits EXACT_HOLD frames
      * before it may be promoted (the user's rule: on the budget's line a ship
      * went back and forth, its fine and coarse views in turn) */
-    for (n_exact = 0; n_exact < ships_stream_slots() - 1 && n_exact < PLAN_MAX; n_exact++) {
+    for (n_exact = 0; n_exact < ships_stream_slots() - 1 && n_exact < EXACT_MAX; n_exact++) {
         int best = -1, detail;
         for (i = 0; i < g_nplan; i++) {
             int was = g_was_exact[g_plan[i].slot], bw = best >= 0 ? g_was_exact[g_plan[best].slot] : 0;
@@ -1234,7 +1239,8 @@ void __far __cdecl flight_startup(void)
     cockpit_palette();                  /* only now: the deck kept its own palette while all that loaded (seconds in the
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
-    g_t_flames = g_t_flames_set = 0;
+    g_t_flames = g_t_flames_set = g_t_plan = 0;
+    g_t_exact = g_t_sets = g_t_draw = g_t_wait = 0;
 }
 
 /* the keys and the pointer: returns the status the exit key sets, else 0 */
@@ -1302,7 +1308,11 @@ void __far __cdecl flight_frame(void)
     ships_frame();
     sim_step();
     stars_place();
-    plan_draws();
+    {
+        unsigned long t0 = clock240();
+        plan_draws();
+        g_t_plan += clock240() - t0;
+    }
     if (g_lasers) {
         if (g_bolt_demo)
             demo_step();
@@ -1387,6 +1397,14 @@ int flight_fly(const RvMission __far *m)
     n = flight_bench_result(&w, &h);
     rv_log("flight: over with status %u after %u frames; benchmark %d sprites of %dx%d a frame at %d fps (%ld pixels a second)",
            status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
+    {
+        unsigned long f = frameCounter, frame = (clock240() - g_t0) - g_t_wait;
+        rv_log("flight: ms a frame: the plan %lu.%02lu; the picture %lu.%02lu (ships drawn exactly %lu.%02lu, from the "
+               "sets %lu.%02lu); the whole frame %lu.%02lu", per_frame(g_t_plan, f) / 100, per_frame(g_t_plan, f) % 100,
+               per_frame(g_t_draw, f) / 100, per_frame(g_t_draw, f) % 100, per_frame(g_t_exact, f) / 100,
+               per_frame(g_t_exact, f) % 100, per_frame(g_t_sets, f) / 100, per_frame(g_t_sets, f) % 100,
+               per_frame(frame, f) / 100, per_frame(frame, f) % 100);
+    }
     rv_log("flight: the engines' flames took %lu.%02lu ms a frame (%lu.%02lu of it set up)",
            g_t_flames * 1000 / 240 / (frameCounter ? frameCounter : 1),
            (g_t_flames * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,
