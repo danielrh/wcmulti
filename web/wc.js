@@ -1165,14 +1165,34 @@ function leaveRoom() {
   if (lobby.game) { try { lobby.game.close(); } catch (e) { /* gone */ } }
   lobby.game = null; lobby.unsubscribe = null; lobby.adopted = false; lobby.backlog = [];
   lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
-  $("lobby").hidden = true; $("leave").hidden = true; $("share").hidden = true; $("join").disabled = false;
+  // (While the game runs, the button stays: the way out of it.)
+  $("lobby").hidden = true; $("leave").hidden = !running; $("share").hidden = true; $("join").disabled = false;
   for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = false;
   $("roster").innerHTML = "";
   updateActions();
 }
 
+// "Leave room" always works.  A running game cannot be stopped, so leaving
+// then reloads the page, once the pilot has said yes: the flight in progress
+// is lost (the saved games are kept in this browser), and the others fly on
+// without them.
+let leavingForGood = false;  // (said yes already: the way out asks nothing more)
+function leaveButton() {
+  if (!running) { leaveRoom(); return; }
+  const title = source && source.game ? source.game.title : "The game";
+  if (!confirm(`${lobby.game ? `Leave room ${lobby.game.code}` : "Leave"}?\n\n${title} is running: leaving ends it here and reloads the page. ` +
+               `The flight in progress is lost (saved games are kept in this browser)${lobby.game ? "; the others fly on without you" : ""}.`)) return;
+  keepSaves();
+  leavingForGood = true;
+  leaveRoom();
+  location.reload();
+}
+// A running game is work in progress: closing or reloading the tab asks
+// first, as the browser does for a document not yet saved.
+window.addEventListener("beforeunload", (ev) => { if (running && !leavingForGood) { ev.preventDefault(); ev.returnValue = ""; } });
+
 $("setup").addEventListener("submit", (ev) => { ev.preventDefault(); void joinRoom(); });
-$("leave").addEventListener("click", leaveRoom);
+$("leave").addEventListener("click", leaveButton);
 // The link to this room, to the clipboard (shown in the status line where
 // the clipboard is out of reach).
 $("share").addEventListener("click", async () => {
@@ -1307,7 +1327,7 @@ async function start(fromGesture) {
   $("fly").disabled = true;
   renderTopAction();
   renderMission();  // (the mission and the frame rate are set for this flight)
-  for (const el of ["gamefile", "exePicker", "callsign", "firstname", "lastname", "verbose", "hint", "leave"]) $(el).disabled = true;
+  for (const el of ["gamefile", "exePicker", "callsign", "firstname", "lastname", "verbose", "hint"]) $(el).disabled = true;
   sourceButtons(false);
   try {
     const cfg = {
