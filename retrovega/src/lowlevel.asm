@@ -204,6 +204,213 @@ _rv_rotate_row:
         pop bp
         retf
 
+; long rv_rotate_edges(const unsigned char far *dense, int w, int h, const LfRot *r,
+;                      int y, int xs, int xe)
+; The silhouette of output row y of the turned image within the span
+; [xs, xe) lf_rotate_span found: the first column whose source pixel is not
+; clear (ax) and one past the last (dx); both xe when there is none.  The
+; walk rv_rotate_row makes, reading only: from xs forward, then from xe - 1
+; back (its u, v by one multiplication: the same sums the forward walk makes),
+; so its edges are the kernel's to the pixel.  For the rows drawn at half
+; height (the user's idea, 2026-10-21): a copied row's own edges are drawn
+; exactly, only its inside is copied from the row above.
+        global _rv_rotate_edges
+_rv_rotate_edges:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        sub sp,8                    ; [bp-12] du, [bp-8] dv
+        mov si,[bp+14]              ; r
+        mov eax,[si+16]
+        mov [bp-12],eax
+        mov eax,[si+20]
+        mov [bp-8],eax
+        movsx eax,word [bp+16]      ; y
+        imul eax,[si+24]            ; y * dru
+        add eax,[si+8]              ; + u00
+        movsx edx,word [bp+18]      ; xs
+        imul edx,[si+16]            ; xs * du
+        add eax,edx
+        movsx edx,word [bp+16]
+        imul edx,[si+28]            ; y * drv
+        add edx,[si+12]             ; + v00
+        movsx ecx,word [bp+18]
+        imul ecx,[si+20]            ; xs * dv
+        add edx,ecx
+        mov esi,eax                 ; u
+        mov edi,edx                 ; v
+        mov cx,[bp+20]
+        sub cx,[bp+18]              ; n = xe - xs
+        jle .none
+        mov gs,[bp+8]               ; dense
+        mov bx,[bp+18]              ; x
+.fwd:
+        mov edx,edi
+        shr edx,16                  ; v
+        imul dx,[bp+10]             ; v * w
+        mov eax,esi
+        shr eax,16                  ; u
+        add dx,ax
+        add dx,[bp+6]               ; + dense's offset
+        movzx edx,dx
+        cmp byte [gs:edx],0
+        jne .first
+        add esi,[bp-12]
+        add edi,[bp-8]
+        inc bx
+        dec cx
+        jnz .fwd
+.none:
+        mov ax,[bp+20]
+        mov dx,ax
+        jmp .out
+.first:
+        push bx                     ; the first column
+        mov cx,[bp+20]
+        dec cx
+        sub cx,bx                   ; k = xe - 1 - first (>= 0)
+        movsx eax,cx
+        imul eax,[bp-12]
+        add esi,eax                 ; u, v at xe - 1
+        movsx eax,cx
+        imul eax,[bp-8]
+        add edi,eax
+        mov bx,[bp+20]
+        dec bx
+.back:                              ; (it stops at the first column at the latest: that one is not clear)
+        mov edx,edi
+        shr edx,16
+        imul dx,[bp+10]
+        mov eax,esi
+        shr eax,16
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        cmp byte [gs:edx],0
+        jne .last
+        sub esi,[bp-12]
+        sub edi,[bp-8]
+        dec bx
+        jmp .back
+.last:
+        lea dx,[bx+1]               ; one past the last
+        pop ax                      ; the first
+.out:
+        add sp,8
+        pop di
+        pop si
+        pop bp
+        retf
+
+; long rv_rotate_edges_near(const unsigned char far *dense, int w, int h, const LfRot *r,
+;                           int y, int xs, int xe, int pl, int pr)
+; rv_rotate_edges for a row whose neighbour above had its edges at pl and pr:
+; each edge found by probing from there, outward while the pixel beyond is
+; not clear, else inward to the first that is not (the user, 2026-10-21: the
+; ship taken as convex, a left and a right a row: a step or two each, not a
+; walk across the margin).  ax the first column, dx one past the last; both
+; xe when the row has none.
+        global _rv_rotate_edges_near
+_rv_rotate_edges_near:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        sub sp,16                   ; [bp-20] u at column 0, [bp-16] v there, [bp-12] du, [bp-8] dv
+        mov si,[bp+14]              ; r
+        mov eax,[si+16]
+        mov [bp-12],eax
+        mov eax,[si+20]
+        mov [bp-8],eax
+        movsx eax,word [bp+16]      ; y
+        imul eax,[si+24]
+        add eax,[si+8]              ; u00 + y * dru
+        mov [bp-20],eax
+        movsx eax,word [bp+16]
+        imul eax,[si+28]
+        add eax,[si+12]             ; v00 + y * drv
+        mov [bp-16],eax
+        mov gs,[bp+8]               ; dense
+        mov cx,[bp+20]
+        cmp cx,[bp+18]
+        jle .none
+        ; the left edge, from pl (kept in [xs, xe))
+        mov bx,[bp+22]
+        cmp bx,[bp+18]
+        jge .l1
+        mov bx,[bp+18]
+.l1:    dec cx
+        cmp bx,cx
+        jle .l2
+        mov bx,cx
+.l2:    call .probe
+        jz .lin
+.lout:  cmp bx,[bp+18]              ; not clear: outward while the next is not clear either
+        jle .lhave
+        dec bx
+        call .probe
+        jnz .lout
+        inc bx
+        jmp .lhave
+.lin:   inc bx                      ; clear: inward to the first that is not
+        cmp bx,[bp+20]
+        jge .none
+        call .probe
+        jz .lin
+.lhave: mov si,bx                   ; the first column
+        ; the right edge, from pr - 1 (kept in [first, xe))
+        mov bx,[bp+24]
+        dec bx
+        cmp bx,si
+        jge .r1
+        mov bx,si
+.r1:    mov cx,[bp+20]
+        dec cx
+        cmp bx,cx
+        jle .r2
+        mov bx,cx
+.r2:    call .probe
+        jz .rin
+.rout:  mov cx,[bp+20]
+        dec cx
+        cmp bx,cx
+        jge .rhave
+        inc bx
+        call .probe
+        jnz .rout
+        dec bx
+        jmp .rhave
+.rin:   dec bx                      ; (it stops at the first column at the latest: that one is not clear)
+        call .probe
+        jz .rin
+.rhave: lea dx,[bx+1]
+        mov ax,si
+        jmp .out
+.none:  mov ax,[bp+20]
+        mov dx,ax
+.out:   add sp,16
+        pop di
+        pop si
+        pop bp
+        retf
+.probe:                             ; bx a column: al its source pixel, ZF when clear
+        movsx eax,bx
+        imul eax,[bp-12]
+        add eax,[bp-20]
+        shr eax,16                  ; u
+        movsx edx,bx
+        imul edx,[bp-8]
+        add edx,[bp-16]
+        shr edx,16                  ; v
+        imul dx,[bp+10]             ; v * w
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        mov al,[gs:edx]
+        test al,al
+        ret
+
 ; void rv_blit_row_rev(unsigned char far *row, const unsigned char far *spans,
 ;                      int right, int xa, int xb)
 ; A run-length row drawn mirrored: the span at sprite columns [c, c+n) lands

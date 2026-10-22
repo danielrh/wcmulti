@@ -76,7 +76,8 @@ static int g_flames_frames;
 static int g_demo_frame;                /* its frames so far */
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
  * at draw time, sixteen cycles a pixel) while their pixels fit this budget
- * a frame and they are big enough for the steps to show; the rest are
+ * a frame and they are big enough for the steps to show, and every ship the
+ * sets have no turned sprites for at its size, at half height; the rest are
  * copies from the pre-rendered sets (RV.EXE /onfly N sets the budget) */
 long g_onfly_px = 32000L;
 #define ONFLY_MIN_SCALE 100
@@ -90,13 +91,11 @@ typedef struct {
 } PlanEntry;
 static PlanEntry __far g_plan[PLAN_MAX];   /* (far: DGROUP is full) */
 #define EXACT_HOLD 45                   /* frames a ship demoted from the exact draw waits before it may be promoted */
-#define EXACT_MAX SHIPS_DENSE_BUFS      /* ships drawn exactly at most: as many as the turned draw's dense buffers (2): a
-                                           third made every exact ship re-expand its view every frame (25.6 ms of a 43.8 ms
-                                           frame, the flames scene at 40,000 cycles; the user asked for a cap); the rest
-                                           from the sets */
+#define EXACT_MAX 2                     /* the plan's first exact ships, at the budget's detail (the user asked for a
+                                           cap: five ran the flames scene at 20 fps); beyond them only the ships the sets
+                                           cannot show turned are drawn exactly, at half height */
 static unsigned char __far g_was_exact[RV_MAX_SHIP_SLOT + 1];   /* drawn exactly last frame */
 static unsigned char __far g_hold[RV_MAX_SHIP_SLOT + 1];   /* frames left before a demoted ship may be drawn exactly */
-static short __far g_last_view[RV_MAX_SHIP_SLOT + 1];   /* each exact ship's last view known to be in (-1 none) */
 static int g_nplan;
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
 /* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
@@ -450,6 +449,12 @@ static int burning(int s)
     return t && speedLo[s] > (unsigned long)t->max_kps;
 }
 
+/* how the plan has a ship drawn (SHIP_AS_*) */
+static int plan_how(int i)
+{
+    return g_plan[i].exact ? SHIP_AS_EXACT : SHIP_AS_SETS;
+}
+
 /* once a frame: which ships show, how big, which are drawn exactly, in what order */
 static void plan_draws(void)
 {
@@ -457,7 +462,7 @@ static void plan_draws(void)
     LfVec rel;
     LfPlace p;
     long px[PLAN_MAX], budget = g_onfly_px;
-    int s, i, k, n_exact, order[PLAN_MAX], wanted[PLAN_MAX];
+    int s, i, k, n_exact, order[PLAN_MAX];
     g_nplan = 0;
     basis_of(0, &cam);
     for (s = 1; s <= RV_MAX_SHIP_SLOT && g_nplan < PLAN_MAX; s++) {
@@ -483,14 +488,11 @@ static void plan_draws(void)
     /* the exact ones: the biggest first, while the budget holds; one too big
      * for what is left is drawn at half or quarter detail (rows copied, then
      * 2 x 1 blocks) rather than from the sets or slower.  At most EXACT_MAX,
-     * and one fewer than the stream has slots: with every slot asked for each frame, a ship
-     * turning onto its next view could not read it and fell back to the
-     * sets' coarser view every other frame (the user saw the flames scene's
-     * Gawain wobble, 2026-10-21).  And steady: the ships drawn exactly last
-     * frame are taken first, and a ship demoted waits EXACT_HOLD frames
-     * before it may be promoted (the user's rule: on the budget's line a ship
-     * went back and forth, its fine and coarse views in turn) */
-    for (n_exact = 0; n_exact < ships_stream_slots() - 1 && n_exact < EXACT_MAX; n_exact++) {
+     * and steady: the ships drawn exactly last frame are taken first, and a
+     * ship demoted waits EXACT_HOLD frames before it may be promoted (the
+     * user's rule: on the budget's line a ship went back and forth, its fine
+     * and coarse views in turn) */
+    for (n_exact = 0; n_exact < EXACT_MAX; n_exact++) {
         int best = -1, detail;
         for (i = 0; i < g_nplan; i++) {
             int was = g_was_exact[g_plan[i].slot], bw = best >= 0 ? g_was_exact[g_plan[best].slot] : 0;
@@ -509,34 +511,21 @@ static void plan_draws(void)
         int now = 0;
         for (i = 0; i < n_exact; i++)
             now |= g_plan[order[i]].slot == s;
-        if (!now)
-            g_last_view[s] = -1;
         if (g_was_exact[s] && !now)
-            g_hold[s] = EXACT_HOLD;     /* demoted: held on the sets a while */
+            g_hold[s] = EXACT_HOLD;     /* demoted: held off the first two a while */
         else if (g_hold[s])
             g_hold[s]--;
         g_was_exact[s] = (unsigned char)now;
     }
-    /* their full-size views: every one already in marked as wanted first, then the missing ones read (the
-     * biggest first) as the frame's reads allow */
-    for (k = 0; k < 2; k++)
-        for (i = 0; i < n_exact; i++) {
-            rel_of(g_plan[order[i]].slot, &rel);
-            basis_of(g_plan[order[i]].slot, &ship);
-            if (k) {
-                if (ships_prefetch(g_plan[order[i]].set, &rel, &cam, &ship))
-                    g_last_view[g_plan[order[i]].slot] = (short)wanted[i];   /* (in: the one to keep from now) */
-            } else {
-                /* its view now, and its last one in (until the new one is read, that is drawn in its stead) */
-                int sl = g_plan[order[i]].slot;
-                wanted[i] = ships_touch(g_plan[order[i]].set, &rel, &cam, &ship);
-                if (g_last_view[sl] >= 0 && g_last_view[sl] != wanted[i])
-                    ships_touch_view(g_plan[order[i]].set, g_last_view[sl]);
-            }
+    /* the rest near enough that their sets have no turned sprites (or whose roll steps did not fit): exactly all
+     * the same, by their true roll, at half height (the user, 2026-10-21: unrolled near fighters look strange;
+     * beyond the first two, each odd row the one above copied down), or at a quarter (2 x 1 blocks too) once the
+     * budget is spent.  Their views are resident (no stream) and their dense copies kept in XMS */
+    for (i = 0; i < g_nplan; i++)
+        if (!g_plan[i].exact && ships_turn_wanted(g_plan[i].set, g_plan[i].scale)) {
+            g_plan[i].exact = (unsigned char)(px[i] / 2 <= budget ? 2 : 4);
+            budget -= px[i] / g_plan[i].exact;
         }
-    if (g_sky && g_set_enemy >= 0)      /* the sky scene's views, in before the draws */
-        for (i = 0; i < 3; i++)
-            ships_prefetch_view(g_set_enemy, g_sky_sprites[i].v);
     /* back to front */
     for (i = 1; i < g_nplan; i++)
         for (k = i; k > 0 && g_plan[k].depth > g_plan[k - 1].depth; k--) {
@@ -554,7 +543,7 @@ static void plan_draws(void)
             basis_of(sl, &ship);
             /* the view and the turn its picture will have (an exact one's true roll, a set's roll step, the far
              * sizes' none): the flames line up with the ship as drawn */
-            ships_drawn(g_plan[i].set, g_plan[i].exact != 0, &rel, &cam, &ship, g_plan[i].scale, &p, &nb, &nh);
+            ships_drawn(g_plan[i].set, plan_how(i), &rel, &cam, &ship, g_plan[i].scale, &p, &nb, &nh);
             flames_add(type_of(sl), &p, nb, nh, g_plan[i].scale, burning(sl), sl, &g_plan[i].fl);
         }
         g_t_flames += clock240() - t0;
@@ -589,7 +578,7 @@ int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
     LfVec rel;
     LfBasis ship;
     long rx, ry, rz, ax, ay;
-    int set, sc, i, box[4];
+    int set, sc, i, box[4], how;
     _fmemset(o, 0, sizeof *o);
     if (slot < 0 || slot > RV_MAX_SHIP_SLOT || (maybeEntityType[slot] != 0xC && maybeEntityType[slot] != 0xD))
         return 0;
@@ -618,14 +607,17 @@ int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
     if (o->half < 2)
         o->half = 2;
     /* drawn exactly this frame: the frame's plan, if this is the camera it was made for */
+    set = ships_find(gInstanceShipTypes[slot]);
+    how = set >= 0 && ships_turn_wanted(set, sc) ? SHIP_AS_EXACT : SHIP_AS_SETS;
     flight_camera(&main_cam);
     if (!_fmemcmp(&main_cam, cam, sizeof main_cam))
         for (i = 0; i < g_nplan; i++)
-            if (g_plan[i].slot == slot)
+            if (g_plan[i].slot == slot) {
                 o->exact = g_plan[i].exact != 0;
+                how = plan_how(i);
+            }
     basis_of(slot, &ship);
-    set = ships_find(gInstanceShipTypes[slot]);
-    if (set >= 0 && ships_box(set, &rel, &cam->b, &ship, sc, o->exact, cam->cx, cam->cy, cam->focal, box)) {
+    if (set >= 0 && ships_box(set, &rel, &cam->b, &ship, sc, how, cam->cx, cam->cy, cam->focal, box)) {
         o->x0 = (short)box[0];
         o->y0 = (short)box[1];
         o->x1 = (short)box[2];
@@ -834,8 +826,8 @@ static void collide_overlay(int y0, int y1, const short __far *ext, int ey0, int
  * The user (2026-10-21): an engine's flame must line up exactly with its ship as drawn, by the same means for the
  * ships drawn exactly and those from the sets, at every distance.  Each of the scene's six types, at distances
  * from twice full size to past the sets' smallest, in 40 orientations (every eighth a yaw only: an exact ship's
- * unturned copy), is drawn as the flight draws it (into an empty band: the choices only), exactly (its view read
- * first, but every third time not: the next view's or the sets' fallback) and from the sets.  Checked: the view
+ * unturned copy), is drawn as the flight draws it (into an empty band: the choices only), exactly (every other
+ * one at half height) and from the sets.  Checked: the view
  * and turn ships_drawn gives the flames are the ones the draw used (ships_last_drawn); and each flame's baked way
  * is within half a pixel, at its tail, of the way the drawn picture's tail points, worked out here from the
  * drawn view and turn (lf_view_rot, lf_sprite_point), not by flames.c.  Beside it, how far off the way before
@@ -875,8 +867,8 @@ static void ft_tail(int v, int roll, int nb, int nh, long *x, long *y)
 
 /* the self-test's picture (FLAMEST.BMP): eight ships turned every way, as the flight draws them and their flames,
  * a dashed white line along each picture's axis (where its tail points) and a red one where its flames pointed
- * before.  Top: from the sets at their roll steps (5,000 km); below, from the sets at a size with no roll steps
- * (3,000 km: drawn unturned) and two drawn exactly */
+ * before.  Top: from the sets at their roll steps (5,000 km); below, at a size the sets have no roll steps for
+ * (3,000 km), drawn exactly: two at half height (the plan's beyond its first two), two in full */
 static void ft_sheet(void)
 {
     static const unsigned char types[8] = { 0x02, 0x04, 0x08, 0x0A, 0x02, 0x09, 0x04, 0x06 };
@@ -886,9 +878,8 @@ static void ft_sheet(void)
     LfVec rel[8];
     LfPlace p[8];
     FlameSet fs[8];
-    int set[8], sc[8], ax[8][4], c, y0, y1, y;
+    int set[8], sc[8], ax[8][4], how[8], c, y0, y1, y;
     basis_of(0, &cam);
-    ships_frame();
     flames_frame();
     for (c = 0; c < 8; c++) {
         RvVec3 f = *(const RvVec3 *)&cam.front, r = *(const RvVec3 *)&cam.right, u = *(const RvVec3 *)&cam.up;
@@ -907,11 +898,8 @@ static void ft_sheet(void)
         rel[c].y = cam.front.y * km + (cam.right.y * km * dx + cam.up.y * km * dy) / 400;
         rel[c].z = cam.front.z * km + (cam.right.z * km * dx + cam.up.z * km * dy) / 400;
         sc[c] = scale_of(&rel[c]);
-        if (ex) {
-            ships_touch(set[c], &rel[c], &cam, &ship[c]);
-            ships_prefetch(set[c], &rel[c], &cam, &ship[c]);
-        }
-        ships_drawn(set[c], ex, &rel[c], &cam, &ship[c], sc[c], &p[c], &nb, &nh);
+        how[c] = c < 4 ? SHIP_AS_SETS : SHIP_AS_EXACT;
+        ships_drawn(set[c], how[c], &rel[c], &cam, &ship[c], sc[c], &p[c], &nb, &nh);
         flames_add(ship_type(types[c]), &p[c], nb, nh, sc[c], c & 1, c, &fs[c]);
         ft_tail(p[c].view, p[c].roll, nb, nh, &tx, &ty);
         ships_lattice(set[c], ex, &nb, &nh);   /* (before: the true roll in the placement's lattice, 11.25 degrees) */
@@ -935,8 +923,8 @@ static void ft_sheet(void)
         for (c = 0; c < 8; c++) {
             if (!fs[c].front)
                 flames_draw(&fs[c], y0, y1, 0, 0, 0);
-            if (c < 6 || !ships_draw_exact(set[c], &rel[c], &cam, &ship[c], sc[c], 1, y0, y1, 0, SCR_W, 0, 0, 0))
-                ships_draw(set[c], &rel[c], &cam, &ship[c], sc[c], y0, y1, 0, SCR_W, 0, 0, 0);
+            ships_draw_as(set[c], how[c], c == 4 || c == 5 ? 2 : 1, &rel[c], &cam, &ship[c], sc[c], y0, y1, 0, SCR_W,
+                          0, 0, 0);
             if (fs[c].front)
                 flames_draw(&fs[c], y0, y1, 0, 0, 0);
             gfx_line(p[c].sx, p[c].sy, p[c].sx + ax[c][2], p[c].sy + ax[c][3], UI_RED, 0, y0, y1);
@@ -950,8 +938,8 @@ static void ft_sheet(void)
 static void flame_test(void)
 {
     static const unsigned char types[6] = { 0x08, 0x02, 0x04, 0x0A, 0x09, 0x06 };
-    static const char __far s_row[] = "flametest: %5d km (scale %3d): %3d drawn (exact %d, unturned %d, next view %d; "
-        "sets: roll steps %d, unturned %d), %d pose mismatches; %4d flames: worst %ld.%03ld px off at the tail, "
+    static const char __far s_row[] = "flametest: %5d km (scale %3d): %3d drawn (exact %d, unturned %d; sets: roll "
+        "steps %d, unturned %d), %d pose mismatches; %4d flames: worst %ld.%03ld px off at the tail, "
         "mean %ld.%03ld, %d over a pixel (before: worst %ld.%03ld, mean %ld.%03ld, %d over a pixel)";
     static const char __far s_bad[] = "flametest: MISMATCH type %02X %d km turn %d exact %d: drawn path %d view %d "
         "roll %d, the flames' path %d view %d roll %d";
@@ -994,18 +982,12 @@ static void flame_test(void)
                     rel.z = cam.front.z * km + (cam.right.z * km * dx + cam.up.z * km * dy) / 12;
                 }
                 sc = scale_of(&rel);
-                for (ex = 0; ex < 2; ex++) {
+                for (ex = 0; ex < 2; ex++) {    /* (SHIP_AS_SETS, _EXACT) */
                     LfPlace p, p0;
                     FlameSet fs;
                     int path, dv, dr, pp, nb, nh, lnb, lnh, k;
                     long tx, ty, ox, oy, oz;
-                    ships_frame();
-                    if (ex && o % 3 != 2) {
-                        ships_touch(set, &rel, &cam, &ship);
-                        ships_prefetch(set, &rel, &cam, &ship);
-                    }
-                    if (!ex || !ships_draw_exact(set, &rel, &cam, &ship, sc, 1, 0, 0, 0, SCR_W, 0, 0, 0))
-                        ships_draw(set, &rel, &cam, &ship, sc, 0, 0, 0, SCR_W, 0, 0, 0);
+                    ships_draw_as(set, ex, o & 1 ? 2 : 1, &rel, &cam, &ship, sc, 0, 0, 0, SCR_W, 0, 0, 0);
                     path = ships_last_drawn(&dv, &dr);
                     pp = ships_drawn(set, ex, &rel, &cam, &ship, sc, &p, &nb, &nh);
                     if (pp != path || (path && (p.view != dv || ((p.roll - dr) & 1023)))) {
@@ -1024,7 +1006,7 @@ static void flame_test(void)
                     flames_frame();
                     flames_add(t, &p, nb, nh, sc, o & 1, 1, &fs);
                     /* before: the true roll in the placement's lattice, the way to the nearest 11.25 degrees */
-                    ships_lattice(set, ex, &nb, &nh);
+                    ships_lattice(set, ex == SHIP_AS_EXACT, &nb, &nh);
                     lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, nb, nh, &p0);
                     ft_tail(p0.view, p0.roll, nb, nh, &ox, &oy);
                     {
@@ -1053,7 +1035,7 @@ static void flame_test(void)
         }
         for (i = 1; i <= 4; i++)
             n[0] += n[i];               /* (the sets' roll steps, flipped or not) */
-        rv_logf(s_row, (int)km, sc, drawn_n, n[SHIP_PATH_EXACT], n[SHIP_PATH_EXACT_BLIT], n[SHIP_PATH_NEIGHBOUR], n[0],
+        rv_logf(s_row, (int)km, sc, drawn_n, n[SHIP_PATH_EXACT], n[SHIP_PATH_EXACT_BLIT], n[0],
                 n[SHIP_PATH_UNTURNED] + n[SHIP_PATH_SCALED], bad, flames, worst / 1000, worst % 1000,
                 flames ? sum / flames / 1000 : 0L, flames ? sum / flames % 1000 : 0L, over, bworst / 1000, bworst % 1000,
                 flames ? bsum / flames / 1000 : 0L, flames ? bsum / flames % 1000 : 0L, bover);
@@ -1230,14 +1212,13 @@ static void draw_world(int y0, int y1)
             flames_draw(&g_plan[i].fl, y0, y1, ext, ey0, rows);
         g_t_flames += clock240() - t0;
         t0 = clock240();
-        if (g_plan[i].exact && ships_draw_exact(set, &rel, &cam, &ship, g_plan[i].scale, g_plan[i].exact, y0, y1,
-                                                0, SCR_W, ext, ey0, rows)) {
-            path = 8 + g_plan[i].exact;
+        /* (an exact one whose full-size views did not fit: from the sets) */
+        path = ships_draw_as(set, plan_how(i), g_plan[i].exact ? g_plan[i].exact : 1, &rel, &cam, &ship,
+                             g_plan[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
+        if (path == SHIP_PATH_EXACT_BLIT || path == SHIP_PATH_EXACT)
             g_t_exact += clock240() - t0;
-        } else {                        /* (or its view is not streamed in yet: from the sets this frame) */
-            path = ships_draw(set, &rel, &cam, &ship, g_plan[i].scale, y0, y1, 0, SCR_W, ext, ey0, rows);
+        else
             g_t_sets += clock240() - t0;
-        }
         if (g_plan[i].fl.front) {       /* flames toward the camera: over it */
             t0 = clock240();
             flames_draw(&g_plan[i].fl, y0, y1, ext, ey0, rows);
@@ -1247,8 +1228,7 @@ static void draw_world(int y0, int y1)
             /* now and then, where each ship was put (tests/ships.txt reads it) */
             LfPlace p;
             int nb, nh;
-            ships_lattice(set, g_plan[i].exact != 0, &nb, &nh);
-            lf_place(&rel, &cam, &ship, SCR_W / 2, (ey0 + rows / 2), 400, nb, nh, &p);
+            ships_drawn(set, plan_how(i), &rel, &cam, &ship, g_plan[i].scale, &p, &nb, &nh);
             rv_log("lightfield: frame %u slot %d type %02X at %ld,%ld,%ld: view %d roll %d scale %d at %d,%d path %d",
                    frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, g_plan[i].scale, p.sx, p.sy, path);
         }
@@ -2043,7 +2023,6 @@ void __far __cdecl flight_startup(void)
     memset(maybeEntityType, 0, RV_SLOTS * 2);
     _fmemset(g_was_exact, 0, sizeof g_was_exact);
     _fmemset(g_hold, 0, sizeof g_hold);
-    _fmemset(g_last_view, 0xFF, sizeof g_last_view);
     if (g_lasers)
         rv_log("lasers: DOS memory free as the flight starts: %lu KB", bolts_dos_free() / 1024);
     missionStatus = 0;
@@ -2144,7 +2123,7 @@ void __far __cdecl flight_startup(void)
                 g_bench_h = h;
             }
         }
-        /* the kernels checked, then the three draw paths timed on a full-size view (streamed in for it) */
+        /* the kernels checked, then the three draw paths timed on a full-size view (resident) */
         {
             long n = ships_selftest();
             rv_log("lightfield: asm kernels %s the C ones (%ld pixels compared)", n < 0 ? "DISAGREE WITH" : "agree with", n);
@@ -2258,7 +2237,6 @@ void __far __cdecl flight_frame(void)
 {
     unsigned long now = clock240(), dt;
     int k = (int)(frameCounter % FPS_WINDOW);
-    ships_frame();
     if (g_flame_test == 1) {            /* (the self-test: once, before the first frame's plan) */
         g_flame_test = 2;
         flame_test();
@@ -2371,11 +2349,12 @@ int flight_fly(const RvMission __far *m)
            status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
     {
         unsigned long f = frameCounter, frame = (clock240() - g_t0) - g_t_wait;
-        rv_log("flight: ms a frame: the plan %lu.%02lu; the picture %lu.%02lu (ships drawn exactly %lu.%02lu, from the "
-               "sets %lu.%02lu); the whole frame %lu.%02lu", per_frame(g_t_plan, f) / 100, per_frame(g_t_plan, f) % 100,
-               per_frame(g_t_draw, f) / 100, per_frame(g_t_draw, f) % 100, per_frame(g_t_exact, f) / 100,
-               per_frame(g_t_exact, f) % 100, per_frame(g_t_sets, f) / 100, per_frame(g_t_sets, f) % 100,
-               per_frame(frame, f) / 100, per_frame(frame, f) % 100);
+        static const char __far s_ms[] = "flight: ms a frame: the plan %lu.%02lu; the picture %lu.%02lu (ships drawn "
+            "exactly %lu.%02lu, from the sets %lu.%02lu); the whole frame %lu.%02lu";
+        rv_logf(s_ms, per_frame(g_t_plan, f) / 100, per_frame(g_t_plan, f) % 100,
+                per_frame(g_t_draw, f) / 100, per_frame(g_t_draw, f) % 100, per_frame(g_t_exact, f) / 100,
+                per_frame(g_t_exact, f) % 100, per_frame(g_t_sets, f) / 100, per_frame(g_t_sets, f) % 100,
+                per_frame(frame, f) / 100, per_frame(frame, f) % 100);
     }
     {
         static const char __far s_m[] = "flight: the missiles took %lu.%02lu ms a frame to place and %lu.%02lu to draw "
@@ -2415,7 +2394,7 @@ int flight_fly(const RvMission __far *m)
     g_scene.no_room = 0;
     g_scene.hide_pointer = 0;
     in_steer(1);
-    ships_stream_log();
+    ships_draw_log();
     ships_unload();
     collide_flight_end();
     cockpit_unload();

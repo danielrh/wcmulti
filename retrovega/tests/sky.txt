@@ -1,4 +1,4 @@
-# three ship views on the sky: the player rolls, yaws, pitches (/sky /stream 8 /bench 0 /record 2 /flight 26)
+# three ship views on the sky: the player rolls, yaws, pitches (/sky /bench 0 /record 2 /flight 26)
 wait 10
 click
 wait 3

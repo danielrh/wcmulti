@@ -612,10 +612,13 @@ the emulator.
   copies of the stored five, of the view or of the opposite heading's
   (`find_sprite`); the top and bottom views, their own mirror, have their
   own table; the asymmetric Convolution stores eight 45-degree steps.
-- **Loading** (`ships_load_blocks`): the stream's slots (below), then the
-  ladder for every type, then the rolls size by size, while the mission
-  budget lasts (1 MB of XMS kept back); a draw whose block is missing takes
-  the unturned sprite at that size. The full-size block is never loaded.
+- **Loading** (`ships_load_blocks`): the dense copies' cache (eight 64 KB
+  copies, below), then the ladder for every type, then each type's
+  full-size block (the exact draw's views: 0.2 to 1.5 MB a fighter), then
+  the rolls size by size, while the mission budget lasts (1 MB of XMS kept
+  back); a draw whose block is missing takes the unturned sprite at that
+  size, and the plan draws such a ship exactly (below). Nothing is read
+  from the disk in flight.
 - **The hybrid** (flight.c `plan_draws`, once a frame): the ships on
   screen are sorted back to front; the biggest, while their pixels fit a
   budget (`g_onfly_px`, 32,000 a frame; `RV.EXE /onfly N`) and they are
@@ -626,7 +629,10 @@ the emulator.
   invisible. A ship too big for what is left of the budget is drawn at
   half or quarter detail instead (every other row computed and the row
   above copied by `rep movsd`; then 2 × 1 blocks, `rv_rotate_row2`): the
-  user's rule that a ship in your face gets blockier, never slower.
+  user's rule that a ship in your face gets blockier, never slower. And
+  every other ship the sets cannot show turned (no roll steps at its size:
+  the four biggest, nearer than ~4,100 km; or rolls that did not fit) is
+  drawn exactly too, at half height (below, "No stream").
 
 **The 15-degree lattice** (the user's choice after the comparison): the
 lightfield is now any lattice of nb bands x nh headings (lightfield.h:
@@ -642,7 +648,43 @@ the engine makes a full-size one by expanding its pair backwards
 carries the lattice in its last two bytes (`pack.py`); capitals stay at
 30 degrees.
 
-**The stream** (2026-10-20, the user's design: "it doesn't impact the
+**No stream; every near ship turned** (2026-10-21). The engine flames'
+self-test (`/flametest`, "Engine flames") showed that the sets hold no
+turned sprites at their four biggest sizes, so every near ship but the two
+drawn exactly showed unturned (the user: "unrolled local fighters ...
+could look really strange"). The user's design: the ships beyond the
+first two drawn exactly as well, at half height, each dropped row the one
+above copied down; and with that, no stream: every full-size view
+resident (the 15-degree lattice), the disk kept for comm images and the
+like. So `ships_load_blocks` loads block 0 (after the ladder, before the
+rolls; `load_full` points the views at it, `loaded` stays 2 so the sets'
+lookup never takes its dense-lattice views), and the slots, reads,
+touches, prefetches and the next-view fallback are gone. The plan marks
+its first two exact as before (stable, `EXACT_HOLD`), then every ship
+`ships_turn_wanted` at detail 2 (4 once the budget is spent). More than two
+turned ships thrashed the two 64 KB dense buffers (25.6 ms with three):
+`dense_from` now keeps the last eight dense copies in XMS too
+(`g_dc`, mission level), and a ship whose copy was taken gets it back by
+one XMS move (host speed in DOSBox) instead of a re-expansion (the flames
+scene: 471 expansions and 10,258 moves in 20 s). A dropped row's copy is
+`copy_down`: a `rep movsd` costs DOSBox a cycle per four bytes, an XMS
+move a few dozen instructions whatever its length, so spans of 128 bytes
+or more go by XMS (the user's idea). **Exact edges** (the user's next
+idea: the copied rows made stair steps of the outline): the ship taken as
+convex, a left and a right edge a row, a jagged inside fine. A row drawn
+in full also has its edges found (`rv_rotate_edges`, lowlevel.asm: the
+kernel's walk, reading only, in from both ends of the span; the kernel
+then runs between them, so the walk costs no more than the kernel did over
+the margins); a dropped row's edges are probed from the row above's
+(`rv_rotate_edges_near`: a step or two each, outward while the next pixel
+is ship, else inward to the first that is), the part the row above covers
+too is copied, and the rest, out to its own edges, sampled. Costs at
+40,000 cycles in the flames scene (six ships 3,000-3,500 km, all near:
+two at full detail, four at half height): exact draws 17.6 ms with the
+plain row copy, 19.5 with walked edges, 18.6 with probed ones; the whole
+frame 32.3 ms (592 frames in 20 s, the 30 fps cap held).
+
+**The stream** (2026-10-20 to 21, since removed; the user's design then: "it doesn't impact the
 drawing and you just get jumpiness until it streams in", a few cache slots
 for the nearest ships, configurable). A set's full-size block (block 0, the
 dense lattice, 0.77 MB a fighter at 15 degrees) stays in the file: the
@@ -728,8 +770,7 @@ of the sky — any length, the world frame — through the camera exactly as
 painted there whose up in the world is `up` (the world's own for most), so
 it turns with the sky as the player rolls. `ships_draw_sky(set, v, dir,
 up, cam, scale, ...)` paints a set's full-size view there through the
-exact path (turned by the sky's roll, scaled); the view must be in the
-frame's plan (`ships_prefetch_view`). The stars themselves are now 2,000
+exact path (turned by the sky's roll, scaled). The stars themselves are now 2,000
 directions over the whole sky (the opening sees about a twentieth): each
 frame `stars_place` puts them through the camera — three products first,
 to drop the sky behind and beside — so they turn with pitch, yaw and roll
@@ -740,11 +781,9 @@ star cost 8 ms a frame (160 cycles a star; `lf_sky`'s `lf_atan2` for every
 visible star had made it 15), which halved the drawing benchmark; the
 assembly, 32-bit registers throughout, places the 2,000 in 1.1 ms and
 draws the ~100 on screen in 0.35 (the flight's closing log line reports
-both). Test scene: `RV.EXE /sky /stream 8`
+both). Test scene: `RV.EXE /sky`
 with tests/sky.txt (three Gawain views painted ahead, high left and low
-right; the player rolls, yaws, pitches): the sky sprites take stream
-slots like any full-size view, so the scene asks for eight; real sky art
-(suns, nebulae, planets) would live in its own small set, resident.
+right; the player rolls, yaws, pitches).
 
 **Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
 its sprites on the fly, continuously, which the earlier note here got
@@ -1142,7 +1181,10 @@ ships are at most `SHIPS_DENSE_BUFS` (2): the exact draws 11.2 ms, the frame
 28 ms, 28.7 fps (the 30 fps cap's waits aside); in the recording ships 3 and
 6 are exact all 15 s and the other four from the sets, no switch. More
 exact ships would need the dense copies sized to their views (a fighter's is
-~16 KB of the 64) rather than more memory.
+~16 KB of the 64) rather than more memory. (Since 2026-10-21 the views are resident and
+the dense copies kept in XMS, and every near ship beyond the two is drawn
+exactly at half height: "No stream; every near ship turned", under the
+sets.)
 
 ### Balls: the spherical projectiles
 

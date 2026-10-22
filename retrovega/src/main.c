@@ -71,10 +71,6 @@ int main(int argc, char **argv)
             g_record = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/onfly"))            /* the exact draws' pixel budget a frame (32000) */
             g_onfly_px = atol(argv[++i]);
-        else if (!strcmp(argv[i], "/stream"))           /* the stream's slots (6) */
-            ships_stream_config(atoi(argv[++i]), -1);
-        else if (!strcmp(argv[i], "/reads"))            /* the stream's reads a frame (2) */
-            ships_stream_config(-1, atoi(argv[++i]));
         else if (!strcmp(argv[i], "/lasers"))           /* tests: the laser benchmark, N far bolts (-1 adapting) */
             g_lasers = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/near"))             /* tests: its near bolts (12) */

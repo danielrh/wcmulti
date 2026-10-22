@@ -17,13 +17,13 @@
  * size while the budget lasts; a draw that finds its block missing takes
  * the unturned one at that size.
  *
- * The full-size block (the exact draw's views, the densest lattice) is not
- * loaded: the view a draw needs is streamed from the file into one of a
- * few XMS slots when the frame's plan asks for it (ships_prefetch), at most
- * a read or so a frame, the least recently used slot taken; a draw whose
- * view is not in yet falls back to the sets for that frame.  So a lattice's
- * density costs disk, not XMS: a fighter type keeps 1.7 MB resident at 15
- * degrees instead of 2.5.
+ * The full-size block (the exact draw's views, the densest lattice: every
+ * 15 degrees) is loaded too, after the ladder and before the rolls: a
+ * fighter type's is 0.2 to 1.5 MB.  Nothing is read from the disk in
+ * flight (the user, 2026-10-21: the stream that read these views a few a
+ * frame into six slots was complicated, it thrashed, and the disk is for
+ * comm images and the like); a type whose full-size block did not fit is
+ * drawn from its sets.
  *
  * Without a .RVS beside RV.EXE a type falls back to SHIPnn.RV decoded here
  * (full size only, scaled or turned at draw time through the lightfield
@@ -59,21 +59,13 @@ static unsigned char __far *g_dense_buf[DENSE_BUFS];
 static int g_dense_set[DENSE_BUFS] = { -1, -1 }, g_dense_view[DENSE_BUFS] = { -1, -1 };
 static unsigned g_dense_used[DENSE_BUFS], g_dense_tick;
 static unsigned char __far *g_dense;    /* the one a draw is using */
+#define DCACHE 8                        /* the dense copies kept in XMS (dense_from) */
+static struct { short set, key; unsigned used; XmsBlock blk; } __far g_dc[DCACHE];
+static int g_ndc;
+static unsigned long g_dc_hits, g_dc_expands;   /* (the flight's tally) */
 static unsigned short __far *g_cmap;    /* the scaled draw's column map, LINE entries */
 static unsigned char __far *g_line;     /* one source row expanded, LINE pixels */
 
-/* the stream's slots: a full-size view each, read from its set's file */
-#define STREAM_SLOTS 8
-static struct {
-    int set, view;                      /* what is in it (-1 none) */
-    unsigned used;                      /* for the least recently used */
-    unsigned frame;                     /* the frame it was last asked for: not taken in that frame */
-    XmsBlock blk;
-} g_slot[STREAM_SLOTS];
-static int g_nslots = 6, g_reads_frame = 2, g_reads_now;   /* (6: up to five ships drawn exactly, one slot spare) */
-static unsigned g_slot_tick, g_frame = 1;
-static unsigned long g_slot_cap;        /* a slot's bytes: the longest view of the sets loaded */
-static unsigned long g_stream_reads, g_stream_ticks, g_stream_waits;
 
 void __far __cdecl rv_blit_row(unsigned char __far *row, const unsigned char __far *spans, int left, int xa, int xb);
 void __far __cdecl rv_blit_row_rev(unsigned char __far *row, const unsigned char __far *spans, int right, int xa, int xb);
@@ -83,6 +75,10 @@ void __far __cdecl rv_rotate_row(const unsigned char __far *dense, int w, int h,
                                  unsigned char __far *out);
 void __far __cdecl rv_rotate_row2(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs, int xe,
                                   unsigned char __far *out);
+long __far __cdecl rv_rotate_edges(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs,
+                                   int xe);           /* (the silhouette's first column, low word; one past its last) */
+long __far __cdecl rv_rotate_edges_near(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs,
+                                        int xe, int pl, int pr);   /* (the same, probed from the row above's edges) */
 
 /* --- the .RV fallback: decoding WC's sprite code --- */
 
@@ -306,7 +302,7 @@ static void file_to_xms(FILE *f, unsigned long at, unsigned long n, XmsBlock blk
 static int set_view(const ShipSet __far *s, const SetBlock __far *b, int v, ShipView *out)
 {
     unsigned char e[12];
-    if (!b || b->loaded != 1)           /* (2: the streamed block, never resident) */
+    if (!b || b->loaded != 1)           /* (2: the full-size block, the exact draw's: its views are the dense lattice's) */
         return 0;
     xms_get(s->blk, b->index_at + 12UL * v, e, 12);
     out->w = e[0] | (e[1] << 8);
@@ -390,11 +386,10 @@ static int load_rvs(ShipSet __far *s, const char *name)
     }
     file_to_xms(f, 52, index_len, s->blk, 0);
     fclose(f);
-    /* the full-size unturned block stays in the file: its views' records,
-     * with where each is and its length (they lie in view order) */
+    /* the full-size unturned block (the exact draw's: loaded = 2, set_view never takes its views, which are in the
+     * dense lattice, not the copies'): its views' records, where each is in it */
     {
         SetBlock __far *b0 = &s->block[0];
-        int prev = -1;
         RV_ASSERT(b0->size == 0 && b0->roll == 0);
         b0->loaded = 2;
         for (v = 0; v < s->nviews; v++) {
@@ -406,25 +401,11 @@ static int load_rvs(ShipSet __far *s, const char *name)
             one.ox = (short)(e[4] | (e[5] << 8));
             one.oy = (short)(e[6] | (e[7] << 8));
             one.blk = 0;
-            one.at = b0->at + (e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24));
+            one.at = e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24);
             one.len = 0;
-            if (one.w) {
-                if (prev >= 0)
-                    s->view[prev].len = one.at - s->view[prev].at;
-                prev = v;
-            }
-            s->view[v] = one;
+            s->view[v] = one;           /* (in the block: blk set when it is loaded, load_full) */
         }
-        if (prev >= 0)
-            s->view[prev].len = b0->at + b0->length - s->view[prev].at;
-        s->max_len = 0;
-        for (v = 0; v < s->nviews; v++)
-            if (s->view[v].len > s->max_len)
-                s->max_len = s->view[v].len;
     }
-    s->fd = open(name, O_RDONLY | O_BINARY);
-    if (s->fd < 0)
-        return 0;
     rv_log("ships: %s, %d views (%d x %d; the copies %d x %d), %d sizes, %d roll steps on %d sizes, %lu blocks", name,
            s->nviews, s->nb0, s->nh0, s->nb1, s->nh1, s->nsizes, s->nrolls, s->roll_sizes, nblocks);
     return 1;
@@ -452,7 +433,6 @@ int ships_load(unsigned type)
     RV_ASSERT(s != 0);
     _fmemset(s, 0, sizeof(ShipSet));
     s->type = (unsigned char)type;
-    s->fd = -1;
     sprintf(name, "SHIP%02X.RVS", type);
     ok = load_rvs(s, name);
     if (!ok) {
@@ -468,31 +448,38 @@ int ships_load(unsigned type)
     return g_nsets++;
 }
 
-static void stream_measure(void);
+/* a set's full-size block in, its views pointed at it */
+static int load_full(ShipSet __far *s, SetBlock __far *b)
+{
+    int v, ok;
+    b->loaded = 0;
+    ok = load_block(s, b);
+    b->loaded = 2;                      /* (the exact draw's still: not the sets') */
+    if (!ok)
+        return 0;
+    for (v = 0; v < s->nviews; v++)
+        if (s->view[v].w)
+            s->view[v].blk = b->blk;
+    return 1;
+}
 
-/* the stream's slots, then the sets' other blocks: the ladder (every size,
- * unturned) for every set, then the rolls, largest size first, while the
- * budget lasts */
+/* the dense copies' cache, then the sets' blocks: the ladder (every size, unturned) for every set, then the
+ * full-size views (the exact draw's), then the rolls, largest size first, while the budget lasts */
 unsigned long ships_load_blocks(unsigned long budget)
 {
     unsigned long taken = 0;
     int pass, i, k;
-    g_slot_cap = 0;
-    for (i = 0; i < g_nsets; i++)
-        if (g_set[i]->max_len > g_slot_cap)
-            g_slot_cap = g_set[i]->max_len;
-    for (i = 0; i < g_nslots; i++) {
-        g_slot[i].set = g_slot[i].view = -1;
-        g_slot[i].blk = 0;
-        if (g_slot_cap && taken + g_slot_cap + 2 <= budget) {
-            g_slot[i].blk = xms_alloc(g_slot_cap + 2, XMS_MISSION);
-            if (g_slot[i].blk)
-                taken += g_slot_cap + 2;
+    for (i = 0, g_ndc = 0; i < DCACHE; i++) {
+        g_dc[i].set = g_dc[i].key = -1;
+        g_dc[i].used = 0;
+        g_dc[i].blk = taken + DENSE_MAX <= budget ? xms_alloc(DENSE_MAX, XMS_MISSION) : 0;
+        if (g_dc[i].blk) {
+            taken += DENSE_MAX;
+            g_ndc = i + 1;
         }
     }
-    g_stream_reads = g_stream_ticks = g_stream_waits = 0;
-    stream_measure();
-    for (pass = 0; pass < 2; pass++)
+    g_dc_hits = g_dc_expands = 0;
+    for (pass = 0; pass < 3; pass++)
         for (k = 0; k < 16; k++)
             for (i = 0; i < g_nsets; i++) {
                 ShipSet __far *s = g_set[i];
@@ -501,13 +488,15 @@ unsigned long ships_load_blocks(unsigned long budget)
                     continue;
                 for (b = 0; b < s->nblocks; b++) {
                     SetBlock __far *blk = &s->block[b];
-                    if (blk->loaded || blk->size != k || (pass == 0) != (blk->roll == 0))
+                    int full = blk->loaded == 2;
+                    if (blk->size != k || (pass == 1) != full || (full ? blk->blk != 0 : blk->loaded)
+                        || (!full && (pass == 0) != (blk->roll == 0)))
                         continue;
                     if (taken + blk->length > budget) {
                         rv_log("ships: the budget is spent at type %02X size %d roll %d", s->type, k, blk->roll);
                         return taken;
                     }
-                    if (!load_block(s, blk))
+                    if (full ? !load_full(s, blk) : !load_block(s, blk))
                         return taken;
                     taken += blk->length;
                 }
@@ -524,105 +513,23 @@ const ShipSet __far *ships_set(int i)
 void ships_unload(void)
 {
     int i;
-    for (i = 0; i < g_nsets; i++) {
-        if (g_set[i]->fd >= 0)
-            close(g_set[i]->fd);
+    for (i = 0; i < g_nsets; i++)
         _ffree(g_set[i]);
-    }
     g_nsets = 0;
     for (i = 0; i < DENSE_BUFS; i++)
         g_dense_set[i] = g_dense_view[i] = -1;
-    for (i = 0; i < STREAM_SLOTS; i++) {
-        g_slot[i].set = g_slot[i].view = -1;
-        g_slot[i].blk = 0;              /* (the mission level frees the block) */
+    for (i = 0; i < DCACHE; i++) {
+        g_dc[i].set = g_dc[i].key = -1;
+        g_dc[i].blk = 0;                /* (the mission level frees it) */
     }
+    g_ndc = 0;
 }
 
-void ships_stream_config(int slots, int reads)
+/* a full-size view's record with its data: 0 when it is not in (its set's full-size block did not fit) */
+static const ShipView *full_view(const ShipSet __far *s, int v, ShipView *out)
 {
-    if (slots >= 1 && slots <= STREAM_SLOTS)
-        g_nslots = slots;
-    if (reads >= 0)
-        g_reads_frame = reads;
-}
-
-int ships_stream_slots(void)
-{
-    int i, n = 0;
-    for (i = 0; i < g_nslots; i++)
-        n += g_slot[i].blk != 0;
-    return n;
-}
-
-void ships_frame(void)
-{
-    g_frame++;
-    g_reads_now = 0;
-}
-
-/* --- the stream --- */
-
-static int set_index(const ShipSet __far *s)
-{
-    int i;
-    for (i = 0; i < g_nsets; i++)
-        if (g_set[i] == s)
-            return i;
-    return -1;
-}
-
-/* a full-size view's record with its data: resident (a .RV set's), in a
- * slot, or, when may_read and the frame's reads allow, read into the least
- * recently used slot not asked for this frame.  0 when it is not in. */
-static const ShipView *stream_view(const ShipSet __far *s, int set_i, int v, int may_read, ShipView *out)
-{
-    int i, pick = -1;
-    unsigned long t0, k;
     *out = s->view[v];
-    if (!out->w || out->blk)
-        return out;
-    for (i = 0; i < g_nslots; i++)
-        if (g_slot[i].set == set_i && g_slot[i].view == v) {
-            g_slot[i].frame = g_frame;
-            g_slot[i].used = ++g_slot_tick;
-            out->blk = g_slot[i].blk;
-            out->at = 0;
-            return out;
-        }
-    if (!may_read)
-        return 0;
-    if (g_reads_now >= g_reads_frame || out->len > g_slot_cap || s->fd < 0) {
-        g_stream_waits++;
-        return 0;
-    }
-    for (i = 0; i < g_nslots; i++)
-        if (g_slot[i].blk && g_slot[i].frame != g_frame && (pick < 0 || g_slot[i].used < g_slot[pick].used))
-            pick = i;
-    if (pick < 0) {
-        g_stream_waits++;
-        return 0;
-    }
-    g_reads_now++;
-    g_slot[pick].set = g_slot[pick].view = -1;
-    t0 = clock240();
-    lseek(s->fd, out->at, SEEK_SET);
-    for (k = 0; k < out->len; k += SCRATCH) {
-        unsigned part = out->len - k < SCRATCH ? (unsigned)(out->len - k) : SCRATCH, got;
-        if (_dos_read(s->fd, gfx_scratch(), part, &got) != 0 || got != part) {
-            rv_log("ships: type %02X view %d: the read failed at %lu", s->type, v, k);
-            return 0;
-        }
-        xms_put(g_slot[pick].blk, k, gfx_scratch(), part);
-    }
-    g_stream_ticks += clock240() - t0;
-    g_stream_reads++;
-    g_slot[pick].set = set_i;
-    g_slot[pick].view = v;
-    g_slot[pick].frame = g_frame;
-    g_slot[pick].used = ++g_slot_tick;
-    out->blk = g_slot[pick].blk;
-    out->at = 0;
-    return out;
+    return out->w && out->blk ? out : 0;
 }
 
 /* a symmetric set's mirrored headings, the indices past its stored views, are drawn as the pair's mirror image */
@@ -643,75 +550,11 @@ static int stored_view(const ShipSet __far *s, int v, int *flags)
     return v;
 }
 
-int ships_prefetch_view(int set_i, int v)
+void ships_draw_log(void)
 {
-    const ShipSet __far *s = ships_set(set_i);
-    ShipView view;
-    int flags;
-    return stream_view(s, set_i, stored_view(s, v, &flags), 1, &view) != 0;
-}
-
-int ships_prefetch(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship)
-{
-    const ShipSet __far *s = ships_set(set_i);
-    LfPlace p;
-    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
-    if (!p.on_screen)
-        return 1;
-    return ships_prefetch_view(set_i, p.view);
-}
-
-void ships_touch_view(int set_i, int v)
-{
-    const ShipSet __far *s = ships_set(set_i);
-    ShipView view;
-    int flags;
-    stream_view(s, set_i, stored_view(s, v, &flags), 0, &view);
-}
-
-int ships_touch(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship)
-{
-    const ShipSet __far *s = ships_set(set_i);
-    LfPlace p;
-    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
-    if (!p.on_screen)
-        return -1;
-    ships_touch_view(set_i, p.view);
-    return p.view;
-}
-
-/* what a read costs here: the longest view of the first set, read into slot 0 256 times */
-static void stream_measure(void)
-{
-    const ShipSet __far *s;
-    int v, best = -1, i;
-    unsigned long t0;
-    if (!g_nsets || !g_slot[0].blk)
-        return;
-    s = g_set[0];
-    for (v = 0; v < s->nviews; v++)
-        if (s->view[v].len == s->max_len && !s->view[v].blk)
-            best = v;
-    if (best < 0)
-        return;
-    t0 = clock240();
-    for (i = 0; i < 256; i++) {
-        ShipView view;
-        g_slot[0].set = -1;
-        g_reads_now = 0;
-        stream_view(s, 0, best, 1, &view);
-    }
-    t0 = clock240() - t0;
-    rv_log("ships: the stream: %d slots of %lu bytes; a read of %lu bytes takes %lu.%03lu ms", g_nslots, g_slot_cap,
-           s->max_len, t0 * 1000 / 240 / 256, (t0 * 1000000 / 240 / 256) % 1000);
-    g_slot[0].set = -1;
-    g_stream_reads = g_stream_ticks = g_stream_waits = 0;
-}
-
-void ships_stream_log(void)
-{
-    rv_log("ships: the stream read %lu views in %lu.%02lu ms; %lu times a ship waited a frame for its view",
-           g_stream_reads, g_stream_ticks * 1000 / 240, (g_stream_ticks * 100000 / 240) % 100, g_stream_waits);
+    static const char __far s_dc[] = "ships: the turned draw's dense copies: %lu expanded, %lu moved back from XMS "
+        "(%d kept)";
+    rv_logf(s_dc, g_dc_expands, g_dc_hits, g_ndc);
 }
 
 /* --- drawing --- */
@@ -916,7 +759,7 @@ int ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int 
     ShipView view;
     int flags;
     v = stored_view(s, v, &flags);      /* a mirrored heading not stored: its pair, mirrored */
-    if (!stream_view(s, set_index(s), v, 0, &view))
+    if (!full_view(s, v, &view))
         return 0;
     ships_blit_view(&view, flags, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
     return 1;
@@ -982,7 +825,7 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
     int w, h, ow, oh, top, left, oy, r0 = 0, r1 = 0;
     unsigned long __far *tab = 0;
     unsigned char __far *data = 0;
-    if (!stream_view(s, set_index(s), v, 0, &view))
+    if (!full_view(s, v, &view))
         return;
     w = view.w;
     h = view.h;
@@ -1040,24 +883,43 @@ int ships_dense_reserve(void)
     return g_dense_buf[DENSE_BUFS - 1] != 0;
 }
 
-/* the whole view dense in g_dense (one of the buffers, the one it is already
- * in or the least recently used): 0 when it does not fit */
-static int make_dense(const ShipSet __far *s, int set_i, int v)
+/* The dense copies' cache in XMS (the mission level): a view once expanded
+ * is kept there too, so a ship whose copy another ship's took from the two
+ * buffers gets it back with one XMS move (DOSBox makes it at host speed)
+ * rather than expanding it again (with three ships turned at draw time, each
+ * had re-expanded its view every frame: 25.6 ms).  A copy's key: its
+ * full-size view's number. */
+
+/* the copy of key in a dense buffer, or in the XMS cache: where, 0 when in neither */
+static int dense_in(int set_i, int key, int *buf, int *dc)
 {
-    ShipView view;
-    int w, h, r0 = 0, i, pick = 0, mir, src;
-    g_dense_tick++;
+    int i;
+    *buf = *dc = -1;
     for (i = 0; i < DENSE_BUFS; i++)
-        if (g_dense_set[i] == set_i && g_dense_view[i] == v) {
-            g_dense = g_dense_buf[i];
-            g_dense_used[i] = g_dense_tick;
+        if (g_dense_set[i] == set_i && g_dense_view[i] == key) {
+            *buf = i;
             return 1;
         }
-    src = stored_view(s, v, &mir);      /* a mirrored heading not stored: its pair, backwards */
-    if (!stream_view(s, set_i, src, 0, &view))
-        return 0;
-    w = view.w;
-    h = view.h;
+    for (i = 0; i < g_ndc; i++)
+        if (g_dc[i].blk && g_dc[i].set == set_i && g_dc[i].key == key) {
+            *dc = i;
+            return 1;
+        }
+    return 0;
+}
+
+/* a dense copy of view `view` (its rows backwards when mir) in g_dense, under key: in a buffer already, else into
+ * the least recently used one, from the XMS cache or expanded (and then kept in the cache): 0 when it does not
+ * fit */
+static int dense_from(int set_i, int key, const ShipView *view, int mir)
+{
+    int w = view->w, h = view->h, r0 = 0, i, pick = 0, dc;
+    g_dense_tick++;
+    if (dense_in(set_i, key, &i, &dc) && i >= 0) {
+        g_dense = g_dense_buf[i];
+        g_dense_used[i] = g_dense_tick;
+        return 1;
+    }
     if (!w || (unsigned long)w * h > DENSE_MAX)
         return 0;
     for (i = 1; i < DENSE_BUFS; i++)
@@ -1066,50 +928,99 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
     if (!g_dense_buf[pick]) g_dense_buf[pick] = dense_alloc();
     RV_ASSERT(g_dense_buf[pick] != 0);
     g_dense = g_dense_buf[pick];
-    while (r0 < h) {
-        unsigned long __far *tab;
-        unsigned char __far *data;
-        int r1 = h, r;
-        tab = fetch_rows(&view, r0, &r1, &data);
-        for (r = r0; r < r1; r++) {
-            unsigned char __far *line = g_dense + (unsigned)r * w;
-            expand_row(data + (unsigned)(tab[r - r0] - tab[0]), line, w);
-            if (mir) {
-                int a = 0, b = w - 1;
-                for (; a < b; a++, b--) {
-                    unsigned char t = line[a];
-                    line[a] = line[b];
-                    line[b] = t;
+    g_dense_set[pick] = g_dense_view[pick] = -1;
+    if (dc >= 0) {                      /* (kept: one move) */
+        xms_get(g_dc[dc].blk, 0, g_dense, ((unsigned long)w * h + 1) & ~1UL);
+        g_dc[dc].used = g_dense_tick;
+        g_dc_hits++;
+    } else {
+        while (r0 < h) {
+            unsigned long __far *tab;
+            unsigned char __far *data;
+            int r1 = h, r;
+            tab = fetch_rows(view, r0, &r1, &data);
+            for (r = r0; r < r1; r++) {
+                unsigned char __far *line = g_dense + (unsigned)r * w;
+                expand_row(data + (unsigned)(tab[r - r0] - tab[0]), line, w);
+                if (mir) {
+                    int a = 0, b = w - 1;
+                    for (; a < b; a++, b--) {
+                        unsigned char t = line[a];
+                        line[a] = line[b];
+                        line[b] = t;
+                    }
                 }
             }
+            r0 = r1;
         }
-        r0 = r1;
+        g_dc_expands++;
+        for (i = 0, dc = -1; i < g_ndc; i++)   /* (kept for next time, over the least recently used) */
+            if (g_dc[i].blk && (dc < 0 || g_dc[i].used < g_dc[dc].used))
+                dc = i;
+        if (dc >= 0) {
+            xms_put(g_dc[dc].blk, 0, g_dense, ((unsigned long)w * h + 1) & ~1UL);
+            g_dc[dc].set = (short)set_i;
+            g_dc[dc].key = (short)key;
+            g_dc[dc].used = g_dense_tick;
+        }
     }
     g_dense_set[pick] = set_i;
-    g_dense_view[pick] = v;
+    g_dense_view[pick] = key;
     g_dense_used[pick] = g_dense_tick;
     return 1;
 }
 
-/* the turned draw: inverse mapping from a dense copy.  detail 1 samples
- * every pixel; 2 samples every other row and copies it to the next (the
- * copy is a plain rep movsd); 4 also writes each sample as a 2 x 1 block
- * (rv_rotate_row2): a ship too big for the budget is drawn coarser rather
- * than slower. */
-static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, int scale256, int roll, int detail,
-                       int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+/* the whole full-size view dense in g_dense: 0 when it is not in (its block did not fit) or does not fit */
+static int make_dense(const ShipSet __far *s, int set_i, int v)
 {
     ShipView view;
-    LfRot r;
-    int top, left, oy;
-    if (!make_dense(s, set_i, v))
+    int mir, src, i, dc;
+    src = stored_view(s, v, &mir);      /* a mirrored heading not stored: its pair, backwards */
+    if (dense_in(set_i, v, &i, &dc))
+        view = s->view[src];            /* (its size only: the copy is made) */
+    else if (!full_view(s, src, &view))
         return 0;
-    if (mirrored_index(s, v)) {         /* the pair's picture, mirrored: so is its origin */
-        view = s->view[lf_pair_of(v, s->nb0, s->nh0)];
-        view.ox = view.w - 1 - view.ox;
+    return dense_from(set_i, v, &view, mir);
+}
+
+/* a row of a picture drawn at half height (detail 2): the row above's span copied down.  A rep movsd costs DOSBox
+ * a cycle per four bytes, an XMS move (host speed) a few dozen instructions whatever its length: the wide spans by
+ * XMS (the user's idea), an even length (it moves words), the odd byte by hand */
+static void copy_down(unsigned char __far *dst, const unsigned char __far *src, int n)
+{
+    if (n >= 128) {
+        xms_copy_conv(dst, src, (unsigned long)(n & ~1));
+        if (n & 1)
+            dst[n - 1] = src[n - 1];
     } else
-        view = s->view[v];
-    lf_rotate_setup(view.w, view.h, view.ox, view.oy, roll, scale256, &r);
+        _fmemcpy(dst, src, n);
+}
+
+/* columns a .. b-1 of output row ry (frame row oy) of the turned picture, at the detail's horizontal grain */
+static void turn_span(int w, int h, const LfRot *r, int ry, int a, int b, int detail, unsigned char __far *out)
+{
+    if (a >= b)
+        return;
+    if (detail >= 4)
+        rv_rotate_row2(g_dense, w, h, r, ry, a, b, out);
+    else
+        rv_rotate_row(g_dense, w, h, r, ry, a, b, out);
+}
+
+/* the rows of a picture turned at draw time, from the dense copy in g_dense (w x h, its origin at (ox, oy)): turned
+ * by roll and scaled by scale256 / 256 about its origin, put at (x, y).  detail 1 samples every pixel; 2 samples
+ * every other row in full and of the rows between only their edges, the inside copied down from the row above
+ * (the user's ideas, 2026-10-21: half height for the ships beyond the plan's first two, its silhouette still
+ * exact; the ship taken as convex, a left and a right edge a row, a jagged inside is fine: a dropped row's edges
+ * are probed from the row above's (rv_rotate_edges_near: a step or two each), the part of it the row above covers
+ * too is copied (copy_down), the rest of it, out to its own edges, sampled); 4 also writes each sample as a 2 x 1 block
+ * (rv_rotate_row2): a ship too big for the budget is drawn coarser rather than slower. */
+static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256, int roll, int detail, int y0, int y1,
+                      int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    LfRot r;
+    int top, left, oy, pl = 0, pr = 0;  /* (pl, pr: the row above's edges; none when pl >= pr) */
+    lf_rotate_setup(w, h, ox, oy_, roll, scale256, &r);
     top = y - r.ocy;
     left = x - r.ocx;
     if (y0 < top) y0 = top;
@@ -1119,27 +1030,58 @@ static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, i
     if (xa < 0) xa = 0;
     if (xb > SCR_W) xb = SCR_W;
     if (y0 >= y1 || left >= xb || left + r.ow <= xa)
-        return 1;
+        return;
     if (xa < left) xa = left;
     if (xb > left + r.ow) xb = left + r.ow;
     for (oy = y0; oy < y1; oy++) {
-        int ca = xa, cb = xb, xs, xe;
-        if (!row_clip(oy, &ca, &cb, ext, ext_y0, ext_rows))
-            continue;
-        if (detail >= 2 && ((oy - top) & 1) && oy > y0) {
-            /* the odd rows: the row above, copied (the sprite's columns only) */
-            if (lf_rotate_span(&r, view.w, view.h, oy - top - 1, ca - left, cb - left, &xs, &xe))
-                _fmemcpy(vid_row(oy) + left + xs, vid_row(oy - 1) + left + xs, xe - xs);
+        int ca = xa, cb = xb, xs, xe, l, e, a, b;
+        long ed;
+        unsigned char __far *row;
+        if (!row_clip(oy, &ca, &cb, ext, ext_y0, ext_rows)
+            || !lf_rotate_span(&r, w, h, oy - top, ca - left, cb - left, &xs, &xe)) {
+            pl = pr = 0;
             continue;
         }
-        if (lf_rotate_span(&r, view.w, view.h, oy - top, ca - left, cb - left, &xs, &xe)) {
-            if (detail >= 4) {
-                rv_rotate_row2(g_dense, view.w, view.h, &r, oy - top, xs, xe, vid_row(oy) + left);
-            } else {
-                rv_rotate_row(g_dense, view.w, view.h, &r, oy - top, xs, xe, vid_row(oy) + left);
-            }
+        row = vid_row(oy) + left;
+        if (detail < 2) {
+            rv_rotate_row(g_dense, w, h, &r, oy - top, xs, xe, row);
+            continue;
         }
+        if (((oy - top) & 1) && pl < pr)   /* (a dropped row: its edges probed from the row above's) */
+            ed = rv_rotate_edges_near(g_dense, w, h, &r, oy - top, xs, xe, pl, pr);
+        else                            /* (a row drawn: all of it, so its edges walked in from the span's) */
+            ed = rv_rotate_edges(g_dense, w, h, &r, oy - top, xs, xe);
+        l = (int)ed;
+        e = (int)(ed >> 16);
+        if (((oy - top) & 1) && pl < pr && l < e) {
+            a = l > pl ? l : pl;        /* (the part the row above covers too: copied) */
+            b = e < pr ? e : pr;
+            if (a < b) {
+                copy_down(row + a, vid_row(oy - 1) + left + a, b - a);
+                turn_span(w, h, &r, oy - top, l, a, detail, row);
+                turn_span(w, h, &r, oy - top, b, e, detail, row);
+            } else
+                turn_span(w, h, &r, oy - top, l, e, detail, row);
+        } else
+            turn_span(w, h, &r, oy - top, l, e, detail, row);
+        pl = l;
+        pr = e;
     }
+}
+
+/* the turned draw of a full-size view: inverse mapping from its dense copy */
+static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, int scale256, int roll, int detail,
+                       int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    ShipView view;
+    if (!make_dense(s, set_i, v))
+        return 0;
+    if (mirrored_index(s, v)) {         /* the pair's picture, mirrored: so is its origin */
+        view = s->view[lf_pair_of(v, s->nb0, s->nh0)];
+        view.ox = view.w - 1 - view.ox;
+    } else
+        view = s->view[v];
+    turn_rows(view.w, view.h, view.ox, view.oy, x, y, scale256, roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows);
     return 1;
 }
 
@@ -1243,16 +1185,38 @@ static int set_pick(const ShipSet __far *s, const LfPlace *p, int scale256, Ship
     return -1;
 }
 
-/* view v can be turned at draw time now (draw_turned's make_dense would find it: dense already, or in) */
+/* view v can be turned at draw time now (draw_turned's make_dense would find it: a dense copy made, or it in) */
 static int can_turn(const ShipSet __far *s, int set_i, int v)
 {
     ShipView view;
-    int i, mir;
-    for (i = 0; i < DENSE_BUFS; i++)
-        if (g_dense_set[i] == set_i && g_dense_view[i] == v)
-            return 1;
-    return stream_view(s, set_i, stored_view(s, v, &mir), 0, &view) && view.w
-        && (unsigned long)view.w * view.h <= DENSE_MAX;
+    int i, dc, mir;
+    if (dense_in(set_i, v, &i, &dc))
+        return 1;
+    return full_view(s, stored_view(s, v, &mir), &view) && (unsigned long)view.w * view.h <= DENSE_MAX;
+}
+
+/* A ship near enough that the sets have no turned sprites at its size (their four biggest: scale 152 and up),
+ * or whose size's roll steps did not fit the mission's XMS, would show unturned from them: the plan draws every
+ * such ship exactly instead, turned by its true roll from its full-size view (the user, 2026-10-21: unrolled near
+ * fighters look strange), at half height beyond its first two (the user's: each odd row the one above copied
+ * down) */
+static int rolls_at(const ShipSet __far *s, int k)
+{
+    int r;
+    for (r = 1; r <= s->nrolls / 4; r++)
+        if (!block_of(s, k, r) || block_of(s, k, r)->loaded != 1)
+            return 0;
+    return 1;
+}
+
+static int turn_wanted(const ShipSet __far *s, int scale256)
+{
+    return s->rvs && s->nrolls >= 4 && !rolls_at(s, size_step(s, scale256));
+}
+
+int ships_turn_wanted(int set_i, int scale256)
+{
+    return turn_wanted(ships_set(set_i), scale256);
 }
 
 int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
@@ -1290,50 +1254,11 @@ int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *s
     return SHIP_PATH_TURNED;
 }
 
-/* a view of the dense lattice next to v (a band or a heading step either way, the headings round the circle)
- * whose full-size copy is in a stream slot now: -1 when none.  While a turning ship's next view is being
- * read, it is drawn from this one rather than from the sets' coarser lattice (the frame's single read went
- * to another ship: a coarse view every other frame made it wobble) */
-static int resident_neighbour(const ShipSet __far *s, int set_i, int v)
-{
-    int nb = s->nb0, nh = s->nh0, full = 2 * (nh - 1), base = 2 + nb * nh, band, hh, db, dh, k;
-    if (v == 0 || v == 1 + nb * nh)
-        return -1;                      /* (a pole's neighbours are a whole band: the sets do) */
-    if (v < base) {
-        band = (v - 1) / nh;
-        hh = (v - 1) % nh;
-    } else {
-        band = (v - base) / (nh - 2);
-        hh = nh + (v - base) % (nh - 2);
-    }
-    for (k = 0; k < 4; k++) {
-        int b, h, c, stored, i;
-        db = k == 0 ? 0 : k == 1 ? 0 : k == 2 ? -1 : 1;
-        dh = k == 0 ? -1 : k == 1 ? 1 : 0;
-        b = band + db;
-        h = (hh + dh + full) % full;
-        if (b < 0 || b >= nb)
-            continue;
-        c = h <= nh - 1 ? 1 + b * nh + h : 2 + nb * nh + b * (nh - 2) + (h - nh);
-        if (!s->asym && c >= base)
-            stored = lf_pair_of(c, nb, nh);
-        else
-            stored = c;
-        if (s->view[stored].blk)
-            return c;                   /* (resident with the set) */
-        for (i = 0; i < g_nslots; i++)
-            if (g_slot[i].blk && g_slot[i].set == set_i && g_slot[i].view == stored)
-                return c;
-    }
-    return -1;
-}
-
 int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int detail,
                      int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
     const ShipSet __far *s = ships_set(set_i);
     LfPlace p;
-    int c;
     drawn(0, -1, 0);
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
     if (!p.on_screen || scale256 < 8)
@@ -1347,24 +1272,27 @@ int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBa
         drawn(SHIP_PATH_EXACT, p.view, p.roll);
         return 1;
     }
-    c = resident_neighbour(s, set_i, p.view);
-    if (c >= 0 && draw_turned(s, set_i, c, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0,
-                              ext_rows)) {
-        drawn(SHIP_PATH_NEIGHBOUR, c, p.roll);
-        return 1;
-    }
-    return 0;
+    return 0;                           /* (its full-size views did not fit, or the view is too big to turn) */
 }
 
-int ships_drawn(int set_i, int exact, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
+int ships_draw_as(int set_i, int how, int detail, const LfVec *rel, const LfBasis *cam, const LfBasis *ship,
+                  int scale256, int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    if (how == SHIP_AS_EXACT && ships_draw_exact(set_i, rel, cam, ship, scale256, detail, y0, y1, xa, xb, ext, ext_y0,
+                                                 ext_rows))
+        return g_drawn.path;            /* (0: off the screen) */
+    return ships_draw(set_i, rel, cam, ship, scale256, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+}
+
+int ships_drawn(int set_i, int how, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
                 LfPlace *p, int *nb, int *nh)
 {
     const ShipSet __far *s = ships_set(set_i);
     ShipView view;
-    int c, rq, roll, path;
+    int rq, roll, path;
     *nb = s->nb0;
     *nh = s->nh0;
-    if (exact) {                        /* as ships_draw_exact draws it */
+    if (how == SHIP_AS_EXACT) {         /* as ships_draw_exact draws it */
         lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, p);
         if (!p->on_screen || scale256 < 8)
             return p->on_screen = 0;
@@ -1374,11 +1302,7 @@ int ships_drawn(int set_i, int exact, const LfVec *rel, const LfBasis *cam, cons
         }
         if (can_turn(s, set_i, p->view))
             return SHIP_PATH_EXACT;
-        if ((c = resident_neighbour(s, set_i, p->view)) >= 0 && can_turn(s, set_i, c)) {
-            p->view = c;
-            return SHIP_PATH_NEIGHBOUR;
-        }
-    }                                   /* (not in: the flight draws it from the sets, as ships_draw) */
+    }                                   /* (not in: from the sets, as ships_draw_as falls back) */
     if (!s->rvs) {
         lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, p);
         if (!p->on_screen || scale256 < 8)
@@ -1404,14 +1328,14 @@ int ships_drawn(int set_i, int exact, const LfVec *rel, const LfBasis *cam, cons
     return path;
 }
 
-int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int exact,
+int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int how,
               int cx, int cy, int focal, int box[4])
 {
     const ShipSet __far *s = ships_set(set_i);
     LfPlace p;
     ShipView view;
     LfRot r;
-    int flags, rq, k;
+    int flags, rq, k, exact = how == SHIP_AS_EXACT;
     if (exact || !s->rvs) {             /* turned (and scaled) at draw time from the full-size view: the turned image */
         int roll;
         lf_place(rel, cam, ship, cx, cy, focal, s->nb0, s->nh0, &p);
@@ -1544,8 +1468,7 @@ void ships_time_paths(int set_i, int v, long out[5])
     ShipView view;
     int y0, y1, k, rows, i;
     long px;
-    g_reads_now = 0;
-    if (!stream_view(s, set_i, v, 1, &view)) {
+    if (!full_view(s, v, &view)) {
         for (k = 0; k < 5; k++)
             out[k] = 0;
         return;
