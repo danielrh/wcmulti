@@ -55,6 +55,7 @@ struct GameParams {
     int missionShipAiOff;    // WC2: the word in a mission ship record that picks its AI (6: the player; 0: not located)
     int gunsSize, gunSize;   // bytes per slot in ds::gunTable, and per gun in it
     int campaign;            // WC1: the campaign whose table the program loads when it starts (-1: none)
+    int shipStatsSize;       // bytes per ship type in the game's table of ship figures (ds::shipStatsHull)
 };
 extern GameParams g_params;
 

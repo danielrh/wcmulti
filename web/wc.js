@@ -671,6 +671,9 @@ function renderMission() {
     sel.value = String(fpsInForce());
     sel.disabled = !isHost() || running;
   }
+  $("capHullLabel").hidden = !lobbyCapHull() || !lobbyFlies();
+  $("capHull").checked = lobby.capHull;
+  $("capHull").disabled = !isHost() || running;
   const hints = (c && c.hints) || {};
   // (One line, cut with an ellipsis; the whole of it is the tooltip.)
   const hint = !c ? (lobbyGameId() ? "" : "Load the game files to pick a mission.")
@@ -715,6 +718,8 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 // frames a second in flight, for a game the hooks pace (its
                 // registry's `fps`: the first is the default): the host's choice
                 fps: 0,
+                // capital ships with three times their hull: the host's choice
+                capHull: false,
                 // game-protocol messages that arrive before DOSBox has adopted this
                 // connection (a wingman faster to the launch than the host), handed
                 // to the transport at adoption so nothing is lost
@@ -744,7 +749,8 @@ const sayHello = (to, reply) => sendLobby({ t: "hello", name: myName(), flying: 
   game: source ? source.game.id : "", voice: voice.choice(),
   mission: isHost() ? missionKey(lobby.mission) : undefined, rocks: isHost() ? lobby.rocks : undefined,
   wingBumps: isHost() ? lobby.wingBumps : undefined,
-  latency: isHost() ? lobby.latency : undefined, fps: isHost() ? lobby.fps : undefined }, to);
+  latency: isHost() ? lobby.latency : undefined, fps: isHost() ? lobby.fps : undefined,
+  capHull: isHost() ? lobby.capHull : undefined }, to);
 
 // Asteroid and mine fields on, soft or off.  The host's page tells the others
 // (for their lobby) and its own running game, which tells every wingman's game.
@@ -808,6 +814,22 @@ function setFps(v) {
   lobby.fps = v;
   renderMission();
   chatLine(`You set ${fpsInForce()} frames a second`, "sys");
+  sayHello();
+}
+
+// Capital ships with three times their hull (WCCAPHULL=3 in every machine's
+// game; the host's decides what is destroyed).  Set before the launch.
+const CAP_HULL = 3;
+const lobbyCapHull = () => { const g = gameById(lobbyGameId()); return !!(g && g.capHull); };
+const capHullLabel = (on) => (on ? `capital ships ${CAP_HULL} times as tough (capship hull on)` : "capital ships as the game has them (capship hull off)");
+function setCapHull(on) {
+  if (!isHost()) { chatLine("Only the host can set the capital ships' hull.", "sys"); renderMission(); return; }
+  if (running) { chatLine("The capital ships' hull is set before the launch.", "sys"); renderMission(); return; }
+  on = !!on;
+  if (lobby.capHull === on) return;
+  lobby.capHull = on;
+  renderMission();
+  chatLine(`You set ${capHullLabel(on)}`, "sys");
   sayHello();
 }
 
@@ -935,6 +957,11 @@ function onLobbyEvent(ev) {
           if (fpsInForce()) chatLine(`${esc(m.name)} set ${fpsInForce()} frames a second`, "sys");
           renderMission();
         }
+        if (ev.from === 0 && !isHost() && typeof m.capHull === "boolean" && m.capHull !== lobby.capHull) {
+          lobby.capHull = m.capHull;
+          if (lobbyCapHull()) chatLine(`${esc(m.name)} set ${capHullLabel(lobby.capHull)}`, "sys");
+          renderMission();
+        }
         voice.remote(ev.from, typeof m.voice === "string" ? m.voice : "off");
         if (!m.reply) sayHello(ev.from, true);
         renderRoster(); updateActions();
@@ -949,6 +976,7 @@ function onLobbyEvent(ev) {
         if (typeof m.wingBumps === "string") lobby.wingBumps = wingBumpsMode(m.wingBumps);
         if (typeof m.latency === "string") lobby.latency = latencyMode(m.latency);
         if (typeof m.fps === "number") lobby.fps = fpsValue(m.fps);
+        if (typeof m.capHull === "boolean") lobby.capHull = m.capHull;
         renderMission();
         chatLine(`${esc(lobby.names.get(0) || "The host")} started ${esc(missionLabel(lobby.mission))}`, "sys");
         lobby.flying.add(0); renderRoster();
@@ -1058,6 +1086,7 @@ async function joinRoom({ create = true } = {}) {
     lobby.wingBumps = game.selfId === 0 ? wingBumpsMode({ 0: "game", 1: "harmless" }[query.get("bumps")] || query.get("bumps")) : "harmless";
     lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "low";
     lobby.fps = game.selfId === 0 ? fpsValue(query.get("fps")) : 0;
+    lobby.capHull = game.selfId === 0 && query.get("caphull") === "1";
     renderMission();
     for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = true;
     chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
@@ -1191,6 +1220,7 @@ $("collisions").addEventListener("change", () => {
 });
 $("latency").addEventListener("change", () => setLatency($("latency").value));
 $("fps").addEventListener("change", () => setFps($("fps").value));
+$("capHull").addEventListener("change", () => setCapHull($("capHull").checked));
 $("mission").addEventListener("change", () => {
   if (!isHost()) return;
   lobby.mission = parseMission($("mission").value);
@@ -1204,7 +1234,7 @@ buildMissionMenu();
 
 $("fly").addEventListener("click", () => {
   if (!source || !lobby.game || running) return;
-  if (isHost()) sendLobby({ t: "start", game: source.game.id, mission: missionKey(lobby.mission), rocks: lobby.rocks, wingBumps: lobby.wingBumps, latency: lobby.latency, fps: lobby.fps });
+  if (isHost()) sendLobby({ t: "start", game: source.game.id, mission: missionKey(lobby.mission), rocks: lobby.rocks, wingBumps: lobby.wingBumps, latency: lobby.latency, fps: lobby.fps, capHull: lobby.capHull });
   void start(true);
 });
 $("fullscreen").addEventListener("click", () => goFullscreen());
@@ -1287,6 +1317,7 @@ async function start(fromGesture) {
     if (source.game.multiplayer && isHost()) env.WCNET_MODE = lobby.latency;
     // (The wingmen's games take the host's with each mission; theirs agrees.)
     if (fpsInForce()) env.WCFPS = String(fpsInForce());
+    if (source.game.multiplayer && lobbyCapHull() && lobby.capHull) env.WCCAPHULL = String(CAP_HULL);
     if (cfg.callsign) env.WCCALLSIGN = cfg.callsign;
     if (cfg.lastname) env.WCLASTNAME = cfg.lastname;
     if (cfg.firstname) env.WCFIRSTNAME = cfg.firstname;

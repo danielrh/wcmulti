@@ -53,6 +53,8 @@
 // is let into the public lobby.
 // `fps`: the frame rates the host may fly at, the first the default (the
 // hooks pace the flight: WCFPS; a game that paces itself has none).
+// `capHull`: the hooks can give capital ships three times their hull (the
+// room's "Capship hull" box: WCCAPHULL).
 // `noFlight`: no missions to pick and nothing to fly yet (the page hides
 // its mission and flight options).
 // `builtin`: a game the site itself serves (ours to give away), as a
@@ -173,7 +175,7 @@ const WC1_FPS = [30, 25, 20, 15];
 export const GAMES = [
   { id: "wc1", tag: "WC1", title: "Wing Commander", detect: ["WC.EXE"], run: "wc", multiplayer: true,
     build: { para: 0x1231, off: 0x0187, text: "Loading WING COMMANDER" },
-    saves: ["GAMEDAT/SAVEGAME.WLD"], cycles: 3630, fps: WC1_FPS,
+    saves: ["GAMEDAT/SAVEGAME.WLD"], cycles: 3630, fps: WC1_FPS, capHull: true,
     pointer: { fromGame: true },
     campaign: { series: WC1_SERIES, hints: WC1_HINTS } },
   // SM2.EXE is the game's last build, with the Crusade campaign (it can
@@ -182,7 +184,7 @@ export const GAMES = [
   // mission is one of Crusade's.
   { id: "wc1sm2", tag: "SM2", partOf: "wc1", title: "Wing Commander: The Secret Missions 2", detect: ["SM2.EXE"], run: "sm2", multiplayer: true,
     build: { para: 0x11E8, off: 0x0181, text: "Loading WING COMMANDER" },
-    saves: ["GAMEDAT/CRUSADE.WLD"], cycles: 3630, fps: WC1_FPS,
+    saves: ["GAMEDAT/CRUSADE.WLD"], cycles: 3630, fps: WC1_FPS, capHull: true,
     pointer: { fromGame: true },
     campaign: { series: SM2_SERIES, hints: WC1_HINTS } },
   // A picked mission of Wing Commander II starts in the barracks (a

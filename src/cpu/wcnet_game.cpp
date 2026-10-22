@@ -16,15 +16,15 @@ namespace wc {
 GameId g_game = GAME_NONE;
 BuildId g_build = BUILD_NONE;
 Bit16u g_loadSeg = 0;
-GameParams g_params = { 0x40, 0x2a, 0, 2, 0x16, 0x17, 0x4d, 0x39, 0, 0x33, 5, 0 };
+GameParams g_params = { 0x40, 0x2a, 0, 2, 0x16, 0x17, 0x4d, 0x39, 0, 0x33, 5, 0, 0x6f };
 
 // WC.EXE starts with the Vega campaign's table (CAMP.000) ...
-static const GameParams kWc1Params = { 0x40, 0x2a, 0, 2, 0x16, 0x17, 0x4d, 0x39, 0, 0x33, 5, 0 };
+static const GameParams kWc1Params = { 0x40, 0x2a, 0, 2, 0x16, 0x17, 0x4d, 0x39, 0, 0x33, 5, 0, 0x6f };
 // ... and SM2.EXE, the same program otherwise, with Crusade's (CAMP.002).
-static const GameParams kSm2Params = { 0x40, 0x2a, 0, 2, 0x16, 0x17, 0x4d, 0x39, 0, 0x33, 5, 2 };
+static const GameParams kSm2Params = { 0x40, 0x2a, 0, 2, 0x16, 0x17, 0x4d, 0x39, 0, 0x33, 5, 2, 0x6f };
 // WC2: 70 slots; a mission ship is 0x3c bytes with its class word at +0x15
 // (5 and 6 are fields: ovr116:1D72); nav points are 0x65 bytes
-static const GameParams kWc2Params = { 0x46, 0x3c, 0x15, 2, 5, 6, 0x65, 0x51, 0x35, 0xa1, 10, -1 };
+static const GameParams kWc2Params = { 0x46, 0x3c, 0x15, 2, 5, 6, 0x65, 0x51, 0x35, 0xa1, 10, -1, 0xf3 };
 Bit16u DS = 0;
 PhysPt DS_OFF = 0;
 static Bit16u g_gamePsp = 0;
@@ -85,6 +85,7 @@ static void load_wc1_code() {
     // overlay 143: ships, damage, weapons
     ovr(do_damage, STUB143, 0x0084, 0x0A99, 4);            // do_damage(src, dst, quantity, vec*)
     ovr(delayedDespawn, STUB143, 0x008E, 0x1F15, 2);       // delayedDespawn(src, ship)
+    ovr(capshipDeathTimer, STUB143, 0x00C0, 0x1CE2);       // outerSpawnExplosion+149: a capital ship's dying explosion was just given hull/4 + 8 frames ([BB8E + 2*SI])
     ovr(fireGunFromShip, STUB143, 0x012E, 0x2978, 2);      // fireGunFromShip(ship, gun)
     ovr(maybe_fire_all_guns, STUB143, 0x0156, 0x2E76, 1);  // maybe_fire_all_guns(ship)
     ovr(aiSetSpeed, STUB143, 0x010B, 0x0874);              // ship_stats_every_frame+26E (AI set speed)

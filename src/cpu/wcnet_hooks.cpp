@@ -970,6 +970,73 @@ static void hold_cheat_hull() {
     wclog(1, "the callsign has CHEAT in it: this ship takes no damage");
 }
 
+// Capital ships' hull times WCCAPHULL (the lobby's "Capship hull" box: 3;
+// default 1, the game's).  WC.EXE destroys a capital ship when the damage
+// points it has taken (ds::damagePoints) reach the hull figure of its ship
+// type (ovr143:0F11), and lets its wreck burn for a quarter of that figure
+// plus eight frames (ovr143:1CCF).  The figure is multiplied in the game's
+// own table, for every type a capital ship of the mission has (re-written
+// each frame: the game may load a type's figures again), so the game's
+// half-hull smoke and anything else that reads it agree; the wreck burns as
+// long as it always did (on_capship_death_timer).  Every machine does the
+// same (the page gives them all the host's choice); the host's decides.
+static int capship_hull_factor() {
+    static int factor = -1;
+    if (factor < 0) {
+        const char *env = getenv("WCCAPHULL");
+        factor = env && env[0] ? atoi(env) : 1;
+        if (factor < 1 || factor > 10) {
+            factor = 1;
+        }
+    }
+    return factor;
+}
+enum { kShipTypes = 64 };
+static Bit16s g_hullFigure[kShipTypes];  // the game's own figure, per ship type
+static bool g_hullKnown[kShipTypes];
+
+static void capship_hull_tick() {
+    const int factor = capship_hull_factor();
+    if (factor == 1 || !is_wc1() || !ds::known(ds::shipStatsHull) || !ds::known(ds::gInstanceShipTypes)) {
+        return;
+    }
+    for (int slot = 0; slot <= kMaxShipSlot; slot++) {
+        if (!slot_in_use(slot) || entity_type(slot) != ET_CAPSHIP) {
+            continue;
+        }
+        int type = (Bit16s)rd16((Bit16u)(ds::gInstanceShipTypes + 2 * slot));
+        if (type < 0 || type >= kShipTypes) {
+            continue;
+        }
+        Bit16u at = (Bit16u)(ds::shipStatsHull + g_params.shipStatsSize * type);
+        int now = (Bit16s)rd16(at);
+        int want = g_hullKnown[type] ? g_hullFigure[type] * factor : -1;
+        if (!g_hullKnown[type] || (now != want && now != g_hullFigure[type])) {
+            g_hullFigure[type] = (Bit16s)now;  // (first seen, or loaded again with other figures)
+            g_hullKnown[type] = true;
+        }
+        want = g_hullFigure[type] * factor;
+        if (want > 0x7fff) {
+            want = 0x7fff;
+        }
+        if (now != want) {
+            wr16(at, (Bit16u)want);
+            wclog(2, "capital ship type %d: hull %d instead of %d", type, want, (int)g_hullFigure[type]);
+        }
+    }
+}
+
+static void on_capship_death_timer(int slot) {
+    if (capship_hull_factor() == 1 || !is_wc1() || slot < 0 || slot > kMaxShipSlot) {
+        return;
+    }
+    int type = (Bit16s)rd16((Bit16u)(ds::gInstanceShipTypes + 2 * slot));
+    if (type >= 0 && type < kShipTypes && g_hullKnown[type]) {
+        wclog(2, "capital ship in slot %d burns %d frames (not %d)", slot, g_hullFigure[type] / 4 + 8, (int)rd16((Bit16u)(ds::damageProperty + 2 * slot)));
+        wr16((Bit16u)(ds::damageProperty + 2 * slot), (Bit16u)(g_hullFigure[type] / 4 + 8));
+    }
+}
+
 // The game removes a ship more than 16000 km from the player's own ship: a
 // friendly that has fallen that far behind (WC.EXE ovr163:003D, WC2.EXE
 // ovr129:004E) and a ship with no target that has wandered off (ovr163:0317,
@@ -1212,6 +1279,9 @@ static void check_hooks_slow() {
     if (at_location(code::autopilotKey) && g_session && g_session->is_client()) {
         reg_eip += 5;  // only the server may engage autopilot
     }
+    if (at_location(code::capshipDeathTimer)) {
+        on_capship_death_timer((int)(reg_si & 0xffff));
+    }
     if (at_location(code::navStepAltIntel) && ds::known(ds::slotIntelRecord)) {
         // A WC2 nav point's step "the ship in slot N flies with the
         // intelligence of file M" (ovr116:1395, case 0) copies an 81-byte
@@ -1266,6 +1336,7 @@ static void check_hooks_slow() {
         }
         maybe_dump_data_segment();
         hold_cheat_hull();
+        capship_hull_tick();
         // The loop comes here once per game frame, and again whenever a
         // trampoline run started here is over: only the first is a frame.
         static int lastFrame = -1;

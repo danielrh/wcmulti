@@ -48,6 +48,7 @@ WC_DS(speedLo, 0xBE6C, 0xC152, 0x677A, 0x6784, 0x6A20)  // [maybeEntityType+152]
 WC_DS(commAnimInfo, 0xBE94, 0xC17A, 0x672A, 0x6734, 0x69D0)  // word per slot (1 = has a pilot that talks); the AI reads it as the ship's side: 0 the player's, 1 the enemy's, 2 others (WC2 ovr129:003D compares it with slot 0's)
 WC_DS(engineFlag, 0xBFD6, 0xC2BC, 0x67B6, 0x67C0, 0x6A5C)  // [commAnimInfo+142] byte per slot, 0xff = disabled
 WC_DS(gInstanceShipTypes, 0xBFF8, 0xC2DE, 0x641E, 0x6428, 0x66C4)  // word per slot, index into kShipStats (0x6f bytes each)
+WC_DS(shipStatsHull, 0x49EC, 0x4CBC, 0x0000, 0x0000, 0x0000)  // [kShipStats+10] word per ship type (GameParams.shipStatsSize apart): a capital ship is destroyed when its damagePoints reach it (ovr143:0F11), and burns for a quarter of it (ovr143:1CCF)
 WC_DS(frameCounter, 0xC0B8, 0xC39E, 0x43C3, 0x43CD, 0x4669)  // [gInstanceShipTypes+C0] incremented once per game frame
 WC_DS(damagePoints, 0xC17A, 0xC460, 0x6306, 0x6310, 0x65AC)  // [currentNavPoint+2] word per slot, accumulated hull damage
 WC_DS(currentNavPoint, 0xC178, 0xC45E, 0x441C, 0x4426, 0x46C2)  // word: the nav point the player is at (ovr145:098F sets it up)

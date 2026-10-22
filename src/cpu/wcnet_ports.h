@@ -10,6 +10,7 @@ static void load_sm2_code() {
     using namespace code;
     ovr(do_damage, 0x10EC, 0x0084, 0x0A99, 4);                     // ovr140:0A99 (ovr143:0A99)
     ovr(delayedDespawn, 0x10EC, 0x008E, 0x1F85, 2);                // ovr140:1F85 (ovr143:1F15)
+    ovr(capshipDeathTimer, 0x10EC, 0x00C0, 0x1D52);                // ovr140:1D52 (ovr143:1CE2)
     ovr(fireGunFromShip, 0x10EC, 0x012E, 0x29E8, 2);               // ovr140:29E8 (ovr143:2978)
     ovr(maybe_fire_all_guns, 0x10EC, 0x0156, 0x2EE6, 1);           // ovr140:2EE6 (ovr143:2E76)
     ovr(aiSetSpeed, 0x10EC, 0x010B, 0x0874);                       // ovr140:0874 (ovr143:0874)

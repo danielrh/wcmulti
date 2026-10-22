@@ -317,6 +317,7 @@
             <select id="latency"><option value="low">fast (low latency)</option><option value="high">far away (high latency)</option><option value="auto">auto (not recommended)</option></select></label>
           <label id="fpsLabel" hidden title="Frames a second in flight. Wing Commander moves everything a step a frame, so this is the game's speed: 30 is the default, and some missions were made for a slower one. The host picks it before the launch">FPS
             <select id="fps"></select></label>
+          <label class="check" id="capHullLabel" hidden title="Capital ships (carriers, destroyers, cruisers, transports, friend and foe) take three times the damage before they are destroyed. The host picks it before the launch"><input type="checkbox" id="capHull"> Capship hull</label>
           <label title="Asteroid and mine fields, and whether two wingmen's ships touching costs them anything (their guns, missiles and ramming anything else always count). The host decides, also while flying; /rocks on, /rocks soft, /rocks off and /bumps harmless, /bumps game in the chat do the same">Collisions
             <select id="collisions">
               <option value="on-harmless">asteroids on, wing bumps harmless</option>
