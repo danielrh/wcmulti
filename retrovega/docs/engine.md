@@ -1195,6 +1195,66 @@ another 2,500 km out turned a little toward the camera, one coming nose
 first from 6,000 km, one far (9,000 km) climbing across as a line; ten
 seconds.
 
+### The sky's far things: nebulae, galaxies, planets
+
+The user's brief (2026-10-21): nebulae, distant galaxies and planets, all at
+infinity: a sprite at one scale that turns as the camera rolls ("we may be
+able to demand symmetry, but let's see what we can afford"). Then, on the
+first frames: half the rows, doubled or interlaced, as a cheaper way, and
+interlacing as the look for translucent gas, an option.
+
+**The art** (`tools/sky.py` -> `SKY.DAT`, built by `build.sh`, in the page's
+`retrovega.tar.gz`): each thing is drawn procedurally once, three times finer
+than shown, in a box of odd size (its middle a pixel's), then for every one
+of 128 turns (2.8 degrees each) turned, box-filtered down, put in the flight
+palette (a 32^3 table: the nearest colour, or a checker of two where their
+mix is much nearer) and run-length coded in the ships' format. Light over
+black space: dimmer than 9 of 255 is clear (a stipple below it to half), a
+planet's body is solid, its night side on the palette's near-blacks (16 up).
+Four things: an emission nebula (hydrogen's pink heart, oxygen's teal outer
+gas, dust and rents, young stars), a spiral galaxy at a slant (bulge, two
+arms with knots, dust lanes), a banded gas giant lit from the upper left
+(turbulent bands, a storm, a blue haze on its lit limb), a ringed planet lit
+from above.
+
+**Symmetry for nothing.** The ships' blit mirrors and flips sprites, and a
+half turn is both, so every thing keeps only the first 64 turns; a thing
+that is its own mirror image (the ringed planet: lit from above, bands and
+rings level) keeps 0 .. 32 and draws the rest flipped (n/2 - k), both (k -
+n/2) or mirrored (n - k).
+
+**Rows.** A thing may keep every other row (each the mean of a pair: half
+the bytes) and is drawn every row, doubled (each kept row on two screen
+rows; of a full thing, its even rows twice) or interlaced (only every other
+screen row from its top: what is behind shows between the lines, a gas's
+translucence; brightened by half to make up for the black lines).
+`ships_blit_rows` draws all of these; `RV.EXE /skyrows N` makes every thing
+so (0 each its own way, 1 every row, 2 doubled, 3 interlaced). The nebula is
+kept at half height and drawn interlaced.
+
+**The engine** (`sky.c`, `sky.h`). `SKY.DAT` goes into resident XMS when
+the game starts (2.8 MB; 1.0 MB more of the page's download, gzipped). A flight
+adds things with `sky_add` (the kind, a direction and an up, world axes;
+the up is scaled to 256: `lf_atan2` overflows past 2^17). Once a frame each
+is put through `lf_sky` (where its direction falls, how its up is turned on
+the screen); the nearest of the 128 turns picks a kept turn and its flips,
+whose header (12 bytes) comes from XMS. Per band, nebulae and galaxies are
+drawn before the stars and planets after them.
+
+| thing | box | turns kept | KB | KB a turn | px drawn |
+|---|---|---|---|---|---|
+| nebula (half the rows) | 241 | 64 | 997 | 15.6 | 13,849 lines |
+| galaxy | 201 | 64 | 708 | 11.1 | 8,315 |
+| gas giant | 131 | 64 | 761 | 11.9 | 11,206 |
+| ringed planet | 181 | 33 | 303 | 9.2 | 8,315 |
+
+Cost at 40,000 cycles in `RV.EXE /skydemo` (the four round the nose, the
+camera rolling a whole turn every twelve seconds and yawing and pitching;
+three or four on screen at a time): drawn every row 3.70 ms a frame, as
+built (the nebula interlaced) 2.79, all interlaced 2.32; placing them
+nothing measurable. Interlacing saves less than half: the rows are still
+fetched and walked.
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the

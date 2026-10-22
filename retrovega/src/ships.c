@@ -808,6 +808,61 @@ void ships_blit_view(const ShipView __far *fv, int flags, int x, int y, int y0, 
     }
 }
 
+/* a view whose rows may stand for two screen rows each (step 2: kept at half its height) and may be drawn
+ * doubled or interlaced (the sky's far things: rows 1 every row, 2 each kept row on two screen rows or, of a
+ * full view, its even rows twice, 3 only the even screen rows from the thing's top, what is behind showing
+ * between them) */
+void ships_blit_rows(const ShipView __far *fv, int flags, int step, int rows, int x, int y, int y0, int y1, int xa,
+                     int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    ShipView view = *fv;
+    int top, left, right, r0, r1, rlo, rhi, ry, H = view.h * step, w = view.w, flip = flags & BLIT_V,
+        mir = flags & BLIT_H, oy = view.oy * step;
+    if (!w)
+        return;
+    top = y - (flip ? H - 1 - oy : oy);
+    left = x - (mir ? w - 1 - view.ox : view.ox);
+    right = left + w;
+    if (y0 < top) y0 = top;
+    if (y1 > top + H) y1 = top + H;
+    if (y0 < 0) y0 = 0;
+    if (y1 > SCR_H) y1 = SCR_H;
+    if (xa < 0) xa = 0;
+    if (xb > SCR_W) xb = SCR_W;
+    if (y0 >= y1 || left >= xb || right <= xa)
+        return;
+    /* the kept rows screen rows y0 .. y1-1 show */
+    rlo = flip ? H - (y1 - top) : y0 - top;
+    rhi = flip ? H - (y0 - top) : y1 - top;
+    if (step == 2) {
+        rlo >>= 1;
+        rhi = (rhi + 1) >> 1;
+    } else if (rows == 2) {
+        rlo &= ~1;
+    }
+    for (r0 = rlo; r0 < rhi; r0 = r1) {
+        unsigned long __far *tab;
+        unsigned char __far *data;
+        r1 = rhi;
+        tab = fetch_rows(&view, r0, &r1, &data);
+        for (ry = y0; ry < y1; ry++) {
+            int i = ry - top, r = flip ? H - 1 - i : i, ca = xa, cb = xb;
+            if (rows == 3 && (i & 1))
+                continue;
+            if (step == 2)
+                r >>= 1;
+            else if (rows == 2)
+                r &= ~1;
+            if (r < r0 || r >= r1 || !row_clip(ry, &ca, &cb, ext, ext_y0, ext_rows))
+                continue;
+            if (mir)
+                rv_blit_row_rev(vid_row(ry), data + (unsigned)(tab[r - r0] - tab[0]), right, ca, cb);
+            else
+                rv_blit_row(vid_row(ry), data + (unsigned)(tab[r - r0] - tab[0]), left, ca, cb);
+        }
+    }
+}
+
 /* two views of one size and origin, each row from one or the other as bit (row + seed) of a scramble says: the
  * engines' flames, two frames of noise mixed row by row so a flame changes every frame */
 void ships_blit_mix(const ShipView __far *fa, unsigned long at_b, unsigned seed, int flags, int x, int y, int y0, int y1,

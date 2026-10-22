@@ -139,6 +139,10 @@ void ships_blit_mix(const ShipView __far *view, unsigned long at_b, unsigned see
                     int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
 void ships_blit_view(const ShipView __far *view, int flags, int x, int y, int y0, int y1, int xa, int xb,
                      const short __far *ext, int ext_y0, int ext_rows);
+/* a view kept at its full height (step 1) or half (2, each row for two screen rows), drawn rows 1 every row, 2
+ * doubled (of a full view: its even rows twice), 3 interlaced (the even screen rows from its top only) */
+void ships_blit_rows(const ShipView __far *view, int flags, int step, int rows, int x, int y, int y0, int y1, int xa,
+                     int xb, const short __far *ext, int ext_y0, int ext_rows);
 
 /* the exact draw's two dense buffers (64 KB each, kept for good once taken) taken now, so that memory
  * sized after (the laser bolts' pool) leaves them their room: 0 when they do not fit */

@@ -28,6 +28,7 @@
 #include "flames.h"
 #include "balls.h"
 #include "missiles.h"
+#include "sky.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -53,6 +54,8 @@ int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser b
 int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept near the camera in it */
 int g_ball_demo = 0;                    /* RV.EXE /balldemo: the four kinds of ball flying at the eye (a test aid) */
 int g_missile_demo = 0;                 /* RV.EXE /missiledemo: six missiles seen every way (a test aid) */
+int g_sky_demo = 0;                     /* RV.EXE /skydemo: the sky's far things as the camera rolls (a test aid) */
+#define SKY_FRAMES 450                  /* its length: fifteen seconds at 30 fps */
 static unsigned char __far *__far g_bl_life;   /* the balls' frames left each */
 static int __far g_bl_far, __far g_bl_cap, __far g_bl_n, __far g_bl_frames;   /* (far: DGROUP is nearly full) */
 static long __far g_bl_sum;
@@ -563,7 +566,10 @@ static void draw_world(int y0, int y1)
     int path;
     unsigned long t0;
     g_world_calls++;
+    sky_draw(0, y0, y1, ext, ey0, rows);   /* the far things behind the stars (nebulae, galaxies), the stars, those
+                                           over them (planets) */
     draw_stars(y0, y1);
+    sky_draw(1, y0, y1, ext, ey0, rows);
     if (g_lasers)
         lasers_draw_far(y0, y1, ext, ey0, rows);
     if (g_bl_cap)                       /* the far balls: a pixel or a few */
@@ -626,7 +632,7 @@ static void __far __cdecl draw_pointer_body(void)
 {
     /* the steering cross where the pointer is, in mouse mode */
     int x = g_scene.px, y = g_scene.py;
-    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo)   /* (the demo's middle bolt is where the cross would be) */
+    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo || g_sky_demo)   /* (the demo's middle bolt is where the cross would be) */
         return;
     gfx_fill(x - 5, y, 11, 1, UI_WHITE, g_ptr_y0, g_ptr_y1);
     gfx_fill(x, y - 5, 1, 11, UI_WHITE, g_ptr_y0, g_ptr_y1);
@@ -713,6 +719,11 @@ static void gather(void)
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
+    } else if (g_sky_demo) {            /* the demo's readout: the time */
+        static const char __far name[] = "SKY";
+        _fstrcpy((char __far *)g_mfd[0][0], name);
+        sprintf(g_mfd[0][1], "T+%d.%d S", g_demo_frame / 30, g_demo_frame % 30 / 3);
+        g_mfd[0][2][0] = 0;
     } else if (g_missile_demo) {        /* the demo's readout: the time in its round */
         static const char __far name[] = "MISSILES";
         int k = g_demo_frame ? (g_demo_frame - 1) % DEMO_FRAMES : 0;
@@ -911,6 +922,43 @@ static void missile_demo_step(void)
         m[i].burn = 1;
     }
     if (++g_demo_frame >= DEMO_FRAMES)
+        missionStatus = 1;              /* landed */
+}
+
+/* --- the sky demo (RV.EXE /skydemo): the far things as the camera rolls ---
+ *
+ * The user's (2026-10-21): nebulae, galaxies and planets at infinity, one
+ * size each, turning as the camera rolls.  The four SKY.DAT has, round the
+ * nose, and the camera standing, rolling a whole turn every twelve seconds
+ * and yawing and pitching gently, so each comes round at every turn and
+ * passes across the view.  Fifteen seconds, then the flight lands. */
+static void sky_demo_setup(void)
+{
+    static const signed char __far at[4][3] = {   /* the thing; its yaw and pitch (degrees) */
+        { SKY_NEBULA, -20, 5 }, { SKY_GALAXY, 23, 9 }, { SKY_GIANT, 7, -5 }, { SKY_RINGED, -4, 7 }
+    };
+    int i;
+    for (i = 0; i < 4; i++) {
+        long yaw = at[i][1] * 1024L / 360, pitch = at[i][2] * 1024L / 360;
+        LfVec dir, up;
+        dir.x = (long)lf_sin((int)yaw) * lf_cos((int)pitch) >> 16;   /* (4096 = 1.0) */
+        dir.y = (long)lf_sin((int)pitch) >> 2;
+        dir.z = (long)lf_cos((int)yaw) * lf_cos((int)pitch) >> 16;
+        up.x = at[i][0] == SKY_GALAXY ? 1700 : 0;   /* (the galaxy's up leans) */
+        up.y = 4096;
+        up.z = 0;
+        sky_add(at[i][0], &dir, &up);
+    }
+}
+
+static void sky_demo_step(void)
+{
+    int t = g_demo_frame;
+    int yaw = (int)((long)lf_sin((int)(t * 1024L / 450)) * 40 >> 14), pitch = (int)((long)lf_sin((int)(t * 1024L / 225)) * 14 >> 14);
+    face(0, yaw, pitch);
+    rotate_pair(&gOrientationRightVector[0], &gOrientationUpVector[0], (int)(t * 1024L / 360 % 1024));
+    orthonormalise(0);
+    if (++g_demo_frame >= SKY_FRAMES)
         missionStatus = 1;              /* landed */
 }
 
@@ -1485,6 +1533,9 @@ void __far __cdecl flight_startup(void)
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
     missiles_init();
+    sky_clear();
+    if (g_sky_demo)
+        sky_demo_setup();
     g_t_flames = g_t_flames_set = g_t_plan = 0;
     g_t_exact = g_t_sets = g_t_draw = g_t_wait = 0;
 }
@@ -1553,7 +1604,14 @@ void __far __cdecl flight_frame(void)
     int k = (int)(frameCounter % FPS_WINDOW);
     ships_frame();
     sim_step();
+    if (g_sky_demo)
+        sky_demo_step();
     stars_place();
+    {
+        LfBasis cam;
+        basis_of(0, &cam);
+        sky_place(&cam, SCR_W / 2, g_cam_cy, 400);
+    }
     {
         unsigned long t0 = clock240();
         plan_draws();
@@ -1564,7 +1622,7 @@ void __far __cdecl flight_frame(void)
             demo_step();
         else if (g_missile_demo)
             missile_demo_step();
-        else if (!g_ball_demo)
+        else if (!g_ball_demo && !g_sky_demo)
             lasers_step();
         balls_step();
         lasers_place();
@@ -1658,11 +1716,17 @@ int flight_fly(const RvMission __far *m)
     {
         static const char __far s_m[] = "flight: the missiles took %lu.%02lu ms a frame to place and %lu.%02lu to draw "
             "(the %lu frames with any flying)";
+        static const char __far s_s[] = "flight: the sky's far things took %lu.%02lu ms a frame to place and "
+            "%lu.%02lu to draw";
         unsigned long t[3];
         missiles_ticks(t);
         if (t[2])
             rv_logf(s_m, per_frame(t[0], (unsigned)t[2]) / 100, per_frame(t[0], (unsigned)t[2]) % 100,
                     per_frame(t[1], (unsigned)t[2]) / 100, per_frame(t[1], (unsigned)t[2]) % 100, t[2]);
+        sky_ticks(t);
+        if (t[0] + t[1])
+            rv_logf(s_s, per_frame(t[0], frameCounter) / 100, per_frame(t[0], frameCounter) % 100,
+                    per_frame(t[1], frameCounter) / 100, per_frame(t[1], frameCounter) % 100);
     }
     rv_log("flight: the engines' flames took %lu.%02lu ms a frame (%lu.%02lu of it set up)",
            g_t_flames * 1000 / 240 / (frameCounter ? frameCounter : 1),

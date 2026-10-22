@@ -2,7 +2,7 @@
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
  *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo] [/flames]
- *          [/balls N [/nearballs N]] [/balldemo] [/missiledemo]
+ *          [/balls N [/nearballs N]] [/balldemo] [/missiledemo] [/skydemo] [/skyrows N]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -20,11 +20,12 @@
 #include "ships.h"
 #include "flames.h"
 #include "balls.h"
+#include "sky.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
-    g_ball_demo, g_missile_demo;
+    g_ball_demo, g_missile_demo, g_sky_demo;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -98,6 +99,14 @@ int main(int argc, char **argv)
             g_lasers = 1;
             g_near_bolts = 0;
             g_big_ships = g_far_ships = 0;
+        } else if (!strcmp(argv[i], "/skyrows"))        /* the sky's far things: 0 each its own way, 1 all rows, 2
+                                                           doubled, 3 interlaced */
+            sky_rows(atoi(argv[++i]));
+        else if (!strcmp(argv[i], "/skydemo")) {      /* tests: the sky's far things as the camera rolls */
+            g_sky_demo = 1;
+            g_lasers = 1;
+            g_near_bolts = 0;
+            g_big_ships = g_far_ships = 0;
         } else if (!strcmp(argv[i], "/missiledemo")) {  /* tests: six missiles seen every way */
             g_missile_demo = 1;
             g_lasers = 1;
@@ -138,6 +147,7 @@ int main(int argc, char **argv)
         log_free("after the music");
         flames_reserve();               /* (resident too) */
         balls_reserve();                /* the balls' sprites (resident) */
+        sky_reserve();                  /* the sky's far things (resident) */
         ok = dat_open("RV.DAT");
     }
     if (!ok) {
