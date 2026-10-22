@@ -480,7 +480,8 @@ So in flight (`wcnet_perf.cpp`):
   time as above): `WCFPS` frames a second, default 30 for WC.EXE (it was
   15 at first, then 20; everything in the game moves per frame, so this is
   also how fast it plays, and the page's FPS box lets the host fly a
-  mission made for a slower game at any whole number from 8 to 60), 0 for none.  Above 20
+  mission made for a slower game at any whole number from 8 to 60; the
+  box starts at 20), 0 for none.  Above 20
   the flight's cycles grow with it, 800 a frame (24000 at 30).  Only the server (or a lone player) paces; a client follows the
   server's frames.
 

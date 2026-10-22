@@ -171,7 +171,7 @@ const wc2Mission = (m) => `Origin s${m.series} m${m.mis}`;
 
 // Wing Commander moves everything by a step a frame, so its frame rate is
 // its speed: some missions were made for a slower one (the host's choice).
-const WC1_FPS = { def: 30, min: 8, max: 60 };
+const WC1_FPS = { def: 20, min: 8, max: 60 };
 
 export const GAMES = [
   { id: "wc1", tag: "WC1", title: "Wing Commander", detect: ["WC.EXE"], run: "wc", multiplayer: true,
