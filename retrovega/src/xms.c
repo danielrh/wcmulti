@@ -1,4 +1,4 @@
-/* xms.c: one XMS arena (32 MB) carved into blocks by level (docs/engine.md).
+/* xms.c: one XMS arena (all the driver has, from 32 MB) carved into blocks by level (docs/engine.md).
  *
  * The arena is a single XMS block taken at start-up; blocks are handed out
  * from it bump-style, each tagged with a level, and freeing a level drops
@@ -17,6 +17,7 @@ static unsigned short g_handle;
 static unsigned long g_size, g_top;
 static struct { unsigned long off, size; unsigned char level, used; } __far g_block[XMS_MAX_BLOCKS + 1];
 static unsigned g_nblocks;
+void (*xms_freed)(unsigned nblocks);    /* told when blocks are given back: the first nblocks are all that are left */
 
 #pragma pack(1)
 static struct {
@@ -28,8 +29,9 @@ static struct {
 } g_move;
 #pragma pack()
 
-int xms_init(unsigned long want_kb)
+int xms_init(unsigned long min_kb, unsigned long max_kb)
 {
+    unsigned long want_kb;
     union REGS r;
     struct SREGS s;
     RvRegs x;
@@ -44,8 +46,9 @@ int xms_init(unsigned long want_kb)
     x.eax = 0x8800; x.ebx = x.ecx = x.edx = 0;
     rv_xms(&x);
     rv_log("XMS: %lu KB largest free, %lu KB in all", x.eax, x.edx);
-    if (x.eax < want_kb)
+    if (x.eax < min_kb)
         return 0;
+    want_kb = x.eax < max_kb ? x.eax : max_kb;   /* (all of it: DOSBox's memsize=63 gives 61 MB) */
     x.eax = 0x8900; x.edx = want_kb;
     rv_xms(&x);
     if ((x.eax & 0xffff) != 1) {
@@ -101,6 +104,8 @@ void xms_free_level(int level)
         g_block[g_nblocks].used = 0;
         g_nblocks--;
     }
+    if (xms_freed)
+        xms_freed(g_nblocks);
 }
 
 static int move(void)

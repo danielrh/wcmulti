@@ -13,7 +13,7 @@ from the start.
 | CPU mode | 16-bit real mode, 386 instructions | the layer's trampolines and accessors are real-mode (spec §5) |
 | Compiler | Open Watcom 2, `wcc -mm -3` (medium model: far code, near data, SS = DS) | the layer reads stack arguments through DS; Watcom's DOS startup keeps SS = DGROUP |
 | Assembler | NASM `-f obj` for RVHOOK and the fixed block | |
-| Big memory | **XMS, 32 MB** through the XMS 3.0 driver (functions 89h allocate-any, 0Bh move) | DOSBox's own XMS; `memsize=40` leaves 39 MB. EMS is no longer needed. |
+| Big memory | **XMS, all there is (at least 32 MB)** through the XMS 3.0 driver (functions 88h/89h query and allocate-any, 0Bh move) | DOSBox's own XMS; `memsize=63`, its most, leaves 62 MB (since 2026-10-22: the user's worry about room; it was 40 and a fixed 32 MB arena). EMS is no longer needed. |
 | Video | VESA 100h, 640×400×256, 64 KB banks | as spec §7 |
 | Mouse | int 33h | DOSBox has it built in; on real DOS, CuteMouse (GPL) |
 | Music | Standard MIDI files, our own sequencer, the OPL3 with our own bank (MPU-401 on request) | below |
@@ -207,9 +207,9 @@ later. It is a set of rooms with the same layout and its own pictures.
 | level | holds | freed |
 |---|---|---|
 | resident | font, cursor, palettes, the music engine and its songs | never |
-| base | the base's room plates, seat sprites, actor frames | on a base change |
-| room | a room's decoded working set | on leaving the room |
-| mission | the mission's ships (later: sprites, sounds) | when the mission ends |
+| base | the archive's palettes, fonts and small tables (134 KB) | on a base change |
+| room | the room's pictures and sprites, read from the archive as drawn | on leaving the room, and at a launch |
+| mission | the mission's ships; the cockpit, faces and pictures a flight draws | when the mission ends |
 
 Music is resident and keeps playing across every load.
 
@@ -217,13 +217,25 @@ Built so far:
 
 - **The base archive:** base 0 is `RV.DAT`, base n is `RVBASEn.DAT`, with
   the same room records and its own pictures. The save keeps the base.
+  Since 2026-10-22 it is not read whole into XMS (it was 11 MB of a 32 MB
+  arena: every room's pictures and all eight cockpits, held through every
+  flight): `dat_open` reads its directory and tables, and the palettes,
+  fonts and tables (134 KB, the base level); any other asset is read from
+  the file the first time `dat_read` wants it, into XMS at the level of the
+  moment (`dat_enter`: `scene_enter` gives the last room's back and takes
+  the room level; a launch gives the room's back and takes the mission's),
+  small ones carved from 64 KB slabs, and kept until that level is given
+  back (`xms_freed`, a hook in xms.c, clears them). DOSBox serves the reads
+  at host speed. The walk test reads 133 assets (3.3 MB) over its rooms;
+  its screens are the old build's but for animation phase.
 - **Changing base:** loading a save from another base unloads the archive
   (`dat_close`: its XMS level, tables and fonts), loads the other, and
   calls `baseChanged`. `tests/base.txt` checks it with a copy of the
   carrier as base 1.
 - **The mission level:** a launch takes the mission level and the end
-  of the flight gives it back. It is empty until flight brings ships and
-  sounds; with the carrier loaded about 23 MB of XMS are free for it.
+  of the flight gives it back. With the archive read as wanted and 62 MB
+  of XMS, 58 MB are free for it (17 before): the flames scene's seven ship
+  types take 26 MB, every roll block in, 31 MB to spare.
 
 **Getting around.** Every room has a door hotspot to its neighbours:
 
@@ -394,7 +406,7 @@ Built (src/music.c, src/opl.c):
 - **Sprites:** run-length spans, copied with `rep movsd`.
 - **Palette fades:** ports 3C8h/3C9h.
 
-**Trading memory for speed in flight.** With 32 MB of XMS and moves that
+**Trading memory for speed in flight.** With 32 MB of XMS (62 since 2026-10-22) and moves that
 cost the emulated CPU almost nothing, the flight renderer can pre-render
 instead of computing. What the benchmark says about it, and the plan for
 scales and rolls, is in "Flight" below.

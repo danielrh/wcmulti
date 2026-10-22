@@ -39,6 +39,7 @@ void scene_enter(int room_id, const unsigned char *seats)
 {
     const RvRoom __far *r;
     int i;
+    dat_enter(XMS_ROOM);                /* (the last room's pictures given back: this one's read as drawn) */
     memset(&g_scene, 0, sizeof g_scene);
     g_scene.room = room_id;
     r = room();

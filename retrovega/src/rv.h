@@ -26,7 +26,9 @@ void __far __cdecl rv_xms(RvRegs *r);
 enum { XMS_RESIDENT, XMS_BASE, XMS_ROOM, XMS_MISSION, XMS_LEVELS };
 #define XMS_MAX_BLOCKS 512               /* a mission's sprite sets take a block per (size, roll): 49 a type, plus the dense copies' cache */
 typedef unsigned short XmsBlock;       /* index into the block table, 0 = none */
-int xms_init(unsigned long want_kb);   /* allocates one arena of want_kb; 0 on failure */
+int xms_init(unsigned long min_kb, unsigned long max_kb);   /* one arena of all the free XMS up to max_kb; 0 when
+                                           there is less than min_kb */
+extern void (*xms_freed)(unsigned nblocks);   /* (dat.c's: blocks past the first nblocks were given back) */
 unsigned long xms_free_kb(void);       /* free in the arena */
 XmsBlock xms_alloc(unsigned long bytes, int level);
 void xms_free_level(int level);        /* frees that level and all above it */
@@ -62,7 +64,10 @@ const RvRoom __far *dat_room(unsigned i);
 const RvPerson __far *dat_person(unsigned i);
 const RvCockpit __far *dat_cockpit(unsigned i);
 const RvDatHeader __far *dat_header(void);
-void dat_read(unsigned long at, void __far *dst, unsigned long n);
+void dat_read(unsigned long at, void __far *dst, unsigned long n);   /* an asset's bytes: read in on first want */
+void dat_enter(int level);              /* XMS level `level` given back, and the assets wanted from now go there
+                                           (XMS_ROOM at each room, XMS_MISSION for a flight) */
+void dat_log(void);                     /* the assets read in so far */
 
 /* drawing (gfx.c), every call clipped to the rows y0 .. y1-1 being drawn */
 #define AT_ASSET (-32768)              /* x or y: where the asset says */

@@ -953,9 +953,13 @@ static int change_base(int base)
 
 static void mission_load_assets(void)
 {
-    /* the mission's ships, sounds and cockpit come here with flight; the level
-     * is taken and given back already, so loading order is right from the start */
-    xms_free_level(XMS_MISSION);
+    /* the mission's ships, sounds and cockpit come here with flight; the room's
+     * pictures are given back first (the user: the briefing room is not held
+     * through a flight), and the archive's assets the flight wants go to the
+     * mission's level */
+    xms_free_level(XMS_ROOM);
+    dat_enter(XMS_MISSION);
+    dat_log();
     rv_log("mission assets: %lu KB of XMS free", xms_free_kb());
 }
 

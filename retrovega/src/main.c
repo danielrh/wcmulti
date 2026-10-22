@@ -6,7 +6,7 @@
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
- * Needs RV.DAT and RVGAME.DAT beside it, 32 MB of XMS and VESA mode 100h. */
+ * Needs RV.DAT and RVGAME.DAT beside it, 32 MB of XMS (it takes all there is) and VESA mode 100h. */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -150,8 +150,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "/nomusic"))
             music_device(MUSIC_OFF);
     }
-    if (!xms_init(32768UL)) {
-        printf("RetroVega needs 32 MB of XMS (HIMEM.SYS or DOSBox's xms=true, memsize=40).\n");
+    if (!xms_init(32768UL, 0x7FFFFFFFUL)) {
+        printf("RetroVega needs 32 MB of XMS (HIMEM.SYS or DOSBox's xms=true, memsize=63).\n");
         return 1;
     }
     /* resident before base: XMS levels nest (xms.c); the songs are resident too */

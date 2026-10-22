@@ -248,7 +248,7 @@ export const GAMES = [
     cycles: 50000,
     pointer: { x: 0.5, y: 0.5, rx: 0.5, ry: 0.5 },
     help: "RetroVega has no flight yet: everyone starts in their own quarters on the TCS Clydesdale and walks the ship, bar, briefing room and deck, saving in the bunk. The host's Fly starts everybody's game. Arrow keys steer the pointer, Tab jumps between the things you can use, Enter uses one.",
-    dosbox: "[dosbox]\nmemsize=40\n[dos]\nxms=true\nems=false\numb=true\n[sblaster]\nsbtype=sb16\noplmode=opl3\n" },
+    dosbox: "[dosbox]\nmemsize=63\n[dos]\nxms=true\nems=false\numb=true\n[sblaster]\nsbtype=sb16\noplmode=opl3\n" },
 ];
 
 // The registry entry of a game id, or null (a game picked by its executable).

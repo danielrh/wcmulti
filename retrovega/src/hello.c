@@ -37,7 +37,7 @@ int main(void)
     if (FP_OFF((void __far *)rvHello) != RV_FN_rvHello) { rv_log("rvHello thunk offset"); ok = 0; }
     if (memcmp(rvPuppetHeader, "RVPUPPET", 8) != 0) { rv_log("puppet header"); ok = 0; }
     if (strcmp((char *)aLoadingWingCom, RV_SIGNATURE) != 0) { rv_log("signature"); ok = 0; }
-    if (!xms_init(32768UL)) {
+    if (!xms_init(32768UL, 32768UL)) {
         rv_log("no 32 MB of XMS");
         ok = 0;
     } else {
