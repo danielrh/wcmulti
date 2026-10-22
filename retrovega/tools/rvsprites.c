@@ -13,14 +13,15 @@
  * copies a block from the file into XMS and draws by copying rows.  The
  * page's JavaScript makes the same bytes from the same .RV at load time.
  *
- * Sizes: 13 steps, each 0.84 of the last, 256/256 .. 32/256.  Rolls: sixteen
- * steps of 22.5 degrees, of which a symmetric ship stores the arc 0..90 (five)
- * for every view: an upside-down copy turns a sprite by 180 - theta and
- * mirrors the heading, a mirrored copy turns it by -theta and mirrors the
- * heading, both together turn it by 180, so the flight draws the other
- * eleven from those five (see stored()).  An asymmetric ship stores the
- * eight 45-degree steps.  Rolls are stored for the ROLL_SIZES largest
- * sizes only.
+ * Sizes: 13 steps, each 0.84 of the last, 256/256 .. 32/256.  Rolls: 32
+ * steps of 11.25 degrees (16 of 22.5 until 2026-10-22: the user spent the
+ * new XMS on finer turning in the mid field), of which a symmetric ship
+ * stores the arc 0..90 (nine) for every view: an upside-down copy turns a
+ * sprite by 180 - theta and mirrors the heading, a mirrored copy turns it
+ * by -theta and mirrors the heading, both together turn it by 180, so the
+ * flight draws the other 23 from those nine (see stored()).  An asymmetric
+ * ship stores the eight 45-degree steps.  Rolls are stored for the
+ * ROLL_SIZES largest sizes only.
  *
  * The views come in a lattice (lightfield.h): WC1's 5 bands x 7 headings
  * (37 views, 62 with an asymmetric ship's mirrored headings) or the denser
@@ -48,7 +49,7 @@
 #include "lightfield.h"
 
 #define NSIZES 13
-#define NROLLS 16
+#define NROLLS 32
 #define ROLL_SIZES 4
 #define MAXV 620                       /* 17 x 19 at 10 degrees with the mirrored headings */
 static const int SCALES[NSIZES] = { 256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32 };
@@ -264,8 +265,8 @@ static int stored(int v, int r, int asym)
 {
     (void)v;
     if (asym)
-        return r % 2 == 0;
-    return r <= 4;
+        return r % (NROLLS / 8) == 0;
+    return r <= NROLLS / 4;
 }
 
 /* the 30-degree sub-lattice's view j (of 62: 37 and the mirrored headings)

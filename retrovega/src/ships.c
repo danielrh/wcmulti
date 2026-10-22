@@ -312,7 +312,7 @@ static int set_view(const ShipSet __far *s, const SetBlock __far *b, int v, Ship
     out->ox = (short)(e[4] | (e[5] << 8));
     out->oy = (short)(e[6] | (e[7] << 8));
     out->blk = b->blk;
-    out->at = e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24);
+    out->at = b->xoff + (e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24));
     return out->w != 0;
 }
 
@@ -323,6 +323,7 @@ static int load_block(ShipSet __far *s, SetBlock __far *b)
     if (b->loaded)
         return 1;
     b->blk = xms_alloc(b->length + 2, XMS_MISSION);
+    b->xoff = 0;
     if (!b->blk)
         return 0;
     sprintf(name, "SHIP%02X.RVS", s->type);
@@ -364,7 +365,7 @@ static int load_rvs(ShipSet __far *s, const char *name)
     if (hd[46] | hd[47])
         s->nviews = hd[46] | (hd[47] << 8);   /* the whole count (byte 5 is its low byte) */
     nblocks = rd32(f);
-    RV_ASSERT(nblocks <= SET_BLOCKS && s->nviews <= SHIP_VIEWS && s->nrolls <= 16);
+    RV_ASSERT(nblocks <= SET_BLOCKS && s->nviews <= SHIP_VIEWS && s->nrolls <= 32);
     s->nblocks = (int)nblocks;
     /* the index: every block's header and view table, walked by their own view counts */
     index_len = 0;
@@ -404,7 +405,6 @@ static int load_rvs(ShipSet __far *s, const char *name)
             one.oy = (short)(e[6] | (e[7] << 8));
             one.blk = 0;
             one.at = e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24);
-            one.len = 0;
             s->view[v] = one;           /* (in the block: blk set when it is loaded, load_full) */
         }
     }
@@ -450,6 +450,50 @@ int ships_load(unsigned type)
     return g_nsets++;
 }
 
+/* how many of a set's roll blocks at size k are not loaded */
+static int rolls_out(const ShipSet __far *s, int k)
+{
+    int b, n = 0;
+    for (b = 0; b < s->nblocks; b++)
+        n += s->block[b].size == k && s->block[b].roll && !s->block[b].loaded;
+    return n;
+}
+
+/* a set's roll blocks at size k (they lie together in the file, rolls 1 .. in order) in one XMS block, each at
+ * its offset in it: a fighter type takes 22 XMS blocks rather than 85 (the arena's table has 512): the bytes
+ * taken, 0 when there were none to load or they did not fit */
+static unsigned long load_rolls(ShipSet __far *s, int k, unsigned long room)
+{
+    int b, first = -1, last = -1;
+    unsigned long span;
+    XmsBlock blk;
+    FILE *f;
+    char name[16];
+    for (b = 0; b < s->nblocks; b++)
+        if (s->block[b].size == k && s->block[b].roll && !s->block[b].loaded) {
+            if (first < 0)
+                first = b;
+            last = b;
+        }
+    if (first < 0)
+        return 0;
+    span = s->block[last].at + s->block[last].length - s->block[first].at;
+    if (span + 2 > room || !(blk = xms_alloc(span + 2, XMS_MISSION)))
+        return 0;
+    sprintf(name, "SHIP%02X.RVS", s->type);
+    if (!(f = fopen(name, "rb")))
+        return 0;
+    file_to_xms(f, s->block[first].at, span, blk, 0);
+    fclose(f);
+    for (b = first; b <= last; b++)
+        if (s->block[b].size == k && s->block[b].roll && !s->block[b].loaded) {
+            s->block[b].blk = blk;
+            s->block[b].xoff = s->block[b].at - s->block[first].at;
+            s->block[b].loaded = 1;
+        }
+    return span + 2;
+}
+
 /* a set's full-size block in, its views pointed at it */
 static int load_full(ShipSet __far *s, SetBlock __far *b)
 {
@@ -488,6 +532,15 @@ unsigned long ships_load_blocks(unsigned long budget)
                 int b;
                 if (!s->rvs)
                     continue;
+                if (pass == 2) {        /* the rolls: a size's at once */
+                    unsigned long got = load_rolls(s, k, budget - taken);
+                    if (!got && rolls_out(s, k)) {
+                        rv_log("ships: the budget is spent at type %02X size %d's rolls", s->type, k);
+                        goto spent;
+                    }
+                    taken += got;
+                    continue;
+                }
                 for (b = 0; b < s->nblocks; b++) {
                     SetBlock __far *blk = &s->block[b];
                     int full = blk->loaded == 2;
@@ -496,13 +549,26 @@ unsigned long ships_load_blocks(unsigned long budget)
                         continue;
                     if (taken + blk->length > budget) {
                         rv_log("ships: the budget is spent at type %02X size %d roll %d", s->type, k, blk->roll);
-                        return taken;
+                        goto spent;
                     }
                     if (full ? !load_full(s, blk) : !load_block(s, blk))
-                        return taken;
+                        goto spent;
                     taken += blk->length;
                 }
             }
+spent:
+    for (i = 0; i < g_nsets; i++) {     /* which sizes have all their rolls in (turn_wanted asks every frame) */
+        ShipSet __far *s = g_set[i];
+        s->rolls_in = 0;
+        for (k = 0; k < s->nsizes && k < 16; k++)
+            if (s->rvs && !rolls_out(s, k) && s->nrolls >= 4) {
+                int b, any = 0;
+                for (b = 0; b < s->nblocks; b++)
+                    any |= s->block[b].size == k && s->block[b].roll;
+                if (any)
+                    s->rolls_in |= 1U << k;
+            }
+    }
     return taken;
 }
 
@@ -1170,18 +1236,9 @@ static int can_turn(const ShipSet __far *s, int set_i, int v)
  * such ship exactly instead, turned by its true roll from its full-size view (the user, 2026-10-21: unrolled near
  * fighters look strange), at half height beyond its first two (the user's: each odd row the one above copied
  * down) */
-static int rolls_at(const ShipSet __far *s, int k)
-{
-    int r;
-    for (r = 1; r <= s->nrolls / 4; r++)
-        if (!block_of(s, k, r) || block_of(s, k, r)->loaded != 1)
-            return 0;
-    return 1;
-}
-
 static int turn_wanted(const ShipSet __far *s, int scale256)
 {
-    return s->rvs && s->nrolls >= 4 && !rolls_at(s, size_step(s, scale256));
+    return s->rvs && s->nrolls >= 4 && !(s->rolls_in >> size_step(s, scale256) & 1);   /* (ships_load_blocks') */
 }
 
 int ships_turn_wanted(int set_i, int scale256)

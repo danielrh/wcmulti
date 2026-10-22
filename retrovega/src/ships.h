@@ -20,17 +20,18 @@ typedef struct {
     XmsBlock blk;                       /* the XMS block holding it; 0: not resident (a full-size view whose block did
                                            not fit) */
     unsigned long at;                   /* offset of the row table (h + 1 dwords) in it, rows after */
-    unsigned long len;                  /* (unused by the sets: 0) */
 } ShipView;
 
-#define SET_BLOCKS 64                   /* 1 + 12 sizes + 9 sizes x 4 stored rolls = 49 */
+#define SET_BLOCKS 96                   /* 1 + 12 sizes + 9 sizes x 8 stored rolls = 85 (an asymmetric ship: x 7) */
 
 /* one (size, roll) block of a pre-rendered set (SHIPnn.RVS, tools/rvsprites.c) */
 typedef struct {
     unsigned char size, roll, loaded, pad;
     unsigned long at, length;           /* in the file */
     unsigned long index_at;             /* its view table in the set's index block */
-    XmsBlock blk;                       /* its data, once loaded */
+    XmsBlock blk;                       /* its data, once loaded: a size's rolls share one XMS block (they lie together
+                                           in the file), each at its own offset in it */
+    unsigned long xoff;
 } SetBlock;
 
 typedef struct {
@@ -42,6 +43,7 @@ typedef struct {
     unsigned short lod0;
     unsigned short scale[16];           /* the size steps, 256 = full */
     XmsBlock blk;                       /* .RV: the views; .RVS: the index */
+    unsigned short rolls_in;            /* bit k: every roll block the set has at size k is loaded */
     int nblocks;
     SetBlock block[SET_BLOCKS];
     ShipView view[SHIP_VIEWS];          /* the full-size, unturned views (a .RVS set's block 0, not resident:

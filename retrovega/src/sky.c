@@ -158,7 +158,6 @@ void sky_place(const LfBasis *cam, int cx, int cy, int focal)
         g_drawn[g_ndrawn].v.oy = hd.oy;
         g_drawn[g_ndrawn].v.blk = g_blk;
         g_drawn[g_ndrawn].v.at = hd.at;
-        g_drawn[g_ndrawn].v.len = 0;
         g_drawn[g_ndrawn].x = (short)p.sx;
         g_drawn[g_ndrawn].y = (short)p.sy;
         g_drawn[g_ndrawn].flags = (unsigned char)flags;

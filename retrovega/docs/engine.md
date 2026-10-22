@@ -604,7 +604,9 @@ the emulator.
 
 - **SHIPnn.RVS** holds every view at 13 size steps (each 0.84 of the last,
   full size down to 1/8) and, for every size from half down (steps 4..12:
-  the recipe `0 4 9`), at roll steps of 22.5 degrees, all in the engine's
+  the recipe `0 4 9`), at roll steps of 11.25 degrees (22.5 until
+  2026-10-22, when the user spent the new XMS on finer turning in the mid
+  field: +1.6 MB a fighter type, 85 blocks a set), all in the engine's
   own run-length row format: a block of the file goes into XMS by a
   straight copy (`file_to_xms`), the index (a view table per block) sits in
   XMS too and is fetched twelve bytes at a time. `tools/rvsprites.c` makes a
@@ -615,19 +617,24 @@ the emulator.
   under node), 0.1-0.4 s a ship, so the 1.2 MB-a-fighter files are never
   downloaded; a copy of RV.EXE without them falls back to the .RV views,
   scaled and turned at draw time.
-- **Five stored turns give sixteen.** An upside-down copy (the rows in the
+- **Nine stored turns give 32** (five gave sixteen before). An upside-down copy (the rows in the
   other order, the same cost as a copy) turns a sprite by 180 − θ and
   mirrors its heading; a mirrored copy (`rv_blit_row_rev`, four pixels a
   `bswap`, 0.7 of a copy) turns it by −θ and mirrors the heading; both
   together turn it by 180. So a symmetric ship stores only the arc 0..90
-  for every view and the flight draws the other eleven steps as those
-  copies of the stored five, of the view or of the opposite heading's
+  for every view and the flight draws the other 23 steps as those
+  copies of the stored nine, of the view or of the opposite heading's
   (`find_sprite`); the top and bottom views, their own mirror, have their
   own table; the asymmetric Convolution stores eight 45-degree steps.
 - **Loading** (`ships_load_blocks`): the dense copies' cache (eight 64 KB
   copies, below), then the ladder for every type, then each type's
   full-size block (the exact draw's views: 0.2 to 1.5 MB a fighter), then
-  the rolls size by size, while the mission budget lasts (1 MB of XMS kept
+  the rolls size by size (a size's rolls lie together in the file and
+  come in as one XMS block, each at its offset: a fighter takes 22 of the
+  arena's 512 blocks, not 85; `ShipSet.rolls_in` marks the sizes whose
+  rolls are all in, for `turn_wanted`, which had looked for roll steps the
+  asymmetric Convolution never stores and drew it exactly at every size),
+  while the mission budget lasts (1 MB of XMS kept
   back); a draw whose block is missing takes the unturned sprite at that
   size, and the plan draws such a ship exactly (below). Nothing is read
   from the disk in flight.
@@ -637,7 +644,7 @@ the emulator.
   above 40% size, are drawn **exactly** — the full-size view turned by the
   true roll and scaled to the true size by inverse mapping from a dense
   copy (`ships_draw_exact`, two dense buffers kept between frames); the
-  rest are copies from the sets, where 22.5-degree and 16% steps are
+  rest are copies from the sets, where 11.25-degree and 16% steps are
   invisible. A ship too big for what is left of the budget is drawn at
   half or quarter detail instead (every other row computed and the row
   above copied by `rep movsd`; then 2 × 1 blocks, `rv_rotate_row2`): the

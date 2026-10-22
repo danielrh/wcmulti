@@ -388,7 +388,6 @@ static int add_one(long x16, long y16, long tx, long ty, long len16, int r16, in
     g_fl[g_nf].v.oy = b[0].oy;
     g_fl[g_nf].v.blk = g_bk_rows;
     g_fl[g_nf].v.at = b[0].at;
-    g_fl[g_nf].v.len = 0;
     g_fl[g_nf].at_b = b[1].at;
     g_fl[g_nf].x = (short)(x16 >> 4);
     g_fl[g_nf].y = (short)(y16 >> 4);
