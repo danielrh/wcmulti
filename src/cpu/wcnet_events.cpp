@@ -1283,6 +1283,44 @@ void on_fire_entry() {
     g_trampoline.run_instead_of_current_call(code::fireGunFromShip);
 }
 
+// Mission ships the host's game leaves out when people fly together.  A
+// mission made for one pilot and the game's wingman that hands the wing a
+// third fighter on the way has a gun too many when a human flies the
+// wingman's ship.  A record must still look as it did when it was put here
+// (its ship type, and its leader's), so another campaign's mission of the
+// same number keeps its ships.
+struct LeftOutShip {
+    BuildId build;
+    int series, mission;      // as ds::currentSeries / ds::currentMission have them
+    int missionShip;
+    int type, leaderType;     // word 0 of the record and of its leader's (word 2)
+    const char *what;
+};
+static const LeftOutShip kLeftOutShips[] = {
+    // The Ralari's escort, which joins the player's wing at the Ralari (the user, 2026-10-21: "too many guns")
+    { BUILD_WC1, 9, 1, 11, 1, 17, "Kurasawa 2: the Ralari's escort Rapier" },
+};
+
+static const LeftOutShip *left_out_ship(int ms) {
+    if (!ds::known(ds::missionShipTable) || ms < 0 || ms >= 16) {
+        return NULL;
+    }
+    for (size_t i = 0; i < sizeof(kLeftOutShips) / sizeof(kLeftOutShips[0]); i++) {
+        const LeftOutShip &l = kLeftOutShips[i];
+        if (l.build != g_build || l.missionShip != ms || rd8(ds::currentSeries) != l.series || rd8(ds::currentMission) != l.mission) {
+            continue;
+        }
+        Bit16u rec = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms);
+        int leader = (Bit16s)rd16((Bit16u)(rec + 4));
+        if ((Bit16s)rd16(rec) != l.type || leader < 0 || leader >= 16 ||
+            (Bit16s)rd16((Bit16u)(ds::missionShipTable + g_params.missionShipSize * leader)) != l.leaderType) {
+            continue;
+        }
+        return &l;
+    }
+    return NULL;
+}
+
 void on_spawn_entry() {
     Session *s = g_session;
     if (is_field_mission_ship(call_arg16(code::outerSpawnShipEntity, 0)) && !rocks_enabled()) {
@@ -1303,6 +1341,13 @@ void on_spawn_entry() {
     }
     if (s->is_client()) {
         return_from_call(code::outerSpawnShipEntity, 0xffff);  // the server decides what exists
+        return;
+    }
+    if (const LeftOutShip *l = left_out_ship(call_arg16(code::outerSpawnShipEntity, 0))) {
+        // (The game takes a refused spawn in its stride: every one of a
+        // client's own is.)
+        wclog(1, "mission ship %d left out: %s", l->missionShip, l->what);
+        return_from_call(code::outerSpawnShipEntity, 0xffff);
         return;
     }
     Spawn spawn;
