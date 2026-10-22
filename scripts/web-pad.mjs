@@ -93,6 +93,67 @@ for (const [ship, how] of COCKPITS[game]) {
   await page.waitForTimeout(200);
   const off4 = await pointerOff();
   check(`${ship}: with a controller the cockpit's crosshair is off, the box brings it back, and keyboard and mouse have it`, off1 === 1 && off2 === 0 && off3 === 1 && off4 === 0, [off1, off2, off3, off4]);
+  // Picked "built in" after the launch, a pad is the game's mouse and
+  // keyboard until the next one: the game port was never put in.
+  if (game === "wc1") {
+    await page.selectOption("#padSelect", "joy|0:Mock Pad (STANDARD GAMEPAD)");
+    await page.waitForTimeout(300);
+    const hint = await page.textContent("#padHint");
+    check(`${ship}: built in after the launch waits for the next one, the port untouched`,
+          /next launch/.test(hint) && (await page.evaluate(() => window.DOSBox._wc_web_joystick(-1))) === 0, hint);
+  }
+  await context.close();
+}
+
+// "Built in" (Wing Commander 1): picked before the launch, the pad is the
+// game port's joystick, which the game reads itself: steps of -9..9 (its
+// joy_init(9, 9, 1, 1)), button 1 the guns.  Taken away in flight it is
+// dropped without a lurch, and given back it is the game's again.
+if (game === "wc1") {
+  const ship = "Built in";
+  const context = await browser.newContext();
+  await context.addInitScript(mock);
+  const page = await context.newPage();
+  page.on("pageerror", (e) => console.log(`PAGE ERROR: ${e.message}`));
+  const u = new URL(pageUrl);
+  for (const [k, v] of Object.entries({ room: "PAD-" + Math.random().toString(36).slice(2, 8).toUpperCase(), server: lobbyUrl, callsign: "HOST",
+                                        "env.WCROOM": "", "env.MIS": "0", "env.SERIES": "1", "env.WCNET_AUTOKEYS": "1", "env.WCNET_KEYSCRIPT": "0.5:!poke=00BA:00" })) u.searchParams.set(k, v);
+  await page.goto(u.toString());
+  const axis = (i, v) => page.evaluate(([i, v]) => { window.__pad.axes[i] = v; }, [i, v]);
+  const button = (i, v) => page.evaluate(([i, v]) => { window.__pad.buttons[i] = { pressed: v > 0.1, touched: v > 0, value: v }; }, [i, v]);
+  await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
+  await page.waitForFunction(() => Array.from(document.querySelectorAll("#padSelect option")).some((o) => o.value.startsWith("joy|")), null, { timeout: 10000 });
+  const options = await page.$$eval("#padSelect option", (os) => os.map((o) => o.textContent));
+  check(`${ship}: the pad is offered built in too`, options.some((t) => /^Built in: 1: Mock Pad/.test(t)), options);
+  await page.selectOption("#padSelect", "joy|0:Mock Pad (STANDARD GAMEPAD)");
+  const greyed = await page.$$eval("#padRows tr", (rows) => rows.filter((r) => r.classList.contains("off")).map((r) => r.cells[0].textContent));
+  check(`${ship}: the actions on the joystick's two buttons are greyed`, greyed.includes("Fire guns") && greyed.includes("Fire missile") && !greyed.some((t) => /Joystick button/.test(t)), greyed);
+  await page.waitForFunction(() => !document.getElementById("lobby").hidden && !document.getElementById("fly").disabled, null, { timeout: 60000 });
+  await page.click("#fly");
+  await page.waitForFunction(() => window.DOSBox && window.DOSBox._wc_web_in_flight && window.DOSBox._wc_web_in_flight() === 1, null, { timeout: 240000 });
+  await page.waitForTimeout(4000);
+  const state = () => page.evaluate(() => window.DOSBox._wc_web_joystick(-1));
+  const turn = () => page.evaluate(() => [window.DOSBox._wc_web_steer(4, 0), window.DOSBox._wc_web_steer(4, 1)]);
+  const held = async (a, v) => { await axis(a, v); await page.waitForTimeout(400); const t = await turn(); await axis(a, 0); await page.waitForTimeout(500); return t; };
+  check(`${ship}: the game reads the joystick`, (await state()) === 2, await state());
+  let t = await turn();
+  check(`${ship}: at rest no turn`, t[0] === 0 && t[1] === 0, t);
+  const back = await held(1, 1), right = await held(0, 1), half = await held(0, 0.5);
+  check(`${ship}: stick back raises the nose, right turns right, the game's full step 9`, back[1] === -9 && back[0] === 0 && right[0] === 9 && right[1] === 0, [back, right]);
+  check(`${ship}: half stick is a smaller step`, half[0] >= 3 && half[0] <= 6, half);
+  const guns = () => page.evaluate(() => window.DOSBox._wc_web_ds_byte(0xBE3A));
+  const g0 = await guns();
+  await button(0, 1); await page.waitForTimeout(250); const g1 = await guns(); await button(0, 0);
+  check(`${ship}: button 1 fires the guns`, g0 === 100 && g1 < 100, [g0, g1]);
+  await page.waitForTimeout(1500);
+  await page.selectOption("#padSelect", "none");
+  await page.waitForTimeout(600);
+  const s0 = await state(); t = await turn();
+  check(`${ship}: keyboard + mouse takes the stick off the port without a turn`, s0 === 0 && t[0] === 0 && t[1] === 0, [s0, t]);
+  await page.selectOption("#padSelect", "joy|0:Mock Pad (STANDARD GAMEPAD)");
+  await page.waitForTimeout(600);
+  const s1 = await state(), again = await held(0, -1);
+  check(`${ship}: picked built in again it is the game's joystick again`, s1 === 2 && again[0] === -9, [s1, again]);
   await context.close();
 }
 await browser.close();

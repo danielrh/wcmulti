@@ -29,6 +29,7 @@
 #include "callback.h"
 #include "cpu.h"
 #include "regs.h"
+#include "joystick.h"
 #include "keyboard.h"
 #include "mouse.h"
 #include "pic.h"
@@ -313,6 +314,8 @@ static void auto_keys() {
 // "!where", which logs where the program is and who called it,
 // "!steer", which logs how the game reads its steering pointer (WC2),
 // "!mem", which logs how much of its heap the game has free (WC2),
+// "!joystick=<1|0>", which puts stick A on the game port or takes it off,
+// "!joy=<x>:<y>", which moves it (-1..1), "!joybutton=<1|2>:<1|0>",
 // "+<key>" / "-<key>", which hold and release a key, or "wait", which holds
 // the script until the next mission reaches its first frame and restarts
 // the clock there ("skip" does the same and taps Esc every two seconds
@@ -406,6 +409,113 @@ static std::string ds_text(Bit16u off, int max) {
         s += !c ? '~' : (c == '\n') ? '|' : (c < 32 || c > 126) ? '.' : (char)c;
     }
     return s;
+}
+
+// The pad as the game's own joystick (the page's "built in" choice; WCJOY=1
+// natively): stick A of the emulated game port, which the game reads and
+// makes sense of itself, double clicks and all.  Otherwise the port is
+// empty, as it is for everyone else ([joystick] joysticktype=none in the
+// browser).  The port has to count ([joystick] timed=false): a stick at rest
+// then reads 64 and its ends 0 and 128 at any CPU speed, where the timed
+// readings grow with the cycles, and a flight runs at several times the
+// menus' (WCFLIGHTCYCLES) with the centre the game took at startup.
+static bool g_joyOn = false;
+static double g_scriptJoyX = 0, g_scriptJoyY = 0;   // the key script's stick (!joy, !joybutton)
+static unsigned g_scriptJoyButtons = 0;
+static void joystick_set(double x, double y, unsigned buttons) {
+    JOYSTICK_Move_X(0, (float)(x < -1 ? -1 : x > 1 ? 1 : x));
+    JOYSTICK_Move_Y(0, (float)(y < -1 ? -1 : y > 1 ? 1 : y));
+    JOYSTICK_Button(0, 0, (buttons & 1) != 0);
+    JOYSTICK_Button(0, 1, (buttons & 2) != 0);
+}
+static int joystick_state();
+// Taken away, a stick the game reads is dropped for the game first: done
+// the game's own way, by a reading that times out, the poll that read it
+// goes on to read "stick 0xffff", the words below stick A's (the y range
+// and the raw counts), and flies a frame by them, a lurch of a quarter turn.
+// So it is dropped between polls with those words zeroed, then leaves the
+// port (joystick_tick).  The pointer, which the game has not parked while
+// the stick flew (it rests at the middle of the mouse's range, a dive in
+// every cockpit), goes to the middle of the view, where the game parks it.
+static bool g_joyDropping = false;
+static void joystick_drop() {
+    if (is_wc1() && DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF) {
+        if (rd8(ds::joyPollBusy) || rd8(ds::joyPointerBusy)) {
+            return;                                   // (the next tick)
+        }
+        for (Bit16u off = (Bit16u)(ds::joyRange + 2); off < ds::joyReading + 6; off += 2) {
+            wr16(off, 0);
+        }
+        wr16(ds::joyStick, 0xFFFF);
+        if (in_flight() && steer_info(0, 0) >= 0) {
+            set_pointer((steer_info(0, 0) + steer_info(0, 2)) / 2 / 640.0, (steer_info(0, 1) + steer_info(0, 3)) / 2 / 200.0);
+        }
+        wclog(1, "joystick: taken from the game");
+    }
+    g_joyDropping = false;
+    JOYSTICK_Enable(0, false);
+}
+static void joystick_on(bool on) {
+    if (!on && !g_joyOn) {
+        return;                                       // (never on: nothing to touch)
+    }
+    if (on != g_joyOn) {
+        wclog(1, "joystick: %s the game port", on ? "on" : "off");
+    }
+    g_joyOn = on;
+    joystick_set(0, 0, 0);
+    if (on) {
+        g_joyDropping = false;
+        JOYSTICK_Enable(0, true);
+    } else {
+        g_joyDropping = true;
+        joystick_drop();
+    }
+}
+// Wing Commander looks for a joystick once, at startup, and drops it for
+// good when a reading times out (the stick taken away): a stick that comes
+// later is given to the game as its joy_init(9, 9, 1, 1) takes one at rest.
+static void arm_game_joystick() {
+    if (!is_wc1() || DS == 0 || !has_started_up || !ds::known(ds::joyStick) || rd16(ds::joyStick) != 0xFFFF) {
+        return;
+    }
+    const int centre = 64, range = 9, dead = 1;   // (RANGE in src/hardware/joystick.cpp)
+    const int below = centre - 10, step = below / range;
+    int loops = 0x40;                             // the first of 64, 128, ... a reading at rest stays under
+    while (loops <= centre) loops += 0x40;
+    for (int a = 0; a < 2; a++) {                 // x, then y
+        wr16((Bit16u)(ds::joyEdges + 2 * a), (Bit16u)below);
+        wr16((Bit16u)(ds::joyEdges + 4 + 2 * a), (Bit16u)(centre + 10));
+        wr16((Bit16u)(ds::joyPerStep + 2 * a), (Bit16u)step);
+        wr16((Bit16u)(ds::joyPerStep + 4 + 2 * a), (Bit16u)step);
+        wr16((Bit16u)(ds::joyHigh + 2 * a), (Bit16u)(centre + step * range));
+        wr16((Bit16u)(ds::joyHigh + 4 + 2 * a), (Bit16u)(centre - step * range));
+        wr16((Bit16u)(ds::joyCentre + 2 * a), (Bit16u)centre);
+        wr16((Bit16u)(ds::joyDead + 2 * a), (Bit16u)dead);
+        wr16((Bit16u)(ds::joyRange + 2 * a), (Bit16u)range);
+    }
+    wr16(ds::joyLoops, (Bit16u)((loops + 0x100) * 2));
+    wr16(ds::joyStick, 0);
+    wclog(1, "joystick: the game had none, given stick A");
+}
+static void joystick_tick() {
+    static int env = -1;
+    if (env < 0) {
+        const char *e = getenv("WCJOY");
+        env = e && e[0] && e[0] != '0' ? 1 : 0;
+        if (env) joystick_on(true);
+    }
+    if (g_joyOn) {
+        arm_game_joystick();
+    } else if (g_joyDropping) {
+        joystick_drop();
+    }
+}
+// 0 off, 1 on the port, 2 read by the game (Wing Commander 1 only: the
+// others' state is not known).
+static int joystick_state() {
+    if (!g_joyOn) return 0;
+    return is_wc1() && DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF ? 2 : 1;
 }
 
 static bool enemy_ship(int slot);
@@ -537,6 +647,27 @@ static void key_script() {
         bool down = colon != std::string::npos && atoi(item.c_str() + colon + 1) != 0;
         wclog(2, "key script %.1fs (t=%.1f): mouse button %d %s", t, now / 1000.0, button, down ? "down" : "up");
         if (down) Mouse_ButtonPressed((Bit8u)button); else Mouse_ButtonReleased((Bit8u)button);
+    } else if (item.compare(0, 5, "!joy=") == 0) {
+        // !joy=<x>:<y>, the game port's stick A, -1..1 each (0:0 at rest)
+        double jx = atof(item.c_str() + 5);
+        size_t colon = item.find(':');
+        double jy = colon == std::string::npos ? 0 : atof(item.c_str() + colon + 1);
+        wclog(2, "key script %.1fs (t=%.1f): joystick to %.2f, %.2f", t, now / 1000.0, jx, jy);
+        g_scriptJoyX = jx; g_scriptJoyY = jy;
+        joystick_set(g_scriptJoyX, g_scriptJoyY, g_scriptJoyButtons);
+    } else if (item.compare(0, 11, "!joybutton=") == 0) {
+        // !joybutton=<1|2>:<1 down, 0 up>
+        int button = atoi(item.c_str() + 11);
+        size_t colon = item.find(':');
+        bool down = colon != std::string::npos && atoi(item.c_str() + colon + 1) != 0;
+        wclog(2, "key script %.1fs (t=%.1f): joystick button %d %s", t, now / 1000.0, button, down ? "down" : "up");
+        unsigned bit = button == 2 ? 2u : 1u;
+        g_scriptJoyButtons = down ? (g_scriptJoyButtons | bit) : (g_scriptJoyButtons & ~bit);
+        joystick_set(g_scriptJoyX, g_scriptJoyY, g_scriptJoyButtons);
+    } else if (item.compare(0, 10, "!joystick=") == 0) {
+        // !joystick=<1 on the game port, 0 off>
+        joystick_on(atoi(item.c_str() + 10) != 0);
+        wclog(1, "key script %.1fs (t=%.1f): joystick %s (state %d)", t, now / 1000.0, g_joyOn ? "on" : "off", joystick_state());
     } else if (item.size() > 1 && (item[0] == '+' || item[0] == '-') && script_key(item.substr(1)) != KBD_NONE) {
         // +<key> holds a key down, -<key> lets it go
         wclog(2, "key script %.1fs (t=%.1f): %s %s", t, now / 1000.0, item[0] == '+' ? "hold" : "release", item.c_str() + 1);
@@ -1436,6 +1567,27 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_mouse_button(int button, int pressed
     }
     if (pressed) g_webButtonsWanted |= 1u << button; else g_webButtonsWanted &= ~(1u << button);
 }
+// The pad as the game's own joystick (web/gamepad.js, a "built in" choice):
+// 1 puts stick A on the game port, 0 takes it off, a negative value only
+// asks; the answer is 0 off, 1 on the port, 2 read by the game (Wing
+// Commander 1; the others' own state is not known).  wc_web_joy moves it
+// (-1..1 each way) and presses its buttons (bit 0 button 1, bit 1 button 2).
+static int g_webJoyWanted = -1;
+static double g_webJoyX = 0, g_webJoyY = 0;
+static unsigned g_webJoyButtons = 0;
+static bool g_webJoyMoved = false;
+extern "C" EMSCRIPTEN_KEEPALIVE int wc_web_joystick(int on) {
+    if (on >= 0) {
+        g_webJoyWanted = on ? 1 : 0;
+    }
+    return wc::joystick_state();
+}
+extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_joy(double x, double y, int buttons) {
+    g_webJoyX = x;
+    g_webJoyY = y;
+    g_webJoyButtons = (unsigned)buttons & 3;
+    g_webJoyMoved = true;
+}
 // The host's page switches the asteroid and mine fields (its lobby option).
 static int g_webRocksWanted = -1;
 extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_set_rocks(int mode) {
@@ -1481,6 +1633,15 @@ static void web_input_tick() {
         if (!(g_webButtonsWanted & bit) && (g_webButtonsDown & bit)) Mouse_ButtonReleased((Bit8u)b);
     }
     g_webButtonsDown = g_webButtonsWanted;
+    if (g_webJoyWanted >= 0) {
+        wc::joystick_on(g_webJoyWanted != 0);
+        g_webJoyWanted = -1;
+        g_webJoyMoved = true;            // (on at rest: then where the page has it)
+    }
+    if (g_webJoyMoved && wc::g_joyOn) {
+        wc::joystick_set(g_webJoyX, g_webJoyY, g_webJoyButtons);
+    }
+    g_webJoyMoved = false;
     if (g_webRocksWanted >= 0) {
         wc_net_set_rocks(g_webRocksWanted);
         g_webRocksWanted = -1;
@@ -1804,6 +1965,7 @@ void wc_net_check_cpu_hooks() {
         }
         auto_keys();
         key_script();
+        joystick_tick();
 #ifdef __EMSCRIPTEN__
         escape_tap();
         web_input_tick();

@@ -987,6 +987,41 @@ top-level README for the workflow).  What differs:
   a window that is visible but not focused keeps flying: two windows side by
   side are a split screen.  The DOS game-port joystick is off in this build
   (`joysticktype=none`), or a gamepad would reach the game twice.
+* **A pad "built in"** (Wing Commander 1 and SM2: the registry's
+  `joystick`).  Each pad is in the picker a second time, "Built in: ...":
+  the pad is then the game port's stick A, which the game reads and makes
+  sense of itself (case 4 of the flight's event loop, `seg001:0FCF`): button
+  1 the guns, both buttons a missile, button 2 with the stick rolls (across)
+  and changes speed (forward and back), a double click of button 2 held is
+  the afterburner (its press counting in `seg039:0007`, from the timer's
+  poll at `seg001:087B`).  The axes are the table's turn and pitch (inverted
+  as set, scaled by the sensitivity, after the dead zone), the two buttons
+  its "Joystick button 1/2" rows (A and B by default); an action bound to
+  either button is greyed and not pressed, and the other buttons press
+  their keys as ever.  The game looks for a joystick once, at startup
+  (`joy_init(9, 9, 1, 1)` from `ovr160:01D2`, which takes the stick's
+  position then as the centre), so the page puts the port in only when a
+  built-in pad is chosen at the launch: `[joystick] joysticktype=none
+  timed=false` in that launch's configuration and nothing in any other.
+  The port counts (`timed=false`): a timed port's readings grow with the
+  CPU's speed, and a flight runs at several times the menus' cycles, past
+  the centre taken at startup.  The type stays `none`: any other has
+  DOSBox's own mapper make a stick of its own and write its rest onto the
+  port every frame.  The page puts the stick on the port (`wc_web_joystick`)
+  and moves it (`wc_web_joy`); the hooks know the game's joystick state
+  (`joyStick` and on in `wcnet_ds.def`).  Taken away in flight (another
+  controller picked, the pad unplugged), the stick is dropped for the game
+  between two polls with the words below stick A's reading zeroed, then
+  leaves the port: dropped the game's own way, by a reading that times
+  out, the poll goes on to read "stick 0xffff" and flies a frame by the
+  y range and the raw counts, a quarter turn at once.  The mouse pointer
+  is then parked in the middle of the view (the stick never parked it).
+  Given back, the stick is handed to the game as its `joy_init` takes one
+  at rest (centre 64 counts, 6 a step, 768 reads at most).  A pad picked
+  built in after a launch without the port is the mouse and keyboard until
+  the next.  Natively `WCJOY=1` puts the stick on from the start (with
+  `[joystick] timed=false` in the configuration) and the key script has
+  `!joystick=`, `!joy=` and `!joybutton=`.
 * **No crosshair for a controller.**  In flight the games steer by their
   mouse pointer, a crosshair the cockpit code draws on every frame while
   the pointer steers (`cmp word [00C6],1` in WC.EXE's `ovr134:26FE`,

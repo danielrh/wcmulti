@@ -58,6 +58,21 @@ WC_DS(directMission, 0x0000, 0x0000, 0x00D0, 0x00D0, 0x00D0)  // WC2: word, the 
 WC_DS(directSeries, 0x0000, 0x0000, 0x00D2, 0x00D2, 0x00D2)  // WC2: word, its series
 WC_DS(pendingCampaign, 0x9D92, 0xA078, 0x0000, 0x0000, 0x0000)  // [pendingCampaign] word: the campaign to fly next (0 Vega, 1 The Secret Missions, 2 Crusade; 0xffff none): the Z<digit> switch and a loaded game set it, runHangarMission takes it over (ovr161:0407)
 WC_DS(statusPilots, 0xC260, 0xC546, 0x0000, 0x0000, 0x0000)  // word per named pilot (8): 0 = alive, else series * 4 + mission of his death
+// The game's joystick (WC.EXE seg019): joy_init(9, 9, 1, 1), called once at startup by ovr160:01D2, looks for a stick on
+// the game port and takes its position then as the centre; seg019:020F reads it (from the timer, seg001:087B) as steps of
+// -9..9 and drops it for good when a reading times out.  SM2.EXE's are WC.EXE's moved by 0x322 (0x2E6 for joyEdges).
+WC_DS(joyStick, 0x76D6, 0x79F8, 0x0000, 0x0000, 0x0000)  // [joyStick] word: the stick read (0 A, 1 B), 0xffff none
+WC_DS(joyLoops, 0x76D8, 0x79FA, 0x0000, 0x0000, 0x0000)  // [joyLoops] word: port reads a reading counts up to
+WC_DS(joyPerStep, 0x76DA, 0x79FC, 0x0000, 0x0000, 0x0000)  // [joyPerStep] 4 words: counts a step below the centre (x, y), then above it (x, y)
+WC_DS(joyHigh, 0x76E2, 0x7A04, 0x0000, 0x0000, 0x0000)  // [joyHigh] 4 words: the highest counts taken (x, y), then the lowest (x, y)
+WC_DS(joyCentre, 0x76EA, 0x7A0C, 0x0000, 0x0000, 0x0000)  // [joyCentre] 2 words: the counts at rest (x, y)
+WC_DS(joyDead, 0x76EE, 0x7A10, 0x0000, 0x0000, 0x0000)  // [joyDead] 2 words: steps read as none (x, y)
+WC_DS(joyRange, 0x76F2, 0x7A14, 0x0000, 0x0000, 0x0000)  // [joyRange] 2 words: steps either side of the centre (x, y)
+WC_DS(joyEdges, 0xD3FA, 0xD6E0, 0x0000, 0x0000, 0x0000)  // [joyEdges] 4 words: joy_init's centre - 10 (x, y) and + 10 (x, y)
+WC_DS(joyRaw, 0x76F6, 0x7A18, 0x0000, 0x0000, 0x0000)  // [joyRaw] 2 words: the last counts read (x, y)
+WC_DS(joyReading, 0x76FA, 0x7A1C, 0x0000, 0x0000, 0x0000)  // [joyReading] 3 words a stick: x, y in steps, then its buttons (bit 0 button 1)
+WC_DS(joyPollBusy, 0x00C8, 0x00C8, 0x0000, 0x0000, 0x0000)  // byte: nonzero while the flight's joystick poll runs (seg001:087B, from the timer)
+WC_DS(joyPointerBusy, 0xD584, 0xD86A, 0x0000, 0x0000, 0x0000)  // byte: nonzero while the menus' poll runs (seg039:0184 / 0245: the stick moves the pointer)
 WC_DS(victoryPoints, 0xC280, 0xC566, 0x0000, 0x0000, 0x0000)  // word
 WC_DS(campaignTable, 0x9A88, 0x9D72, 0x0000, 0x0000, 0x0000)  // near pointer: 0x5A bytes per series (series 1 first): +2 missions, +3 points for the winning path; +0xA 0x14 bytes per mission, 16 objective point bytes at its +4
 WC_DS(missileTarget, 0xC284, 0xC56A, 0x6FF4, 0x6FFE, 0x729A)  // [currentCampaign+2] byte per slot

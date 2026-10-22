@@ -56,6 +56,9 @@
 // itself has none).
 // `capHull`: the hooks can give capital ships three times their hull (the
 // room's "Capship hull" box: WCCAPHULL).
+// `joystick`: the game reads a joystick on the game port itself, its own
+// way (double clicks and all), and the hooks know its joystick state: the
+// controller picker offers each pad "built in" too (web/gamepad.js).
 // `noFlight`: no missions to pick and nothing to fly yet (the page hides
 // its mission and flight options).
 // `builtin`: a game the site itself serves (ours to give away), as a
@@ -176,7 +179,7 @@ const WC1_FPS = { def: 20, min: 8, max: 60 };
 export const GAMES = [
   { id: "wc1", tag: "WC1", title: "Wing Commander", detect: ["WC.EXE"], run: "wc", multiplayer: true,
     build: { para: 0x1231, off: 0x0187, text: "Loading WING COMMANDER" },
-    saves: ["GAMEDAT/SAVEGAME.WLD"], cycles: 3630, fps: WC1_FPS, capHull: true,
+    saves: ["GAMEDAT/SAVEGAME.WLD"], cycles: 3630, fps: WC1_FPS, capHull: true, joystick: true,
     pointer: { fromGame: true },
     campaign: { series: WC1_SERIES, hints: WC1_HINTS } },
   // SM2.EXE is the game's last build, with the Crusade campaign (it can
@@ -185,7 +188,7 @@ export const GAMES = [
   // mission is one of Crusade's.
   { id: "wc1sm2", tag: "SM2", partOf: "wc1", title: "Wing Commander: The Secret Missions 2", detect: ["SM2.EXE"], run: "sm2", multiplayer: true,
     build: { para: 0x11E8, off: 0x0181, text: "Loading WING COMMANDER" },
-    saves: ["GAMEDAT/CRUSADE.WLD"], cycles: 3630, fps: WC1_FPS, capHull: true,
+    saves: ["GAMEDAT/CRUSADE.WLD"], cycles: 3630, fps: WC1_FPS, capHull: true, joystick: true,
     pointer: { fromGame: true },
     campaign: { series: SM2_SERIES, hints: WC1_HINTS } },
   // A picked mission of Wing Commander II starts in the barracks (a

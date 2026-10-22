@@ -719,6 +719,7 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 // to the transport at adoption so nothing is lost
                 backlog: [] };
 let running = false;
+let joystickPort = false;  // (the launch put the game port in: a pad was picked built in then)
 let seeking = false;  // ("Join open game" is asking the lobby)
 const PRIVATE_KEY = "wc:private";
 const privateOn = () => $("private").checked;  // (the room is kept out of "Join open game")
@@ -1402,6 +1403,10 @@ window.addEventListener("keyup", capsLockAsEscape, true);
 async function start(fromGesture) {
   if (running) return;
   running = true;
+  // A pad picked "built in" is the game port's joystick, which the game
+  // looks for once, when it starts: the port goes into this launch's
+  // configuration or into none (see below).
+  joystickPort = controls.builtIn();
   emulatorStarted = true;
   // (The public lobby is for finding a flight: this page has one.  The
   // pilot is back in it when the game is over: flightOver.)
@@ -1533,7 +1538,12 @@ async function start(fromGesture) {
     // What the game's own setup expects of the machine (the registry), as a
     // configuration file: DOSBox's `config -set` rewrites the list of
     // startup commands it is itself run from, and the game's is lost.
-    const conf = gameInfo() && gameInfo().dosbox;
+    // The game port, for a built-in pad: counting (timed=false), since a
+    // timed port's readings grow with the CPU's speed, which a flight
+    // raises; the type stays "none", or DOSBox's own mapper would hold the
+    // stick at rest every frame (the page puts it on the port, gamepad.js).
+    // Any other launch's configuration is what it always was.
+    const conf = ((gameInfo() && gameInfo().dosbox) || "") + (joystickPort ? "[joystick]\njoysticktype=none\ntimed=false\n" : "");
     if (conf) { Module.FS.writeFile("/game.conf", conf); args.unshift("-conf", "/game.conf"); }
     Module.callMain([...args, "-c", cmd]);
     setInterval(keepSaves, 4000);
@@ -1652,11 +1662,13 @@ const voice = initVoice({
 window.__wcVoiceLinks = voice.links;  // (for the page tests)
 window.__wcVoiceReport = voice.report;
 
-initControls({
+const controls = initControls({
   module: () => (running && window.DOSBox) || null,
   // (A controller button without a key of its own is the page's: push to talk.)
   onAction: (id, down) => { if (id === "ptt") voice.ptt(down); },
   pointer: steeringPointer,
+  builtIn: () => !!(gameInfo() && gameInfo().joystick),
+  joystickPort: () => (running ? joystickPort : null),
   log,
 });
 

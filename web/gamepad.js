@@ -13,6 +13,18 @@
 //
 // The emulator side is four exports (src/cpu/wcnet_hooks.cpp): wc_web_key,
 // wc_web_pointer, wc_web_mouse_button and wc_web_in_flight.
+//
+// A game that reads a joystick itself (the registry's `joystick`) is offered
+// each pad "built in" as well: the pad is then the game port's joystick,
+// which the game makes sense of its own way (Wing Commander: button 1 the
+// guns, both buttons a missile, button 2 with the stick rolls and changes
+// speed, a double click of it the afterburner), and the buttons bound to
+// other actions still press their keys.  The game looks for a joystick once,
+// when it starts, so the page puts the port in the launch's configuration
+// only when a built-in pad is chosen then (host.joystickPort); otherwise the
+// port stays empty and a pad picked "built in" later flies as the mouse and
+// keyboard until the next launch.  Two more exports: wc_web_joystick (the
+// stick on or off the port) and wc_web_joy (where it is, its buttons).
 
 // DOSBox's KBD_KEYS numbering (include/keyboard.h; a static_assert next to
 // wc_web_key checks the order).
@@ -32,6 +44,10 @@ export const KEY = (() => {
 // What a button can do: the keys it holds down, and whether it is also the
 // pointer's click outside flight (menus, the barracks).
 export const ACTIONS = [
+  // (A built-in pad's game-port buttons, which the game makes sense of; an
+  // action bound to the same button is not pressed with them.)
+  { id: "joy1", label: "Joystick button 1 (built in)", keys: [], port: 1, bind: { button: 0 } },
+  { id: "joy2", label: "Joystick button 2 (built in)", keys: [], port: 2, bind: { button: 1 } },
   { id: "guns", label: "Fire guns", keys: ["space"], click: true, bind: { button: 0 } },
   { id: "missile", label: "Fire missile", keys: ["enter"], bind: { button: 1 } },
   { id: "target", label: "Change target", keys: ["t"], bind: { button: 2 } },
@@ -71,6 +87,10 @@ const AXIS_NAMES = ["Left stick, sideways", "Left stick, up/down", "Right stick,
 const CONFIG_KEY = "wcpad:config";
 const CHOICE_KEY = "wcpad:choice";
 const NONE = "none";
+// A built-in pad's choice is its key after this.
+const BUILT_IN = "joy|";
+const isBuiltIn = (choice) => !!choice && choice.startsWith(BUILT_IN);
+const padOf = (choice) => (isBuiltIn(choice) ? choice.slice(BUILT_IN.length) : choice);
 
 // The stick's sensitivity is the share of the game's full turn that full
 // stick asks for: 100%, the stick being analog anyway (it was 70%, which
@@ -139,6 +159,10 @@ export function stepped(v, steps, reach, edge, top) {
 //   log(line)
 //   onAction(id, down): an action of the page's own (no key), such as voice
 //              push to talk, pressed or released (optional)
+//   builtIn(): whether the game reads a joystick itself (pads are offered
+//              "built in" too)
+//   joystickPort(): null before the launch, then whether it put the game
+//              port in (a built-in pad was chosen then)
 export function initControls(host) {
   const $ = (id) => document.getElementById(id);
   let cfg = loadConfig();
@@ -150,6 +174,7 @@ export function initControls(host) {
   let rollHeld = null;          // "left" | "right" | null
   let clickHeld = false;
   let lastPointer = { x: -1, y: -1, at: 0 };
+  let lastJoy = { x: 0, y: 0, b: 0, at: 0 };  // what the game port's stick was last told
   let menu = { x: 0.5, y: 0.5, wasFlight: false, at: 0 };
   const others = new Map();     // padKey -> time another window last claimed it
   let channel = null;
@@ -162,21 +187,24 @@ export function initControls(host) {
     };
   } catch (e) { /* no coordination between windows */ }
   let lastClaim = 0;
-  let told = { M: null, off: false };   // what the emulator was last told about the crosshair
+  let told = { M: null, off: false, joyM: null, joy: false };   // what the emulator was last told: the crosshair, the port
 
-  const selected = () => (choice && choice !== NONE ? pads().find((p) => padKey(p) === choice) || null : null);
+  const selected = () => (choice && choice !== NONE ? pads().find((p) => padKey(p) === padOf(choice)) || null : null);
+  const offered = () => !!(host.builtIn && host.builtIn());
+  // Built in, and the port is there: the pad is the game's joystick.
+  const onPort = () => isBuiltIn(choice) && offered() && !!host.joystickPort && host.joystickPort() === true;
   const usedElsewhere = (key) => (Date.now() - (others.get(key) || 0)) < 5000;
 
   function choose(key, how) {
     if (key === choice) return;
-    if (choice && choice !== NONE && channel) channel.postMessage({ t: "release", key: choice });
+    if (choice && choice !== NONE && channel && padOf(choice) !== padOf(key)) channel.postMessage({ t: "release", key: padOf(choice) });
     releaseAll();
     choice = key;
     try { if (key) sessionStorage.setItem(CHOICE_KEY, key); else sessionStorage.removeItem(CHOICE_KEY); } catch (e) { /* fine */ }
     capture = null;
     lastClaim = 0;
     listed = "";
-    if (key && key !== NONE) host.log(`controller: ${key.slice(key.indexOf(":") + 1)} ${how}`);
+    if (key && key !== NONE) host.log(`controller: ${padOf(key).slice(padOf(key).indexOf(":") + 1)}${isBuiltIn(key) ? " (built in)" : ""} ${how}`);
     render();
   }
 
@@ -187,23 +215,39 @@ export function initControls(host) {
     if (b.button !== undefined) return `${BUTTON_NAMES[b.button] || "Button " + b.button}`;
     return `${AXIS_NAMES[b.axis] || "Axis " + b.axis} ${b.dir < 0 ? "−" : "+"}`;
   }
+  const signatureOf = (list) => list.map(padKey).join("|") + "/" + choice + "/" + offered() + "/" + list.map((p) => usedElsewhere(padKey(p))).join("");
+  const sameBind = (a, b) => !!a && !!b && (a.button !== undefined ? a.button === b.button : a.axis === b.axis && a.dir === b.dir);
   function render() {
     const sel = $("padSelect");
     const list = pads();
-    const signature = list.map(padKey).join("|") + "/" + choice + "/" + list.map((p) => usedElsewhere(padKey(p))).join("");
+    const signature = signatureOf(list);
     if (signature !== listed) {
       listed = signature;
       sel.innerHTML = "";
       const add = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; sel.appendChild(o); };
       add(NONE, "Keyboard + mouse");
-      for (const p of list) add(padKey(p), `${p.index + 1}: ${p.id}${usedElsewhere(padKey(p)) ? " (in use in another window)" : ""}`);
-      if (choice && choice !== NONE && !list.some((p) => padKey(p) === choice)) add(choice, `${choice.slice(choice.indexOf(":") + 1)} (not connected)`);
-      sel.value = choice || NONE;
+      for (const p of list) {
+        const busy = usedElsewhere(padKey(p)) ? " (in use in another window)" : "";
+        add(padKey(p), `${p.index + 1}: ${p.id}${busy}`);
+        if (offered()) add(BUILT_IN + padKey(p), `Built in: ${p.index + 1}: ${p.id}${busy}`);
+      }
+      // (A pad picked built in for a game that has no joystick of its own
+      // is that game's mouse and keyboard.)
+      const shown = isBuiltIn(choice) && !offered() ? padOf(choice) : choice;
+      if (shown && shown !== NONE && !list.some((p) => padKey(p) === padOf(shown))) {
+        add(shown, `${isBuiltIn(shown) ? "Built in: " : ""}${padOf(shown).slice(padOf(shown).indexOf(":") + 1)} (not connected)`);
+      }
+      sel.value = shown || NONE;
     }
     const pad = selected();
+    const builtIn = isBuiltIn(choice) && offered();
     $("padHint").textContent = pad
-      ? (pad.mapping === "standard" ? "Using the standard gamepad layout; change any button or axis below."
-                                    : "This controller does not report the standard layout: check the buttons and axes below.")
+      ? (builtIn && host.joystickPort && host.joystickPort() === false
+          ? "Built in: the game looks for a joystick when it starts, so this pad is its joystick from the next launch; until then it is its mouse and keyboard."
+          : builtIn
+          ? "Built in: the game reads this pad as the joystick on its game port, its own way: button 1 fires the guns, both buttons a missile; hold button 2 and move the stick to roll and change speed, double-click it for the afterburner. The other buttons still press their keys."
+          : pad.mapping === "standard" ? "Using the standard gamepad layout; change any button or axis below."
+                                       : "This controller does not report the standard layout: check the buttons and axes below.")
       : (list.length ? "Pick a controller, or press one of its buttons while this window has the focus."
                      : "No controller seen yet: plug one in and press one of its buttons.");
 
@@ -218,9 +262,14 @@ export function initControls(host) {
     for (const a of ACTIONS) {
       const b = cfg.buttons[a.id];
       const busy = capture && capture.kind === "button" && capture.id === a.id;
-      rows.push(`<tr><td>${a.label}</td><td>${busy ? "press a button…" : bindingText(b)}</td><td></td>` +
-                `<td><button type="button" class="secondary" data-button="${a.id}">${busy ? "Cancel" : "Change"}</button>` +
-                (b && !busy ? ` <button type="button" class="secondary" data-clear="${a.id}">Clear</button>` : "") + `</td></tr>`);
+      // Greyed: the joystick's buttons but for a built-in pad, and with
+      // one, an action on the same button (the game has it).
+      const off = a.port ? !builtIn : builtIn && !a.port && [cfg.buttons.joy1, cfg.buttons.joy2].some((j) => sameBind(j, b));
+      const why = a.port ? "Only for a pad picked built in" : "The joystick's button here: the game has it";
+      const dis = a.port && off ? " disabled" : "";
+      rows.push(`<tr${off ? ` class="off" title="${why}"` : ""}><td>${a.label}</td><td>${busy ? "press a button…" : bindingText(b)}</td><td></td>` +
+                `<td><button type="button" class="secondary" data-button="${a.id}"${dis}>${busy ? "Cancel" : "Change"}</button>` +
+                (b && !busy ? ` <button type="button" class="secondary" data-clear="${a.id}"${dis}>Clear</button>` : "") + `</td></tr>`);
     }
     $("padRows").innerHTML = rows.join("");
     for (const [id, key, scale] of [["padSensitivity", "sensitivity", 100], ["padDeadzone", "deadzone", 100], ["padBurner", "burner", 100]]) {
@@ -281,6 +330,7 @@ export function initControls(host) {
       if (clickHeld) M._wc_web_mouse_button(0, 0);
     }
     held.clear(); rollHeld = null; clickHeld = false;
+    lastJoy = { x: 0, y: 0, b: 0, at: 0 };
   }
 
   function capturing(pad) {
@@ -304,6 +354,7 @@ export function initControls(host) {
 
   function drive(pad, M, now) {
     const flying = M._wc_web_in_flight() !== 0;
+    const port = onPort() && !!M._wc_web_joy;
     const yaw = axisValue(pad, "yaw");
     // Pitch: positive raises the nose.  The game turns towards its pointer,
     // so the nose comes up when the pointer is above the neutral point
@@ -312,7 +363,18 @@ export function initControls(host) {
     const pitch = clamp(pitchOf("pitch") + pitchOf("pitch2"), -1, 1);
     const roll = axisValue(pad, "roll");
     let x, y, refresh;
-    if (flying) {
+    if (port) {
+      // The game port's stick, -1..1: right, and back (towards the pilot),
+      // which raises the nose, are positive.  The game reads it everywhere,
+      // the menus too (its pointer), so the page leaves the mouse alone.
+      const jx = clamp(yaw * cfg.sensitivity, -1, 1);
+      const jy = clamp(pitch * cfg.sensitivity, -1, 1);
+      const jb = (buttonValue(pad, cfg.buttons.joy1) >= 0.5 ? 1 : 0) | (buttonValue(pad, cfg.buttons.joy2) >= 0.5 ? 2 : 0);
+      if (Math.abs(jx - lastJoy.x) > 0.001 || Math.abs(jy - lastJoy.y) > 0.001 || jb !== lastJoy.b || now - lastJoy.at > 200) {
+        M._wc_web_joy(jx, jy, jb);
+        lastJoy = { x: jx, y: jy, b: jb, at: now };
+      }
+    } else if (flying) {
       const p = host.pointer() || { x: 0.5, y: 0.5, rx: 0.5, ry: 0.5 };
       if (p.stepsX) {
         x = p.x + stepped(yaw * cfg.sensitivity, p.stepsX, p.rx, p.edgeX, p.top);
@@ -334,7 +396,7 @@ export function initControls(host) {
       x = menu.x; y = menu.y; refresh = 1e9;
     }
     menu.at = now;
-    if (Math.abs(x - lastPointer.x) > 0.001 || Math.abs(y - lastPointer.y) > 0.001 || now - lastPointer.at > refresh) {
+    if (!port && (Math.abs(x - lastPointer.x) > 0.001 || Math.abs(y - lastPointer.y) > 0.001 || now - lastPointer.at > refresh)) {
       M._wc_web_pointer(x, y);
       lastPointer = { x, y, at: now };
     }
@@ -344,8 +406,10 @@ export function initControls(host) {
       if (wantRoll) sendKeys(M, [ROLL_KEYS[wantRoll]], true);
       rollHeld = wantRoll;
     }
+    const joyButtons = port ? [cfg.buttons.joy1, cfg.buttons.joy2] : [];
     for (const a of ACTIONS) {
-      const v = buttonValue(pad, cfg.buttons[a.id]);
+      if (a.port) continue;
+      const v = joyButtons.some((j) => sameBind(j, cfg.buttons[a.id])) ? 0 : buttonValue(pad, cfg.buttons[a.id]);
       // An analog trigger has to be nearly all the way down (the afterburner
       // drinks fuel); letting go needs a little less, so it does not flutter.
       const on = a.analog ? cfg.burner : 0.5;
@@ -355,7 +419,7 @@ export function initControls(host) {
         held.set(a.id, down);
       }
       if (a.click) {
-        const click = down && !flying;
+        const click = down && !flying && !port;
         if (click !== clickHeld) { M._wc_web_mouse_button(0, click ? 1 : 0); clickHeld = click; }
       }
     }
@@ -371,23 +435,32 @@ export function initControls(host) {
       if (p) choose(padKey(p), "picked up from its button press");
     }
     const pad = selected();
-    if (channel && choice && choice !== NONE && pad && now - lastClaim > 2000) { channel.postMessage({ t: "claim", key: choice }); lastClaim = now; }
+    if (channel && choice && choice !== NONE && pad && now - lastClaim > 2000) { channel.postMessage({ t: "claim", key: padOf(choice) }); lastClaim = now; }
     const M = host.module();
     // With a controller chosen in this window the cockpit's crosshair is not
     // drawn (src/cpu/wcnet_hooks.cpp, pointer_off), unless the pilot wants it.
     const off = !!choice && choice !== NONE && !cfg.pointer;
     if (M && M._wc_web_pointer_off && (told.M !== M || told.off !== off)) { M._wc_web_pointer_off(off ? 1 : 0); told = { M, off }; }
+    // The game port's stick: only when the launch put the port in (a
+    // built-in pad was chosen then), on while that pad is chosen and there.
+    if (M && M._wc_web_joystick && host.joystickPort && host.joystickPort() === true) {
+      const want = !!pad && onPort();
+      if (told.joyM !== M || told.joy !== want) { M._wc_web_joystick(want ? 1 : 0); told.joyM = M; told.joy = want; lastJoy.at = 0; }
+    }
     if (pad && capture) capturing(pad);
     else if (pad && M && M._wc_web_key && !capture) drive(pad, M, now);
     else if (held.size || rollHeld || clickHeld) releaseAll();
-    if (list.map(padKey).join("|") + "/" + choice + "/" + list.map((p) => usedElsewhere(padKey(p))).join("") !== listed) render();
+    if (signatureOf(list) !== listed) render();
   }
   window.addEventListener("gamepadconnected", () => render());
   window.addEventListener("gamepaddisconnected", () => { releaseAll(); render(); });
-  window.addEventListener("pagehide", () => { if (channel && choice && choice !== NONE) channel.postMessage({ t: "release", key: choice }); });
+  window.addEventListener("pagehide", () => { if (channel && choice && choice !== NONE) channel.postMessage({ t: "release", key: padOf(choice) }); });
   render();
   // A timer rather than animation frames: a window that is visible but not
   // focused (the other half of a split screen) must keep reading its controller.
   setInterval(tick, 16);
-  return { config: () => cfg, choice: () => choice };
+  // builtIn(): a built-in pad is chosen for a game with a joystick of its
+  // own (the launch then puts the game port in); render(): after the game
+  // changes, which changes what is offered.
+  return { config: () => cfg, choice: () => choice, builtIn: () => isBuiltIn(choice) && offered(), render };
 }
