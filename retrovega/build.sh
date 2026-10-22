@@ -24,6 +24,8 @@ nasm -f obj -o "$OUT/lasers_a.obj" src/lasers.asm
 # the balls' sprites (the spherical projectiles: every kind, frame and diameter)
 [ "$OUT/BALLS.DAT" -nt tools/balls.py ] && [ "$OUT/BALLS.DAT" -nt data/palette.json ] \
     || ~/.venvs/retrovega-art/bin/python -P tools/balls.py --out "$OUT/BALLS.DAT" --preview docs/balls.png > /dev/null
+# the ships' silhouettes (tools/hitboxes.py made them from the meshes; the build has no Vega Strike assets)
+cp data/shapes.dat "$OUT/SHAPES.DAT"
 # the sky's far things (nebulae, galaxies, planets: every turn of each)
 [ "$OUT/SKY.DAT" -nt tools/sky.py ] && [ "$OUT/SKY.DAT" -nt data/palette.json ] \
     || ~/.venvs/retrovega-art/bin/python -P tools/sky.py --out "$OUT/SKY.DAT" --preview docs/sky.png > /dev/null

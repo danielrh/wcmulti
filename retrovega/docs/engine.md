@@ -1326,12 +1326,48 @@ straight away from the box's nearest point. It is b's move (a's is the
 opposite; the demo shares it, half each). `collide_shape` gives a ship's
 box corners and vitals in the world, for drawing.
 
+**The hull: three silhouettes** (the user's pick, "useful especially for
+point blaster shots"). `tools/hitboxes.py` also rasterizes each mesh seen
+from above, the side and the front (orthographic, over its box) into 64 x
+64 bit masks, a cell solid when the mesh covers 40% of it: `data/shapes.dat`
+(54 KB for 35 types; the build copies it to `SHAPES.DAT`, resident XMS; a
+flight keeps the types it meets in an 8-slot cache, 1.5 KB each). A point in
+a ship's frame is in its hull when it is in the box and its cell is solid in
+all three (the cell of v on an axis of half extent h is (v + h) / 2h x 64;
+masks: top columns X rows Z, side columns Z rows Y, front columns X rows Y;
+X the ship's right, the mesh's -x). The way out of the hull for a push: the
+shortest of twelve, along each mask's two axes either way to its first
+clear cell (out of one silhouette is out of the hull). The vitals tests
+above are against the hull (the core sphere as its middle and six points a
+radius off it); a type without silhouettes is its box. `collide_point`
+(a blaster shot) and `collide_segment` (a bolt from where it was to where
+it is): the segment's box against the ship's, both ends into the ship's
+frame, clipped to its box (in 1024ths of the way, 32-bit: Watcom's long
+long divisions cost thousands of cycles), then walked in cell units, at
+most half a cell an axis a step, until a cell is solid in all three: the
+first point in, and how far along. At 40,000 cycles a bolt's 75 km move
+through a fighter's box costs 81 us (most of it the walk: a fighter's box
+is thin, 4 km cells up and down); a ray from the eye through it 153 us.
+
+`RV.EXE /hulldemo [/hulltype N]` (`tests/boltdemo.txt`, `/record 1`): a
+fighter turning every way 1,800 km ahead, a 24 x 16 grid of rays from the
+eye through its box on the screen tested each frame (red in, grey missed;
+recorded, every other frame clean, the grid logged): over the 150 clean
+frames 81% of the hits are on the ship's sprite and 85% of its points are
+hit (the hull is fuller than the ship where it is hollow from every side;
+the engines' glow is not hull; the sprite is a lattice view a few degrees
+off). Which side is the ship's right could not be checked: the only
+strongly asymmetric type (the Convolution, 0x0D) fails its set's load
+check (`ships.c`'s bound on blocks, views and rolls), and the others are
+too nearly symmetric to tell (mirrored masks score the same).
+
 `RV.EXE /collidedemo` (`tests/boltdemo.txt`, `/record 1`): two fighters
 2,600 km ahead flown at each other at 14 km a frame each, three rounds:
-level (hits in 44 of the 46 frames their spheres touch, pushed back along
-the line of flight, so they press nose to nose), 120 km apart vertically
-(11 hits, pushed apart as they pass), 700 km apart (inside each other's
-spheres 35 frames, no hit). Their boxes (red while they hit) and vitals are
+level (with the boxes: hits in 44 of the 46 frames their spheres touch,
+pushed back along the line of flight, nose to nose; with the hulls: 22,
+pushed apart up and down, the thin hull's shortest way out, so they slip
+past), 120 km apart vertically (boxes: 11 hits; hulls: none, they do not
+meet), 700 km apart (inside each other's spheres 35 frames, no hit). Their boxes (red while they hit) and vitals are
 drawn over them.
 
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)

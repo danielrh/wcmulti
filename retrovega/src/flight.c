@@ -52,6 +52,9 @@ int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own gu
 int g_flames_demo = 0;                  /* RV.EXE /flames: six ships turning every way, flames on (a test aid) */
 int g_boxes = 0;                        /* RV.EXE /boxes: every ship's box bracketed (flight_ent_box's check) */
 int g_collide_demo = 0;                 /* RV.EXE /collidedemo: two fighters flown into each other (collide.c's check) */
+int g_hull_demo = 0;                    /* RV.EXE /hulldemo: a turning fighter shot through by a grid of rays */
+int g_hull_type = -1;                   /* RV.EXE /hulltype N: its ship's type (decimal; an asymmetric one checks the
+                                           silhouettes' left and right) */
 int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
                                            30 fps) and g_near_balls near */
 int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept near the camera in it */
@@ -824,6 +827,132 @@ static void collide_overlay(int y0, int y1, const short __far *ext, int ey0, int
     }
 }
 
+/* --- the hull demo (RV.EXE /hulldemo): a turning fighter shot through by a grid of rays ---
+ *
+ * The user's pick (2026-10-21): the ships' three-view silhouette hulls,
+ * "useful especially for point blaster shots".  Slot 1 (the enemy's type)
+ * 1,800 km ahead, turning every way (yaw, pitch and roll at their own rates);
+ * each frame a grid of 24 x 16 rays from the eye through its box on the
+ * screen (flight_ent_box), each a segment from the eye to past the ship
+ * against its hull (collide_segment, as a bolt's last move would be): a hit
+ * red where it went in, a miss a grey dot.  The red should fill the sprite (a
+ * three-view hull is a little fuller than the ship where it is hollow from
+ * every side).  Ten seconds. */
+#define HD_GX 24
+#define HD_GY 16
+static unsigned char __far g_hd_hit[HD_GY][HD_GX];
+static short __far g_hd_x0, __far g_hd_y0, __far g_hd_dx, __far g_hd_dy;
+static unsigned long __far g_hd_ticks, __far g_hd_tests, __far g_hd_hits, __far g_hd_bolt_us100;
+
+/* what a bolt's last move (75 km, a frame's) against the ship costs: random ones through its box, timed */
+static void hull_bolt_time(void)
+{
+    static unsigned long __far seed = 99;
+    long H = collide_half(1);
+    unsigned long t0 = clock240(), dt, it = 0;
+    LfVec a, b;
+    do {
+        int k;
+        long d[3];
+        for (k = 0; k < 3; k++) {
+            seed = seed * 1103515245UL + 12345UL;
+            d[k] = (long)((seed >> 8) % 2001) - 1000;
+        }
+        seed = seed * 1103515245UL + 12345UL;
+        a.x = gPositionVector[1].x + (long)((seed >> 4) % 1001 - 500) * H / 500;
+        seed = seed * 1103515245UL + 12345UL;
+        a.y = gPositionVector[1].y + (long)((seed >> 4) % 1001 - 500) * H / 1500;
+        seed = seed * 1103515245UL + 12345UL;
+        a.z = gPositionVector[1].z + (long)((seed >> 4) % 1001 - 500) * H / 500;
+        b.x = a.x + d[0] * (75L * 256) / 1000;   /* (75 km at most on an axis) */
+        b.y = a.y + d[1] * (75L * 256) / 1000;
+        b.z = a.z + d[2] * (75L * 256) / 1000;
+        collide_segment(1, &a, &b, 0, 0);
+        it++;
+    } while ((dt = clock240() - t0) < 120);
+    g_hd_bolt_us100 = dt * 416667UL / it;    /* (hundredths of a microsecond each) */
+}
+
+static void hull_demo_step(void)
+{
+    RvCamera cam;
+    EntBox b;
+    LfVec from, to, hit;
+    long k;
+    int gx, gy, t;
+    unsigned long t0;
+    gPositionVector[1].x = 0;
+    gPositionVector[1].y = 0;
+    gPositionVector[1].z = 256L * 1800;
+    if (g_demo_frame == 1)
+        hull_bolt_time();
+    face(1, (int)(g_demo_frame * 1024L / 300 % 1024), (int)((long)lf_sin((int)(g_demo_frame * 1024L / 200)) * 200 >> 14));
+    rotate_pair(&gOrientationRightVector[1], &gOrientationUpVector[1], (int)(g_demo_frame * 1024L / 450 % 1024));
+    orthonormalise(1);
+    _fmemset(g_hd_hit, 0, sizeof g_hd_hit);
+    flight_camera(&cam);
+    if (flight_ent_box(1, &cam, &b) && b.visible) {
+        g_hd_dx = (short)((b.x1 - b.x0) / HD_GX + 1);
+        g_hd_dy = (short)((b.y1 - b.y0) / HD_GY + 1);
+        g_hd_x0 = b.x0 + g_hd_dx / 2;
+        g_hd_y0 = b.y0 + g_hd_dy / 2;
+        from = cam.pos;
+        k = (b.Z * 16 + collide_half(1) * 2) / 400;   /* (positions a pixel off the axis, past the ship) */
+        t0 = clock240();
+        for (gy = 0; gy < HD_GY; gy++)
+            for (gx = 0; gx < HD_GX; gx++) {
+                long px = g_hd_x0 + gx * g_hd_dx - cam.cx, py = cam.cy - (g_hd_y0 + gy * g_hd_dy);
+                to.x = from.x + (cam.b.front.x * 400L + cam.b.right.x * px + cam.b.up.x * py) / 256 * k;
+                to.y = from.y + (cam.b.front.y * 400L + cam.b.right.y * px + cam.b.up.y * py) / 256 * k;
+                to.z = from.z + (cam.b.front.z * 400L + cam.b.right.z * px + cam.b.up.z * py) / 256 * k;
+                if (collide_segment(1, &from, &to, &hit, &t)) {
+                    g_hd_hit[gy][gx] = 1;
+                    g_hd_hits++;
+                }
+                g_hd_tests++;
+            }
+        g_hd_ticks += clock240() - t0;
+        if (g_record) {                 /* (the grid and its hits, for checking them against the picture) */
+            static const char __far s_g[] = "hullgrid: %u %d %d %d %d %s";
+            char hex[HD_GX * HD_GY / 4 + 1];
+            for (gy = 0, k = 0; gy < HD_GY; gy++)
+                for (gx = 0; gx < HD_GX; gx += 4, k++)
+                    hex[k] = "0123456789ABCDEF"[g_hd_hit[gy][gx] | g_hd_hit[gy][gx + 1] << 1 | g_hd_hit[gy][gx + 2] << 2
+                                                | g_hd_hit[gy][gx + 3] << 3];
+            hex[k] = 0;
+            rv_logf(s_g, frameCounter, g_hd_x0, g_hd_y0, g_hd_dx, g_hd_dy, hex);
+        }
+    }
+    if (++g_demo_frame >= DEMO_FRAMES)
+        missionStatus = 1;              /* landed */
+}
+
+static void hull_report(void)
+{
+    static const char __far s_r[] = "hull: %lu rays from the eye through its box (%lu hits) took %lu.%02lu ms a frame, "
+        "%lu us each; a bolt's 75 km move through its box %lu.%02lu us";
+    unsigned long f = g_demo_frame ? g_demo_frame : 1, us = g_hd_tests ? g_hd_ticks * 4167UL / g_hd_tests : 0;
+    rv_logf(s_r, g_hd_tests, g_hd_hits, g_hd_ticks * 1000 / 240 / f, g_hd_ticks * 100000 / 240 / f % 100, us,
+            g_hd_bolt_us100 / 100, g_hd_bolt_us100 % 100);
+}
+
+static void hull_overlay(int y0, int y1, const short __far *ext, int ey0, int rows)
+{
+    int gx, gy;
+    if (g_record && !(frameCounter & 1))
+        return;                         /* (recorded: every other frame clean, to check the hits against) */
+    for (gy = 0; gy < HD_GY; gy++)
+        for (gx = 0; gx < HD_GX; gx++) {
+            int x = g_hd_x0 + gx * g_hd_dx, y = g_hd_y0 + gy * g_hd_dy;
+            if (g_hd_hit[gy][gx]) {
+                hud_run(x - 1, x + 1, y - 1, UI_RED, y0, y1, ext, ey0, rows);
+                hud_run(x - 1, x + 1, y, UI_RED, y0, y1, ext, ey0, rows);
+            } else {
+                hud_run(x, x + 1, y, UI_GREY3, y0, y1, ext, ey0, rows);
+            }
+        }
+}
+
 static void draw_world(int y0, int y1)
 {
     int ey0, rows, i;
@@ -891,6 +1020,8 @@ static void draw_world(int y0, int y1)
         boxes_draw(y0, y1, ext, ey0, rows);
     if (g_collide_demo)
         collide_overlay(y0, y1, ext, ey0, rows);
+    if (g_hull_demo)
+        hull_overlay(y0, y1, ext, ey0, rows);
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
@@ -903,7 +1034,7 @@ static void __far __cdecl draw_pointer_body(void)
 {
     /* the steering cross where the pointer is, in mouse mode */
     int x = g_scene.px, y = g_scene.py;
-    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo || g_sky_demo || g_collide_demo)   /* (the demo's middle bolt is where the cross would be) */
+    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo || g_sky_demo || g_collide_demo || g_hull_demo)   /* (the demo's middle bolt is where the cross would be) */
         return;
     gfx_fill(x - 5, y, 11, 1, UI_WHITE, g_ptr_y0, g_ptr_y1);
     gfx_fill(x, y - 5, 1, 11, UI_WHITE, g_ptr_y0, g_ptr_y1);
@@ -990,6 +1121,11 @@ static void gather(void)
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
+    } else if (g_hull_demo) {           /* the demo's readout */
+        static const char __far name[] = "HULL";
+        _fstrcpy((char __far *)g_mfd[0][0], name);
+        sprintf(g_mfd[0][1], "T+%d.%d S", g_demo_frame / 30, g_demo_frame % 30 / 3);
+        g_mfd[0][2][0] = 0;
     } else if (g_collide_demo) {        /* the demo's readout: the round, a hit */
         static const char __far name[] = "COLLIDE", hit[] = "HIT", miss[] = "-";
         _fstrcpy((char __far *)g_mfd[0][0], name);
@@ -1706,6 +1842,8 @@ void __far __cdecl flight_startup(void)
         ships_load(0x02);
         n = 2;
     }
+    if (g_hull_demo && g_hull_type >= 0)
+        enemy_type = g_hull_type;       /* (/hulltype: its ship) */
     if (g_lasers) {
         lasers_setup(enemy_type);
         n = 3;
@@ -1884,6 +2022,8 @@ void __far __cdecl flight_frame(void)
         sky_demo_step();
     if (g_collide_demo)
         collide_demo_step();
+    if (g_hull_demo)
+        hull_demo_step();
     stars_place();
     {
         LfBasis cam;
@@ -1900,7 +2040,7 @@ void __far __cdecl flight_frame(void)
             demo_step();
         else if (g_missile_demo)
             missile_demo_step();
-        else if (!g_ball_demo && !g_sky_demo && !g_collide_demo)
+        else if (!g_ball_demo && !g_sky_demo && !g_collide_demo && !g_hull_demo)
             lasers_step();
         balls_step();
         lasers_place();
@@ -2022,6 +2162,8 @@ int flight_fly(const RvMission __far *m)
     }
     if (g_collide_demo)
         collide_report();
+    if (g_hull_demo)
+        hull_report();
     g_star_place_ticks = g_star_draw_ticks = 0;
     g_scene.full = 0;
     g_scene.no_room = 0;
@@ -2029,6 +2171,7 @@ int flight_fly(const RvMission __far *m)
     in_steer(1);
     ships_stream_log();
     ships_unload();
+    collide_flight_end();
     cockpit_unload();
     rv_hangar();
     uiMode(1);

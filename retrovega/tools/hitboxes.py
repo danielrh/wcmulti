@@ -22,7 +22,21 @@ sprite at every view angle (the user's definition), to COVER: in each of
 its views (render_all.py's, build/sprites, one livery's), the biggest disc
 about the middle that is 95% opaque; the least of them, over the view's
 half width.
-Run once (it reads the meshes and the views); rvdata.py packs the csv."""
+And its silhouettes (data/shapes.dat, SHAPES.DAT in the game): the mesh
+seen from above, from the side and from the front, orthographically, each
+a 64 x 64 bit mask over its box (the user's pick, 2026-10-21: a three-view
+hull, "useful especially for point blaster shots"): a point is in the hull
+when it is in all three.  In the collisions' frame (X the ship's right, Y
+up, Z the nose), the cell of a coordinate v on an axis of half extent h
+being (v + h) / 2h x 64: mask 0 the top (columns X, rows Z), 1 the side
+(columns Z, rows Y), 2 the front (columns X, rows Y); a row 8 bytes, the
+first column the low bit.  A cell is solid when the mesh covers 40% of it.
+
+shapes.dat: "RVSHAPE\0", u16 version, u16 ships, u16 64, u16 0; then for
+each ship its type byte, a 0, and its three masks (1,536 bytes).
+
+Run once (it reads the meshes and the views); rvdata.py packs the csv, the
+build copies shapes.dat."""
 import argparse
 import csv
 import os
@@ -56,6 +70,31 @@ def unit_mounts(assets, unit):
                     pass
             return [o for o in out if len(o) == 3]
     return []
+
+
+N = 64                                  # a silhouette's cells across
+SS = 4                                  # drawn this much finer, then each cell's cover taken
+SOLID = 0.4
+
+
+def silhouettes(parts, center, radius, half):
+    """the three masks (bytes): top (X, Z), side (Z, Y), front (X, Y)"""
+    from PIL import ImageDraw
+    pts = [np.column_stack([-(m.positions[:, 0] - center[0]), m.positions[:, 1] - center[1],
+                            m.positions[:, 2] - center[2]]) / radius for m in parts]
+    out = bytearray()
+    for cu, cv in ((0, 2), (2, 1), (0, 1)):
+        im = Image.new('L', (N * SS, N * SS), 0)
+        dr = ImageDraw.Draw(im)
+        for p, m in zip(pts, parts):
+            u = (p[:, cu] + half[cu]) / (2 * half[cu]) * N * SS
+            v = (p[:, cv] + half[cv]) / (2 * half[cv]) * N * SS
+            for t in np.asarray(m.tri_index).reshape(-1, 3):
+                dr.polygon([(u[t[0]], v[t[0]]), (u[t[1]], v[t[1]]), (u[t[2]], v[t[2]])], fill=255)
+        cover = np.asarray(im, dtype=np.float64).reshape(N, SS, N, SS).mean(axis=(1, 3)) / 255
+        bits = cover >= SOLID
+        out += np.packbits(bits, axis=1, bitorder='little').tobytes()
+    return bytes(out)
 
 
 COVER = 0.95                            # the core's disc must be this full in every view (the user's, 2026-10-21)
@@ -93,6 +132,7 @@ def main():
     args = ap.parse_args()
     rows = list(csv.DictReader(open(os.path.join(HERE, '..', 'data', 'ships.csv'))))
     out = []
+    shapes = []
     for row in rows:
         if not row['mesh']:
             continue
@@ -117,6 +157,7 @@ def main():
         kept = kept[:VITALS]
         cells = ['%.3f' % v for p in kept for v in p]
         core = core_of(row['key'], args.sprites)
+        shapes.append((int(row['type'], 16), silhouettes(parts, center, radius, half)))
         out.append([row['key']] + ['%.3f' % v for v in half] + ['%.3f' % core, str(len(kept))] + cells)
         print('%-8s box %.2f %.2f %.2f, core %.3f, %d vitals (%d mounts)' % (row['key'], half[0], half[1], half[2],
                                                                             core, len(kept), len(mounts)))
@@ -126,6 +167,12 @@ def main():
                                                             for c in ('x', 'y', 'z')])
         for r in out:
             w.writerow(r + [''] * (6 + 3 * VITALS - len(r)))
+    import struct
+    blob = b'RVSHAPE\0' + struct.pack('<4H', 1, len(shapes), N, 0)
+    for t, m in shapes:
+        blob += bytes([t, 0]) + m
+    open(os.path.join(HERE, '..', 'data', 'shapes.dat'), 'wb').write(blob)
+    print('data/shapes.dat: %d bytes' % len(blob))
 
 
 if __name__ == '__main__':
