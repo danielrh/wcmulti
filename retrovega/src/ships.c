@@ -1302,6 +1302,54 @@ int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBa
                                  ext_rows);
 }
 
+int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int exact,
+              int cx, int cy, int focal, int box[4])
+{
+    const ShipSet __far *s = ships_set(set_i);
+    LfPlace p;
+    ShipView view;
+    LfRot r;
+    int flags, rq, k, step;
+    if (exact || !s->rvs) {             /* turned (and scaled) at draw time from the full-size view: the turned image */
+        int roll;
+        lf_place(rel, cam, ship, cx, cy, focal, s->nb0, s->nh0, &p);
+        if (!p.on_screen || scale256 < 8)
+            return 0;
+        if (mirrored_index(s, p.view)) {
+            view = s->view[lf_pair_of(p.view, s->nb0, s->nh0)];
+            view.ox = view.w - 1 - view.ox;
+        } else
+            view = s->view[p.view];
+        if (!view.w)
+            return 0;
+        roll = exact ? p.roll : (((p.roll + 32) & 1023) / 64) * 64;   /* (ships_draw's fallback: sixteen steps) */
+        lf_rotate_setup(view.w, view.h, view.ox, view.oy, roll, scale256 > 256 && !exact ? 256 : scale256, &r);
+        box[0] = p.sx - r.ocx;
+        box[1] = p.sy - r.ocy;
+        box[2] = box[0] + r.ow;
+        box[3] = box[1] + r.oh;
+        return 1;
+    }
+    lf_place(rel, cam, ship, cx, cy, focal, s->nb1, s->nh1, &p);   /* from the sets: the sprite ships_draw takes */
+    if (!p.on_screen || scale256 < 8)
+        return 0;
+    step = 1024 / s->nrolls;
+    rq = ((p.roll + step / 2) & 1023) / step;
+    k = size_step(s, scale256);
+    if ((flags = find_sprite(s, k, p.view, rq, &view)) < 0 && (!(rq & 1)
+        || (flags = find_sprite(s, k, p.view, rq & ~1, &view)) < 0))
+        for (; k < s->nsizes; k++)
+            if ((flags = find_sprite(s, k, p.view, 0, &view)) >= 0)
+                break;
+    if (flags < 0 || !view.w)
+        return 0;
+    box[0] = p.sx - (flags & BLIT_H ? view.w - 1 - view.ox : view.ox);   /* (as ships_blit_view places it) */
+    box[1] = p.sy - (flags & BLIT_V ? view.h - 1 - view.oy : view.oy);
+    box[2] = box[0] + view.w;
+    box[3] = box[1] + view.h;
+    return 1;
+}
+
 int ships_draw_sky(int set_i, int v, const LfVec *dir, const LfVec *up, const LfBasis *cam, int scale256,
                    int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {

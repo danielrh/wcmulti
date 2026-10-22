@@ -49,6 +49,7 @@ int g_far_ships = 16;                   /* RV.EXE /farships N: its small far shi
 int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ships, 0 .. 2 */
 int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts (a test aid) */
 int g_flames_demo = 0;                  /* RV.EXE /flames: six ships turning every way, flames on (a test aid) */
+int g_boxes = 0;                        /* RV.EXE /boxes: every ship's box bracketed (flight_ent_box's check) */
 int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
                                            30 fps) and g_near_balls near */
 int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept near the camera in it */
@@ -557,6 +558,143 @@ static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int
 static unsigned long g_t_exact, g_t_sets;   /* what the slots' ships cost to draw: exactly, and from the sets */
 static unsigned long g_world_calls;     /* draw_world's calls: the bands a frame draws the world in */
 
+/* --- where a ship is on a screen (flight.h): targeting, its lock, the cockpit's animations --- */
+
+void flight_camera(RvCamera *c)
+{
+    const RvCockpit __far *ck = cockpit_record();
+    c->pos = *(const LfVec *)&gPositionVector[0];
+    basis_of(0, &c->b);
+    c->cx = SCR_W / 2;
+    c->cy = (short)g_cam_cy;
+    c->focal = 400;
+    c->vx0 = 0;
+    c->vx1 = SCR_W;
+    c->vy0 = ck ? ck->open_y0 : 0;
+    c->vy1 = ck ? ck->open_y1 : SCR_H;
+}
+
+int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
+{
+    const RvShipType __far *t;
+    RvCamera main_cam;
+    LfVec rel;
+    LfBasis ship;
+    long rx, ry, rz, ax, ay;
+    int set, sc, i, box[4];
+    _fmemset(o, 0, sizeof *o);
+    if (slot < 0 || slot > RV_MAX_SHIP_SLOT || (maybeEntityType[slot] != 0xC && maybeEntityType[slot] != 0xD))
+        return 0;
+    rel.x = gPositionVector[slot].x - cam->pos.x;
+    rel.y = gPositionVector[slot].y - cam->pos.y;
+    rel.z = gPositionVector[slot].z - cam->pos.z;
+    rx = rel.x >> 4;                    /* sixteenths of a km (exact to 131,072 km) */
+    ry = rel.y >> 4;
+    rz = rel.z >> 4;
+    o->X = (rx * cam->b.right.x + ry * cam->b.right.y + rz * cam->b.right.z) / 256;
+    o->Y = (rx * cam->b.up.x + ry * cam->b.up.y + rz * cam->b.up.z) / 256;
+    o->Z = (rx * cam->b.front.x + ry * cam->b.front.y + rz * cam->b.front.z) / 256;
+    for (ax = o->X, ay = o->Y; ax > 65535 || ax < -65535 || ay > 65535 || ay < -65535; ax /= 2, ay /= 2)
+        ;                               /* (lf_atan2's products overflow past 2^17) */
+    o->dir = (short)lf_atan2(ax, ay);
+    if (o->Z < 16)                      /* (within a km of its plane: as behind) */
+        return 1;
+    o->ahead = 1;
+    ax = cam->cx + o->X * cam->focal / o->Z;
+    ay = cam->cy - o->Y * cam->focal / o->Z;
+    o->sx = (short)(ax < -16000 ? -16000 : ax > 16000 ? 16000 : ax);
+    o->sy = (short)(ay < -16000 ? -16000 : ay > 16000 ? 16000 : ay);
+    sc = (int)((long)scale_of(&rel) * cam->focal / 400);   /* (the sprites' size is the flight's, at its focal length) */
+    t = type_of(slot);
+    o->half = (short)(t ? (long)t->lod0_px * sc / 512 : 4);
+    if (o->half < 2)
+        o->half = 2;
+    /* drawn exactly this frame: the frame's plan, if this is the camera it was made for */
+    flight_camera(&main_cam);
+    if (!_fmemcmp(&main_cam, cam, sizeof main_cam))
+        for (i = 0; i < g_nplan; i++)
+            if (g_plan[i].slot == slot)
+                o->exact = g_plan[i].exact != 0;
+    basis_of(slot, &ship);
+    set = ships_find(gInstanceShipTypes[slot]);
+    if (set >= 0 && ships_box(set, &rel, &cam->b, &ship, sc, o->exact, cam->cx, cam->cy, cam->focal, box)) {
+        o->x0 = (short)box[0];
+        o->y0 = (short)box[1];
+        o->x1 = (short)box[2];
+        o->y1 = (short)box[3];
+    } else {
+        o->x0 = o->sx - o->half;
+        o->y0 = o->sy - o->half;
+        o->x1 = o->sx + o->half;
+        o->y1 = o->sy + o->half;
+    }
+    o->visible = o->x1 > cam->vx0 && o->x0 < cam->vx1 && o->y1 > cam->vy0 && o->y0 < cam->vy1;
+    return 1;
+}
+
+/* the /boxes check: brackets at each box's corners (the sprite's cyan, the steady square amber), clipped to the band
+ * and the opening as the world is */
+static void hud_run(int xa, int xb, int y, int colour, int y0, int y1, const short __far *ext, int ey0, int rows)
+{
+    unsigned char __far *row;
+    if (y < y0 || y >= y1)
+        return;
+    if (ext) {
+        if (y < ey0 || y >= ey0 + rows)
+            return;
+        if (xa < ext[2 * (y - ey0)]) xa = ext[2 * (y - ey0)];
+        if (xb > ext[2 * (y - ey0) + 1]) xb = ext[2 * (y - ey0) + 1];
+    }
+    if (xa < 0) xa = 0;
+    if (xb > SCR_W) xb = SCR_W;
+    if (xa >= xb)
+        return;
+    row = vid_row(y);
+    _fmemset(row + xa, colour, xb - xa);
+}
+
+static void brackets(int x0, int y0b, int x1, int y1b, int colour, int y0, int y1, const short __far *ext, int ey0,
+                     int rows)
+{
+    int aw = (x1 - x0) / 4, ah = (y1b - y0b) / 4, k;
+    if (aw > 10) aw = 10;
+    if (ah > 10) ah = 10;
+    if (aw < 2) aw = 2;
+    if (ah < 2) ah = 2;
+    hud_run(x0, x0 + aw, y0b, colour, y0, y1, ext, ey0, rows);
+    hud_run(x1 - aw, x1, y0b, colour, y0, y1, ext, ey0, rows);
+    hud_run(x0, x0 + aw, y1b - 1, colour, y0, y1, ext, ey0, rows);
+    hud_run(x1 - aw, x1, y1b - 1, colour, y0, y1, ext, ey0, rows);
+    for (k = 0; k < ah; k++) {
+        hud_run(x0, x0 + 1, y0b + k, colour, y0, y1, ext, ey0, rows);
+        hud_run(x1 - 1, x1, y0b + k, colour, y0, y1, ext, ey0, rows);
+        hud_run(x0, x0 + 1, y1b - 1 - k, colour, y0, y1, ext, ey0, rows);
+        hud_run(x1 - 1, x1, y1b - 1 - k, colour, y0, y1, ext, ey0, rows);
+    }
+}
+
+static void boxes_draw(int y0, int y1, const short __far *ext, int ey0, int rows)
+{
+    static const char __far s_box[] = "boxes: frame %u slot %d at %d,%d: box %d,%d - %d,%d, half %d, way %d, %s%s";
+    RvCamera cam;
+    EntBox b;
+    int run0, run1, s;
+    if (!vid_run(&run0, &run1))
+        return;
+    flight_camera(&cam);
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
+        if (!flight_ent_box(s, &cam, &b))
+            continue;
+        if (y0 <= ey0 && (frameCounter % 100 == 1 || (g_record && frameCounter % 30 == 0)))
+            rv_logf(s_box, frameCounter, s, b.sx, b.sy, b.x0, b.y0, b.x1, b.y1, b.half, b.dir,
+                    b.visible ? "visible" : b.ahead ? "ahead, off the view" : "behind", b.exact ? ", exact" : "");
+        if (!b.visible)
+            continue;
+        brackets(b.sx - b.half, b.sy - b.half, b.sx + b.half + 1, b.sy + b.half + 1, UI_AMBER3, y0, y1, ext, ey0, rows);
+        brackets(b.x0, b.y0, b.x1, b.y1, UI_HILITE, y0, y1, ext, ey0, rows);
+    }
+}
+
 static void draw_world(int y0, int y1)
 {
     int ey0, rows, i;
@@ -620,6 +758,8 @@ static void draw_world(int y0, int y1)
     if (g_bl_cap)
         balls_draw_near(y0, y1, ext, ey0, rows);
     missiles_draw(y0, y1, ext, ey0, rows);
+    if (g_boxes)
+        boxes_draw(y0, y1, ext, ey0, rows);
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)

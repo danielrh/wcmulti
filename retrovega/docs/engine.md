@@ -1255,6 +1255,39 @@ built (the nebula interlaced) 2.79, all interlaced 2.32; placing them
 nothing measurable. Interlacing saves less than half: the rows are still
 fetched and walked.
 
+### Where a ship is on a screen: boxes for targeting
+
+The user's brief (2026-10-21): functions that take an entity's index and a
+camera and give its axis-aligned box on the screen, for targeting, the lock
+and the cockpit's animations.
+
+`flight.h`: an `RvCamera` (a position, a basis, the projection's middle and
+focal length, and the part of the screen it shows); `flight_camera` fills
+one with the player's view. `flight_ent_box(slot, camera, &box)` (0 when no
+ship is in the slot) gives an `EntBox`:
+
+- `x0, y0, x1, y1`: the box of the ship's sprite as it is (or would be)
+  drawn, `ships_box` (`ships.c`) following `ships_draw`'s choice: from the
+  sets, the record of the size step, view and roll step it takes, placed
+  as `ships_blit_view` places it (mirrored or upside down); drawn exactly
+  (the plan's choice, when the camera is the one the frame was planned
+  for), the turned image's box (`lf_rotate_setup`). Engines' flames are
+  not in it. When there is no sprite (too small, not in), the square
+  below.
+- `sx, sy` its middle on the screen; `half` half its size there (the
+  type's `lod0_px` at the flight's scale for its distance and the camera's
+  focal length): a square that does not change as the ship turns, for
+  lock brackets.
+- `dir`: the way to it on the screen, 0..1023 clockwise from up, also when
+  it is behind the camera (an arrow at the view's edge); `X, Y, Z`: it
+  from the camera (right, up, ahead, sixteenths of a km); `ahead`;
+  `visible` (ahead and its box touching the camera's part of the screen);
+  `exact`.
+
+`RV.EXE /boxes` brackets every ship's two boxes in flight (the sprite's
+cyan, the steady square amber) and logs them now and then; with `/flames
+/record 1` the six turning ships' brackets follow their sprites.
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the

@@ -65,6 +65,12 @@ void ships_unload(void);                /* forgets every set (the mission level 
 /* the view the camera projects through: its centre on screen and its focal length */
 void ships_set_camera(int cx, int cy, int focal);
 
+/* where the sprite ships_draw (or, exact, ships_draw_exact) would draw would be on a screen of that projection: its
+ * box, box[0] <= x < box[2], box[1] <= y < box[3] (a sprite's record: the turned image's box when turned at draw
+ * time); 0 when it would not be drawn (behind the camera, too small, its sprite not in) */
+int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int exact,
+              int cx, int cy, int focal, int box[4]);
+
 /* The stream: a .RVS set's full-size views stay in the file; the one a
  * draw needs is read into one of a few XMS slots (the nearest ships' views
  * stay in them, least recently used out), at most `reads` a frame, and
