@@ -661,10 +661,10 @@ function renderMission() {
     if (sel.dataset.choices !== fpsChoices.join()) {
       sel.dataset.choices = fpsChoices.join();
       sel.innerHTML = "";
-      fpsChoices.forEach((n, i) => {
+      fpsChoices.forEach((n) => {
         const o = document.createElement("option");
         o.value = String(n);
-        o.textContent = `${n} frames/s` + (i === 0 ? " (default)" : n < fpsChoices[0] ? " (slower)" : "");
+        o.textContent = String(n);
         sel.appendChild(o);
       });
     }
@@ -1219,6 +1219,27 @@ $("collisions").addEventListener("change", () => {
   setWingBumps(bumps);
 });
 $("latency").addEventListener("change", () => setLatency($("latency").value));
+// A terse menu shows a word when closed and the whole of each choice
+// (data-long) while open; its width stays the closed one's meanwhile.
+for (const sel of document.querySelectorAll("select.terse")) {
+  for (const o of sel.options) o.dataset.short = o.textContent;
+  const open = () => {
+    if (sel.dataset.open) return;
+    sel.dataset.open = "1";
+    if (sel.offsetWidth) sel.style.width = `${sel.offsetWidth}px`;
+    for (const o of sel.options) o.textContent = o.dataset.long || o.dataset.short;
+  };
+  const close = () => {
+    if (!sel.dataset.open) return;
+    delete sel.dataset.open;
+    for (const o of sel.options) o.textContent = o.dataset.short;
+    sel.style.width = "";
+  };
+  sel.addEventListener("pointerdown", open);
+  sel.addEventListener("keydown", open);
+  sel.addEventListener("change", close);
+  sel.addEventListener("blur", close);
+}
 $("fps").addEventListener("change", () => setFps($("fps").value));
 $("capHull").addEventListener("change", () => setCapHull($("capHull").checked));
 $("mission").addEventListener("change", () => {
