@@ -1053,6 +1053,18 @@ static void flame_test(void)
     flames_frame();
 }
 
+/* a flight's first comm, three seconds out: the first of the mission's people with comm art (its talk's speakers,
+ * the squadron's pilots) says their own line on the left VDU (until the missions have comm lines of their own) */
+static void comm_launch(void)
+{
+    int i;
+    if (!g_m)
+        return;
+    for (i = 0; i < (int)g_m->ntalk; i++)
+        if (comms_say(g_m->talk[i].speaker, 0, (const char __far *)g_pilots[g_m->talk[i].speaker].line))
+            return;
+}
+
 /* --- the comm demo (RV.EXE /commdemo): every pilot with comm art says their line, on each VDU by turns --- */
 static void comm_demo_next(void)
 {
@@ -2262,6 +2274,8 @@ void __far __cdecl flight_frame(void)
     }
     if (g_comm_demo && !comms_on(0) && !comms_on(1))
         comm_demo_next();
+    else if (!g_comm_demo && frameCounter == 90)
+        comm_launch();
     comms_tick();
     sim_step();
     if (g_sky_demo)
