@@ -1206,6 +1206,55 @@ the dense copies kept in XMS, and every near ship beyond the two is drawn
 exactly at half height: "No stream; every near ship turned", under the
 sets.)
 
+### The comm link: faces on the VDUs
+
+The user's brief (2026-10-22, from a WC1 screenshot): a pilot's face on
+either VDU over a grainy green-and-white link; every human pilot in the
+same helmet, styled for this universe, "futuristic but functional" (their
+reference, after a racing helmet and a SpaceX one: a clear-domed hood, head
+on), the callsign on it, the pilot's own eyes from their portrait,
+animating a bit; the helmets shared and only the differences animated; the
+mouth behind breathing gear, so only the eyes differ; a low-bandwidth,
+encrypted link: each row drawn twice, the picture deliberately coarse;
+little memory; good on most VDUs, cropped for the rest.
+
+**The art** (`tools/helmet3d.py`, `tools/comms.py`, made in the build into
+build/comms). The helmet is signed distance fields ray-marched in numpy, one
+render for everyone: a dark satin shell, a clear visor in a black gasket,
+air pads at the cheeks, a lamp and camera module, an oxygen mask with its
+regulator, straps and a ribbed hose, a fabric neck seal; key, fill and rim
+lights, soft shadows, occlusion, a studio's reflections (the visor's kept
+apart, laid over the face). Each pilot's portrait goes behind the visor,
+its eyes onto the helmet's eye points, its local contrast raised so the
+eyes survive the reduction. Then the link's look: luminance, a dark ground,
+the range stretched, 56 x 40 kept (shown as 2 x 2 blocks: the user's pick
+of the coarse look; `--cols 112` keeps the full width), eight shades that
+are flight palette entries every cockpit shares (black, the carrier-green
+livery ramp 64..71, a pale green-white), a light ordered dither. What
+differs from pilot to pilot is only the eyes and brows: RV.DAT holds the
+shared helmet (`comm_helmet`), each pilot's window and four eye patches
+(half, shut, glance left, right; `RvPerson.comm` and the four after it),
+24 KB for the ten (eight pilots, both heroes), read in as wanted; and
+`comm_ramp`: the shades' entries, the same two steps down for the scan
+line, where the callsign goes and where the regulator's light is.
+
+**The engine** (`src/comms.c`). `comms_say(person, vdu, text)` puts the
+picture together once in XMS as the VDU shows it (112 x 80, each kept row
+twice, the second through the darker ramp); a blink or a glance rebuilds
+only the rows its patch covers. Each frame `comms_draw` moves the visible
+rows to the screen (an XMS move a row), stencils the callsign at the VDU's
+own resolution in a 4 x 6 pixel font (at the link's it could not be read;
+ink light on a dark shell, dark on a light one, a shadow), lights the
+regulator while a mouth shape is open (`lip_steps` on the text: no mouth
+to animate), and sprinkles three grains a row (a shade up or down).
+Centred on the VDU; a shorter one loses three quarters of its crop at the
+bottom (the mask, the hose), keeping the callsign. The eyes blink every
+1.3-4 s (half, shut, half) or, one time in four, glance aside for half a
+second. A flight frame pays 0.6 ms for a comm at 40,000 cycles (the XMS
+moves, ~70 a frame; the picture held in conventional memory would be 0.1
+ms for 9 KB). `RV.EXE /commdemo`: the pilots say their lines in turn, each
+VDU by turns.
+
 ### Balls: the spherical projectiles
 
 The user's brief (2026-10-21): very fast spherical projectiles, far more

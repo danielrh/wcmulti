@@ -26,6 +26,7 @@
 #include "cockpit.h"
 #include "bolts.h"
 #include "flames.h"
+#include "comms.h"
 #include "balls.h"
 #include "missiles.h"
 #include "sky.h"
@@ -54,6 +55,7 @@ int g_boxes = 0;                        /* RV.EXE /boxes: every ship's box brack
 int g_collide_demo = 0;                 /* RV.EXE /collidedemo: two fighters flown into each other (collide.c's check) */
 int g_hull_demo = 0;                    /* RV.EXE /hulldemo: a turning fighter shot through by a grid of rays */
 int g_flame_test = 0;                   /* RV.EXE /flametest: the flames' self-test (with the flames scene's types) */
+int g_comm_demo = 0;                    /* RV.EXE /commdemo: the pilots on the comm in turn, each VDU by turns */
 int g_hull_type = -1;                   /* RV.EXE /hulltype N: its ship's type (decimal; an asymmetric one checks the
                                            silhouettes' left and right) */
 int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
@@ -1051,6 +1053,20 @@ static void flame_test(void)
     flames_frame();
 }
 
+/* --- the comm demo (RV.EXE /commdemo): every pilot with comm art says their line, on each VDU by turns --- */
+static void comm_demo_next(void)
+{
+    static int person = -1, vdu = 1;
+    int k;
+    for (k = 0; k < RV_PEOPLE; k++) {
+        person = (person + 1) % (int)dat_header()->npeople;
+        if (comms_say(person, vdu, (const char __far *)g_pilots[person].line)) {
+            vdu ^= 1;
+            return;
+        }
+    }
+}
+
 /* --- the hull demo (RV.EXE /hulldemo): a turning fighter shot through by a grid of rays ---
  *
  * The user's pick (2026-10-21): the ships' three-view silhouette hulls,
@@ -1272,8 +1288,10 @@ static void flight_draw(int y0, int y1)
 
 static void mfd_draw(int which, const RvRect __far *r, int y0, int y1)
 {
-    /* the right MFD: the target's view, clipped to the glass */
+    /* a comm on this VDU, else on the right one the target's view, clipped to the glass */
     const ShipSet __far *set;
+    if (comms_draw(which, r, y0, y1))
+        return;
     if (which != 1 || g_set_enemy < 0)
         return;
     set = ships_set(g_set_enemy);
@@ -1393,7 +1411,7 @@ static void gather(void)
         sprintf(g_mfd[0][3], "%d FAT %d LN", fats, lines);
     } else
         sprintf(g_mfd[0][3], "T-%lu", (FLIGHT_TICKS - (clock240() - g_t0) + 239) / 240);
-    g_st.mfd_text[0][0] = g_mfd[0][0];
+    g_st.mfd_text[0][0] = comms_on(0) ? 0 : g_mfd[0][0];   /* (a comm takes the whole VDU) */
     g_st.mfd_text[0][1] = g_mfd[0][1];
     g_st.mfd_text[0][2] = g_mfd[0][2];
     g_st.mfd_text[0][3] = g_mfd[0][3];
@@ -2167,6 +2185,7 @@ void __far __cdecl flight_startup(void)
     cockpit_palette();                  /* only now: the deck kept its own palette while all that loaded (seconds in the
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
+    comms_flight_start();
     missiles_init();
     sky_clear();
     if (g_sky_demo)
@@ -2241,6 +2260,9 @@ void __far __cdecl flight_frame(void)
         g_flame_test = 2;
         flame_test();
     }
+    if (g_comm_demo && !comms_on(0) && !comms_on(1))
+        comm_demo_next();
+    comms_tick();
     sim_step();
     if (g_sky_demo)
         sky_demo_step();
@@ -2395,6 +2417,7 @@ int flight_fly(const RvMission __far *m)
     g_scene.hide_pointer = 0;
     in_steer(1);
     ships_draw_log();
+    comms_flight_end();
     ships_unload();
     collide_flight_end();
     cockpit_unload();

@@ -1,29 +1,32 @@
 #!/usr/bin/env python3
-"""Comm-link faces for the cockpit's VDUs: a pilot in a flight helmet over a grainy green-and-white link.
+"""Comm-link faces for the cockpit's VDUs: a pilot in a flight helmet over a low-bandwidth green link.
 
-    comms.py [KEY ...] [--out build/comms] [--preview DIR]
+    comms.py [KEY ...] [--out build/comms] [--cols 112] [--preview DIR]
 
 The user's brief (2026-10-22): every human pilot in the same helmet, styled for this universe, futuristic but
-functional (after their reference: a clear-domed hood seen head on), the callsign on it, the pilot's own face
-behind the visor, the eyes animating; the helmets shared and only the differences animated; good on most of the
-cockpits' VDUs, cropped for the rest; the scan lines left to the engine.
+functional (after their reference: a clear-domed hood seen head on); the mouth covered by breathing gear and the
+eyes shown, so only the eyes differ from pilot to pilot and only they animate; the callsign on the helmet; a low
+bandwidth, encrypted link: each row drawn twice, the picture deliberately coarse; little memory.
 
 The helmet is one render for everyone (tools/helmet3d.py: signed distance fields ray-marched in numpy, lit, the
-visor's reflection kept apart).  Each pilot's portrait (art/people/faces/KEY/: base.png, the eye and mouth frames,
-face.json) goes behind the visor, its eyes onto the helmet's eye points, lit by the light that falls inside and
-under the visor's reflection.  Then to the link's look: luminance, the background a dark tone so the helmet's
-outline reads, the range stretched, W x H (what most of the cockpits' VDUs show: the engine crops it for smaller
-ones and fills round it for bigger), LEVELS greens, a light ordered dither.  The callsign is stencilled on the
-shell above the visor in a 4 x 6 pixel font at that size (a smoothed one is mush at seven pixels).
+visor's reflection kept apart; the oxygen mask, its regulator and hose, inside the visor).  Each pilot's portrait
+(art/people/faces/KEY/) goes behind the visor, its eyes onto the helmet's eye points.  Then to the link's look:
+luminance, a dark ground so the helmet's outline reads, the range stretched, reduced to COLS x ROWS (ROWS = 40:
+the engine draws each row twice, the second a scan line darker; COLS 112, or 56 for 2 x 2 blocks), LEVELS greens
+(flight palette entries), a light ordered dither.
 
 What the engine keeps (OUT/): helmet.png, the shared picture (shade indices, mode L); for each pilot KEY/:
-window.png, the part that differs from pilot to pilot (the visor and the callsign); eyes_NAME.png and mouth_N.png,
-the patches that animate it; comm.json, where each sits.  With --preview DIR: a contact sheet and each pilot
-talking and blinking as a GIF, in the link's greens with scan lines and grain as the engine will draw them.
+window.png, the part that differs from pilot to pilot (the eyes and brows), and eyes_half, eyes_shut, eyes_left,
+eyes_right.png, the patches that animate it, with comm.json saying where each sits; comms.json: the sizes, the
+ramps, where the engine stencils the callsign (it draws it at the VDU's own resolution, in a 4 x 6 pixel font:
+at the link's it could not be read) and where the regulator's light is (lit while the pilot speaks).  With
+--preview DIR: a contact sheet and each pilot's GIF (blinking, glancing, the light with their line), drawn as the
+engine draws them.
 
 Everything here is rendered from scratch or made from the user's portraits.
 """
 import argparse
+import csv
 import json
 import os
 import sys
@@ -40,17 +43,23 @@ import lipsync  # noqa: E402
 ROOT = os.path.join(HERE, '..')
 FACES = os.path.join(ROOT, 'art', 'people', 'faces')
 PILOTS = ['COMET', 'FROST', 'ECHO', 'TORCH', 'KESTREL', 'DRIFTER', 'PRIME', 'ANCHOR', 'HERO_M', 'HERO_F']
-W, H = 112, 80                          # the VDU picture (most cockpits' VDUs are 103..109 x 70..74)
-SS = 4                                  # rendered this much finer, then reduced
+SW, SH = 112, 80                        # on the VDU (most cockpits' VDUs are 103..109 x 70..74)
+ROWS = 40                               # kept: each row drawn twice
+SS = 4                                  # the helmet rendered this much finer than the VDU picture
 LEVELS = 8
-GREENS = [(3, 12, 5), (8, 34, 12), (16, 62, 22), (28, 96, 34), (46, 132, 50), (74, 170, 74), (122, 210, 116),
-          (206, 246, 196)]              # black green to green white: the engine's palette takes these
-LOOK = dict(bg=0.045, lo=0.05, hi=0.75, gamma=0.7, dither=0.25)   # the link's treatment (chosen from four; bg linear)
+# the shades are flight palette entries (the same in every cockpit): black, the carrier-green livery's ramp (64 ..
+# 71), a pale green white at the top; a row's second drawing (the scan line) the same two steps down
+RAMP = [16, 64, 66, 67, 68, 69, 71, 155]
+RAMP_DARK = [16, 16, 64, 66, 67, 68, 69, 71]
+_FLIGHT = json.load(open(os.path.join(ROOT, 'data', 'palette.json')))['rgb']
+GREENS = [tuple(_FLIGHT[i]) for i in RAMP]
+GREENS_DARK = [tuple(_FLIGHT[i]) for i in RAMP_DARK]
+LOOK = dict(bg=0.045, lo=0.05, hi=0.75, gamma=0.7, dither=0.25)
 EYE_FRAMES = ['open', 'half', 'shut', 'left', 'right']
+PATCHES = ['eyes_half', 'eyes_shut', 'eyes_left', 'eyes_right']   # RV.DAT's order, after each pilot's window
 BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]) / 16.0 - 0.5
-CALLSIGN_SHADE = 6
 
-GLYPHS = {   # 4 x 6 (M, W 5 wide; I, T, Y 3)
+GLYPHS = {   # 4 x 6 (M, W 5 wide; I, T, Y 3): the engine's table is the same (comms.c)
     'A': ['.##.', '#..#', '#..#', '####', '#..#', '#..#'], 'B': ['###.', '#..#', '###.', '#..#', '#..#', '###.'],
     'C': ['.###', '#...', '#...', '#...', '#...', '.###'], 'D': ['###.', '#..#', '#..#', '#..#', '#..#', '###.'],
     'E': ['####', '#...', '###.', '#...', '#...', '####'], 'F': ['####', '#...', '###.', '#...', '#...', '#...'],
@@ -68,7 +77,7 @@ GLYPHS = {   # 4 x 6 (M, W 5 wide; I, T, Y 3)
 
 
 class Portrait:
-    """a pilot's portrait (256 x 256), its eye and mouth frames, and where its eyes are"""
+    """a pilot's portrait (256 x 256), its eye frames, and where its eyes are"""
 
     def __init__(self, key):
         d = os.path.join(FACES, key)
@@ -77,32 +86,29 @@ class Portrait:
         self.callsign = self.meta.get('callsign') or key.title()
         self.base = Image.open(os.path.join(d, 'base.png')).convert('RGBA')
         self.eyes = [Image.open(os.path.join(d, 'eyes_%d.png' % i)).convert('RGBA') for i in range(3)]
-        self.mouths = []
-        for i in range(9):
-            f = os.path.join(d, 'mouth_%d.png' % i)
-            self.mouths.append(Image.open(f).convert('RGBA') if os.path.exists(f) else None)
         src, b = self.meta['source'], self.meta['eye_box']
         sb = src['eye_box']
         k = (b[2] - b[0]) / (sb[2] - sb[0])
         self.eye_pts = [((ex - sb[0]) * k + b[0], (ey - sb[1]) * k + b[1]) for ex, ey in src['eyes']]
 
-    def picture(self, eyes=0, glance=0, mouth=0):
-        """the portrait's luminance with an eye frame (0 open, 1 half, 2 shut), a glance (-1 left, 1 right: the eye
-        band shifted in its box) and a mouth frame (lipsync's nine) laid over it"""
+    def picture(self, eyes=0, glance=0):
+        """the portrait's luminance with an eye frame (0 open, 1 half, 2 shut) and a glance (-1 left, 1 right: the eye
+        band shifted in its box, the box's edges kept)"""
         im = self.base.copy()
         if eyes:
             im.alpha_composite(self.eyes[eyes], tuple(self.meta['eye_box'][:2]))
-        if mouth and self.mouths[mouth] is not None:
-            im.alpha_composite(self.mouths[mouth], tuple(self.meta['mouth_box'][:2]))
         a = np.asarray(im.convert('RGB'), dtype=np.float64) / 255.0
         lum = 0.3 * a[..., 0] + 0.59 * a[..., 1] + 0.11 * a[..., 2]
+        # for a coarse link: the skin to the middle, the eyes and brows made to stand out (local contrast: the
+        # face less its blur, three times over)
+        soft = ndimage.gaussian_filter(lum, 6.0)
+        lum = np.clip(0.45 + 0.55 * (soft - soft.mean()) + 3.0 * (lum - soft), 0, 1)
         if glance:
             x0, y0, x1, y1 = self.meta['eye_box']
             band = lum[y0:y1, x0:x1].copy()
-            shift = int(round(glance * 2.5))
-            moved = np.roll(band, shift, axis=1)
+            moved = np.roll(band, int(round(glance * 3)), axis=1)
             edge = np.ones(band.shape)
-            edge[:, :3] = edge[:, -3:] = 0       # (the band's own edges stay: the whites and lids move, not the box)
+            edge[:, :4] = edge[:, -4:] = 0
             lum[y0:y1, x0:x1] = band * (1 - edge) + moved * edge
         return lum
 
@@ -123,38 +129,15 @@ def composite(r, por, lum_face):
     return out * r['visor_pass'] + r['visor_refl']
 
 
-def shades(gray):
-    """luminance (gamma 1.8 display, as the grey previews) to the link's shades at W x H"""
+def shades(gray, cols):
+    """luminance (gamma 1.8 display, as the grey previews) to the link's shades at cols x ROWS"""
     disp = np.clip(gray, 0, 1.5) ** (1 / 1.8)
-    small = np.asarray(Image.fromarray((np.clip(disp, 0, 1) * 255).astype(np.uint8)).resize((W, H), Image.LANCZOS),
+    small = np.asarray(Image.fromarray((np.clip(disp, 0, 1) * 255).astype(np.uint8)).resize((cols, ROWS),
+                                                                                            Image.LANCZOS),
                        dtype=np.float64) / 255.0
     s = np.clip((small - LOOK['lo']) / (LOOK['hi'] - LOOK['lo']), 0, 1) ** LOOK['gamma']
-    b = np.tile(BAYER4, (H // 4 + 1, W // 4 + 1))[:H, :W]
+    b = np.tile(BAYER4, (ROWS // 4 + 1, cols // 4 + 1))[:ROWS, :cols]
     return np.clip(np.round(s * (LEVELS - 1) + b * LOOK['dither']), 0, LEVELS - 1).astype(np.uint8)
-
-
-def stencil(idx, text, cx, cy):
-    """the callsign in the pixel font, centred at (cx, cy): light on a dark shell, dark on a light one, a shadow
-    a pixel down and right in the other shade, so it reads on whatever is behind it"""
-    text = ''.join(ch for ch in text.upper() if ch in GLYPHS)
-    width = sum(len(GLYPHS[ch][0]) + 1 for ch in text) - 1
-    x0, y0 = int(round(cx - width / 2.0)), int(round(cy - 3))
-    under = idx[max(y0, 0):y0 + 6, max(x0, 0):x0 + width]
-    light = under.size == 0 or under.mean() < (LEVELS - 1) * 0.55
-    ink, shadow = (CALLSIGN_SHADE, 1) if light else (1, LEVELS - 2)
-    pts = []
-    x = x0
-    for ch in text:
-        g = GLYPHS[ch]
-        pts += [(y0 + rr, x + k) for rr, row in enumerate(g) for k, p in enumerate(row) if p == '#']
-        x += len(g[0]) + 1
-    for (y, x) in pts:
-        if 0 <= y + 1 < idx.shape[0] and 0 <= x + 1 < idx.shape[1]:
-            idx[y + 1, x + 1] = shadow
-    for (y, x) in pts:
-        if 0 <= y < idx.shape[0] and 0 <= x < idx.shape[1]:
-            idx[y, x] = ink
-    return idx
 
 
 def bbox(mask):
@@ -164,26 +147,59 @@ def bbox(mask):
     return [int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1]
 
 
-def to_rgb(idx, frame=0, scan=True, grain=True, seed=0):
-    rng = np.random.default_rng(seed + frame * 7919)
-    i = idx.astype(np.int32)
-    if grain:
-        i = np.clip(i + (rng.random(i.shape) < 0.025) * rng.choice([-1, 1], i.shape), 0, LEVELS - 1)
-    rgb = np.array(GREENS, dtype=np.uint8)[i]
-    if scan:
-        rgb[1::2] = (rgb[1::2].astype(np.int32) * 5 // 8).astype(np.uint8)
-    return Image.fromarray(rgb, 'RGB')
+# --- what the engine draws, done here for the previews ---
+
+def on_vdu(idx, rng=None, grain=True):
+    """a kept picture (cols x ROWS shades) as the VDU shows it: SW x SH, each row twice (the second the scan line's
+    ramp), each column (SW / cols) times; a few grains a row"""
+    sx = SW // idx.shape[1]
+    big = np.repeat(np.repeat(idx, 2, axis=0), sx, axis=1).astype(np.int32)
+    rgb = np.array(GREENS, dtype=np.uint8)[big]
+    rgb[1::2] = np.array(GREENS_DARK, dtype=np.uint8)[big[1::2]]
+    if grain and rng is not None:
+        for y in range(SH):
+            for _ in range(3):
+                x = int(rng.integers(0, SW))
+                s = int(np.clip(big[y, x] + rng.choice([-1, 1]), 0, LEVELS - 1))
+                rgb[y, x] = (GREENS_DARK if y & 1 else GREENS)[s]
+    return rgb
+
+
+def stencil(rgb, idx_big, text, cx, cy):
+    """the callsign in the 4 x 6 font at the VDU's resolution: light on a dark shell, dark on a light one, a shadow a
+    pixel down and right"""
+    text = ''.join(ch for ch in text.upper() if ch in GLYPHS)
+    width = sum(len(GLYPHS[ch][0]) + 1 for ch in text) - 1
+    x0, y0 = int(round(cx - width / 2.0)), int(round(cy - 3))
+    under = idx_big[max(y0, 0):y0 + 6, max(x0, 0):x0 + width]
+    light = under.size == 0 or under.mean() < (LEVELS - 1) * 0.55
+    ink, shadow = (GREENS[6], GREENS[1]) if light else (GREENS[1], GREENS[6])
+    pts, x = [], x0
+    for ch in text:
+        g = GLYPHS[ch]
+        pts += [(y0 + rr, x + k) for rr, row in enumerate(g) for k, p in enumerate(row) if p == '#']
+        x += len(g[0]) + 1
+    for y, x in pts:
+        if 0 <= y + 1 < SH and 0 <= x + 1 < SW:
+            rgb[y + 1, x + 1] = shadow
+    for y, x in pts:
+        if 0 <= y < SH and 0 <= x < SW:
+            rgb[y, x] = ink
+    return rgb
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('keys', nargs='*')
     ap.add_argument('--out', default=os.path.join(ROOT, 'build', 'comms'))
+    ap.add_argument('--cols', type=int, default=112, help='kept columns: 112, or 56 for 2 x 2 blocks')
     ap.add_argument('--preview')
     args = ap.parse_args()
     keys = args.keys or PILOTS
-    r = helmet3d.render(W * SS, H * SS)
+    cols = args.cols
+    r = helmet3d.render(SW * SS, SH * SS)
     brow = (r['brow'][0] / SS, r['brow'][1] / SS)
+    led = (r['led'][0] / SS, r['led'][1] / SS)
     pilots = {}
     for key in keys:
         por = Portrait(key)
@@ -191,22 +207,17 @@ def main():
         for name in EYE_FRAMES:
             e = {'open': 0, 'half': 1, 'shut': 2}.get(name, 0)
             g = {'left': -1, 'right': 1}.get(name, 0)
-            frames['eyes_' + name] = stencil(shades(composite(r, por, por.picture(e, g))), por.callsign, *brow)
-        for m in range(1, 9):
-            if por.mouths[m] is not None:
-                frames['mouth_%d' % m] = stencil(shades(composite(r, por, por.picture(0, 0, m))), por.callsign, *brow)
+            frames['eyes_' + name] = shades(composite(r, por, por.picture(e, g)), cols)
         pilots[key] = (por, frames)
-        print('%-8s %d frames' % (key, len(frames)))
-    # the shared helmet, and each pilot's window: where any pilot's picture differs from another's
+    # the shared helmet, and the window: where any pilot's picture differs from another's
     first = pilots[keys[0]][1]['eyes_open']
-    differ = np.zeros((H, W), bool)
+    differ = np.zeros(first.shape, bool)
     for key in keys:
         differ |= pilots[key][1]['eyes_open'] != first
-    head = np.asarray(Image.fromarray((r['mat'] == helmet3d.MAT['head']).astype(np.uint8) * 255).resize((W, H),
-                      Image.BILINEAR)) > 0
-    win = bbox(differ | head)
+    win = bbox(differ)
     os.makedirs(args.out, exist_ok=True)
     Image.fromarray(first, 'L').save(os.path.join(args.out, 'helmet.png'))
+    total = first.size
     for key in keys:
         por, frames = pilots[key]
         base = frames['eyes_open']
@@ -214,37 +225,42 @@ def main():
         os.makedirs(d, exist_ok=True)
         x0, y0, x1, y1 = win
         Image.fromarray(np.ascontiguousarray(base[y0:y1, x0:x1]), 'L').save(os.path.join(d, 'window.png'))
-        info = {'key': key, 'callsign': por.callsign, 'w': W, 'h': H, 'levels': LEVELS, 'window': win, 'patches': {}}
-        for name, f in frames.items():
-            if name == 'eyes_open':
-                continue
-            bb = bbox(f != base)
+        total += (x1 - x0) * (y1 - y0)
+        info = {'key': key, 'callsign': por.callsign, 'window': win, 'patches': {}}
+        for name in PATCHES:
+            bb = bbox(frames[name] != base)
             if bb is None:
                 continue
             info['patches'][name] = bb
-            Image.fromarray(np.ascontiguousarray(f[bb[1]:bb[3], bb[0]:bb[2]]), 'L').save(os.path.join(d, name + '.png'))
+            total += (bb[2] - bb[0]) * (bb[3] - bb[1])
+            Image.fromarray(np.ascontiguousarray(frames[name][bb[1]:bb[3], bb[0]:bb[2]]), 'L').save(
+                os.path.join(d, name + '.png'))
         json.dump(info, open(os.path.join(d, 'comm.json'), 'w'), indent=1)
+    json.dump({'cols': cols, 'rows': ROWS, 'w': SW, 'h': SH, 'levels': LEVELS, 'ramp': RAMP, 'ramp_dark': RAMP_DARK,
+               'patches': PATCHES, 'pilots': keys, 'brow': [round(brow[0]), round(brow[1])],
+               'led': [round(led[0]), round(led[1])]}, open(os.path.join(args.out, 'comms.json'), 'w'), indent=1)
+    print('comms: %d pilots at %d x %d (each row twice), the window %s, %d bytes in all' % (len(keys), cols, ROWS,
+                                                                                         win, total))
     if args.preview:
-        preview(args.preview, keys, pilots)
+        preview(args.preview, keys, pilots, brow, led)
 
 
-def preview(out, keys, pilots):
-    """each pilot saying their line and blinking, glancing now and then; a contact sheet"""
+def preview(out, keys, pilots, brow, led):
+    """each pilot saying their line (the regulator's light) and blinking, glancing now and then; a contact sheet"""
     os.makedirs(out, exist_ok=True)
     Z = 3
     tiles = []
-    people = {row['key']: row for row in __import__('csv').DictReader(open(os.path.join(ROOT, 'data', 'people.csv')))}
+    people = {row['key']: row for row in csv.DictReader(open(os.path.join(ROOT, 'data', 'people.csv')))}
     for n, key in enumerate(keys):
         por, frames = pilots[key]
-        line = people.get(key, {}).get('line', 'Copy that.')
-        mouths = lipsync.frames(line, 1)
-        total = max(len(mouths) + 12, 60)
+        talk = lipsync.frames(people.get(key, {}).get('line', 'Copy that.'), 1)
+        total = max(len(talk) + 12, 60)
         rng = np.random.default_rng(n + 5)
         eyes = ['open'] * total
         k = 8
-        while k < total - 3:                      # blinks every second or two, a glance now and then
+        while k < total - 3:
             if rng.random() < 0.3:
-                g = rng.choice(['left', 'right'])
+                g = str(rng.choice(['left', 'right']))
                 for j in range(k, min(k + 6, total)):
                     eyes[j] = g
                 k += 7
@@ -256,21 +272,25 @@ def preview(out, keys, pilots):
             k += int(rng.integers(10, 22))
         gif = []
         for f in range(total):
-            m = mouths[f - 6] if 6 <= f < 6 + len(mouths) else 0
-            name = ('mouth_%d' % m) if m and ('mouth_%d' % m) in frames else 'eyes_open'
-            pic = frames[name].copy()
-            if eyes[f] != 'open':
-                eb = frames['eyes_' + eyes[f]]
-                diff = eb != frames['eyes_open']
-                pic[diff] = eb[diff]
-            gif.append(to_rgb(pic, f, seed=n).resize((W * Z, H * Z), Image.NEAREST))
+            idx = frames['eyes_' + eyes[f]]
+            rgb = on_vdu(idx, rng)
+            big = np.repeat(np.repeat(idx, 2, axis=0), SW // idx.shape[1], axis=1)
+            stencil(rgb, big, por.callsign, *brow)
+            speaking = 6 <= f < 6 + len(talk) and talk[f - 6] != 0
+            if speaking:
+                lx, ly = int(round(led[0])), int(round(led[1]))
+                rgb[ly - 1:ly + 1, lx - 1:lx + 1] = GREENS[7]
+            gif.append(Image.fromarray(rgb, 'RGB').resize((SW * Z, SH * Z), Image.NEAREST))
         gif[0].save(os.path.join(out, key + '.gif'), save_all=True, append_images=gif[1:], duration=100, loop=0)
-        tiles.append(to_rgb(frames['eyes_open'], 0, seed=n))
+        rgb = on_vdu(frames['eyes_open'], np.random.default_rng(1))
+        stencil(rgb, np.repeat(np.repeat(frames['eyes_open'], 2, axis=0), SW // frames['eyes_open'].shape[1], axis=1),
+                por.callsign, *brow)
+        tiles.append(Image.fromarray(rgb, 'RGB'))
     cols = 5
     rows = (len(tiles) + cols - 1) // cols
-    sheet = Image.new('RGB', (cols * (W * Z + 8) + 8, rows * (H * Z + 8) + 8), (8, 8, 10))
+    sheet = Image.new('RGB', (cols * (SW * Z + 8) + 8, rows * (SH * Z + 8) + 8), (8, 8, 10))
     for i, t in enumerate(tiles):
-        sheet.paste(t.resize((W * Z, H * Z), Image.NEAREST), (8 + (i % cols) * (W * Z + 8), 8 + (i // cols) * (H * Z + 8)))
+        sheet.paste(t.resize((SW * Z, SH * Z), Image.NEAREST), (8 + (i % cols) * (SW * Z + 8), 8 + (i // cols) * (SH * Z + 8)))
     sheet.save(os.path.join(out, 'sheet.png'))
 
 

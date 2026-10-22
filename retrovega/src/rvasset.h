@@ -2,7 +2,7 @@
 #ifndef RVASSET_H
 #define RVASSET_H
 
-#define RVDAT_VERSION 2
+#define RVDAT_VERSION 3
 
 #define RV_HOTS 8
 #define RV_POSES 12
@@ -114,7 +114,10 @@ typedef struct {
     unsigned short font_chalk;          /* the tally board's hand (packed: 4 pixels a byte), loaded while it shows */
     unsigned short chalk_pal, chalk_back;   /* the bar's chalkboard up close: its palette, the picture */
     short chalk_slate[4];               /* the slate in that picture: x, y, w, h */
-    unsigned char reserved[10];
+    unsigned short comm_helmet, comm_ramp;   /* the comm link: its shared helmet (IMG, shades, cols x 40), its ramp
+                                           (RAW: the shades' palette entries, the same a scan line darker, then the
+                                           callsign's centre and the regulator's light, x y on the VDU picture) */
+    unsigned char reserved[6];
 } RvDatHeader;
 typedef struct {
     char name[22];
@@ -176,6 +179,8 @@ typedef struct {
     char key[10];
     unsigned short palpart, face, mouth0, eyes0;   /* the face sprite, 9 mouth and 3 eye images */
     short top;                  /* the face's first opaque row */
+    unsigned short comm;        /* the comm link's window (IMG, shades: what differs from the shared helmet), its 4
+                                   patches after it (eyes half, shut, left, right); 0xFFFF none */
 } RvPerson;
 typedef struct { short x, y, w, h; } RvRect;
 typedef struct {
@@ -202,7 +207,7 @@ typedef struct {
 #pragma pack()
 
 #define RV_ROOM_SIZE 556
-#define RV_PERSON_SIZE 20
+#define RV_PERSON_SIZE 22
 #define RV_COCKPIT_SIZE 224
 
 #endif

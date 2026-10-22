@@ -50,7 +50,7 @@ sys.path.insert(0, HERE)
 import cockpits  # noqa: E402
 import places  # noqa: E402
 
-VERSION = 2
+VERSION = 3
 SCREEN = (640, 400)
 ROOMS = ['bar', 'lounge', 'briefing', 'quarters', 'locker', 'deck']
 FACE = 352                      # close-up face size (the 256 px faces scaled 1.375)
@@ -509,7 +509,43 @@ def preview_cockpits(previews, path):
 
 # --- people ------------------------------------------------------------------
 
-def pack_people(pack, keys):
+def pack_comms(pack):
+    """the comm link's art (tools/comms.py, in build/comms): the shared helmet, and for each pilot it has their window
+    and its twelve patches (comms.json's order), all IMG in the link's shades 0..LEVELS-1, x and y where each sits on
+    the W x H picture; the ramp (RAW: LEVELS flight-palette entries for the shades, then LEVELS a scan line darker,
+    comms.py's entries, shared by every cockpit; then the callsign's centre and the regulator's light, x and y on
+    the VDU picture).  -> (helmet, ramp, {key: window})"""
+    d = os.path.join(ROOT, 'build', 'comms')
+    man = os.path.join(d, 'comms.json')
+    if not os.path.exists(man):
+        print('rvpack: no build/comms (tools/comms.py): no comm faces')
+        return 0xFFFF, 0xFFFF, {}
+    info = json.load(open(man))
+    def img(name, path, x, y):
+        a = np.asarray(Image.open(path).convert('L'), dtype=np.uint8)
+        return pack.add(name, 'IMG', a.tobytes(), a.shape[1], a.shape[0], x, y)
+    helmet = img('comm_helmet', os.path.join(d, 'helmet.png'), 0, 0)
+    ramp = info['ramp'] + info['ramp_dark']    # (flight palette entries below the cockpits' own: comms.py's)
+    assert all(i < CP_FREE[0] for i in ramp)
+    # then where the engine stencils the callsign and lights the regulator, on the VDU picture (x, y each)
+    ramp_i = pack.add('comm_ramp', 'RAW', bytes(ramp + info['brow'] + info['led']))
+    windows = {}
+    for key in info['pilots']:
+        pd = os.path.join(d, key)
+        c = json.load(open(os.path.join(pd, 'comm.json')))
+        x0, y0 = c['window'][:2]
+        windows[key] = img('cwin_' + key[:12], os.path.join(pd, 'window.png'), x0, y0)
+        for name in info['patches']:
+            bb = c['patches'].get(name)
+            if bb:
+                img('c%s_%s' % (name.replace('eyes_', ''), key[:12]), os.path.join(pd, name + '.png'), bb[0], bb[1])
+            else:                       # (no change in that frame: an empty patch)
+                pack.add('c%s_%s' % (name.replace('eyes_', ''), key[:12]), 'IMG', b'', 0, 0, 0, 0)
+    print('rvpack: comm faces for %d pilots, the ramp %s' % (len(windows), ramp))
+    return helmet, ramp_i, windows
+
+
+def pack_people(pack, keys, comms=None):
     out = []
     for key in keys:
         d = os.path.join(ROOT, 'art', 'people', 'faces', key)
@@ -538,7 +574,7 @@ def pack_people(pack, keys):
             e0 = j if e0 is None else e0
         bb = np.asarray(base)[..., 3] >= 128
         top = int(np.nonzero(bb.any(axis=1))[0][0])
-        out.append(struct.pack('<10sHHHHh', key.encode()[:9], pp, b, m0, e0, top))
+        out.append(struct.pack('<10sHHHHhH', key.encode()[:9], pp, b, m0, e0, top, (comms or {}).get(key, 0xFFFF)))
     return out
 
 
@@ -654,11 +690,12 @@ def main():
                                  0 if rec['actor'][0] == 0xFF else 1, rec['palette'], rec['back'],
                                  rec['closeup_part'], rec['closeup_back'])
                      + hot + poses + rec['actor'] + speaker + deck + boards)
-    persons = pack_people(pack, people)
+    comm_helmet, comm_ramp, comm_windows = pack_comms(pack)
+    persons = pack_people(pack, people, comm_windows)
     cockpits_recs, previews = pack_cockpits(pack, ships_csv)
     preview_cockpits(previews, os.path.join(ROOT, 'docs', 'cockpits-packed.png'))
     # lay out: header, directory, rooms, people, cockpits, payloads
-    hdr_fmt = '<8sHHLHLHLHHHHHHHHLHHHH4h10s'
+    hdr_fmt = '<8sHHLHLHLHHHHHHHHLHHHH4hHH6s'
     hsize = struct.calcsize(hdr_fmt)
     dir_at = hsize
     dsize = 40
@@ -675,7 +712,8 @@ def main():
             blobs.append(b'\0')
     head = struct.pack(hdr_fmt, b'RVDAT', VERSION, len(pack.assets), dir_at, len(rooms), rooms_at, len(persons),
                        people_at, len(rooms[0]), len(persons[0]), body, title, arrow, door, ui_i,
-                       len(cockpits_recs), cockpits_at, len(cockpits_recs[0]), chalk, chalk_pal, chalk_back, *slate, b'')
+                       len(cockpits_recs), cockpits_at, len(cockpits_recs[0]), chalk, chalk_pal, chalk_back, *slate,
+                       comm_helmet, comm_ramp, b'')
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, 'wb') as f:
         f.write(head + b''.join(directory) + b''.join(rooms) + b''.join(persons) + b''.join(cockpits_recs)
@@ -728,7 +766,10 @@ def header(room_size, person_size, cockpit_size):
     unsigned short font_chalk;          /* the tally board's hand (packed: 4 pixels a byte), loaded while it shows */
     unsigned short chalk_pal, chalk_back;   /* the bar's chalkboard up close: its palette, the picture */
     short chalk_slate[4];               /* the slate in that picture: x, y, w, h */
-    unsigned char reserved[10];
+    unsigned short comm_helmet, comm_ramp;   /* the comm link: its shared helmet (IMG, shades, cols x 40), its ramp
+                                           (RAW: the shades' palette entries, the same a scan line darker, then the
+                                           callsign's centre and the regulator's light, x y on the VDU picture) */
+    unsigned char reserved[6];
 } RvDatHeader;
 typedef struct {
     char name[22];
@@ -790,6 +831,8 @@ typedef struct {
     char key[10];
     unsigned short palpart, face, mouth0, eyes0;   /* the face sprite, 9 mouth and 3 eye images */
     short top;                  /* the face's first opaque row */
+    unsigned short comm;        /* the comm link's window (IMG, shades: what differs from the shared helmet), its 4
+                                   patches after it (eyes half, shut, left, right); 0xFFFF none */
 } RvPerson;
 typedef struct { short x, y, w, h; } RvRect;
 typedef struct {

@@ -52,7 +52,7 @@ def smax(a, b, k):
     return -smin(-a, -b, k)
 
 
-MAT = {'shell': 0, 'gasket': 1, 'pad': 2, 'metal': 3, 'seal': 4, 'lens': 5, 'head': 6}
+MAT = {'shell': 0, 'gasket': 1, 'pad': 2, 'metal': 3, 'seal': 4, 'lens': 5, 'head': 6, 'mask': 7, 'hose': 8}
 HEAD_C = np.array([0.0, 0.0, 0.0])
 HEAD_R = np.array([0.40, 0.52, 0.46])
 SHELL_C = np.array([0.0, 0.06, -0.06])
@@ -108,10 +108,24 @@ def solids(p):
     suit = ellipsoid(p, np.array([0, -1.55, -0.05]), np.array([1.15, 0.58, 0.64]))
     seal = smin(smin(seal, collar, 0.04), suit, 0.10)
     head = ellipsoid(p, HEAD_C, HEAD_R)
-    return {'shell': shell, 'gasket': gasket, 'pad': pad, 'metal': module, 'lens': lens, 'seal': seal, 'head': head}
+    # the breathing gear (the user: the mouth covered, the eyes all shown): a rubber mask over nose and mouth, its
+    # regulator in front, straps back across the cheeks, a ribbed hose down to the neck seal
+    mask = ellipsoid(p, np.array([0.0, -0.215, 0.385]), np.array([0.215, 0.205, 0.16]))
+    mask = smax(mask, -(p[..., 2] - 0.30), 0.02)
+    mask = smin(mask, rbox(p, np.array([0.0, -0.10, 0.47]), np.array([0.07, 0.07, 0.05]), 0.04), 0.05)   # (the nose)
+    reg = cyl_z(p, np.array([0.0, -0.265, 0.535]), 0.06, 0.035)
+    reg = np.minimum(reg, cyl_z(p, np.array([0.0, -0.265, 0.575]), 0.035, 0.012))
+    straps = np.minimum(capsule(pm, np.array([0.18, -0.13, 0.38]), np.array([0.36, -0.02, 0.12]), 0.014),
+                        capsule(pm, np.array([0.19, -0.30, 0.34]), np.array([0.36, -0.24, 0.08]), 0.014))
+    t = np.clip((-0.33 - y) / 0.36, 0, 1)
+    hx = 0.10 + 0.16 * t
+    hz = 0.47 - 0.14 * t
+    hose = np.where((y < -0.30) & (y > -0.72), np.hypot(x - hx, z - hz) - 0.032 - 0.004 * np.sin(y * 160), 1e3)
+    return {'shell': shell, 'gasket': gasket, 'pad': pad, 'metal': np.minimum(module, reg), 'lens': lens,
+            'seal': seal, 'head': head, 'mask': np.minimum(mask, straps), 'hose': hose}
 
 
-ORDER = ['shell', 'gasket', 'pad', 'metal', 'lens', 'seal', 'head']
+ORDER = ['shell', 'gasket', 'pad', 'metal', 'lens', 'seal', 'head', 'mask', 'hose']
 
 
 def sdf(p):
@@ -184,7 +198,7 @@ def studio(R):
     return 0.03 + 0.95 * box + strip
 
 
-def camera(w, h, span=2.02, eye=(0.0, 0.10, 5.0), look=(0.0, 0.03, 0.0)):
+def camera(w, h, span=1.52, eye=(0.0, 0.10, 5.0), look=(0.0, 0.135, 0.0)):
     eye = np.array(eye, dtype=np.float64)
     fwd = np.array(look) - eye
     dist = np.linalg.norm(fwd)
@@ -223,8 +237,10 @@ def render(w, h):
     sh = soft_shadow(P + N * 0.002, KEY)
     ao = occlusion(P, N)
     pick = lambda vals, other: np.select([mat == MAT[k] for k in vals], list(vals.values()), other)
-    alb = pick({'shell': 0.16, 'gasket': 0.035, 'pad': 0.82, 'metal': 0.30, 'lens': 0.05, 'seal': 0.07}, 0.5)
-    rough = pick({'shell': 0.30, 'gasket': 0.6, 'pad': 0.85, 'metal': 0.25, 'lens': 0.05, 'seal': 0.9}, 0.7)
+    alb = pick({'shell': 0.16, 'gasket': 0.035, 'pad': 0.82, 'metal': 0.30, 'lens': 0.05, 'seal': 0.07,
+                'mask': 0.10, 'hose': 0.09}, 0.5)
+    rough = pick({'shell': 0.30, 'gasket': 0.6, 'pad': 0.85, 'metal': 0.25, 'lens': 0.05, 'seal': 0.9,
+                  'mask': 0.55, 'hose': 0.6}, 0.7)
     coat = pick({'shell': 0.9, 'metal': 0.6, 'lens': 1.0}, 0.05)
     nl = np.clip(N @ KEY, 0, 1)
     nv = np.clip(np.sum(N * V, -1), 0, 1)
@@ -254,9 +270,10 @@ def render(w, h):
         nvv = np.clip(np.sum(Nv * Vv, -1), 0, 1)
         Rv = -Vv + 2 * nvv[..., None] * Nv
         fres = 0.05 + 0.95 * (1 - nvv) ** 5
-        vrefl[front] = studio(Rv) * (0.22 + 0.78 * fres) * 0.8
+        vrefl[front] = studio(Rv) * (0.22 + 0.78 * fres) * 0.4
         vpass[front] = 0.82 * (1 - fres)
     eyes = [project(e) for e in EYES]
     brow = project(np.array([0.0, 0.535, 0.56]))  # the callsign's place on the shell, above the visor's gasket
+    led = project(np.array([0.0, -0.265, 0.59]))   # the regulator's light: lit while the pilot speaks
     return {'lum': lum, 'mat': matmap, 'light': light, 'visor_refl': vrefl, 'visor_pass': vpass, 'eyes': eyes,
-            'brow': brow}
+            'brow': brow, 'led': led}

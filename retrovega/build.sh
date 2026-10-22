@@ -20,6 +20,10 @@ CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq $OPT -i=src"
 nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 nasm -f obj -o "$OUT/lasers_a.obj" src/lasers.asm
+# the comm link's faces (one helmet render, every pilot's face behind its visor: ~15 s), when their sources change
+[ build/comms/comms.json -nt tools/comms.py ] && [ build/comms/comms.json -nt tools/helmet3d.py ] \
+    && [ -z "$(find art/people/faces -newer build/comms/comms.json -print -quit)" ] \
+    || python3 -W ignore tools/comms.py --out build/comms --cols 56 > /dev/null   # (56: 2 x 2 blocks, the user's coarse link)
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
 # the balls' sprites (the spherical projectiles: every kind, frame and diameter)
 [ "$OUT/BALLS.DAT" -nt tools/balls.py ] && [ "$OUT/BALLS.DAT" -nt data/palette.json ] \
@@ -45,7 +49,7 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     s="$OUT/SHIP20.RVS"
     [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
 fi
-ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts balls missiles sky collide flames cockpit flight game main"
+ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts balls missiles sky collide flames comms cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
