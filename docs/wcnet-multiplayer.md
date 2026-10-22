@@ -1149,8 +1149,11 @@ top-level README for the workflow).  What differs:
   the lobby's own, a malformed or profane one, a free count that is not
   1..255), keeps those it can fly in (the program played and the game the
   code names, `canFly`) and joins one at random, the next if that one is
-  full by then.  With none it makes the pilot's own room of the room form,
-  which the next pilot to ask will find.  A pilot who ticks **Private**
+  full by then.  It never makes a room (the user's: that is what "Join
+  room" below is for): with none, "No open game found" shows beside the
+  button for five seconds and fades, with how many pilots did not answer
+  (a page older than the question does not; the user's first try met
+  one).  A pilot who ticks **Private**
   (beside "Controller buttons and axes", remembered by the browser) gives
   empty answers, and so does everyone in the room of a host who ticked it
   (the host's hello says `private`): such a room is found only by its code

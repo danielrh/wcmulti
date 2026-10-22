@@ -551,7 +551,7 @@ export function initHall(opts) {
       // A pilot looks for an open game: this page's room, when it has a
       // free seat and is not private (opts.openRoom), or a plain answer.
       if (!askers.has(id)) askers.set(id, makeBucket({ burst: 3, every: 5000, at: now }));
-      if (typeof m.n !== "string" || m.n.length > 16 || !askers.get(id).take(now)) return;
+      if (typeof m.n !== "string" || m.n.length > 16 || !askers.get(id).take(now) || settings.mute) return;
       const r = settings.room || (opts.openRoom ? opts.openRoom() : null);
       net.send(id, JSON.stringify({ t: "room", n: m.n, ...(r ? { code: r.code, game: r.game, free: r.free } : {}) }));
     } else if (m.t === "room") {
@@ -562,9 +562,10 @@ export function initHall(opts) {
   }
 
   // "Join open game": the rooms with a free seat that the pilots in the
-  // lobby sit in, [{ code, game, free }] (answers that break the rules are
-  // left out), or null when this page is not in the lobby.  A page that has
-  // only just entered first gives its links to the others a few seconds.
+  // lobby sit in, { rooms: [{ code, game, free }], asked, answered } (answers
+  // that break the rules are left out; a page older than the question does
+  // not answer), or null when this page is not in the lobby.  A page that
+  // has only just entered first gives its links to the others a few seconds.
   async function findRooms() {
     const until = (cond, ms) => new Promise((resolve) => {
       const end = Date.now() + ms;
@@ -593,7 +594,7 @@ export function initHall(opts) {
           rooms.set(code, { code, game: a.game, free });
         }
         log(`lobby: asked ${ask.asked} pilots for an open game: ${ask.answers.size} answered, ${rooms.size} room${rooms.size === 1 ? "" : "s"} with a free seat`);
-        resolve(Array.from(rooms.values()));
+        resolve({ rooms: Array.from(rooms.values()), asked: ask.asked, answered: ask.answers.size });
       };
       if (!ask.asked) { ask.finish(); return; }
       const m = JSON.stringify({ t: "rooms?", n: ask.n });
@@ -838,7 +839,8 @@ export function initHall(opts) {
     // For the page tests (scripts/web-hall.mjs).
     test: {
       net: () => net,
-      // (room: the answer this page gives to a question for open rooms, whatever its own room.)
+      // (room: the answer this page gives to a question for open rooms, whatever its own room;
+      // mute: it gives none, as a page older than the question.)
       configure(s) { settings = { ...settings, ...s }; },
       // A message as a page that keeps no rules would send it.
       raw(obj) { const m = typeof obj === "string" ? obj : JSON.stringify(obj); for (const p of net.players) if (p.id !== net.selfId) net.send(p.id, m); },

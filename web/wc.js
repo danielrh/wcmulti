@@ -902,7 +902,7 @@ function renderTopAction() {
   b.textContent = { screen: "Full screen", files: "Load game files", room: "Join open game", fly: "Fly" }[step];
   b.title = { screen: "The game full screen; holding Esc leaves it",
               files: "Your own Wing Commander or Wing Commander II: a .zip of the game folder, or the GOG installer",
-              room: "Joins a room with a free seat that a pilot in the lobby sits in, for a game this browser has (one at random); with none, your own room of step 2, for the next pilot to find. \"Join room\" in step 2 joins the code typed there",
+              room: "Joins a room with a free seat that a pilot in the lobby sits in, for a game this browser has (one at random). \"Join room\" in step 2 joins the code typed there, or makes that room",
               fly: $("status").textContent }[step];
 }
 $("topAction").addEventListener("click", () => {
@@ -1171,11 +1171,11 @@ $("advertise").addEventListener("click", () => { if (lobby.game && !running) voi
 // "Join open game" (the top button while the pilot is in no room): the
 // pilots in the lobby are asked for the room they sit in when it has a free
 // seat (hall.findRooms), and one of those that this browser can fly in is
-// joined, at random.  With none, the pilot's own room of step 2 is made, for
-// the next pilot who asks to find.  A pilot who ticks Private is not asked
+// joined, at random.  It never makes a room: with none, "No open game found"
+// shows beside the button for a while ("Join room" in step 2 joins the code
+// typed there, or makes that room).  A pilot who ticks Private is not asked
 // about their room, nor is anyone in the room of a host who ticked it: only
-// its code or its link brings somebody in.  "Join room" in step 2 joins the
-// code typed there.
+// its code or its link brings somebody in.
 try { $("private").checked = localStorage.getItem(PRIVATE_KEY) === "1"; } catch (e) { /* not kept */ }
 $("private").addEventListener("change", () => {
   try { localStorage.setItem(PRIVATE_KEY, privateOn() ? "1" : "0"); } catch (e) { /* not kept */ }
@@ -1194,16 +1194,24 @@ function canFly(r) {
   const prog = gameById(r.game), tagged = codeGame(r.code);
   return !!prog && !!prog.multiplayer && !!holderOf(prog.id) && (!tagged || !!holderOf(tagged.id));
 }
+// A word beside the top button, fading after a while.
+let topNoteTimer = null;
+function topNote(text, why = "") {
+  const n = $("topNote");
+  n.textContent = text; n.title = why;
+  n.classList.add("on");
+  clearTimeout(topNoteTimer);
+  topNoteTimer = setTimeout(() => n.classList.remove("on"), 5000);
+}
 async function joinOpenGame() {
   if (seeking || lobby.game || running || $("join").disabled) return;
   seeking = true;
   renderTopAction();
-  // (Said under the lobby's chat as well: the status line is far below.)
-  const tell = (text) => { status(text); hall.note(text); };
   try {
     status("Asking the pilots in the lobby for an open game…");
-    const rooms = await hall.findRooms();
-    const fit = (rooms || []).filter(canFly);
+    const found = await hall.findRooms();
+    const rooms = found ? found.rooms : [];
+    const fit = rooms.filter(canFly);
     for (let i = fit.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [fit[i], fit[j]] = [fit[j], fit[i]]; }
     const typed = $("room").value;
     for (const r of fit) {
@@ -1211,18 +1219,25 @@ async function joinOpenGame() {
       $("room").value = r.code;
       await joinRoom({ create: false });
       if (lobby.game) {
-        tell(`You are in room ${r.code}, an open game from the lobby: the host presses Fly when everyone is in.`);
+        // (Said under the lobby's chat as well: the status line is far below.)
+        const text = `You are in room ${r.code}, an open game from the lobby.`;
+        status(text); hall.note(text);
         return;
       }
     }
     if (lobby.game || running) return;
     $("room").value = typed; retagRoom();
-    const why = rooms === null ? "You are not in the lobby, so there was nobody to ask"
-      : fit.length ? "The open games were taken by the time you got there"
-      : rooms.length ? "No open game in the lobby is for a game this browser has" : "No open game in the lobby";
-    await joinRoom();
-    if (lobby.game) tell(`${why}: you are in a room of your own, ${lobby.game.code}, ` +
-                          (privateOn() ? "kept out of Join open game (Private)." : "which the next pilot who presses Join open game can find."));
+    // (A pilot whose page is older than the question does not answer.)
+    const silent = found ? found.asked - found.answered : 0;
+    const text = !found ? "Not in the lobby: nobody to ask"
+      : `No open game found${silent ? ` (${silent} pilot${silent === 1 ? "" : "s"} did not answer)` : ""}`;
+    const why = !found ? "Join open game asks the pilots in the lobby (enter it above)."
+      : fit.length ? "The open games were full by the time this page got there."
+      : rooms.length ? "The open games in the lobby are for games this browser has no files for."
+      : silent ? "A page older than Join open game does not answer: a reload brings the new one."
+      : "Nobody in the lobby sits in a room with a free seat that is not private.";
+    topNote(text, why);
+    status(`${text}. ${why}`);
   } finally {
     seeking = false;
     renderTopAction();

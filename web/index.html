@@ -32,8 +32,11 @@
   #top #serverTag { color: var(--amber); letter-spacing: .04em; text-transform: none; overflow-wrap: anywhere; }
   /* (The next step, wherever the page is scrolled to: Fly, or what comes
      before it.  Left of the lamps.) */
-  #top .acts { margin-left: auto; margin-right: 54px; }
+  #top .acts { margin-left: auto; margin-right: 54px; display: flex; align-items: center; gap: 10px; }
   #top .acts button { padding: 6px 14px; }
+  /* What came of the button (no open game): shown at once, fading after a while. */
+  #topNote { color: var(--amber); font-size: 11px; opacity: 0; transition: opacity .8s; }
+  #topNote.on { opacity: 1; transition: none; }
   /* (Three lamps: red, amber, green.) */
   #top::before, #top::after { content: ""; position: absolute; bottom: 9px; height: 7px; box-sizing: border-box; }
   #top::before { right: 26px; width: 8px; background: var(--red); }
@@ -211,7 +214,7 @@
     <h1>Wing Commander</h1>
     <span class="sub">cooperative multiplayer in the browser</span>
     <span class="sub" id="serverTag" title="This page uses another lobby server than the public one (its address has ?server=, or Options says so): you meet the pilots who use the same" hidden></span>
-    <div class="acts"><button type="button" id="topAction" disabled title="The next step, wherever the page is scrolled to">Fly</button></div>
+    <div class="acts"><span id="topNote" role="status"></span><button type="button" id="topAction" disabled title="The next step, wherever the page is scrolled to">Fly</button></div>
   </header>
 
   <div id="deck">

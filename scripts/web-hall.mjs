@@ -308,44 +308,62 @@ await b.context().close();
 // -- "Join open game" ---------------------------------------------------------------
 // The top button asks the pilots in the lobby for a room with a free seat
 // (a message of its own, not a line of chat) and joins one this browser can
-// fly in; with none, the pilot's own room.  Private keeps a room out of it.
+// fly in; with none it says so beside the button and makes no room.
+// Private keeps a room out of it.
 const opened = { hall: "OPEN-" + run };
 const openGame = async (page) => {
   const label = await page.$eval("#topAction", (el) => el.textContent);
   check("the top button says Join open game", label === "Join open game", label);
   await page.click("#topAction");
-  await page.waitForFunction(() => !document.getElementById("lobby").hidden && !/Asking the pilots/.test(document.getElementById("status").textContent), null, { timeout: 40000 }).catch(() => {});
-  return status(page);
+  await page.waitForFunction(() => !/Asking the pilots/.test(document.getElementById("status").textContent), null, { timeout: 40000 }).catch(() => {});
+  return page.evaluate(() => ({ room: !document.getElementById("lobby").hidden, note: document.getElementById("topNote").classList.contains("on") ? document.getElementById("topNote").textContent : "",
+    status: document.getElementById("status").textContent }));
 };
+const ownRoom = async (page) => { await page.click("#join"); await page.waitForFunction(() => !document.getElementById("lobby").hidden, null, { timeout: 30000 }); };
 const seatOf = async (page) => (/player (\d) of (\d) in room/.exec(await text(page, "chatLog")) || []).slice(1).join(" of ");
 const oscar = await open("OSCAR", opened);
 await inside(oscar);
+let got = await openGame(oscar);
+check("alone in the lobby: no open game found, said beside the button, and no room made", !got.room && got.note === "No open game found", got);
+check("which fades after a while", await oscar.waitForFunction(() => !document.getElementById("topNote").classList.contains("on"), null, { timeout: 8000 }).then(() => true, () => false), null);
+await oscar.evaluate(() => window.__wcHall.test.configure({ mute: true }));
+await ownRoom(oscar);
 const codeO = await value(oscar, "room");
-check("alone in the lobby, Join open game makes the pilot's own room", /^No open game in the lobby: you are in a room of your own, WC1-\d{4}, which the next pilot/.test(await openGame(oscar)) && (await value(oscar, "room")) === codeO && (await seatOf(oscar)) === "1 of 2", await status(oscar));
 const quebec = await open("QUEBEC", opened);
 await inside(quebec); await pilots(quebec, 2);
-check("the next pilot is put into it", /an open game from the lobby/.test(await openGame(quebec)) && (await value(quebec, "room")) === codeO && (await seatOf(quebec)) === "2 of 2", [await status(quebec), await value(quebec, "room")]);
+got = await openGame(quebec);
+check("a pilot whose page does not answer (an older one) is counted", !got.room && got.note === "No open game found (1 pilot did not answer)" && /reload brings the new one/.test(got.status), got);
+await oscar.evaluate(() => window.__wcHall.test.configure({ mute: false }));
+await sleep(5.5);
+got = await openGame(quebec);
+check("an open room is joined", got.room && /an open game from the lobby/.test(got.status) && (await value(quebec, "room")) === codeO && (await seatOf(quebec)) === "2 of 2", [got, await value(quebec, "room")]);
 check("the question and the answers are no lines of chat", !/rooms\?|"t"|OSCAR\s*WC1\s*:/.test((await text(oscar, "hallLog")) + (await text(quebec, "hallLog"))), await text(quebec, "hallLog"));
 const romeo = await open("ROMEO", opened);
 await inside(romeo); await pilots(romeo, 3);
+got = await openGame(romeo);
+check("a full room is not offered", !got.room && got.note === "No open game found", got);
 await romeo.check("#private");
-check("a full room is not offered: own room, kept out while Private is ticked", /^No open game in the lobby: you are in a room of your own, WC1-\d{4}, kept out of Join open game \(Private\)/.test(await openGame(romeo)) && (await value(romeo, "room")) !== codeO, await status(romeo));
+await ownRoom(romeo);
 const codeR = await value(romeo, "room");
 const sierra = await open("SIERRA", opened);
 await inside(sierra); await pilots(sierra, 4);
-check("a private room is not offered", /^No open game in the lobby: you are in a room of your own/.test(await openGame(sierra)) && ![codeO, codeR].includes(await value(sierra, "room")), await status(sierra));
+got = await openGame(sierra);
+check("a private room is not offered", !got.room && got.note === "No open game found", got);
+await ownRoom(sierra);
 // SIERRA's page now says it sits in a Wing Commander II room.
 await sierra.evaluate(() => window.__wcHall.test.configure({ room: { code: "WC2-4242", game: "wc2", free: 1 } }));
 const tango = await open("TANGO", opened);
 await inside(tango); await pilots(tango, 5);
-check("a room for a game this browser lacks is not joined", /^No open game in the lobby is for a game this browser has: you are in a room of your own/.test(await openGame(tango)) && (await value(tango, "room")) !== "WC2-4242", await status(tango));
+got = await openGame(tango);
+check("a room for a game this browser lacks is not joined", !got.room && got.note === "No open game found" && /no files for/.test(got.status), got);
+await ownRoom(tango);
 const codeT = await value(tango, "room");
 await romeo.uncheck("#private");
 check("Private is remembered by the browser", (await romeo.evaluate(() => localStorage.getItem("wc:private"))) === "0", null);
 const uniform = await open("UNIFORM", opened);
 await inside(uniform); await pilots(uniform, 6);
-await openGame(uniform);
-check("one of the open rooms, at random", [codeR, codeT].includes(await value(uniform, "room")) && (await seatOf(uniform)) === "2 of 2", [await status(uniform), await value(uniform, "room")]);
+got = await openGame(uniform);
+check("one of the open rooms, at random", got.room && [codeR, codeT].includes(await value(uniform, "room")) && (await seatOf(uniform)) === "2 of 2", [got, await value(uniform, "room")]);
 for (const p of [oscar, quebec, romeo, sierra, tango, uniform]) await p.context().close();
 
 // -- another lobby server -----------------------------------------------------------
