@@ -10,12 +10,14 @@
  * noise (ragged edges, a shimmering gradient), through a stipple of colour
  * pairs (the palette has no saturated violet-blue: alternate pixels mix two
  * it has); every size, foreshortening and way (0 .. 90 degrees, the rest
- * mirrored and flipped) in three frames of noise, kept in XMS as run-length
- * sprites.  A frame draws the nearest baked flame, its noise's frame picked
- * at random, as the ships' sprites are drawn (ships_blit_view).  End on, a
- * disc.  The nozzle and the flame's way are taken from the ship's sprite as
- * drawn (its view, roll and size: lightfield's lf_view_rot and
- * lf_sprite_point), so the flames stay on the engines the picture shows.  A
+ * mirrored and flipped; in steps fine enough that a tail ends within half a
+ * pixel of its way) in two frames of noise, kept in XMS as run-length
+ * sprites.  A frame draws the nearest baked flame, each row from one frame
+ * of noise or the other at random (ships_blit_mix).  End on, a disc.  The
+ * nozzle and the flame's way are taken from the ship's sprite as drawn (the
+ * view and turn the draw picks: ships_drawn; its size; lightfield's
+ * lf_view_rot and lf_sprite_point), so the flames stay on the engines the
+ * picture shows and point exactly along it (the user's rule).  A
  * flame pointing away from the camera is drawn before its ship (the hull
  * hides its root), one pointing toward it after.  The
  * afterburner's flames are twice as long, whiter, their tail magenta. */
@@ -39,8 +41,9 @@ void flames_bake(void);                 /* then, RV.DAT open: every flame baked 
 void flames_init(void);                 /* at a flight's start: the draw's tables */
 void flames_frame(void);                /* a new frame: no flames yet */
 
-/* a ship's flames as its sprite is drawn: its type, where lf_place put it
- * with the lattice (nb, nh) its draw uses, its size (256 full), afterburner
+/* a ship's flames as its sprite is drawn: its type, its place with the view
+ * and turn its picture has (ships_drawn) in the lattice (nb, nh) of that
+ * picture, its size (256 full), afterburner
  * on or not, its slot (its noise's own); *out the flames made (none when it
  * has no engines, is too small, or the frame's room is used up) */
 void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int scale256, int burn, int slot,
@@ -50,6 +53,12 @@ void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int
  * radius (x16), the afterburner's look or not, a number of its own (its noise's); *out as flames_add's (its
  * `front` the caller's to set) */
 void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned id, FlameSet __far *out);
+
+/* the frame's flame k (a FlameSet's first + i): the way its baked flame's tail points on screen (16384ths of a turn
+ * from the right, clockwise: y down) and its length (x16); 0 when it is end on (no way shows).  And a way as a
+ * vector (16384 = 1.0).  For the self-test (/flametest) */
+int flames_way(int k, int *way, int *len16);
+void flames_way_vec(int way, long *c, long *s);
 
 /* a ship's flames into this band, rows y0 .. y1-1, clipped to the extents as the ships are */
 void flames_draw(const FlameSet __far *f, int y0, int y1, const short __far *ext, int ext_y0, int ext_rows);

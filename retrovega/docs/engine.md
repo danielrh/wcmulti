@@ -1048,18 +1048,65 @@ frame). Shaded live, six near ships' 18 flames cost 16.6 ms a frame at
 to 9.4. So every flame is baked, once, when the game starts (the user's
 wish: not at every launch; `flames_bake` after the fonts): 2 looks x 6
 foreshortenings (the tail's length over the root's radius: 0, end on, to 5,
-or 10 for the afterburner) x 9 ways (0 .. 90 degrees down-right; the rest
-mirrored and flipped as the ships' sprites are) x 6 sizes (1 .. 7 px of
-radius) x 2 frames of noise: 1,104 run-length sprites in the ships' format,
-260 KB of XMS (the resident level, reserved before RV.DAT), 0.7 s at
-40,000 cycles. A frame takes the nearest, its nozzle at the
-sprite's origin, and draws it with `ships_blit_mix`: each row from one of
-the two frames at random (the user's idea again: two frames mixed row by
-row make a new flame every frame). The way snaps to 11.25 degrees, the size
-to steps of 1.5. Cost at 40,000 cycles: the six near ships' 18 flames
+or 10 for the afterburner) x 6 sizes (1 .. 7 px of radius) x the ways (0 ..
+90 degrees down-right, the rest mirrored and flipped as the ships' sprites
+are; how many below) x 2 frames of noise: 3,114 run-length sprites in the
+ships' format, 1,356 KB of XMS (the resident level, reserved before RV.DAT),
+1.9 s at 40,000 cycles (each strip of the scratch cleared only over the
+flame's own columns: clearing all 640 had cost a second). A frame takes the
+nearest, its nozzle at the sprite's origin, and draws it with
+`ships_blit_mix`: each row from one of the two frames at random (the user's
+idea again: two frames mixed row by row make a new flame every frame). The
+size snaps to steps of 1.5. Cost at 40,000 cycles: the six near ships' 18 flames
 3.45 ms a frame (1.80 of it the set-up in C: the sprite's frame, two sprite
 points and a header from XMS an engine; the blits 1.65), the laser
 benchmark's two big ships 0.52, a normal mission ~0.5-0.9.
+
+**Lined up exactly** (the user, 2026-10-21: in play the flames looked bent
+left or right; they are a strong clue to a ship's heading, so they must
+point exactly along the ship as drawn, by the same means for the ships drawn
+exactly and from the sets). Three errors were found, by `/flametest` below:
+
+- *The picture's turn.* The flames took the ship's true roll, but only the
+  ships drawn exactly are turned by it. A set's sprite is turned to a
+  22.5-degree step (or a coarser one, when that step is not in), and the
+  sets hold no turned sprites at all at their four biggest sizes (scale 152
+  and up, nearer than ~4,100 km), nor at the far sizes whose roll blocks did
+  not fit the mission's XMS: those ships are drawn unturned. Their flames
+  pointed up to 140 px from where the picture's tail points. Now
+  `ships_drawn` makes the draw's own choices (one `set_pick` shared with
+  `ships_draw` and `ships_box`; for an exact ship, whether its view or a
+  neighbour's can be turned now, else the sets as the flight falls back) and
+  gives the flames the view and turn the picture will have.
+- *The ways baked.* Every 11.25 degrees: a 30 px flame's tail up to 3 px off
+  its axis. Now each foreshortening and size has k steps to the quarter
+  turn, k >= pi L / 2 for a flame L px long (at least 8, up to 110 for the
+  afterburner's longest), so the tail is within half a pixel of the way
+  asked for.
+- *The angle's grain.* `lf_atan2` floors to 1024ths of a turn (0.35
+  degrees: half a pixel on a 70 px flame). The ways are now 16384ths: baked
+  from the sine table interpolated, and a flame's taken from a 257-entry
+  arctangent table interpolated (one division; a binary search by cross
+  products was as exact but cost 0.9 ms a frame more in the scene), the way
+  asked for from the whole axis (`lf_sprite_point` of 16384 units), its
+  length apart.
+
+**The self-test.** `RV.EXE /flametest` (`tests/run.sh tests/flames.txt
+/flametest /flight 200`), before the flames scene's first frame: the six
+types, at ten distances (1,250 to 28,000 km), in 40 orientations each (every
+eighth a yaw only, dead ahead: an exact ship's unturned copy at 2,500 km),
+drawn as the flight draws them (into an empty band: the choices only),
+exactly (its view read first, but every third time not: the neighbour's or
+the sets' fallback) and from the sets. It checks that the view and turn
+`ships_drawn` gives are those the draw used (`ships_last_drawn`), and that
+every flame's baked way ends within half a pixel (and the ways' grain: 0.53)
+of where the drawn picture's tail points, worked out from the drawn view and
+turn, not by flames.c; and logs the old way's miss beside it. The result
+(4,800 draws, 14,716 flames): no pose differs, the worst flame 0.512 px off
+at its tail, the mean 0.15; before, 1,100 of every 1,470 flames were more
+than a pixel off near, ~800 far, the worst 140 px; `flametest: OK`. It also
+found `scale_of` wrapping past 16,384 km (a ship there drawn too big: the
+squares' sum is now kept in 32 bits).
 
 **The test scene.** `RV.EXE /flames` (`tests/flames.txt`): six ships in two
 rows of three 3,000-3,500 km ahead, standing, each yawing at its own rate

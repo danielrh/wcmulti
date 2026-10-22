@@ -113,6 +113,28 @@ int ships_draw(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *shi
 int ships_draw_exact(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int detail,
                      int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows);
 
+/* how a ship is drawn: ships_draw's returns (1 + the flips: a set's sprite at its roll step, or a coarser one),
+ * and ships_draw_exact's ways */
+#define SHIP_PATH_UNTURNED 5            /* a set's unturned sprite (no roll step in: the far sizes) */
+#define SHIP_PATH_SCALED 6              /* (a set without copies) scaled, unturned */
+#define SHIP_PATH_TURNED 7              /* (a set without copies) turned at draw time, sixteen steps */
+#define SHIP_PATH_EXACT_BLIT 20         /* exactly: full size, unturned (its roll within 3 degrees of none) */
+#define SHIP_PATH_EXACT 21              /* exactly: turned by its true roll */
+#define SHIP_PATH_NEIGHBOUR 22          /* exactly, from the next view (its own not read yet) */
+
+/* the view and the turn its picture shows of a ship as the flight draws it (exact: ships_draw_exact, falling back
+ * to ships_draw when its view is not in, as the flight does; else ships_draw), made by the same choices: *p placed
+ * in the lattice (*nb, *nh) of that picture, its view and roll those the picture has.  The engines' flames take
+ * their nozzles and their way from it (the user: they must line up with the ship exactly, 2026-10-21).  Returns
+ * the path (SHIP_PATH_*, or ships_draw's), 0 when it would not be drawn (p->on_screen 0).  Call it in the frame's
+ * plan, after the frame's reads (ships_prefetch): it reads nothing */
+int ships_drawn(int set, int exact, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
+                LfPlace *p, int *nb, int *nh);
+
+/* what the last ships_draw or ships_draw_exact drew: its path (0: nothing), *view and *roll as ships_drawn gives
+ * them (the flames' self-test) */
+int ships_last_drawn(int *view, int *roll);
+
 /* a set's full-size view v painted on the sky: at direction dir (the world
  * frame, any length), its up `up` in the world, turned with the sky as the
  * camera rolls (lf_sky), at scale256 / 256 of full size; the view must be

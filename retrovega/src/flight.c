@@ -53,6 +53,7 @@ int g_flames_demo = 0;                  /* RV.EXE /flames: six ships turning eve
 int g_boxes = 0;                        /* RV.EXE /boxes: every ship's box bracketed (flight_ent_box's check) */
 int g_collide_demo = 0;                 /* RV.EXE /collidedemo: two fighters flown into each other (collide.c's check) */
 int g_hull_demo = 0;                    /* RV.EXE /hulldemo: a turning fighter shot through by a grid of rays */
+int g_flame_test = 0;                   /* RV.EXE /flametest: the flames' self-test (with the flames scene's types) */
 int g_hull_type = -1;                   /* RV.EXE /hulltype N: its ship's type (decimal; an asymmetric one checks the
                                            silhouettes' left and right) */
 int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
@@ -418,9 +419,15 @@ static void basis_of(int s, LfBasis *b)
 #define FULL_SIZE_UNITS (256L * 2500)
 static int scale_of(const LfVec *rel)
 {
-    long d = (long)lf_sqrt((unsigned long)((rel->x / 64) * (rel->x / 64) + (rel->y / 64) * (rel->y / 64)
-                                           + (rel->z / 64) * (rel->z / 64))) * 64;
-    long sc = d ? FULL_SIZE_UNITS * 256 / d : 512;
+    long x = rel->x / 64, y = rel->y / 64, z = rel->z / 64, k = 64, d, sc;
+    while (x > 37000 || x < -37000 || y > 37000 || y < -37000 || z > 37000 || z < -37000) {
+        x /= 4;                         /* (the squares' sum must fit 32 bits: it wrapped past 16,384 km, */
+        y /= 4;                         /*  a ship there drawn too big; /flametest found it) */
+        z /= 4;
+        k *= 4;
+    }
+    d = (long)lf_sqrt((unsigned long)(x * x) + (unsigned long)(y * y) + (unsigned long)(z * z)) * k;
+    sc = d ? FULL_SIZE_UNITS * 256 / d : 512;
     return (int)(sc > 512 ? 512 : sc);
 }
 
@@ -543,16 +550,12 @@ static void plan_draws(void)
         flames_frame();
         for (i = g_nplan - 1; i >= 0; i--) {
             int nb, nh, sl = g_plan[i].slot;
-            const RvShipType __far *t = type_of(sl);
-            ships_lattice(g_plan[i].set, g_plan[i].exact != 0, &nb, &nh);
-            if (g_plan[i].exact) {      /* (placed already, in that lattice) */
-                p = g_plan[i].p;
-            } else {
-                rel_of(sl, &rel);
-                basis_of(sl, &ship);
-                lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, nb, nh, &p);
-            }
-            flames_add(t, &p, nb, nh, g_plan[i].scale, burning(sl), sl, &g_plan[i].fl);
+            rel_of(sl, &rel);
+            basis_of(sl, &ship);
+            /* the view and the turn its picture will have (an exact one's true roll, a set's roll step, the far
+             * sizes' none): the flames line up with the ship as drawn */
+            ships_drawn(g_plan[i].set, g_plan[i].exact != 0, &rel, &cam, &ship, g_plan[i].scale, &p, &nb, &nh);
+            flames_add(type_of(sl), &p, nb, nh, g_plan[i].scale, burning(sl), sl, &g_plan[i].fl);
         }
         g_t_flames += clock240() - t0;
         g_t_flames_set += clock240() - t0;
@@ -825,6 +828,245 @@ static void collide_overlay(int y0, int y1, const short __far *ext, int ey0, int
                     hud_run(x - 1, x + 2, y + j, col, y0, y1, ext, ey0, rows);
             }
     }
+}
+
+/* --- the flames' self-test (RV.EXE /flametest, in the flames scene) ---
+ * The user (2026-10-21): an engine's flame must line up exactly with its ship as drawn, by the same means for the
+ * ships drawn exactly and those from the sets, at every distance.  Each of the scene's six types, at distances
+ * from twice full size to past the sets' smallest, in 40 orientations (every eighth a yaw only: an exact ship's
+ * unturned copy), is drawn as the flight draws it (into an empty band: the choices only), exactly (its view read
+ * first, but every third time not: the next view's or the sets' fallback) and from the sets.  Checked: the view
+ * and turn ships_drawn gives the flames are the ones the draw used (ships_last_drawn); and each flame's baked way
+ * is within half a pixel, at its tail, of the way the drawn picture's tail points, worked out here from the
+ * drawn view and turn (lf_view_rot, lf_sprite_point), not by flames.c.  Beside it, how far off the way before
+ * was (the true roll on every picture, ways baked every 11.25 degrees). */
+#define FT_DISTS 10
+#define FT_TURNS 40
+#define FT_TOL 530                      /* milli-pixels at a tail: half a pixel (the ways' steps), and the ways' grain
+                                           (16384ths of a turn: 0.03 px on a 70 px flame) */
+static const short __far g_ft_km[FT_DISTS] = { 1250, 1800, 2500, 3500, 5000, 7000, 10000, 14000, 20000, 28000 };
+
+/* how far (milli-pixels) the tail of a flame len16 long (x16) pointing way w (16384ths) is from where it would be
+ * pointing the way (x, y) points */
+static long ft_miss(int w, long x, long y, int len16)
+{
+    long c, sn, e, dx, dy;
+    flames_way_vec(w, &c, &sn);
+    while (x > 16384 || x < -16384 || y > 16384 || y < -16384) {
+        x /= 2;
+        y /= 2;
+    }
+    e = (long)lf_sqrt((unsigned long)(x * x + y * y));
+    if (!e)
+        return 0;
+    dx = c - x * 16384 / e;             /* (the two ways' unit vectors apart, 16384 = 1.0) */
+    dy = sn - y * 16384 / e;
+    return (long)lf_sqrt((unsigned long)(dx * dx + dy * dy)) * len16 / 262;   /* (x16: 16 x 16384 / 1000 = 262) */
+}
+
+/* the way the tail of a picture of view v (lattice nb, nh) turned by roll points on screen, 16384 = 1.0 */
+static void ft_tail(int v, int roll, int nb, int nh, long *x, long *y)
+{
+    LfViewRot rot;
+    long z;
+    lf_view_rot(v, nb, nh, &rot);
+    lf_sprite_point(&rot, roll, 0, 0, -16384, x, y, &z);
+}
+
+/* the self-test's picture (FLAMEST.BMP): eight ships turned every way, as the flight draws them and their flames,
+ * a dashed white line along each picture's axis (where its tail points) and a red one where its flames pointed
+ * before.  Top: from the sets at their roll steps (5,000 km); below, from the sets at a size with no roll steps
+ * (3,000 km: drawn unturned) and two drawn exactly */
+static void ft_sheet(void)
+{
+    static const unsigned char types[8] = { 0x02, 0x04, 0x08, 0x0A, 0x02, 0x09, 0x04, 0x06 };
+    static const short turn[8][3] = { { 300, 40, 90 }, { 700, -60, 200 }, { 230, 100, 330 }, { 800, 20, 140 },
+                                      { 280, -30, 110 }, { 740, 50, 300 }, { 250, 70, 170 }, { 760, -40, 60 } };
+    LfBasis cam, ship[8];
+    LfVec rel[8];
+    LfPlace p[8];
+    FlameSet fs[8];
+    int set[8], sc[8], ax[8][4], c, y0, y1, y;
+    basis_of(0, &cam);
+    ships_frame();
+    flames_frame();
+    for (c = 0; c < 8; c++) {
+        RvVec3 f = *(const RvVec3 *)&cam.front, r = *(const RvVec3 *)&cam.right, u = *(const RvVec3 *)&cam.up;
+        long km = c < 4 ? 5000 : 3000, ox, oy, tx, ty;
+        int dx = 80 + 160 * (c % 4) - SCR_W / 2, dy = g_cam_cy - (c < 4 ? 100 : 290), nb, nh, ex = c >= 6, a;
+        set[c] = ships_find(types[c]);
+        if (set[c] < 0)
+            return;
+        rotate_pair(&f, &r, turn[c][0]);
+        rotate_pair(&f, &u, turn[c][1]);
+        rotate_pair(&r, &u, turn[c][2]);
+        ship[c].front = *(LfVec *)&f;
+        ship[c].right = *(LfVec *)&r;
+        ship[c].up = *(LfVec *)&u;
+        rel[c].x = cam.front.x * km + (cam.right.x * km * dx + cam.up.x * km * dy) / 400;
+        rel[c].y = cam.front.y * km + (cam.right.y * km * dx + cam.up.y * km * dy) / 400;
+        rel[c].z = cam.front.z * km + (cam.right.z * km * dx + cam.up.z * km * dy) / 400;
+        sc[c] = scale_of(&rel[c]);
+        if (ex) {
+            ships_touch(set[c], &rel[c], &cam, &ship[c]);
+            ships_prefetch(set[c], &rel[c], &cam, &ship[c]);
+        }
+        ships_drawn(set[c], ex, &rel[c], &cam, &ship[c], sc[c], &p[c], &nb, &nh);
+        flames_add(ship_type(types[c]), &p[c], nb, nh, sc[c], c & 1, c, &fs[c]);
+        ft_tail(p[c].view, p[c].roll, nb, nh, &tx, &ty);
+        ships_lattice(set[c], ex, &nb, &nh);   /* (before: the true roll in the placement's lattice, 11.25 degrees) */
+        {
+            LfPlace p0;
+            lf_place(&rel[c], &cam, &ship[c], SCR_W / 2, g_cam_cy, 400, nb, nh, &p0);
+            ft_tail(p0.view, p0.roll, nb, nh, &ox, &oy);
+        }
+        a = lf_atan2(oy, ox);
+        a = (a + 16) / 32 * 32;
+        ax[c][0] = (int)(tx * 70 / 16384);
+        ax[c][1] = (int)(ty * 70 / 16384);
+        ox = (long)lf_sqrt((unsigned long)((ox / 4) * (ox / 4) + (oy / 4) * (oy / 4))) * 4;   /* (its length, its way) */
+        ax[c][2] = (int)(lf_cos(a) * ox / 16384 * 70 / 16384);
+        ax[c][3] = (int)(lf_sin(a) * ox / 16384 * 70 / 16384);
+    }
+    vid_dirty(0, SCR_H);
+    while (vid_dirty_band(&y0, &y1)) {
+        for (y = y0; y < y1; y++)
+            _fmemset(vid_row(y), 0, SCR_W);
+        for (c = 0; c < 8; c++) {
+            if (!fs[c].front)
+                flames_draw(&fs[c], y0, y1, 0, 0, 0);
+            if (c < 6 || !ships_draw_exact(set[c], &rel[c], &cam, &ship[c], sc[c], 1, y0, y1, 0, SCR_W, 0, 0, 0))
+                ships_draw(set[c], &rel[c], &cam, &ship[c], sc[c], y0, y1, 0, SCR_W, 0, 0, 0);
+            if (fs[c].front)
+                flames_draw(&fs[c], y0, y1, 0, 0, 0);
+            gfx_line(p[c].sx, p[c].sy, p[c].sx + ax[c][2], p[c].sy + ax[c][3], UI_RED, 0, y0, y1);
+            gfx_line(p[c].sx, p[c].sy, p[c].sx + ax[c][0], p[c].sy + ax[c][1], UI_WHITE, 1, y0, y1);
+        }
+        vid_flip();
+    }
+    shot_save("FLAMEST");
+}
+
+static void flame_test(void)
+{
+    static const unsigned char types[6] = { 0x08, 0x02, 0x04, 0x0A, 0x09, 0x06 };
+    static const char __far s_row[] = "flametest: %5d km (scale %3d): %3d drawn (exact %d, unturned %d, next view %d; "
+        "sets: roll steps %d, unturned %d), %d pose mismatches; %4d flames: worst %ld.%03ld px off at the tail, "
+        "mean %ld.%03ld, %d over a pixel (before: worst %ld.%03ld, mean %ld.%03ld, %d over a pixel)";
+    static const char __far s_bad[] = "flametest: MISMATCH type %02X %d km turn %d exact %d: drawn path %d view %d "
+        "roll %d, the flames' path %d view %d roll %d";
+    static const char __far s_end[] = "flametest: %Fs: %ld draws, %ld pose mismatches, %ld flames, the worst %ld.%03ld "
+        "px off at the tail (before: %ld.%03ld)";
+    static const char __far s_ok[] = "OK", s_fail[] = "FAILED";
+    LfBasis cam;
+    long all_draws = 0, all_bad = 0, all_flames = 0, all_worst = 0, all_before = 0;
+    int di;
+    basis_of(0, &cam);
+    for (di = 0; di < FT_DISTS; di++) {
+        long km = g_ft_km[di], worst = 0, sum = 0, bworst = 0, bsum = 0;
+        int n[24], bad = 0, flames = 0, drawn_n = 0, sc = 0, ti, o, ex, i, over = 0, bover = 0;
+        memset(n, 0, sizeof n);
+        for (ti = 0; ti < 6; ti++) {
+            int set = ships_find(types[ti]);
+            const RvShipType __far *t = ship_type(types[ti]);
+            const ShipSet __far *ss;
+            if (set < 0 || !t)
+                continue;
+            ss = ships_set(set);
+            for (o = 0; o < FT_TURNS; o++) {
+                RvVec3 f = *(const RvVec3 *)&cam.front, r = *(const RvVec3 *)&cam.right, u = *(const RvVec3 *)&cam.up;
+                LfBasis ship;
+                LfVec rel;
+                if (o % 8 == 0) {
+                    rotate_pair(&f, &r, o * 37);
+                } else {
+                    rotate_pair(&f, &r, o * 97 + 13);
+                    rotate_pair(&f, &u, o * 61 + ti * 29);
+                    rotate_pair(&r, &u, o * 151 + ti * 71);
+                }
+                ship.front = *(LfVec *)&f;
+                ship.right = *(LfVec *)&r;
+                ship.up = *(LfVec *)&u;
+                {                       /* (off the middle of the screen, but the yaws only dead ahead) */
+                    int dx = o % 8 ? o % 5 - 2 : 0, dy = o % 8 ? o / 5 % 3 - 1 : 0;
+                    rel.x = cam.front.x * km + (cam.right.x * km * dx + cam.up.x * km * dy) / 12;
+                    rel.y = cam.front.y * km + (cam.right.y * km * dx + cam.up.y * km * dy) / 12;
+                    rel.z = cam.front.z * km + (cam.right.z * km * dx + cam.up.z * km * dy) / 12;
+                }
+                sc = scale_of(&rel);
+                for (ex = 0; ex < 2; ex++) {
+                    LfPlace p, p0;
+                    FlameSet fs;
+                    int path, dv, dr, pp, nb, nh, lnb, lnh, k;
+                    long tx, ty, ox, oy, oz;
+                    ships_frame();
+                    if (ex && o % 3 != 2) {
+                        ships_touch(set, &rel, &cam, &ship);
+                        ships_prefetch(set, &rel, &cam, &ship);
+                    }
+                    if (!ex || !ships_draw_exact(set, &rel, &cam, &ship, sc, 1, 0, 0, 0, SCR_W, 0, 0, 0))
+                        ships_draw(set, &rel, &cam, &ship, sc, 0, 0, 0, SCR_W, 0, 0, 0);
+                    path = ships_last_drawn(&dv, &dr);
+                    pp = ships_drawn(set, ex, &rel, &cam, &ship, sc, &p, &nb, &nh);
+                    if (pp != path || (path && (p.view != dv || ((p.roll - dr) & 1023)))) {
+                        if (bad++ < 4)
+                            rv_logf(s_bad, types[ti], (int)km, o, ex, path, dv, dr, pp, p.view, p.roll);
+                    }
+                    if (!path)
+                        continue;
+                    drawn_n++;
+                    n[path < 24 ? path : 0]++;
+                    /* the drawn picture's tail, from what the draw used */
+                    lnb = path >= SHIP_PATH_EXACT_BLIT || !ss->rvs ? ss->nb0 : ss->nb1;
+                    lnh = path >= SHIP_PATH_EXACT_BLIT || !ss->rvs ? ss->nh0 : ss->nh1;
+                    ft_tail(dv, dr, lnb, lnh, &tx, &ty);
+                    /* the flames as the flight makes them */
+                    flames_frame();
+                    flames_add(t, &p, nb, nh, sc, o & 1, 1, &fs);
+                    /* before: the true roll in the placement's lattice, the way to the nearest 11.25 degrees */
+                    ships_lattice(set, ex, &nb, &nh);
+                    lf_place(&rel, &cam, &ship, SCR_W / 2, g_cam_cy, 400, nb, nh, &p0);
+                    ft_tail(p0.view, p0.roll, nb, nh, &ox, &oy);
+                    {
+                        long ax = ox < 0 ? -ox : ox, ay = oy < 0 ? -oy : oy;
+                        int a = (lf_atan2(ay, ax) + 16) / 32 * 32 * 16;
+                        if (a > 4096) a = 4096;
+                        oz = ox < 0 ? (oy < 0 ? 8192 + a : 8192 - a) : oy < 0 ? (16384 - a) & 16383 : a;
+                    }
+                    for (k = fs.first; k < fs.first + fs.n; k++) {
+                        int w, len16;
+                        long m, mb;
+                        if (!flames_way(k, &w, &len16))
+                            continue;   /* (end on: no way shows) */
+                        m = ft_miss(w, tx, ty, len16);
+                        mb = ft_miss((int)oz, tx, ty, len16);
+                        flames++;
+                        sum += m;
+                        bsum += mb;
+                        if (m > worst) worst = m;
+                        if (mb > bworst) bworst = mb;
+                        over += m > 1000;
+                        bover += mb > 1000;
+                    }
+                }
+            }
+        }
+        for (i = 1; i <= 4; i++)
+            n[0] += n[i];               /* (the sets' roll steps, flipped or not) */
+        rv_logf(s_row, (int)km, sc, drawn_n, n[SHIP_PATH_EXACT], n[SHIP_PATH_EXACT_BLIT], n[SHIP_PATH_NEIGHBOUR], n[0],
+                n[SHIP_PATH_UNTURNED] + n[SHIP_PATH_SCALED], bad, flames, worst / 1000, worst % 1000,
+                flames ? sum / flames / 1000 : 0L, flames ? sum / flames % 1000 : 0L, over, bworst / 1000, bworst % 1000,
+                flames ? bsum / flames / 1000 : 0L, flames ? bsum / flames % 1000 : 0L, bover);
+        all_draws += drawn_n;
+        all_bad += bad;
+        all_flames += flames;
+        if (worst > all_worst) all_worst = worst;
+        if (bworst > all_before) all_before = bworst;
+    }
+    rv_logf(s_end, all_bad || all_worst > FT_TOL || !all_flames ? s_fail : s_ok, all_draws, all_bad, all_flames,
+            all_worst / 1000, all_worst % 1000, all_before / 1000, all_before % 1000);
+    ft_sheet();
+    flames_frame();
 }
 
 /* --- the hull demo (RV.EXE /hulldemo): a turning fighter shot through by a grid of rays ---
@@ -2017,6 +2259,10 @@ void __far __cdecl flight_frame(void)
     unsigned long now = clock240(), dt;
     int k = (int)(frameCounter % FPS_WINDOW);
     ships_frame();
+    if (g_flame_test == 1) {            /* (the self-test: once, before the first frame's plan) */
+        g_flame_test = 2;
+        flame_test();
+    }
     sim_step();
     if (g_sky_demo)
         sky_demo_step();

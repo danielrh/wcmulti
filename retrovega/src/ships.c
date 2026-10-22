@@ -1201,47 +1201,93 @@ static int find_sprite(const ShipSet __far *s, int k, int v, int r, ShipView *ou
     return -1;
 }
 
+/* what the last ships_draw or ships_draw_exact drew: its path (ships_draw's return, SHIP_PATH_*), the view and the
+ * turn on screen its picture shows (the flames' self-test checks ships_drawn against it) */
+static struct { short path, view, roll; } __far g_drawn;
+
+static void drawn(int path, int view, int roll)
+{
+    g_drawn.path = (short)path;
+    g_drawn.view = (short)view;
+    g_drawn.roll = (short)roll;
+}
+
+int ships_last_drawn(int *view, int *roll)
+{
+    *view = g_drawn.view;
+    *roll = g_drawn.roll;
+    return g_drawn.path;
+}
+
+/* the sets' sprite for a place (in the copies' lattice): as wanted; else a coarser roll; else unturned (else
+ * smaller): its flags (-1: none in), *roll the turn its picture shows (1024 a turn), *path ships_draw's return */
+static int set_pick(const ShipSet __far *s, const LfPlace *p, int scale256, ShipView *view, int *roll, int *path)
+{
+    int flags, step = 1024 / s->nrolls, rq = ((p->roll + step / 2) & 1023) / step, k = size_step(s, scale256);
+    if ((flags = find_sprite(s, k, p->view, rq, view)) >= 0) {
+        *roll = rq * step;
+        *path = 1 + flags;
+        return flags;
+    }
+    if ((rq & 1) && (flags = find_sprite(s, k, p->view, rq & ~1, view)) >= 0) {
+        *roll = (rq & ~1) * step;
+        *path = 1 + flags;
+        return flags;
+    }
+    for (; k < s->nsizes; k++)
+        if ((flags = find_sprite(s, k, p->view, 0, view)) >= 0) {
+            *roll = 0;
+            *path = SHIP_PATH_UNTURNED;
+            return flags;
+        }
+    return -1;
+}
+
+/* view v can be turned at draw time now (draw_turned's make_dense would find it: dense already, or in) */
+static int can_turn(const ShipSet __far *s, int set_i, int v)
+{
+    ShipView view;
+    int i, mir;
+    for (i = 0; i < DENSE_BUFS; i++)
+        if (g_dense_set[i] == set_i && g_dense_view[i] == v)
+            return 1;
+    return stream_view(s, set_i, stored_view(s, v, &mir), 0, &view) && view.w
+        && (unsigned long)view.w * view.h <= DENSE_MAX;
+}
+
 int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
                int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
     const ShipSet __far *s = ships_set(set_i);
     LfPlace p;
-    int rq, k;
+    int rq;
+    drawn(0, -1, 0);
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->rvs ? s->nb1 : s->nb0, s->rvs ? s->nh1 : s->nh0, &p);
     if (!p.on_screen || scale256 < 8)
         return 0;
     if (s->rvs) {
         ShipView view;
-        int flags, step = 1024 / s->nrolls;
-        rq = ((p.roll + step / 2) & 1023) / step;
-        k = size_step(s, scale256);
-        /* the sprite as wanted; else a coarser roll; else unturned; else smaller */
-        if ((flags = find_sprite(s, k, p.view, rq, &view)) >= 0) {
-            ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-            return 1 + flags;
-        }
-        if ((rq & 1) && (flags = find_sprite(s, k, p.view, rq & ~1, &view)) >= 0) {
-            ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-            return 1 + flags;
-        }
-        for (; k < s->nsizes; k++)
-            if ((flags = find_sprite(s, k, p.view, 0, &view)) >= 0) {
-                ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-                return 5;
-            }
-        return 0;
+        int flags, roll, path;
+        if ((flags = set_pick(s, &p, scale256, &view, &roll, &path)) < 0)
+            return 0;
+        ships_blit_view(&view, flags, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+        drawn(path, p.view, roll);
+        return path;
     }
     rq = ((p.roll + 32) & 1023) / 64;   /* the fallback: sixteen steps, drawn at draw time */
     if (rq == 0 && scale256 >= 256) {
         ships_blit(s, p.view, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+        drawn(1, p.view, 0);
         return 1;
     }
     if (rq == 0 || !draw_turned(s, set_i, p.view, p.sx, p.sy, scale256 > 256 ? 256 : scale256, rq * 64, 1, y0, y1, xa, xb,
                                 ext, ext_y0, ext_rows)) {
         draw_scaled(s, p.view, p.sx, p.sy, scale256 > 256 ? 256 : scale256, y0, y1, xa, xb, ext, ext_y0, ext_rows);
-        return 6;
+        drawn(SHIP_PATH_SCALED, p.view, 0);
+        return SHIP_PATH_SCALED;
     }
-    return 7;
+    drawn(SHIP_PATH_TURNED, p.view, rq * 64);
+    return SHIP_PATH_TURNED;
 }
 
 /* a view of the dense lattice next to v (a band or a heading step either way, the headings round the circle)
@@ -1288,18 +1334,74 @@ int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBa
     const ShipSet __far *s = ships_set(set_i);
     LfPlace p;
     int c;
+    drawn(0, -1, 0);
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
     if (!p.on_screen || scale256 < 8)
         return 1;
     if (scale256 == 256 && ((p.roll + 8) & 1023) < 16) {
         ships_blit(s, p.view, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+        drawn(SHIP_PATH_EXACT_BLIT, p.view, 0);
         return 1;
     }
-    if (draw_turned(s, set_i, p.view, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows))
+    if (draw_turned(s, set_i, p.view, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows)) {
+        drawn(SHIP_PATH_EXACT, p.view, p.roll);
         return 1;
+    }
     c = resident_neighbour(s, set_i, p.view);
-    return c >= 0 && draw_turned(s, set_i, c, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0,
-                                 ext_rows);
+    if (c >= 0 && draw_turned(s, set_i, c, p.sx, p.sy, scale256, p.roll, detail, y0, y1, xa, xb, ext, ext_y0,
+                              ext_rows)) {
+        drawn(SHIP_PATH_NEIGHBOUR, c, p.roll);
+        return 1;
+    }
+    return 0;
+}
+
+int ships_drawn(int set_i, int exact, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
+                LfPlace *p, int *nb, int *nh)
+{
+    const ShipSet __far *s = ships_set(set_i);
+    ShipView view;
+    int c, rq, roll, path;
+    *nb = s->nb0;
+    *nh = s->nh0;
+    if (exact) {                        /* as ships_draw_exact draws it */
+        lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, p);
+        if (!p->on_screen || scale256 < 8)
+            return p->on_screen = 0;
+        if (scale256 == 256 && ((p->roll + 8) & 1023) < 16) {
+            p->roll = 0;
+            return SHIP_PATH_EXACT_BLIT;
+        }
+        if (can_turn(s, set_i, p->view))
+            return SHIP_PATH_EXACT;
+        if ((c = resident_neighbour(s, set_i, p->view)) >= 0 && can_turn(s, set_i, c)) {
+            p->view = c;
+            return SHIP_PATH_NEIGHBOUR;
+        }
+    }                                   /* (not in: the flight draws it from the sets, as ships_draw) */
+    if (!s->rvs) {
+        lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, p);
+        if (!p->on_screen || scale256 < 8)
+            return p->on_screen = 0;
+        rq = ((p->roll + 32) & 1023) / 64;
+        if (rq == 0 && scale256 >= 256) {
+            p->roll = 0;
+            return 1;
+        }
+        if (rq == 0 || !can_turn(s, set_i, p->view)) {
+            p->roll = 0;
+            return SHIP_PATH_SCALED;
+        }
+        p->roll = rq * 64;
+        return SHIP_PATH_TURNED;
+    }
+    *nb = s->nb1;
+    *nh = s->nh1;
+    lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb1, s->nh1, p);
+    if (!p->on_screen || scale256 < 8 || set_pick(s, p, scale256, &view, &roll, &path) < 0)
+        return p->on_screen = 0;
+    p->roll = roll;
+    return path;
 }
 
 int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int exact,
@@ -1309,7 +1411,7 @@ int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *sh
     LfPlace p;
     ShipView view;
     LfRot r;
-    int flags, rq, k, step;
+    int flags, rq, k;
     if (exact || !s->rvs) {             /* turned (and scaled) at draw time from the full-size view: the turned image */
         int roll;
         lf_place(rel, cam, ship, cx, cy, focal, s->nb0, s->nh0, &p);
@@ -1333,15 +1435,7 @@ int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *sh
     lf_place(rel, cam, ship, cx, cy, focal, s->nb1, s->nh1, &p);   /* from the sets: the sprite ships_draw takes */
     if (!p.on_screen || scale256 < 8)
         return 0;
-    step = 1024 / s->nrolls;
-    rq = ((p.roll + step / 2) & 1023) / step;
-    k = size_step(s, scale256);
-    if ((flags = find_sprite(s, k, p.view, rq, &view)) < 0 && (!(rq & 1)
-        || (flags = find_sprite(s, k, p.view, rq & ~1, &view)) < 0))
-        for (; k < s->nsizes; k++)
-            if ((flags = find_sprite(s, k, p.view, 0, &view)) >= 0)
-                break;
-    if (flags < 0 || !view.w)
+    if ((flags = set_pick(s, &p, scale256, &view, &rq, &k)) < 0 || !view.w)
         return 0;
     box[0] = p.sx - (flags & BLIT_H ? view.w - 1 - view.ox : view.ox);   /* (as ships_blit_view places it) */
     box[1] = p.sy - (flags & BLIT_V ? view.h - 1 - view.oy : view.oy);
