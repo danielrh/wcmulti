@@ -666,23 +666,24 @@ turned ships thrashed the two 64 KB dense buffers (25.6 ms with three):
 `dense_from` now keeps the last eight dense copies in XMS too
 (`g_dc`, mission level), and a ship whose copy was taken gets it back by
 one XMS move (host speed in DOSBox) instead of a re-expansion (the flames
-scene: 471 expansions and 10,258 moves in 20 s). A dropped row's copy is
-`copy_down`: a `rep movsd` costs DOSBox a cycle per four bytes, an XMS
-move a few dozen instructions whatever its length, so spans of 128 bytes
-or more go by XMS (the user's idea). **Exact edges** (the user's next
+scene: 471 expansions and 10,258 moves in 20 s). A dropped row's copy is a
+`rep movsd` (DOSBox charges a cycle per four bytes; an XMS move, a few
+dozen instructions whatever its length, was tried for the wide spans and
+gained nothing once the row was one call). **Exact edges** (the user's next
 idea: the copied rows made stair steps of the outline): the ship taken as
 convex, a left and a right edge a row, a jagged inside fine. A row drawn
-in full also has its edges found (`rv_rotate_edges`, lowlevel.asm: the
-kernel's walk, reading only, in from both ends of the span; the kernel
-then runs between them, so the walk costs no more than the kernel did over
-the margins); a dropped row's edges are probed from the row above's
-(`rv_rotate_edges_near`: a step or two each, outward while the next pixel
-is ship, else inward to the first that is), the part the row above covers
-too is copied, and the rest, out to its own edges, sampled. Costs at
-40,000 cycles in the flames scene (six ships 3,000-3,500 km, all near:
-two at full detail, four at half height): exact draws 17.6 ms with the
-plain row copy, 19.5 with walked edges, 18.6 with probed ones; the whole
-frame 32.3 ms (592 frames in 20 s, the 30 fps cap held).
+in full also has its edges found (`rv_turn_drawn`, lowlevel.asm: the
+kernel's walk, reading only, in from both ends of the span, then the
+kernel between them, so the walk costs no more than the kernel did over
+the margins); a dropped row's edges are probed from the row above's (a
+step or two each, outward while the next pixel is ship, else inward to
+the first that is), the part the row above covers too is copied, and the
+rest, out to its own edges, sampled (`rv_turn_dropped`): one far call a
+row. Costs at 40,000 cycles in the flames scene (six ships 3,000-3,500
+km, all near: two at full detail, four at half height): exact draws 17.6
+ms with the plain (jagged) row copy, 19.5 with walked edges in C, 18.6
+with probed ones and four calls a row, 17.8 with one asm call a row; the
+whole frame 31.8 ms (593 frames in 20 s, the 30 fps cap held).
 
 **The stream** (2026-10-20 to 21, since removed; the user's design then: "it doesn't impact the
 drawing and you just get jumpiness until it streams in", a few cache slots

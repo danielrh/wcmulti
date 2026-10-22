@@ -303,21 +303,22 @@ _rv_rotate_edges:
         pop bp
         retf
 
-; long rv_rotate_edges_near(const unsigned char far *dense, int w, int h, const LfRot *r,
-;                           int y, int xs, int xe, int pl, int pr)
-; rv_rotate_edges for a row whose neighbour above had its edges at pl and pr:
-; each edge found by probing from there, outward while the pixel beyond is
-; not clear, else inward to the first that is not (the user, 2026-10-21: the
-; ship taken as convex, a left and a right a row: a step or two each, not a
-; walk across the margin).  ax the first column, dx one past the last; both
-; xe when the row has none.
-        global _rv_rotate_edges_near
-_rv_rotate_edges_near:
+;-----------------------------------------------------------------------------
+; The rows of a picture drawn at half height (ships.c's turn_rows, the user's
+; ideas, 2026-10-21): one call a row, the edges kept for the next.
+;
+; long rv_turn_drawn(const unsigned char far *dense, int w, int h, const LfRot *r,
+;                    int y, int xs, int xe, unsigned char far *out)
+; A row drawn: its edges walked in from both ends of the span (as
+; rv_rotate_edges), then rv_rotate_row's kernel between them.  ax the first
+; column, dx one past the last (both xe when the row has none).
+        global _rv_turn_drawn
+_rv_turn_drawn:
         push bp
         mov bp,sp
         push si
         push di
-        sub sp,16                   ; [bp-20] u at column 0, [bp-16] v there, [bp-12] du, [bp-8] dv
+        sub sp,16                   ; [bp-20] u at the first column, [bp-16] v there, [bp-12] du, [bp-8] dv
         mov si,[bp+14]              ; r
         mov eax,[si+16]
         mov [bp-12],eax
@@ -325,13 +326,135 @@ _rv_rotate_edges_near:
         mov [bp-8],eax
         movsx eax,word [bp+16]      ; y
         imul eax,[si+24]
-        add eax,[si+8]              ; u00 + y * dru
+        add eax,[si+8]
+        movsx edx,word [bp+18]      ; xs
+        imul edx,[si+16]
+        add eax,edx
+        movsx edx,word [bp+16]
+        imul edx,[si+28]
+        add edx,[si+12]
+        movsx ecx,word [bp+18]
+        imul ecx,[si+20]
+        add edx,ecx
+        mov esi,eax                 ; u
+        mov edi,edx                 ; v
+        mov cx,[bp+20]
+        sub cx,[bp+18]
+        jle .none
+        mov gs,[bp+8]
+        mov bx,[bp+18]
+.fwd:   mov edx,edi
+        shr edx,16
+        imul dx,[bp+10]
+        mov eax,esi
+        shr eax,16
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        cmp byte [gs:edx],0
+        jne .first
+        add esi,[bp-12]
+        add edi,[bp-8]
+        inc bx
+        dec cx
+        jnz .fwd
+.none:  mov ax,[bp+20]
+        mov dx,ax
+        jmp .out
+.first: mov [bp-20],esi             ; (u, v at the first column: the kernel starts there)
+        mov [bp-16],edi
+        push bx
+        mov cx,[bp+20]
+        dec cx
+        sub cx,bx                   ; k = xe - 1 - first
+        movsx eax,cx
+        imul eax,[bp-12]
+        add esi,eax
+        movsx eax,cx
+        imul eax,[bp-8]
+        add edi,eax
+        mov bx,[bp+20]
+        dec bx
+.back:  mov edx,edi
+        shr edx,16
+        imul dx,[bp+10]
+        mov eax,esi
+        shr eax,16
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        cmp byte [gs:edx],0
+        jne .last
+        sub esi,[bp-12]
+        sub edi,[bp-8]
+        dec bx
+        jmp .back
+.last:  pop ax                      ; the first
+        lea cx,[bx+1]
+        push cx                     ; one past the last
+        push ax
+        sub cx,ax                   ; n
+        mov esi,[bp-20]
+        mov edi,[bp-16]
+        mov es,[bp+24]
+        mov bx,[bp+22]
+        add bx,ax                   ; out + first
+.k:     mov edx,edi
+        shr edx,16
+        imul dx,[bp+10]
+        mov eax,esi
+        shr eax,16
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        mov al,[gs:edx]
+        test al,al
+        jz .ks
+        mov [es:bx],al
+.ks:    add esi,[bp-12]
+        add edi,[bp-8]
+        inc bx
+        dec cx
+        jnz .k
+        pop ax
+        pop dx
+.out:   add sp,16
+        pop di
+        pop si
+        pop bp
+        retf
+
+; long rv_turn_dropped(const unsigned char far *dense, int w, int h, const LfRot *r,
+;                      int y, int xs, int xe, int pl, int pr,
+;                      unsigned char far *out, const unsigned char far *above)
+; A dropped row: its edges probed from the row above's, pl and pr, a step
+; or two each (the ship taken as convex, a left and a right a row:
+; outward while the next pixel is ship, else inward to the first that is),
+; the part of it the row above covers too copied down from `above`
+; (the same columns), the rest out to its own edges sampled: the outline
+; exact, the inside copied.  Returns its edges as rv_turn_drawn does.
+        global _rv_turn_dropped
+_rv_turn_dropped:
+        push bp
+        mov bp,sp
+        push si
+        push di
+        sub sp,24                   ; [bp-20] u at column 0, [bp-16] v there, [bp-12] du, [bp-8] dv,
+                                    ; [bp-22] first, [bp-24] end, [bp-26] a, [bp-28] b
+        mov si,[bp+14]              ; r
+        mov eax,[si+16]
+        mov [bp-12],eax
+        mov eax,[si+20]
+        mov [bp-8],eax
+        movsx eax,word [bp+16]      ; y
+        imul eax,[si+24]
+        add eax,[si+8]
         mov [bp-20],eax
         movsx eax,word [bp+16]
         imul eax,[si+28]
-        add eax,[si+12]             ; v00 + y * drv
+        add eax,[si+12]
         mov [bp-16],eax
-        mov gs,[bp+8]               ; dense
+        mov gs,[bp+8]
         mov cx,[bp+20]
         cmp cx,[bp+18]
         jle .none
@@ -346,25 +469,25 @@ _rv_rotate_edges_near:
         mov bx,cx
 .l2:    call .probe
         jz .lin
-.lout:  cmp bx,[bp+18]              ; not clear: outward while the next is not clear either
+.lout:  cmp bx,[bp+18]
         jle .lhave
         dec bx
         call .probe
         jnz .lout
         inc bx
         jmp .lhave
-.lin:   inc bx                      ; clear: inward to the first that is not
+.lin:   inc bx
         cmp bx,[bp+20]
         jge .none
         call .probe
         jz .lin
-.lhave: mov si,bx                   ; the first column
+.lhave: mov [bp-22],bx
         ; the right edge, from pr - 1 (kept in [first, xe))
         mov bx,[bp+24]
         dec bx
-        cmp bx,si
+        cmp bx,[bp-22]
         jge .r1
-        mov bx,si
+        mov bx,[bp-22]
 .r1:    mov cx,[bp+20]
         dec cx
         cmp bx,cx
@@ -381,15 +504,60 @@ _rv_rotate_edges_near:
         jnz .rout
         dec bx
         jmp .rhave
-.rin:   dec bx                      ; (it stops at the first column at the latest: that one is not clear)
+.rin:   dec bx
         call .probe
         jz .rin
-.rhave: lea dx,[bx+1]
-        mov ax,si
+.rhave: inc bx
+        mov [bp-24],bx              ; one past the last
+        ; what the row above covers too: a = max(first, pl), b = min(end, pr)
+        mov ax,[bp-22]
+        cmp ax,[bp+22]
+        jge .a1
+        mov ax,[bp+22]
+.a1:    mov [bp-26],ax
+        mov dx,[bp-24]
+        cmp dx,[bp+24]
+        jle .b1
+        mov dx,[bp+24]
+.b1:    mov [bp-28],dx
+        cmp ax,dx
+        jge .whole
+        ; copied: above[a .. b) to out[a .. b)
+        push ds
+        mov cx,dx
+        sub cx,ax                   ; b - a
+        les di,[bp+26]
+        add di,ax
+        lds si,[bp+30]
+        add si,ax
+        mov dx,cx
+        shr cx,2
+        rep movsd
+        mov cx,dx
+        and cx,3
+        rep movsb
+        pop ds
+        mov es,[bp+28]              ; (the sampling writes through es)
+        mov ax,[bp-22]              ; sampled: [first, a) and [b, end)
+        mov cx,[bp-26]
+        sub cx,ax
+        call .span
+        mov ax,[bp-28]
+        mov cx,[bp-24]
+        sub cx,ax
+        call .span
+        jmp .ret
+.whole: mov es,[bp+28]              ; nothing in common: all of it sampled
+        mov ax,[bp-22]
+        mov cx,[bp-24]
+        sub cx,ax
+        call .span
+.ret:   mov ax,[bp-22]
+        mov dx,[bp-24]
         jmp .out
 .none:  mov ax,[bp+20]
         mov dx,ax
-.out:   add sp,16
+.out:   add sp,24
         pop di
         pop si
         pop bp
@@ -398,18 +566,48 @@ _rv_rotate_edges_near:
         movsx eax,bx
         imul eax,[bp-12]
         add eax,[bp-20]
-        shr eax,16                  ; u
+        shr eax,16
         movsx edx,bx
         imul edx,[bp-8]
         add edx,[bp-16]
-        shr edx,16                  ; v
-        imul dx,[bp+10]             ; v * w
+        shr edx,16
+        imul dx,[bp+10]
         add dx,ax
         add dx,[bp+6]
         movzx edx,dx
         mov al,[gs:edx]
         test al,al
         ret
+.span:                              ; ax a column, cx how many from it: sampled into out (es)
+        or cx,cx
+        jle .sret
+        movsx edx,ax
+        mov esi,edx
+        imul esi,[bp-12]
+        add esi,[bp-20]             ; u
+        mov edi,edx
+        imul edi,[bp-8]
+        add edi,[bp-16]             ; v
+        mov bx,[bp+26]
+        add bx,ax                   ; out + column
+.sl:    mov edx,edi
+        shr edx,16
+        imul dx,[bp+10]
+        mov eax,esi
+        shr eax,16
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        mov al,[gs:edx]
+        test al,al
+        jz .ss
+        mov [es:bx],al
+.ss:    add esi,[bp-12]
+        add edi,[bp-8]
+        inc bx
+        dec cx
+        jnz .sl
+.sret:  ret
 
 ; void rv_blit_row_rev(unsigned char far *row, const unsigned char far *spans,
 ;                      int right, int xa, int xb)

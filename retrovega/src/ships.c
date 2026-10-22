@@ -77,8 +77,10 @@ void __far __cdecl rv_rotate_row2(const unsigned char __far *dense, int w, int h
                                   unsigned char __far *out);
 long __far __cdecl rv_rotate_edges(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs,
                                    int xe);           /* (the silhouette's first column, low word; one past its last) */
-long __far __cdecl rv_rotate_edges_near(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs,
-                                        int xe, int pl, int pr);   /* (the same, probed from the row above's edges) */
+long __far __cdecl rv_turn_drawn(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs, int xe,
+                                 unsigned char __far *out);   /* (a row: its edges, the kernel between them) */
+long __far __cdecl rv_turn_dropped(const unsigned char __far *dense, int w, int h, const LfRot *r, int y, int xs,
+                                   int xe, int pl, int pr, unsigned char __far *out, const unsigned char __far *above);
 
 /* --- the .RV fallback: decoding WC's sprite code --- */
 
@@ -983,37 +985,14 @@ static int make_dense(const ShipSet __far *s, int set_i, int v)
     return dense_from(set_i, v, &view, mir);
 }
 
-/* a row of a picture drawn at half height (detail 2): the row above's span copied down.  A rep movsd costs DOSBox
- * a cycle per four bytes, an XMS move (host speed) a few dozen instructions whatever its length: the wide spans by
- * XMS (the user's idea), an even length (it moves words), the odd byte by hand */
-static void copy_down(unsigned char __far *dst, const unsigned char __far *src, int n)
-{
-    if (n >= 128) {
-        xms_copy_conv(dst, src, (unsigned long)(n & ~1));
-        if (n & 1)
-            dst[n - 1] = src[n - 1];
-    } else
-        _fmemcpy(dst, src, n);
-}
-
-/* columns a .. b-1 of output row ry (frame row oy) of the turned picture, at the detail's horizontal grain */
-static void turn_span(int w, int h, const LfRot *r, int ry, int a, int b, int detail, unsigned char __far *out)
-{
-    if (a >= b)
-        return;
-    if (detail >= 4)
-        rv_rotate_row2(g_dense, w, h, r, ry, a, b, out);
-    else
-        rv_rotate_row(g_dense, w, h, r, ry, a, b, out);
-}
-
 /* the rows of a picture turned at draw time, from the dense copy in g_dense (w x h, its origin at (ox, oy)): turned
  * by roll and scaled by scale256 / 256 about its origin, put at (x, y).  detail 1 samples every pixel; 2 samples
  * every other row in full and of the rows between only their edges, the inside copied down from the row above
  * (the user's ideas, 2026-10-21: half height for the ships beyond the plan's first two, its silhouette still
- * exact; the ship taken as convex, a left and a right edge a row, a jagged inside is fine: a dropped row's edges
- * are probed from the row above's (rv_rotate_edges_near: a step or two each), the part of it the row above covers
- * too is copied (copy_down), the rest of it, out to its own edges, sampled); 4 also writes each sample as a 2 x 1 block
+ * exact; the ship taken as convex, a left and a right edge a row, a jagged inside is fine): a drawn row finds its
+ * edges walking in from its span and samples between them (rv_turn_drawn), a dropped row probes its edges from the
+ * row above's (a step or two each), copies the part the row above covers too and samples the rest out to its own
+ * edges (rv_turn_dropped): one call a row (lowlevel.asm).  4 also writes each drawn row's samples as 2 x 1 blocks
  * (rv_rotate_row2): a ship too big for the budget is drawn coarser rather than slower. */
 static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256, int roll, int detail, int y0, int y1,
                       int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
@@ -1034,7 +1013,7 @@ static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256,
     if (xa < left) xa = left;
     if (xb > left + r.ow) xb = left + r.ow;
     for (oy = y0; oy < y1; oy++) {
-        int ca = xa, cb = xb, xs, xe, l, e, a, b;
+        int ca = xa, cb = xb, xs, xe;
         long ed;
         unsigned char __far *row;
         if (!row_clip(oy, &ca, &cb, ext, ext_y0, ext_rows)
@@ -1047,25 +1026,16 @@ static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256,
             rv_rotate_row(g_dense, w, h, &r, oy - top, xs, xe, row);
             continue;
         }
-        if (((oy - top) & 1) && pl < pr)   /* (a dropped row: its edges probed from the row above's) */
-            ed = rv_rotate_edges_near(g_dense, w, h, &r, oy - top, xs, xe, pl, pr);
-        else                            /* (a row drawn: all of it, so its edges walked in from the span's) */
+        if (((oy - top) & 1) && pl < pr)   /* (a dropped row) */
+            ed = rv_turn_dropped(g_dense, w, h, &r, oy - top, xs, xe, pl, pr, row, vid_row(oy - 1) + left);
+        else if (detail >= 4) {
             ed = rv_rotate_edges(g_dense, w, h, &r, oy - top, xs, xe);
-        l = (int)ed;
-        e = (int)(ed >> 16);
-        if (((oy - top) & 1) && pl < pr && l < e) {
-            a = l > pl ? l : pl;        /* (the part the row above covers too: copied) */
-            b = e < pr ? e : pr;
-            if (a < b) {
-                copy_down(row + a, vid_row(oy - 1) + left + a, b - a);
-                turn_span(w, h, &r, oy - top, l, a, detail, row);
-                turn_span(w, h, &r, oy - top, b, e, detail, row);
-            } else
-                turn_span(w, h, &r, oy - top, l, e, detail, row);
+            if ((int)ed < (int)(ed >> 16))
+                rv_rotate_row2(g_dense, w, h, &r, oy - top, (int)ed, (int)(ed >> 16), row);
         } else
-            turn_span(w, h, &r, oy - top, l, e, detail, row);
-        pl = l;
-        pr = e;
+            ed = rv_turn_drawn(g_dense, w, h, &r, oy - top, xs, xe, row);
+        pl = (int)ed;
+        pr = (int)(ed >> 16);
     }
 }
 
