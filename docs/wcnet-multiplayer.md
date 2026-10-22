@@ -1136,7 +1136,26 @@ top-level README for the workflow).  What differs:
   one of the pilot's lines: when they are used up for the moment it waits
   in the box.  A pilot who comes later is shown the last line of each
   pilot present (its author sends it again, marked with its age; one a
-  minute is taken from a seat).  A pilot who opens the page is in the
+  minute is taken from a seat).  **"Join open game"** (the top button while
+  the pilot is in no room; the user's design, 2026-10-22) finds a room
+  without a line of chat: the page asks every pilot in the lobby, on the
+  same data channels but as a message of its own kind that no chat window
+  shows (`{t: "rooms?", n}`), and each page answers with the room it sits
+  in when that has a free seat -- its code, the program it plays and the
+  free seats (`{t: "room", n, code, game, free}`, `openRoom`) -- or with an
+  empty answer.  A page answers three questions from a seat at once and
+  then one every five seconds; the asking page waits for every answer or
+  two and a half seconds, drops answers that break the rules (a code of
+  the lobby's own, a malformed or profane one, a free count that is not
+  1..255), keeps those it can fly in (the program played and the game the
+  code names, `canFly`) and joins one at random, the next if that one is
+  full by then.  With none it makes the pilot's own room of the room form,
+  which the next pilot to ask will find.  A pilot who ticks **Private**
+  (beside "Controller buttons and axes", remembered by the browser) gives
+  empty answers, and so does everyone in the room of a host who ticked it
+  (the host's hello says `private`): such a room is found only by its code
+  or its link.  "Join room" in the room panel joins the code typed there.
+  A pilot who opens the page is in the
   lobby (the user's choice of default; it connects the browser directly to
   strangers', which the panel says), unless a link to a room brought the
   page -- that pilot has somebody to fly with -- or the pilot left the

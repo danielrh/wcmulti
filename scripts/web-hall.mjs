@@ -305,6 +305,49 @@ check("a code clicked there says the page has to be loaded again", /Reload the p
 await a.context().close();
 await b.context().close();
 
+// -- "Join open game" ---------------------------------------------------------------
+// The top button asks the pilots in the lobby for a room with a free seat
+// (a message of its own, not a line of chat) and joins one this browser can
+// fly in; with none, the pilot's own room.  Private keeps a room out of it.
+const opened = { hall: "OPEN-" + run };
+const openGame = async (page) => {
+  const label = await page.$eval("#topAction", (el) => el.textContent);
+  check("the top button says Join open game", label === "Join open game", label);
+  await page.click("#topAction");
+  await page.waitForFunction(() => !document.getElementById("lobby").hidden && !/Asking the pilots/.test(document.getElementById("status").textContent), null, { timeout: 40000 }).catch(() => {});
+  return status(page);
+};
+const seatOf = async (page) => (/player (\d) of (\d) in room/.exec(await text(page, "chatLog")) || []).slice(1).join(" of ");
+const oscar = await open("OSCAR", opened);
+await inside(oscar);
+const codeO = await value(oscar, "room");
+check("alone in the lobby, Join open game makes the pilot's own room", /^No open game in the lobby: you are in a room of your own, WC1-\d{4}, which the next pilot/.test(await openGame(oscar)) && (await value(oscar, "room")) === codeO && (await seatOf(oscar)) === "1 of 2", await status(oscar));
+const quebec = await open("QUEBEC", opened);
+await inside(quebec); await pilots(quebec, 2);
+check("the next pilot is put into it", /an open game from the lobby/.test(await openGame(quebec)) && (await value(quebec, "room")) === codeO && (await seatOf(quebec)) === "2 of 2", [await status(quebec), await value(quebec, "room")]);
+check("the question and the answers are no lines of chat", !/rooms\?|"t"|OSCAR\s*WC1\s*:/.test((await text(oscar, "hallLog")) + (await text(quebec, "hallLog"))), await text(quebec, "hallLog"));
+const romeo = await open("ROMEO", opened);
+await inside(romeo); await pilots(romeo, 3);
+await romeo.check("#private");
+check("a full room is not offered: own room, kept out while Private is ticked", /^No open game in the lobby: you are in a room of your own, WC1-\d{4}, kept out of Join open game \(Private\)/.test(await openGame(romeo)) && (await value(romeo, "room")) !== codeO, await status(romeo));
+const codeR = await value(romeo, "room");
+const sierra = await open("SIERRA", opened);
+await inside(sierra); await pilots(sierra, 4);
+check("a private room is not offered", /^No open game in the lobby: you are in a room of your own/.test(await openGame(sierra)) && ![codeO, codeR].includes(await value(sierra, "room")), await status(sierra));
+// SIERRA's page now says it sits in a Wing Commander II room.
+await sierra.evaluate(() => window.__wcHall.test.configure({ room: { code: "WC2-4242", game: "wc2", free: 1 } }));
+const tango = await open("TANGO", opened);
+await inside(tango); await pilots(tango, 5);
+check("a room for a game this browser lacks is not joined", /^No open game in the lobby is for a game this browser has: you are in a room of your own/.test(await openGame(tango)) && (await value(tango, "room")) !== "WC2-4242", await status(tango));
+const codeT = await value(tango, "room");
+await romeo.uncheck("#private");
+check("Private is remembered by the browser", (await romeo.evaluate(() => localStorage.getItem("wc:private"))) === "0", null);
+const uniform = await open("UNIFORM", opened);
+await inside(uniform); await pilots(uniform, 6);
+await openGame(uniform);
+check("one of the open rooms, at random", [codeR, codeT].includes(await value(uniform, "room")) && (await seatOf(uniform)) === "2 of 2", [await status(uniform), await value(uniform, "room")]);
+for (const p of [oscar, quebec, romeo, sierra, tango, uniform]) await p.context().close();
+
 // -- another lobby server -----------------------------------------------------------
 // Should the public server be down, pilots meet on another: ?server=URL in
 // the page's address, or the field under Options.  (Every page of this

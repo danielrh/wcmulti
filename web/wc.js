@@ -712,11 +712,16 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 fps: 0,
                 // capital ships with three times their hull: the host's choice
                 capHull: false,
+                // the host keeps the room out of "Join open game" (its Private box)
+                hostPrivate: false,
                 // game-protocol messages that arrive before DOSBox has adopted this
                 // connection (a wingman faster to the launch than the host), handed
                 // to the transport at adoption so nothing is lost
                 backlog: [] };
 let running = false;
+let seeking = false;  // ("Join open game" is asking the lobby)
+const PRIVATE_KEY = "wc:private";
+const privateOn = () => $("private").checked;  // (the room is kept out of "Join open game")
 const myName = () => $("callsign").value.trim() || "Pilot " + (lobby.game ? lobby.game.selfId + 1 : "?");
 const isHost = () => lobby.game && lobby.game.selfId === 0;
 
@@ -742,7 +747,7 @@ const sayHello = (to, reply) => sendLobby({ t: "hello", name: myName(), flying: 
   mission: isHost() ? missionKey(lobby.mission) : undefined, rocks: isHost() ? lobby.rocks : undefined,
   wingBumps: isHost() ? lobby.wingBumps : undefined,
   latency: isHost() ? lobby.latency : undefined, fps: isHost() ? lobby.fps : undefined,
-  capHull: isHost() ? lobby.capHull : undefined }, to);
+  capHull: isHost() ? lobby.capHull : undefined, private: isHost() ? privateOn() : undefined }, to);
 
 // Asteroid and mine fields on, soft or off.  The host's page tells the others
 // (for their lobby) and its own running game, which tells every wingman's game.
@@ -893,17 +898,18 @@ function renderTopAction() {
   const step = running ? "screen" : !source ? "files" : !lobby.game ? "room" : "fly";
   b.dataset.step = step;
   b.disabled = step === "fly" && $("fly").disabled;
-  b.textContent = { screen: "Full screen", files: "Load game files", room: "Join room", fly: "Fly" }[step];
+  if (step === "room") b.disabled = seeking;
+  b.textContent = { screen: "Full screen", files: "Load game files", room: "Join open game", fly: "Fly" }[step];
   b.title = { screen: "The game full screen; holding Esc leaves it",
               files: "Your own Wing Commander or Wing Commander II: a .zip of the game folder, or the GOG installer",
-              room: "Take a seat in the room of step 2 (made if nobody has); wingmen join by its code or this page's link",
+              room: "Joins a room with a free seat that a pilot in the lobby sits in, for a game this browser has (one at random); with none, your own room of step 2, for the next pilot to find. \"Join room\" in step 2 joins the code typed there",
               fly: $("status").textContent }[step];
 }
 $("topAction").addEventListener("click", () => {
   const step = $("topAction").dataset.step;
   if (step === "screen") goFullscreen();
   else if (step === "files") $("gamefile").click();
-  else if (step === "room") { $("roomPanel").scrollIntoView({ block: "nearest", behavior: "smooth" }); void joinRoom(); }
+  else if (step === "room") { $("roomPanel").scrollIntoView({ block: "nearest", behavior: "smooth" }); void joinOpenGame(); }
   else $("fly").click();
 });
 
@@ -953,6 +959,7 @@ function onLobbyEvent(ev) {
           if (fpsInForce()) chatLine(`${esc(m.name)} set ${fpsInForce()} frames a second`, "sys");
           renderMission();
         }
+        if (ev.from === 0) lobby.hostPrivate = m.private === true;
         if (ev.from === 0 && !isHost() && typeof m.capHull === "boolean" && m.capHull !== lobby.capHull) {
           lobby.capHull = m.capHull;
           if (lobbyCapHull()) chatLine(`${esc(m.name)} set ${capHullLabel(lobby.capHull)}`, "sys");
@@ -1159,11 +1166,74 @@ async function myRoom() {
 }
 $("advertise").addEventListener("click", () => { if (lobby.game && !running) void hall.advertise(); });
 
+// -- an open game ----------------------------------------------------------------
+
+// "Join open game" (the top button while the pilot is in no room): the
+// pilots in the lobby are asked for the room they sit in when it has a free
+// seat (hall.findRooms), and one of those that this browser can fly in is
+// joined, at random.  With none, the pilot's own room of step 2 is made, for
+// the next pilot who asks to find.  A pilot who ticks Private is not asked
+// about their room, nor is anyone in the room of a host who ticked it: only
+// its code or its link brings somebody in.  "Join room" in step 2 joins the
+// code typed there.
+try { $("private").checked = localStorage.getItem(PRIVATE_KEY) === "1"; } catch (e) { /* not kept */ }
+$("private").addEventListener("change", () => {
+  try { localStorage.setItem(PRIVATE_KEY, privateOn() ? "1" : "0"); } catch (e) { /* not kept */ }
+  sayHello();
+});
+// The room this page offers to a pilot looking for an open game, or null.
+function openRoom() {
+  const g = lobby.game;
+  if (!g || running || privateOn() || lobby.hostPrivate) return null;
+  const free = g.players.filter((p) => !p.occupied).length;
+  return free > 0 ? { code: g.code, game: lobbyGameId(), free } : null;
+}
+// Can this browser fly in an offered room: the program it plays, and the
+// game its code names (fitsRoom)?
+function canFly(r) {
+  const prog = gameById(r.game), tagged = codeGame(r.code);
+  return !!prog && !!prog.multiplayer && !!holderOf(prog.id) && (!tagged || !!holderOf(tagged.id));
+}
+async function joinOpenGame() {
+  if (seeking || lobby.game || running || $("join").disabled) return;
+  seeking = true;
+  renderTopAction();
+  // (Said under the lobby's chat as well: the status line is far below.)
+  const tell = (text) => { status(text); hall.note(text); };
+  try {
+    status("Asking the pilots in the lobby for an open game…");
+    const rooms = await hall.findRooms();
+    const fit = (rooms || []).filter(canFly);
+    for (let i = fit.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [fit[i], fit[j]] = [fit[j], fit[i]]; }
+    const typed = $("room").value;
+    for (const r of fit) {
+      if (lobby.game || running) return;
+      $("room").value = r.code;
+      await joinRoom({ create: false });
+      if (lobby.game) {
+        tell(`You are in room ${r.code}, an open game from the lobby: the host presses Fly when everyone is in.`);
+        return;
+      }
+    }
+    if (lobby.game || running) return;
+    $("room").value = typed; retagRoom();
+    const why = rooms === null ? "You are not in the lobby, so there was nobody to ask"
+      : fit.length ? "The open games were taken by the time you got there"
+      : rooms.length ? "No open game in the lobby is for a game this browser has" : "No open game in the lobby";
+    await joinRoom();
+    if (lobby.game) tell(`${why}: you are in a room of your own, ${lobby.game.code}, ` +
+                          (privateOn() ? "kept out of Join open game (Private)." : "which the next pilot who presses Join open game can find."));
+  } finally {
+    seeking = false;
+    renderTopAction();
+  }
+}
+
 function leaveRoom() {
   voice.stopAll();
   if (lobby.unsubscribe) lobby.unsubscribe();
   if (lobby.game) { try { lobby.game.close(); } catch (e) { /* gone */ } }
-  lobby.game = null; lobby.unsubscribe = null; lobby.adopted = false; lobby.backlog = [];
+  lobby.game = null; lobby.unsubscribe = null; lobby.adopted = false; lobby.backlog = []; lobby.hostPrivate = false;
   lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
   // (While the game runs, the button stays: the way out of it.)
   $("lobby").hidden = true; $("leave").hidden = !running; $("share").hidden = true; $("join").disabled = false;
@@ -1550,6 +1620,7 @@ const hall = initHall({
   fits: (tag) => !source || !gameByTag(tag) || !!holderOf(gameByTag(tag).id),
   onCode: (code) => void joinFromLobby(code),
   room: myRoom,
+  openRoom,
   log,
 });
 window.__wcHall = hall;  // (for the page tests)

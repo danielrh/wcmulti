@@ -44,6 +44,13 @@
 //   * Every pilot is linked to every other, so a newcomer to a full lobby
 //     gets hundreds of offers.  They are spread over a few seconds: the
 //     server drops a socket that has more than a hundred messages waiting.
+//
+// "Join open game" asks the lobby without a line of chat: the page asks
+// every pilot in it for the room they sit in ({t: "rooms?", n}), and each
+// page answers with its room's code, the program it plays and its free
+// seats, or with nothing when it has no room with a free seat or its pilot
+// keeps the room private ({t: "room", n, code, game, free}; opts.openRoom
+// says).  The asking page picks one it can fly in (web/wc.js).
 import { checkMessage, checkName, makeBucket, lineEvery, splitCodes, whyText, lobbyCode, isLobbyCode, LOBBY_CODE, RATE, MAX_CHARS, MAX_NAME, GAME_TAGS } from "./chatfilter.js";
 
 const SEATS = 32;                 // asked for (what the public server gives a room; 32 pilots at a line every ten seconds are three lines a second); a server that gives fewer says how many
@@ -62,6 +69,8 @@ const MAX_ATTEMPTS = 3;           // per pair: direct, relayed, relayed
 const MAX_WIRE = 600;             // characters of one message between pages
 const REPLAY_AGE_MS = 15 * 60000; // a newcomer is shown each pilot's last line when it is younger than this
 const REPLAY_EVERY_MS = 60000;    // ... and takes one such line a minute from a seat
+const ROOMS_WAIT_MS = 2500;       // how long "Join open game" waits for the pilots' answers
+const LINKS_WAIT_MS = 8000;       // ... and, just after entering, for the links to those already there
 
 // -- the connection --------------------------------------------------------------
 
@@ -391,8 +400,9 @@ const store = (s, key, value) => { try { if (value == null) s.removeItem(key); e
 // title(tag) a game's name,
 // onCode(code) a room code was clicked, room() the pilot's own room for an
 // advertisement, { code, offer } or null (the page joins the room of its
-// room form first when the pilot is in none), log(line), code (another row
-// of lobbies, for tests).
+// room form first when the pilot is in none), openRoom() the room offered to
+// a pilot who asks for an open game, { code, game, free } or null (none, or
+// private), log(line), code (another row of lobbies, for tests).
 export function initHall(opts) {
   const code = opts.code || LOBBY_CODE;
   // The lobbies' own codes, this row's and the public one's, are not rooms.
@@ -407,6 +417,8 @@ export function initHall(opts) {
   const hellos = new Map();      // seat -> how often it may introduce itself
   const replays = new Map();     // seat -> when an old line was last taken from it
   const shown = new Map();       // seat -> its last line shown
+  const askers = new Map();      // seat -> how often it may ask for open rooms
+  let asking = null;             // { n, asked, answers: seat -> answer, finish }: this page's question for open rooms
   let lastLine = null;           // { text, at }: this pilot's last line, for those who come later
   let noted = "";                // the hint line's own text (a refusal), until the next key
 
@@ -535,7 +547,59 @@ export function initHall(opts) {
       if (!buckets.get(id).take(now)) { log(`lobby: dropped a line from pilot ${id + 1} (too many)`); return; }
       shown.set(id, r.text);
       chatLine(who.name, who.tag, r.text);
+    } else if (m.t === "rooms?") {
+      // A pilot looks for an open game: this page's room, when it has a
+      // free seat and is not private (opts.openRoom), or a plain answer.
+      if (!askers.has(id)) askers.set(id, makeBucket({ burst: 3, every: 5000, at: now }));
+      if (typeof m.n !== "string" || m.n.length > 16 || !askers.get(id).take(now)) return;
+      const r = settings.room || (opts.openRoom ? opts.openRoom() : null);
+      net.send(id, JSON.stringify({ t: "room", n: m.n, ...(r ? { code: r.code, game: r.game, free: r.free } : {}) }));
+    } else if (m.t === "room") {
+      if (!asking || m.n !== asking.n || asking.answers.has(id)) return;
+      asking.answers.set(id, m);
+      if (asking.answers.size >= asking.asked) asking.finish();
     }
+  }
+
+  // "Join open game": the rooms with a free seat that the pilots in the
+  // lobby sit in, [{ code, game, free }] (answers that break the rules are
+  // left out), or null when this page is not in the lobby.  A page that has
+  // only just entered first gives its links to the others a few seconds.
+  async function findRooms() {
+    const until = (cond, ms) => new Promise((resolve) => {
+      const end = Date.now() + ms;
+      const look = () => { if (cond() || Date.now() >= end) resolve(); else setTimeout(look, 200); };
+      look();
+    });
+    if (entering) await until(() => !entering, CONNECT_TIMEOUT_MS * 2);
+    if (!inside()) return null;
+    const there = () => net.players.filter((p) => p.id !== net.selfId && p.occupied && p.connected).length;
+    await until(() => !inside() || others().length >= there(), LINKS_WAIT_MS);
+    if (!inside()) return null;
+    if (asking) return asking.result;   // (one question at a time)
+    const ask = { n: Math.random().toString(36).slice(2, 10), asked: others().length, answers: new Map() };
+    asking = ask;
+    ask.result = new Promise((resolve) => {
+      const timer = setTimeout(() => ask.finish(), ROOMS_WAIT_MS);
+      ask.finish = () => {
+        clearTimeout(timer);
+        if (asking === ask) asking = null;
+        const rooms = new Map();
+        for (const a of ask.answers.values()) {
+          const code = typeof a.code === "string" ? a.code : "";
+          const free = Number(a.free);
+          if (!/^[A-Za-z0-9_-]{4,64}$/.test(code) || isLobby(code) || !checkMessage(code).ok) continue;
+          if (typeof a.game !== "string" || a.game.length > 16 || !Number.isInteger(free) || free < 1 || free > 255) continue;
+          rooms.set(code, { code, game: a.game, free });
+        }
+        log(`lobby: asked ${ask.asked} pilots for an open game: ${ask.answers.size} answered, ${rooms.size} room${rooms.size === 1 ? "" : "s"} with a free seat`);
+        resolve(Array.from(rooms.values()));
+      };
+      if (!ask.asked) { ask.finish(); return; }
+      const m = JSON.stringify({ t: "rooms?", n: ask.n });
+      for (const p of others()) net.send(p.id, m);
+    });
+    return ask.result;
   }
 
   function linkChanged(id, open) {
@@ -743,6 +807,8 @@ export function initHall(opts) {
     },
     // The pilot's room, as a line in the lobby (the buttons that say so).
     advertise,
+    // The open rooms the pilots in the lobby offer ("Join open game").
+    findRooms,
     // A word under the chat, until the pilot types: what came of a click on
     // a code (the page's status line is far below).
     note,
@@ -772,6 +838,7 @@ export function initHall(opts) {
     // For the page tests (scripts/web-hall.mjs).
     test: {
       net: () => net,
+      // (room: the answer this page gives to a question for open rooms, whatever its own room.)
       configure(s) { settings = { ...settings, ...s }; },
       // A message as a page that keeps no rules would send it.
       raw(obj) { const m = typeof obj === "string" ? obj : JSON.stringify(obj); for (const p of net.players) if (p.id !== net.selfId) net.send(p.id, m); },

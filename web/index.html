@@ -80,7 +80,7 @@
   summary { cursor: pointer; color: var(--muted); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; }
   summary:hover { color: var(--green); }
   /* (The rarely used panels' headings on one line; an open one takes the row.) */
-  .details-row { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; }
+  .details-row { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin-top: 6px; }
   .details-row details { margin-top: 0; }
   .details-row details[open] { flex-basis: 100%; }
 
@@ -311,6 +311,7 @@
         </div>
         <p class="hint">The controller is the game's mouse and keyboard: the sticks steer (left stick turns and pitches, right stick pitches and rolls), the buttons press the game's keys. In menus and the barracks the left stick moves the pointer and the Fire guns button clicks. Each browser window has its own controller, so two windows side by side make a split screen: one controller each, or a controller in one and the keyboard and mouse in the other.</p>
       </details>
+      <label class="check" id="privateLabel" title="Your room is not offered to the pilots in the lobby who press Join open game (nor is the room of a host who ticks it): only its code or its link brings somebody in. Remembered by this browser"><input type="checkbox" id="private"> Private</label>
       </div>
       <div id="lobby" hidden>
         <div id="missionRow">
