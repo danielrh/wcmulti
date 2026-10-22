@@ -38,6 +38,9 @@ export function initVoice(host) {
   try { const saved = localStorage.getItem(VOICE_KEY); if (CHOICES.includes(saved)) choice = saved; } catch (e) { /* off */ }
   try { inputId = localStorage.getItem(INPUT_KEY) || ""; } catch (e) { /* system default */ }
   sel.value = choice;
+  // (The microphone is chosen only once there is a voice to choose it for.)
+  const showInput = () => { if (input) input.parentElement.hidden = choice === "off"; };
+  showInput();
   const remote = new Map();   // player id -> that player's choice
   const links = new Map();    // player id -> { pc, audio, offerer, pending }
   let mic = null;             // the microphone, while the choice is a talking one
@@ -254,6 +257,7 @@ export function initVoice(host) {
   sel.addEventListener("change", async () => {
     const previous = choice;
     choice = CHOICES.includes(sel.value) ? sel.value : "off";
+    showInput();
     pttDown = false; micError = "";
     save(); applyMute();
     // PTT and Always share the same sending track; applyMute handles the switch.
