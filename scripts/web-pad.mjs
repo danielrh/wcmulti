@@ -95,7 +95,7 @@ for (const [ship, how] of COCKPITS[game]) {
   check(`${ship}: with a controller the cockpit's crosshair is off, the box brings it back, and keyboard and mouse have it`, off1 === 1 && off2 === 0 && off3 === 1 && off4 === 0, [off1, off2, off3, off4]);
   // Picked "built in" after the launch, a pad is the game's mouse and
   // keyboard until the next one: the game port was never put in.
-  if (game === "wc1") {
+  {
     await page.selectOption("#padSelect", "joy|0:Mock Pad (STANDARD GAMEPAD)");
     await page.waitForTimeout(300);
     const hint = await page.textContent("#padHint");
@@ -105,22 +105,28 @@ for (const [ship, how] of COCKPITS[game]) {
   await context.close();
 }
 
-// "Built in" (Wing Commander 1): picked before the launch, the pad is the
-// game port's joystick, which the game reads itself: steps of -9..9 (its
-// joy_init(9, 9, 1, 1)), button 1 the guns.  Taken away in flight it is
+// "Built in": picked before the launch, the pad is the game port's
+// joystick, which the game reads itself: steps of -9..9 in Wing Commander
+// (its joy_init(9, 9, 1, 1)), -8..8 in Wing Commander II, button 1 the guns
+// (the gun energy, dseg:BE3A and dseg:66F8).  Taken away in flight it is
 // dropped without a lurch, and given back it is the game's again.
-if (game === "wc1") {
+{
   const ship = "Built in";
+  const { steps, guns: gunsAt, how } = {
+    wc1: { steps: 9, guns: 0xBE3A, how: { "env.MIS": "0", "env.SERIES": "1", "env.WCNET_AUTOKEYS": "1", "env.WCNET_KEYSCRIPT": "0.5:!poke=00BA:00" } },
+    wc2: { steps: 8, guns: 0x66F8, how: { cmd: "loadfix -34 wc2 Origin -k l s1 m0" } },
+  }[game];
   const context = await browser.newContext();
   await context.addInitScript(mock);
   const page = await context.newPage();
   page.on("pageerror", (e) => console.log(`PAGE ERROR: ${e.message}`));
   const u = new URL(pageUrl);
   for (const [k, v] of Object.entries({ room: "PAD-" + Math.random().toString(36).slice(2, 8).toUpperCase(), server: lobbyUrl, callsign: "HOST",
-                                        "env.WCROOM": "", "env.MIS": "0", "env.SERIES": "1", "env.WCNET_AUTOKEYS": "1", "env.WCNET_KEYSCRIPT": "0.5:!poke=00BA:00" })) u.searchParams.set(k, v);
+                                        "env.WCROOM": "", ...how })) u.searchParams.set(k, v);
   await page.goto(u.toString());
   const axis = (i, v) => page.evaluate(([i, v]) => { window.__pad.axes[i] = v; }, [i, v]);
   const button = (i, v) => page.evaluate(([i, v]) => { window.__pad.buttons[i] = { pressed: v > 0.1, touched: v > 0, value: v }; }, [i, v]);
+  if (process.env.GAME_FILE) await page.setInputFiles("#gamefile", process.env.GAME_FILE);
   await page.waitForFunction(() => /^(ready|error)$/.test(document.getElementById("sourceStatus").dataset.state || ""), null, { timeout: 300000 });
   await page.waitForFunction(() => Array.from(document.querySelectorAll("#padSelect option")).some((o) => o.value.startsWith("joy|")), null, { timeout: 10000 });
   const options = await page.$$eval("#padSelect option", (os) => os.map((o) => o.textContent));
@@ -139,9 +145,9 @@ if (game === "wc1") {
   let t = await turn();
   check(`${ship}: at rest no turn`, t[0] === 0 && t[1] === 0, t);
   const back = await held(1, 1), right = await held(0, 1), half = await held(0, 0.5);
-  check(`${ship}: stick back raises the nose, right turns right, the game's full step 9`, back[1] === -9 && back[0] === 0 && right[0] === 9 && right[1] === 0, [back, right]);
+  check(`${ship}: stick back raises the nose, right turns right, the game's full step ${steps}`, back[1] === -steps && back[0] === 0 && right[0] === steps && right[1] === 0, [back, right]);
   check(`${ship}: half stick is a smaller step`, half[0] >= 3 && half[0] <= 6, half);
-  const guns = () => page.evaluate(() => window.DOSBox._wc_web_ds_byte(0xBE3A));
+  const guns = () => page.evaluate((at) => window.DOSBox._wc_web_ds_byte(at), gunsAt);
   const g0 = await guns();
   await button(0, 1); await page.waitForTimeout(250); const g1 = await guns(); await button(0, 0);
   check(`${ship}: button 1 fires the guns`, g0 === 100 && g1 < 100, [g0, g1]);
@@ -153,7 +159,7 @@ if (game === "wc1") {
   await page.selectOption("#padSelect", "joy|0:Mock Pad (STANDARD GAMEPAD)");
   await page.waitForTimeout(600);
   const s1 = await state(), again = await held(0, -1);
-  check(`${ship}: picked built in again it is the game's joystick again`, s1 === 2 && again[0] === -9, [s1, again]);
+  check(`${ship}: picked built in again it is the game's joystick again`, s1 === 2 && again[0] === -steps, [s1, again]);
   await context.close();
 }
 await browser.close();

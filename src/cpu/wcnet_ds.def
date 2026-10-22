@@ -61,16 +61,18 @@ WC_DS(statusPilots, 0xC260, 0xC546, 0x0000, 0x0000, 0x0000)  // word per named p
 // The game's joystick (WC.EXE seg019): joy_init(9, 9, 1, 1), called once at startup by ovr160:01D2, looks for a stick on
 // the game port and takes its position then as the centre; seg019:020F reads it (from the timer, seg001:087B) as steps of
 // -9..9 and drops it for good when a reading times out.  SM2.EXE's are WC.EXE's moved by 0x322 (0x2E6 for joyEdges).
-WC_DS(joyStick, 0x76D6, 0x79F8, 0x0000, 0x0000, 0x0000)  // [joyStick] word: the stick read (0 A, 1 B), 0xffff none
-WC_DS(joyLoops, 0x76D8, 0x79FA, 0x0000, 0x0000, 0x0000)  // [joyLoops] word: port reads a reading counts up to
-WC_DS(joyPerStep, 0x76DA, 0x79FC, 0x0000, 0x0000, 0x0000)  // [joyPerStep] 4 words: counts a step below the centre (x, y), then above it (x, y)
-WC_DS(joyHigh, 0x76E2, 0x7A04, 0x0000, 0x0000, 0x0000)  // [joyHigh] 4 words: the highest counts taken (x, y), then the lowest (x, y)
-WC_DS(joyCentre, 0x76EA, 0x7A0C, 0x0000, 0x0000, 0x0000)  // [joyCentre] 2 words: the counts at rest (x, y)
-WC_DS(joyDead, 0x76EE, 0x7A10, 0x0000, 0x0000, 0x0000)  // [joyDead] 2 words: steps read as none (x, y)
-WC_DS(joyRange, 0x76F2, 0x7A14, 0x0000, 0x0000, 0x0000)  // [joyRange] 2 words: steps either side of the centre (x, y)
-WC_DS(joyEdges, 0xD3FA, 0xD6E0, 0x0000, 0x0000, 0x0000)  // [joyEdges] 4 words: joy_init's centre - 10 (x, y) and + 10 (x, y)
-WC_DS(joyRaw, 0x76F6, 0x7A18, 0x0000, 0x0000, 0x0000)  // [joyRaw] 2 words: the last counts read (x, y)
-WC_DS(joyReading, 0x76FA, 0x7A1C, 0x0000, 0x0000, 0x0000)  // [joyReading] 3 words a stick: x, y in steps, then its buttons (bit 0 button 1)
+// WC2.EXE has the same library (seg082:000A joy_init(8, 8, 1, 1) from ovr190:0010 at startup, seg082:0213 the reading,
+// the flight's poll seg001:065A), its variables in the same order; it has no flag for a poll that is running.
+WC_DS(joyStick, 0x76D6, 0x79F8, 0xA8D4, 0xA738, 0xA9CE)  // [joyStick] word: the stick read (0 A, 1 B), 0xffff none
+WC_DS(joyLoops, 0x76D8, 0x79FA, 0xA8D6, 0xA73A, 0xA9D0)  // [joyLoops] word: port reads a reading counts up to
+WC_DS(joyPerStep, 0x76DA, 0x79FC, 0xA8D8, 0xA73C, 0xA9D2)  // [joyPerStep] 4 words: counts a step below the centre (x, y), then above it (x, y)
+WC_DS(joyHigh, 0x76E2, 0x7A04, 0xA8E0, 0xA744, 0xA9DA)  // [joyHigh] 4 words: the highest counts taken (x, y), then the lowest (x, y)
+WC_DS(joyCentre, 0x76EA, 0x7A0C, 0xA8E8, 0xA74C, 0xA9E2)  // [joyCentre] 2 words: the counts at rest (x, y)
+WC_DS(joyDead, 0x76EE, 0x7A10, 0xA8EC, 0xA750, 0xA9E6)  // [joyDead] 2 words: steps read as none (x, y)
+WC_DS(joyRange, 0x76F2, 0x7A14, 0xA8F0, 0xA754, 0xA9EA)  // [joyRange] 2 words: steps either side of the centre (x, y)
+WC_DS(joyEdges, 0xD3FA, 0xD6E0, 0xDF32, 0xDD8A, 0xE3B2)  // [joyEdges] 4 words: joy_init's centre - 10 (x, y) and + 10 (x, y)
+WC_DS(joyRaw, 0x76F6, 0x7A18, 0xA8F4, 0xA758, 0xA9EE)  // [joyRaw] 2 words: the last counts read (x, y)
+WC_DS(joyReading, 0x76FA, 0x7A1C, 0xA8F8, 0xA75C, 0xA9F2)  // [joyReading] 3 words a stick: x, y in steps, then its buttons (bit 0 button 1)
 WC_DS(joyPollBusy, 0x00C8, 0x00C8, 0x0000, 0x0000, 0x0000)  // byte: nonzero while the flight's joystick poll runs (seg001:087B, from the timer)
 WC_DS(joyPointerBusy, 0xD584, 0xD86A, 0x0000, 0x0000, 0x0000)  // byte: nonzero while the menus' poll runs (seg039:0184 / 0245: the stick moves the pointer)
 WC_DS(victoryPoints, 0xC280, 0xC566, 0x0000, 0x0000, 0x0000)  // word

@@ -430,18 +430,24 @@ static void joystick_set(double x, double y, unsigned buttons) {
 }
 static int joystick_state();
 // Taken away, a stick the game reads is dropped for the game first: done
-// the game's own way, by a reading that times out, the poll that read it
-// goes on to read "stick 0xffff", the words below stick A's (the y range
-// and the raw counts), and flies a frame by them, a lurch of a quarter turn.
-// So it is dropped between polls with those words zeroed, then leaves the
-// port (joystick_tick).  The pointer, which the game has not parked while
-// the stick flew (it rests at the middle of the mouse's range, a dive in
-// every cockpit), goes to the middle of the view, where the game parks it.
+// the game's own way, by a reading that times out, the flight's poll that
+// read it (WC.EXE seg001:087B, WC2.EXE seg001:065A) goes on to read "stick
+// 0xffff", the words below stick A's (the y range and the raw counts), and
+// flies a frame by them, a lurch of a quarter turn.  So it is dropped with
+// those words zeroed where no poll is half done: in flight at the top of
+// the frame loop (loopTop: code::mainLoopTop), elsewhere when the game's
+// flags for a poll that is running are clear (WC1's; WC2 has none, and its
+// other polls keep the stick they began with).  Then it leaves the port.
+// The pointer, which the game has not parked while the stick flew (it
+// rests at the middle of the mouse's range, a dive in every cockpit), goes
+// to the middle of the view, where the game parks it.
 static bool g_joyDropping = false;
-static void joystick_drop() {
-    if (is_wc1() && DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF) {
-        if (rd8(ds::joyPollBusy) || rd8(ds::joyPointerBusy)) {
-            return;                                   // (the next tick)
+static void joystick_drop(bool loopTop) {
+    if (DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF) {
+        bool busy = in_flight() ? !loopTop
+                                : (ds::known(ds::joyPollBusy) && rd8(ds::joyPollBusy)) || (ds::known(ds::joyPointerBusy) && rd8(ds::joyPointerBusy));
+        if (busy) {
+            return;                                   // (later)
         }
         for (Bit16u off = (Bit16u)(ds::joyRange + 2); off < ds::joyReading + 6; off += 2) {
             wr16(off, 0);
@@ -469,17 +475,25 @@ static void joystick_on(bool on) {
         JOYSTICK_Enable(0, true);
     } else {
         g_joyDropping = true;
-        joystick_drop();
+        joystick_drop(false);
     }
 }
 // Wing Commander looks for a joystick once, at startup, and drops it for
 // good when a reading times out (the stick taken away): a stick that comes
-// later is given to the game as its joy_init(9, 9, 1, 1) takes one at rest.
+// later is given to the game as its joy_init takes one at rest, with the
+// steps the game asked for when it took one (WC1 9 either way of the
+// centre, WC2 8; the dead zone 1).  (Given before the game looks, it is
+// looked for and found all the same.)
 static void arm_game_joystick() {
-    if (!is_wc1() || DS == 0 || !has_started_up || !ds::known(ds::joyStick) || rd16(ds::joyStick) != 0xFFFF) {
+    if (DS == 0 || !ds::known(ds::joyStick) || rd16(ds::joyStick) != 0xFFFF) {
         return;
     }
-    const int centre = 64, range = 9, dead = 1;   // (RANGE in src/hardware/joystick.cpp)
+    const int centre = 64;                        // (RANGE in src/hardware/joystick.cpp)
+    int range = (Bit16s)rd16(ds::joyRange), dead = (Bit16s)rd16(ds::joyDead);
+    if (range < 1 || range > 30 || dead < 0 || dead > range) {
+        range = is_wc2() ? 8 : 9;                 // (none taken yet: what joy_init is called with)
+        dead = 1;
+    }
     const int below = centre - 10, step = below / range;
     int loops = 0x40;                             // the first of 64, 128, ... a reading at rest stays under
     while (loops <= centre) loops += 0x40;
@@ -508,14 +522,13 @@ static void joystick_tick() {
     if (g_joyOn) {
         arm_game_joystick();
     } else if (g_joyDropping) {
-        joystick_drop();
+        joystick_drop(false);
     }
 }
-// 0 off, 1 on the port, 2 read by the game (Wing Commander 1 only: the
-// others' state is not known).
+// 0 off, 1 on the port, 2 read by the game.
 static int joystick_state() {
     if (!g_joyOn) return 0;
-    return is_wc1() && DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF ? 2 : 1;
+    return DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF ? 2 : 1;
 }
 
 static bool enemy_ship(int slot);
@@ -1465,6 +1478,9 @@ static void check_hooks_slow() {
             g_frameSeen = true;
             g_flightCount++;
         }
+        if (g_joyDropping) {
+            joystick_drop(true);
+        }
         maybe_dump_data_segment();
         hold_cheat_hull();
         capship_hull_tick();
@@ -1569,8 +1585,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_mouse_button(int button, int pressed
 }
 // The pad as the game's own joystick (web/gamepad.js, a "built in" choice):
 // 1 puts stick A on the game port, 0 takes it off, a negative value only
-// asks; the answer is 0 off, 1 on the port, 2 read by the game (Wing
-// Commander 1; the others' own state is not known).  wc_web_joy moves it
+// asks; the answer is 0 off, 1 on the port, 2 read by the game.  wc_web_joy moves it
 // (-1..1 each way) and presses its buttons (bit 0 button 1, bit 1 button 2).
 static int g_webJoyWanted = -1;
 static double g_webJoyX = 0, g_webJoyY = 0;

@@ -987,14 +987,18 @@ top-level README for the workflow).  What differs:
   a window that is visible but not focused keeps flying: two windows side by
   side are a split screen.  The DOS game-port joystick is off in this build
   (`joysticktype=none`), or a gamepad would reach the game twice.
-* **A pad "built in"** (Wing Commander 1 and SM2: the registry's
+* **A pad "built in"** (all five programs, and SO3: the registry's
   `joystick`).  Each pad is in the picker a second time, "Built in: ...":
   the pad is then the game port's stick A, which the game reads and makes
   sense of itself (case 4 of the flight's event loop, `seg001:0FCF`): button
   1 the guns, both buttons a missile, button 2 with the stick rolls (across)
   and changes speed (forward and back), a double click of button 2 held is
   the afterburner (its press counting in `seg039:0007`, from the timer's
-  poll at `seg001:087B`).  The axes are the table's turn and pitch (inverted
+  poll at `seg001:087B`).  Wing Commander II has the same library and the
+  same scheme (checked: the trigger, a Pilum on both buttons, the roll, the
+  afterburner); its `joy_init(8, 8, 1, 1)` (`seg082:000A`, from `ovr190`)
+  reads steps of -8..8, and its variables are WC1's in the same order
+  (`dseg:A8D4` on; SO1's and SO2's carried over by `scripts/wcport.py`).  The axes are the table's turn and pitch (inverted
   as set, scaled by the sensitivity, after the dead zone), the two buttons
   its "Joystick button 1/2" rows (A and B by default); an action bound to
   either button is greyed and not pressed, and the other buttons press
@@ -1013,11 +1017,16 @@ top-level README for the workflow).  What differs:
   controller picked, the pad unplugged), the stick is dropped for the game
   between two polls with the words below stick A's reading zeroed, then
   leaves the port: dropped the game's own way, by a reading that times
-  out, the poll goes on to read "stick 0xffff" and flies a frame by the
-  y range and the raw counts, a quarter turn at once.  The mouse pointer
+  out, the flight's poll (WC1 `seg001:087B`, WC2 `seg001:065A`) goes on to
+  read "stick 0xffff" and flies a frame by the y range and the raw counts,
+  a quarter turn at once.  In flight the drop waits for the top of the
+  frame loop (`code::mainLoopTop`), where no poll is half done; elsewhere
+  for WC1's flags of a running poll (WC2's other polls keep the stick they
+  began with).  The mouse pointer
   is then parked in the middle of the view (the stick never parked it).
   Given back, the stick is handed to the game as its `joy_init` takes one
-  at rest (centre 64 counts, 6 a step, 768 reads at most).  A pad picked
+  at rest (centre 64 counts, 6 a step, 768 reads at most, the game's own
+  range).  A pad picked
   built in after a launch without the port is the mouse and keyboard until
   the next.  Natively `WCJOY=1` puts the stick on from the start (with
   `[joystick] timed=false` in the configuration) and the key script has

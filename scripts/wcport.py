@@ -61,6 +61,8 @@ MANUAL = {
     ("sm2", "commTextTimer"): (0x9084, "two votes only; ovr131:0C27 cmp word [9084],0 is WC.EXE ovr134:0C27 cmp word [8D96],0"),
     ("sm2", "pilotLastName"): (0x9D2C, "ovr146:0044 mov word [C526],9D2C is WC.EXE ovr149:0020 mov word [C240],9A42"),
     ("sm2", "pilotCallsign"): (0x9D3A, "14 bytes after the last name, as in WC.EXE"),
+    ("so1", "joyRaw"): (0xA758, "one vote only, and right after joyRange as in WC2.EXE"),
+    ("so2", "joyRaw"): (0xA9EE, "one vote only, and right after joyRange as in WC2.EXE"),
 }
 # The same for code places: (build, name) -> "seg:off" in that build.
 MANUAL_CODE = {
