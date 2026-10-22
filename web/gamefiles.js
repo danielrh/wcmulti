@@ -29,8 +29,8 @@
 // a download), and `cycles`, the emulated CPU speed the game plays well at
 // (DOSBox's default of 3000 is what Ctrl+F11 / Ctrl+F12 adjust; Wing
 // Commander 1 has no frame limiter, so its cutscenes and menus take their
-// speed from this, while in flight the hooks hold 20 frames a second with
-// 16000 cycles: WCFPS and WCFLIGHTCYCLES in the environment), and `pointer`,
+// speed from this, while in flight the hooks hold 30 frames a second with
+// 24000 cycles: WCFPS and WCFLIGHTCYCLES in the environment), and `pointer`,
 // for a controller's stick (web/gamepad.js): where the mouse pointer rests
 // when the game steers by it and how far it reaches, as fractions of the
 // mouse range.  Both games park the pointer in the middle of the cockpit's
@@ -51,6 +51,8 @@
 // image's own RVHOOK header, as RetroVega has it).  The page asks the file
 // the same question (knownBuild): only a pilot whose game the hooks will fly
 // is let into the public lobby.
+// `fps`: the frame rates the host may fly at, the first the default (the
+// hooks pace the flight: WCFPS; a game that paces itself has none).
 // `noFlight`: no missions to pick and nothing to fly yet (the page hides
 // its mission and flight options).
 // `builtin`: a game the site itself serves (ours to give away), as a
@@ -164,10 +166,14 @@ const WC2_HINTS = {
 // programs puts the story at that mission and starts in the barracks.
 const wc2Mission = (m) => `Origin s${m.series} m${m.mis}`;
 
+// Wing Commander moves everything by a step a frame, so its frame rate is
+// its speed: some missions were made for a slower one (the host's choice).
+const WC1_FPS = [30, 25, 20, 15];
+
 export const GAMES = [
   { id: "wc1", tag: "WC1", title: "Wing Commander", detect: ["WC.EXE"], run: "wc", multiplayer: true,
     build: { para: 0x1231, off: 0x0187, text: "Loading WING COMMANDER" },
-    saves: ["GAMEDAT/SAVEGAME.WLD"], cycles: 3630,
+    saves: ["GAMEDAT/SAVEGAME.WLD"], cycles: 3630, fps: WC1_FPS,
     pointer: { fromGame: true },
     campaign: { series: WC1_SERIES, hints: WC1_HINTS } },
   // SM2.EXE is the game's last build, with the Crusade campaign (it can
@@ -176,7 +182,7 @@ export const GAMES = [
   // mission is one of Crusade's.
   { id: "wc1sm2", tag: "SM2", partOf: "wc1", title: "Wing Commander: The Secret Missions 2", detect: ["SM2.EXE"], run: "sm2", multiplayer: true,
     build: { para: 0x11E8, off: 0x0181, text: "Loading WING COMMANDER" },
-    saves: ["GAMEDAT/CRUSADE.WLD"], cycles: 3630,
+    saves: ["GAMEDAT/CRUSADE.WLD"], cycles: 3630, fps: WC1_FPS,
     pointer: { fromGame: true },
     campaign: { series: SM2_SERIES, hints: WC1_HINTS } },
   // A picked mission of Wing Commander II starts in the barracks (a

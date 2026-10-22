@@ -60,7 +60,7 @@ static int env_int(const char *name, int fallback) {
 
 int pace_fps() {
     if (g_fps < 0) {
-        g_fps = env_int("WCFPS", is_wc1() ? 20 : 0);
+        g_fps = env_int("WCFPS", is_wc1() ? 30 : 0);
         if (g_fps < 0 || g_fps > 100) {
             g_fps = 0;
         }
@@ -97,9 +97,18 @@ private:
 static void boost_cycles() {
     // WC.EXE's heaviest frames (Gimle 1: Raptors, Jalthi and the Exeter) are
     // 400 to 660 thousand cycles of work, and a frame at 20 a second has
-    // 50 ms: 16000 leaves room.  (WC2 holds its own 15 frames a second with
-    // GOG's 8000 cycles in an ordinary furball, with little to spare: 12000.)
-    int want = env_int("WCFLIGHTCYCLES", is_wc1() ? 16000 : (g_game != GAME_NONE ? 12000 : 0));
+    // 50 ms: 16000 leaves room, and as much again for every frame a second
+    // more (24000 at 30).  (WC2 holds its own 15 frames a second with GOG's
+    // 8000 cycles in an ordinary furball, with little to spare: 12000.)
+    int fps = pace_fps();
+    int want = env_int("WCFLIGHTCYCLES", is_wc1() ? (fps > 20 ? 800 * fps : 16000) : (g_game != GAME_NONE ? 12000 : 0));
+    if (g_boostCycles && g_boostCycles != want && CPU_CycleMax == g_boostCycles && want > g_baseCycles) {
+        // (A client boosted before the server's frame rate reached it.)
+        g_boostCycles = want;
+        CPU_CycleMax = want;
+        wclog(2, "in flight: %d cycles for %d frames a second", want, fps);
+        return;
+    }
     if (want <= 0 || CPU_CycleAutoAdjust || g_boostCycles || CPU_CycleMax >= want) {
         return;
     }

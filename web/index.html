@@ -164,7 +164,7 @@
   #missionRow label { display: flex; gap: 6px; align-items: center; min-width: 0; color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
   #missionRow select { min-width: 0; max-width: 100%; }
   #mission { width: 30ch; }
-  #collisions, #latency { width: auto; }  /* wide enough for the whole option */
+  #collisions, #latency, #fps { width: auto; }  /* wide enough for the whole option */
   /* (One line: the ellipsis cuts it, the tooltip has the rest.) */
   #missionHint { flex-basis: 100%; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
   #missionHint:empty { display: none; }
@@ -315,6 +315,8 @@
           <label title="The mission the host picked for everyone">Mis <select id="mission"></select></label>
           <label title="The connection: how the host's game and the wingmen's exchange their frames. Low latency (the default): each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes); auto: the host's game measures the connection and switches by itself, which has proved disruptive. The host decides, also while flying; /latency low, /latency high and /latency auto in the chat do the same">Conn
             <select id="latency"><option value="low">fast (low latency)</option><option value="high">far away (high latency)</option><option value="auto">auto (not recommended)</option></select></label>
+          <label id="fpsLabel" hidden title="Frames a second in flight. Wing Commander moves everything a step a frame, so this is the game's speed: 30 is the default, and some missions were made for a slower one. The host picks it before the launch">FPS
+            <select id="fps"></select></label>
           <label title="Asteroid and mine fields, and whether two wingmen's ships touching costs them anything (their guns, missiles and ramming anything else always count). The host decides, also while flying; /rocks on, /rocks soft, /rocks off and /bumps harmless, /bumps game in the chat do the same">Collisions
             <select id="collisions">
               <option value="on-harmless">asteroids on, wing bumps harmless</option>

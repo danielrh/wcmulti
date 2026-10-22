@@ -654,6 +654,23 @@ function renderMission() {
   $("collisions").disabled = !isHost();  // the host may switch them while flying too
   $("latency").value = lobby.latency;
   $("latency").disabled = !isHost();
+  const fpsChoices = lobbyFpsChoices();
+  $("fpsLabel").hidden = !fpsChoices || !lobbyFlies();
+  if (fpsChoices) {
+    const sel = $("fps");
+    if (sel.dataset.choices !== fpsChoices.join()) {
+      sel.dataset.choices = fpsChoices.join();
+      sel.innerHTML = "";
+      fpsChoices.forEach((n, i) => {
+        const o = document.createElement("option");
+        o.value = String(n);
+        o.textContent = `${n} frames/s` + (i === 0 ? " (default)" : n < fpsChoices[0] ? " (slower)" : "");
+        sel.appendChild(o);
+      });
+    }
+    sel.value = String(fpsInForce());
+    sel.disabled = !isHost() || running;
+  }
   const hints = (c && c.hints) || {};
   // (One line, cut with an ellipsis; the whole of it is the tooltip.)
   const hint = !c ? (lobbyGameId() ? "" : "Load the game files to pick a mission.")
@@ -695,6 +712,9 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 // "auto" (the host's game measures the connection and picks,
                 // which proved disruptive in play): the host's choice
                 latency: "low",
+                // frames a second in flight, for a game the hooks pace (its
+                // registry's `fps`: the first is the default): the host's choice
+                fps: 0,
                 // game-protocol messages that arrive before DOSBox has adopted this
                 // connection (a wingman faster to the launch than the host), handed
                 // to the transport at adoption so nothing is lost
@@ -724,7 +744,7 @@ const sayHello = (to, reply) => sendLobby({ t: "hello", name: myName(), flying: 
   game: source ? source.game.id : "", voice: voice.choice(),
   mission: isHost() ? missionKey(lobby.mission) : undefined, rocks: isHost() ? lobby.rocks : undefined,
   wingBumps: isHost() ? lobby.wingBumps : undefined,
-  latency: isHost() ? lobby.latency : undefined }, to);
+  latency: isHost() ? lobby.latency : undefined, fps: isHost() ? lobby.fps : undefined }, to);
 
 // Asteroid and mine fields on, soft or off.  The host's page tells the others
 // (for their lobby) and its own running game, which tells every wingman's game.
@@ -771,6 +791,24 @@ function setLatency(v) {
   chatLine(`You set ${latencyLabel(v)}`, "sys");
   sayHello();
   if (running && window.DOSBox && window.DOSBox._wc_web_set_latency) window.DOSBox._wc_web_set_latency(LATENCY[v]);
+}
+
+// The frame rate in flight (WCFPS): Wing Commander's speed, since it moves
+// everything a step a frame.  The host picks it before the launch; the
+// host's game gives it to the wingmen's with each mission.  0: the game's
+// default (the first of its registry's `fps`).
+const lobbyFpsChoices = () => { const g = gameById(lobbyGameId()); return (g && g.fps) || null; };
+const fpsValue = (v) => { const c = lobbyFpsChoices(); v = Number(v) || 0; return c && c.includes(v) ? v : 0; };
+const fpsInForce = () => { const c = lobbyFpsChoices(); return c ? (lobby.fps || c[0]) : 0; };
+function setFps(v) {
+  if (!isHost()) { chatLine("Only the host can set the frame rate.", "sys"); renderMission(); return; }
+  if (running) { chatLine("The frame rate is set before the launch.", "sys"); renderMission(); return; }
+  v = fpsValue(v);
+  if (lobby.fps === v) return;
+  lobby.fps = v;
+  renderMission();
+  chatLine(`You set ${fpsInForce()} frames a second`, "sys");
+  sayHello();
 }
 
 function chatLine(html, cls) {
@@ -892,6 +930,11 @@ function onLobbyEvent(ev) {
           chatLine(`${esc(m.name)} set ${latencyLabel(lobby.latency)}`, "sys");
           renderMission();
         }
+        if (ev.from === 0 && !isHost() && typeof m.fps === "number" && fpsValue(m.fps) !== lobby.fps) {
+          lobby.fps = fpsValue(m.fps);
+          if (fpsInForce()) chatLine(`${esc(m.name)} set ${fpsInForce()} frames a second`, "sys");
+          renderMission();
+        }
         voice.remote(ev.from, typeof m.voice === "string" ? m.voice : "off");
         if (!m.reply) sayHello(ev.from, true);
         renderRoster(); updateActions();
@@ -905,6 +948,7 @@ function onLobbyEvent(ev) {
         if (typeof m.rocks === "string") lobby.rocks = rocksMode(m.rocks);
         if (typeof m.wingBumps === "string") lobby.wingBumps = wingBumpsMode(m.wingBumps);
         if (typeof m.latency === "string") lobby.latency = latencyMode(m.latency);
+        if (typeof m.fps === "number") lobby.fps = fpsValue(m.fps);
         renderMission();
         chatLine(`${esc(lobby.names.get(0) || "The host")} started ${esc(missionLabel(lobby.mission))}`, "sys");
         lobby.flying.add(0); renderRoster();
@@ -1013,6 +1057,7 @@ async function joinRoom({ create = true } = {}) {
     lobby.rocks = game.selfId === 0 ? rocksMode({ 0: "off", 2: "soft" }[query.get("rocks")] || query.get("rocks")) : "on";
     lobby.wingBumps = game.selfId === 0 ? wingBumpsMode({ 0: "game", 1: "harmless" }[query.get("bumps")] || query.get("bumps")) : "harmless";
     lobby.latency = game.selfId === 0 ? latencyMode(query.get("latency")) : "low";
+    lobby.fps = game.selfId === 0 ? fpsValue(query.get("fps")) : 0;
     renderMission();
     for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = true;
     chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
@@ -1145,6 +1190,7 @@ $("collisions").addEventListener("change", () => {
   setWingBumps(bumps);
 });
 $("latency").addEventListener("change", () => setLatency($("latency").value));
+$("fps").addEventListener("change", () => setFps($("fps").value));
 $("mission").addEventListener("change", () => {
   if (!isHost()) return;
   lobby.mission = parseMission($("mission").value);
@@ -1158,7 +1204,7 @@ buildMissionMenu();
 
 $("fly").addEventListener("click", () => {
   if (!source || !lobby.game || running) return;
-  if (isHost()) sendLobby({ t: "start", game: source.game.id, mission: missionKey(lobby.mission), rocks: lobby.rocks, wingBumps: lobby.wingBumps, latency: lobby.latency });
+  if (isHost()) sendLobby({ t: "start", game: source.game.id, mission: missionKey(lobby.mission), rocks: lobby.rocks, wingBumps: lobby.wingBumps, latency: lobby.latency, fps: lobby.fps });
   void start(true);
 });
 $("fullscreen").addEventListener("click", () => goFullscreen());
@@ -1211,6 +1257,7 @@ async function start(fromGesture) {
   if (voiceWarning) { chatLine(esc(voiceWarning), "sys"); log("voice: " + voiceWarning); }
   $("fly").disabled = true;
   renderTopAction();
+  renderMission();  // (the mission and the frame rate are set for this flight)
   for (const el of ["gamefile", "exePicker", "callsign", "firstname", "lastname", "verbose", "hint", "leave"]) $(el).disabled = true;
   sourceButtons(false);
   try {
@@ -1238,6 +1285,8 @@ async function start(fromGesture) {
     if (source.game.multiplayer) env.WCROCKS = String(ROCKS[lobby.rocks]);
     if (source.game.multiplayer) env.WCWINGBUMPS = String(WING_BUMPS[lobby.wingBumps]);
     if (source.game.multiplayer && isHost()) env.WCNET_MODE = lobby.latency;
+    // (The wingmen's games take the host's with each mission; theirs agrees.)
+    if (fpsInForce()) env.WCFPS = String(fpsInForce());
     if (cfg.callsign) env.WCCALLSIGN = cfg.callsign;
     if (cfg.lastname) env.WCLASTNAME = cfg.lastname;
     if (cfg.firstname) env.WCFIRSTNAME = cfg.firstname;
