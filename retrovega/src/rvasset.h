@@ -2,7 +2,7 @@
 #ifndef RVASSET_H
 #define RVASSET_H
 
-#define RVDAT_VERSION 3
+#define RVDAT_VERSION 4
 
 #define RV_HOTS 8
 #define RV_POSES 12
@@ -11,6 +11,7 @@
 #define RV_CLIPS 3
 #define RV_PEOPLE 16
 #define RV_ACTOR_FRAMES 12
+#define RV_COMM_VOICES 24
 #define RV_FACE 352
 #define RV_CP_LAYERS 32
 #define RV_CP_FIRST 208
@@ -114,9 +115,8 @@ typedef struct {
     unsigned short font_chalk;          /* the tally board's hand (packed: 4 pixels a byte), loaded while it shows */
     unsigned short chalk_pal, chalk_back;   /* the bar's chalkboard up close: its palette, the picture */
     short chalk_slate[4];               /* the slate in that picture: x, y, w, h */
-    unsigned short comm_helmet, comm_ramp;   /* the comm link: its shared helmet (IMG, shades, cols x 40), its ramp
-                                           (RAW: the shades' palette entries, the same a scan line darker, then the
-                                           callsign's centre and the regulator's light, x y on the VDU picture) */
+    unsigned short comm_cast, comm_ramp;   /* the comm link: its voices (RAW: an RvCommVoice each), its ramp (RAW:
+                                           the shades' palette entries, the same a scan line darker) */
     unsigned char reserved[6];
 } RvDatHeader;
 typedef struct {
@@ -179,9 +179,22 @@ typedef struct {
     char key[10];
     unsigned short palpart, face, mouth0, eyes0;   /* the face sprite, 9 mouth and 3 eye images */
     short top;                  /* the face's first opaque row */
-    unsigned short comm;        /* the comm link's window (IMG, shades: what differs from the shared helmet), its 4
-                                   patches after it (eyes half, shut, left, right); 0xFFFF none */
+    unsigned short comm;        /* their comm voice (the comm_cast's record); 0xFFFF none */
 } RvPerson;
+typedef struct {
+    unsigned short base;        /* IMG: the picture under it all (the link's shades, cols x 40): a helmet */
+    unsigned short win;         /* IMG: the window over it (w 0: none); its patches follow it: the eyes half, shut,
+                                   left, right, then nmouth mouths (an empty IMG: no change; a pixel of LEVELS and up
+                                   in one: clear) */
+    unsigned short line;        /* RAW: the voice's own line, NUL-terminated (0xFFFF none) */
+    unsigned char nmouth;       /* 0 (the regulator's light shows the speaking), 8 (lipsync's shapes 1 .. 8: a bare
+                                   face), 2 (by how open: an alien's speech lights) */
+    unsigned char side;         /* 0 Terran, 1 Aera, 2 Rlaan */
+    unsigned char cx, cy;       /* the callsign's centre on the VDU picture (cx 0: none) */
+    unsigned char lx, ly;       /* the regulator's light, lit while the voice speaks (lx 0: none) */
+    char callsign[10];          /* stencilled on the helmet ("": none) */
+    unsigned char ships[4];     /* ships.csv types this voice flies (0xFF: none) */
+} RvCommVoice;
 typedef struct { short x, y, w, h; } RvRect;
 typedef struct {
     unsigned short sprite;      /* the healthy control, at x, y */

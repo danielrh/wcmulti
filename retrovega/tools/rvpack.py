@@ -50,7 +50,7 @@ sys.path.insert(0, HERE)
 import cockpits  # noqa: E402
 import places  # noqa: E402
 
-VERSION = 3
+VERSION = 4
 SCREEN = (640, 400)
 ROOMS = ['bar', 'lounge', 'briefing', 'quarters', 'locker', 'deck']
 FACE = 352                      # close-up face size (the 256 px faces scaled 1.375)
@@ -69,7 +69,8 @@ TEXT_COLOURS = [7, 11, 5]       # white, amber, grey: the mix tables' order
 KIND = {'PAL': 1, 'PALPART': 2, 'IMG': 3, 'SPR': 4, 'FONT': 5, 'RAW': 6}
 ACTIONS = ['NONE', 'GOTO', 'BUNK', 'LOG', 'SCORES', 'SIMULATOR', 'CLOSEUP', 'CUSTOMIZE', 'LAUNCH', 'MEDALS',
            'LETTERS', 'PHOTOS', 'KILLS']
-LIMITS = {'HOTS': 8, 'POSES': 12, 'IDLE': 16, 'DECK_SHIPS': 8, 'CLIPS': 3, 'PEOPLE': 16, 'ACTOR_FRAMES': 12}
+LIMITS = {'HOTS': 8, 'POSES': 12, 'IDLE': 16, 'DECK_SHIPS': 8, 'CLIPS': 3, 'PEOPLE': 16, 'ACTOR_FRAMES': 12,
+          'COMM_VOICES': 24}
 
 
 class Pack:
@@ -509,40 +510,56 @@ def preview_cockpits(previews, path):
 
 # --- people ------------------------------------------------------------------
 
-def pack_comms(pack):
-    """the comm link's art (tools/comms.py, in build/comms): the shared helmet, and for each pilot it has their window
-    and its twelve patches (comms.json's order), all IMG in the link's shades 0..LEVELS-1, x and y where each sits on
-    the W x H picture; the ramp (RAW: LEVELS flight-palette entries for the shades, then LEVELS a scan line darker,
-    comms.py's entries, shared by every cockpit; then the callsign's centre and the regulator's light, x and y on
-    the VDU picture).  -> (helmet, ramp, {key: window})"""
-    d = os.path.join(ROOT, 'build', 'comms')
+COMM_VOICE = '<HHHBBBBBB10s4B'          # RvCommVoice (header())
+
+
+def pack_comms(pack, d, ships_csv):
+    """the comm link's art (tools/comms.py, in d): its voices, each a base picture (the pilots' shared helmet, or an
+    alien's own), its window over that (an empty IMG for none) and its patches after it (the eyes half, shut, left,
+    right, then its mouths; an empty IMG where nothing changes), all IMG in the link's shades 0..LEVELS-1 (a patch's
+    clear pixels LEVELS and up), x and y where each sits on the cols x 40 picture; its line (RAW); the cast (RAW: an
+    RvCommVoice each); the ramp (RAW: LEVELS flight-palette entries for the shades, then LEVELS a scan line darker,
+    comms.py's entries, shared by every cockpit).  -> (cast, ramp, {person key: voice})"""
     man = os.path.join(d, 'comms.json')
     if not os.path.exists(man):
-        print('rvpack: no build/comms (tools/comms.py): no comm faces')
+        print('rvpack: no %s (tools/comms.py): no comm faces' % man)
         return 0xFFFF, 0xFFFF, {}
     info = json.load(open(man))
+    assert info['clear'] >= info['levels'] and len(info['voices']) <= LIMITS['COMM_VOICES']
+    types = {r['key']: int(r['type'], 16) for r in ships_csv}
+
     def img(name, path, x, y):
         a = np.asarray(Image.open(path).convert('L'), dtype=np.uint8)
         return pack.add(name, 'IMG', a.tobytes(), a.shape[1], a.shape[0], x, y)
     helmet = img('comm_helmet', os.path.join(d, 'helmet.png'), 0, 0)
     ramp = info['ramp'] + info['ramp_dark']    # (flight palette entries below the cockpits' own: comms.py's)
     assert all(i < CP_FREE[0] for i in ramp)
-    # then where the engine stencils the callsign and lights the regulator, on the VDU picture (x, y each)
-    ramp_i = pack.add('comm_ramp', 'RAW', bytes(ramp + info['brow'] + info['led']))
-    windows = {}
-    for key in info['pilots']:
-        pd = os.path.join(d, key)
-        c = json.load(open(os.path.join(pd, 'comm.json')))
-        x0, y0 = c['window'][:2]
-        windows[key] = img('cwin_' + key[:12], os.path.join(pd, 'window.png'), x0, y0)
-        for name in info['patches']:
-            bb = c['patches'].get(name)
+    ramp_i = pack.add('comm_ramp', 'RAW', bytes(ramp))
+    cast, voices = [], {}
+    for n, v in enumerate(info['voices']):
+        key = v['key'][:12]
+        base = helmet if v['base'] == 'helmet.png' else img('cbase_' + key, os.path.join(d, v['base']), 0, 0)
+        if v['window']:
+            win = img('cwin_' + key, os.path.join(d, v['key'], 'window.png'), *v['window'][:2])
+        else:
+            win = pack.add('cwin_' + key, 'IMG', b'', 0, 0, 0, 0)
+        for name, bb in v['patches']:
+            short = name.replace('eyes_', '').replace('mouth_', 'm')
             if bb:
-                img('c%s_%s' % (name.replace('eyes_', ''), key[:12]), os.path.join(pd, name + '.png'), bb[0], bb[1])
+                img('c%s_%s' % (short, key), os.path.join(d, v['key'], name + '.png'), bb[0], bb[1])
             else:                       # (no change in that frame: an empty patch)
-                pack.add('c%s_%s' % (name.replace('eyes_', ''), key[:12]), 'IMG', b'', 0, 0, 0, 0)
-    print('rvpack: comm faces for %d pilots, the ramp %s' % (len(windows), ramp))
-    return helmet, ramp_i, windows
+                pack.add('c%s_%s' % (short, key), 'IMG', b'', 0, 0, 0, 0)
+        assert len(v['patches']) == 4 + v['nmouth']
+        line = pack.add('cline_' + key, 'RAW', v['line'].encode('ascii')[:79] + b'\0') if v['line'] else 0xFFFF
+        ships = [types[k] for k in v['ships']][:4]
+        cx, cy = v['brow'] or (0, 0)
+        lx, ly = v['led'] or (0, 0)
+        cast.append(struct.pack(COMM_VOICE, base, win, line, v['nmouth'], v['side'], cx, cy, lx, ly,
+                                v['callsign'].encode('ascii')[:9], *(ships + [0xFF] * (4 - len(ships)))))
+        voices[v['key']] = n
+    cast_i = pack.add('comm_cast', 'RAW', b''.join(cast))
+    print('rvpack: comm voices %d (%s), the ramp %s' % (len(cast), 'bare faces' if info.get('face') else 'masks', ramp))
+    return cast_i, ramp_i, voices
 
 
 def pack_people(pack, keys, comms=None):
@@ -644,6 +661,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--out', default=os.path.join(ROOT, 'build', 'dos', 'RV.DAT'))
     ap.add_argument('--header', default=os.path.join(ROOT, 'src', 'rvasset.h'))
+    ap.add_argument('--comms', default=os.path.join(ROOT, 'build', 'comms'), help="tools/comms.py's output")
     args = ap.parse_args()
     table = json.load(open(os.path.join(ROOT, 'data', 'places.json')))
     with open(os.path.join(ROOT, 'data', 'people.csv')) as f:
@@ -690,8 +708,8 @@ def main():
                                  0 if rec['actor'][0] == 0xFF else 1, rec['palette'], rec['back'],
                                  rec['closeup_part'], rec['closeup_back'])
                      + hot + poses + rec['actor'] + speaker + deck + boards)
-    comm_helmet, comm_ramp, comm_windows = pack_comms(pack)
-    persons = pack_people(pack, people, comm_windows)
+    comm_cast, comm_ramp, comm_voices = pack_comms(pack, args.comms, ships_csv)
+    persons = pack_people(pack, people, comm_voices)
     cockpits_recs, previews = pack_cockpits(pack, ships_csv)
     preview_cockpits(previews, os.path.join(ROOT, 'docs', 'cockpits-packed.png'))
     # lay out: header, directory, rooms, people, cockpits, payloads
@@ -713,7 +731,7 @@ def main():
     head = struct.pack(hdr_fmt, b'RVDAT', VERSION, len(pack.assets), dir_at, len(rooms), rooms_at, len(persons),
                        people_at, len(rooms[0]), len(persons[0]), body, title, arrow, door, ui_i,
                        len(cockpits_recs), cockpits_at, len(cockpits_recs[0]), chalk, chalk_pal, chalk_back, *slate,
-                       comm_helmet, comm_ramp, b'')
+                       comm_cast, comm_ramp, b'')
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, 'wb') as f:
         f.write(head + b''.join(directory) + b''.join(rooms) + b''.join(persons) + b''.join(cockpits_recs)
@@ -766,9 +784,8 @@ def header(room_size, person_size, cockpit_size):
     unsigned short font_chalk;          /* the tally board's hand (packed: 4 pixels a byte), loaded while it shows */
     unsigned short chalk_pal, chalk_back;   /* the bar's chalkboard up close: its palette, the picture */
     short chalk_slate[4];               /* the slate in that picture: x, y, w, h */
-    unsigned short comm_helmet, comm_ramp;   /* the comm link: its shared helmet (IMG, shades, cols x 40), its ramp
-                                           (RAW: the shades' palette entries, the same a scan line darker, then the
-                                           callsign's centre and the regulator's light, x y on the VDU picture) */
+    unsigned short comm_cast, comm_ramp;   /* the comm link: its voices (RAW: an RvCommVoice each), its ramp (RAW:
+                                           the shades' palette entries, the same a scan line darker) */
     unsigned char reserved[6];
 } RvDatHeader;
 typedef struct {
@@ -831,9 +848,22 @@ typedef struct {
     char key[10];
     unsigned short palpart, face, mouth0, eyes0;   /* the face sprite, 9 mouth and 3 eye images */
     short top;                  /* the face's first opaque row */
-    unsigned short comm;        /* the comm link's window (IMG, shades: what differs from the shared helmet), its 4
-                                   patches after it (eyes half, shut, left, right); 0xFFFF none */
+    unsigned short comm;        /* their comm voice (the comm_cast's record); 0xFFFF none */
 } RvPerson;
+typedef struct {
+    unsigned short base;        /* IMG: the picture under it all (the link's shades, cols x 40): a helmet */
+    unsigned short win;         /* IMG: the window over it (w 0: none); its patches follow it: the eyes half, shut,
+                                   left, right, then nmouth mouths (an empty IMG: no change; a pixel of LEVELS and up
+                                   in one: clear) */
+    unsigned short line;        /* RAW: the voice's own line, NUL-terminated (0xFFFF none) */
+    unsigned char nmouth;       /* 0 (the regulator's light shows the speaking), 8 (lipsync's shapes 1 .. 8: a bare
+                                   face), 2 (by how open: an alien's speech lights) */
+    unsigned char side;         /* 0 Terran, 1 Aera, 2 Rlaan */
+    unsigned char cx, cy;       /* the callsign's centre on the VDU picture (cx 0: none) */
+    unsigned char lx, ly;       /* the regulator's light, lit while the voice speaks (lx 0: none) */
+    char callsign[10];          /* stencilled on the helmet ("": none) */
+    unsigned char ships[4];     /* ships.csv types this voice flies (0xFF: none) */
+} RvCommVoice;
 typedef struct { short x, y, w, h; } RvRect;
 typedef struct {
     unsigned short sprite;      /* the healthy control, at x, y */

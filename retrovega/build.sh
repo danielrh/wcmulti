@@ -1,6 +1,7 @@
 #!/bin/sh
 # Build RV.EXE (and the M0 check, HELLO.EXE) with Open Watcom 2 and NASM.
-#   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE (DEBUG=1: unoptimised, -d2)
+#   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE (DEBUG=1: unoptimised, -d2;
+#                            RV_COMMS=face: the comm faces without breathing gear, their mouths speaking)
 # The toolchain lives in ~/opt/watcom (docs/engine.md); WATCOM overrides it.
 set -e
 cd "$(dirname "$0")"
@@ -20,11 +21,18 @@ CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq $OPT -i=src"
 nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 nasm -f obj -o "$OUT/lasers_a.obj" src/lasers.asm
-# the comm link's faces (one helmet render, every pilot's face behind its visor: ~15 s), when their sources change
-[ build/comms/comms.json -nt tools/comms.py ] && [ build/comms/comms.json -nt tools/helmet3d.py ] \
-    && [ -z "$(find art/people/faces -newer build/comms/comms.json -print -quit)" ] \
-    || python3 -W ignore tools/comms.py --out build/comms --cols 56 > /dev/null   # (56: 2 x 2 blocks, the user's coarse link)
-~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h
+# the comm link's faces (one helmet render, every pilot's face behind its visor, each alien's helmet: ~40 s), when
+# their sources change.  RV_COMMS=face builds the pilots without their breathing gear, the bare face's mouth
+# speaking (the user's option, to weigh its cost); the default, mask, is the user's ruling
+RV_COMMS=${RV_COMMS:-mask}
+case "$RV_COMMS" in mask) FACE="" ;; face) FACE="--face" ;; *) echo "RV_COMMS is mask or face"; exit 1 ;; esac
+COMMS=build/comms-$RV_COMMS
+[ $COMMS/comms.json -nt tools/comms.py ] && [ $COMMS/comms.json -nt tools/helmet3d.py ] \
+    && [ $COMMS/comms.json -nt tools/aliens3d.py ] && [ $COMMS/comms.json -nt data/aliens.csv ] \
+    && [ $COMMS/comms.json -nt data/people.csv ] \
+    && [ -z "$(find art/people/faces -newer $COMMS/comms.json -print -quit)" ] \
+    || python3 -W ignore tools/comms.py --out $COMMS --cols 56 $FACE > /dev/null   # (56: 2 x 2 blocks, the coarse link)
+~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h --comms $COMMS
 # the balls' sprites (the spherical projectiles: every kind, frame and diameter)
 [ "$OUT/BALLS.DAT" -nt tools/balls.py ] && [ "$OUT/BALLS.DAT" -nt data/palette.json ] \
     || ~/.venvs/retrovega-art/bin/python -P tools/balls.py --out "$OUT/BALLS.DAT" --preview docs/balls.png > /dev/null

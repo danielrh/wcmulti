@@ -1061,22 +1061,58 @@ static void comm_launch(void)
     if (!g_m)
         return;
     for (i = 0; i < (int)g_m->ntalk; i++)
-        if (comms_say(g_m->talk[i].speaker, 0, (const char __far *)g_pilots[g_m->talk[i].speaker].line))
+        if (comms_say(comms_voice(g_m->talk[i].speaker), 0, (const char __far *)g_pilots[g_m->talk[i].speaker].line))
             return;
 }
 
-/* --- the comm demo (RV.EXE /commdemo): every pilot with comm art says their line, on each VDU by turns --- */
+/* the aliens' hail: the first Aera or Rlaan fighter to come within HAIL_KM hails the player on the right VDU, once
+ * a flight, after the launch's comm (its pilot the side's voice for that ship: data/aliens.csv; until the missions
+ * script their own) */
+#define HAIL_KM 3000L
+static unsigned char __far g_hailed;
+
+static void comm_hail(void)
+{
+    static const char __far s_hail[] = "flight: frame %u: slot %d (type %02X, side %d) hails, voice %d";
+    int s, v;
+    if (!g_m || g_hailed || frameCounter <= 90 || (frameCounter & 7) || comms_on(0) || comms_on(1))
+        return;
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
+        long dx, dy, dz;
+        if (maybeEntityType[s] != 0xC || commAnimInfo[s] < 1 || commAnimInfo[s] > 2)
+            continue;
+        dx = (gPositionVector[s].x - gPositionVector[0].x) / 256;     /* (km) */
+        dy = (gPositionVector[s].y - gPositionVector[0].y) / 256;
+        dz = (gPositionVector[s].z - gPositionVector[0].z) / 256;
+        if (dx > HAIL_KM || dx < -HAIL_KM || dy > HAIL_KM || dy < -HAIL_KM || dz > HAIL_KM || dz < -HAIL_KM
+            || dx * dx + dy * dy + dz * dz > HAIL_KM * HAIL_KM)
+            continue;
+        v = comms_voice_for(commAnimInfo[s], gInstanceShipTypes[s]);
+        g_hailed = 1;
+        rv_logf(s_hail, frameCounter, s, gInstanceShipTypes[s], commAnimInfo[s], v);
+        comms_say(v, 1, NULL);
+        return;
+    }
+}
+
+/* --- the comm demo (RV.EXE /commdemo): what a comm costs (in the log), then every voice says its own line, the
+ * aliens first, on each VDU by turns --- */
 static void comm_demo_next(void)
 {
-    static int person = -1, vdu = 1;
-    int k;
-    for (k = 0; k < RV_PEOPLE; k++) {
-        person = (person + 1) % (int)dat_header()->npeople;
-        if (comms_say(person, vdu, (const char __far *)g_pilots[person].line)) {
-            vdu ^= 1;
-            return;
-        }
+    static int voice = -1, vdu = 1;
+    if (voice == -1) {                  /* (first the bench: its draw is timed in the frames after) */
+        voice = -2;
+        comms_bench();
+        return;
     }
+    if (!comms_voices())
+        return;
+    if (voice < 0)                      /* (from the first alien: the newest faces first) */
+        voice = comms_voice_for(1, -1) > 0 ? comms_voice_for(1, -1) : 0;
+    else
+        voice = (voice + 1) % comms_voices();
+    comms_say(voice, vdu, NULL);
+    vdu ^= 1;
 }
 
 /* --- the hull demo (RV.EXE /hulldemo): a turning fighter shot through by a grid of rays ---
@@ -2198,6 +2234,7 @@ void __far __cdecl flight_startup(void)
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
     comms_flight_start();
+    g_hailed = 0;
     missiles_init();
     sky_clear();
     if (g_sky_demo)
@@ -2276,6 +2313,8 @@ void __far __cdecl flight_frame(void)
         comm_demo_next();
     else if (!g_comm_demo && frameCounter == 90)
         comm_launch();
+    else if (!g_comm_demo)
+        comm_hail();
     comms_tick();
     sim_step();
     if (g_sky_demo)

@@ -1216,44 +1216,86 @@ on), the callsign on it, the pilot's own eyes from their portrait,
 animating a bit; the helmets shared and only the differences animated; the
 mouth behind breathing gear, so only the eyes differ; a low-bandwidth,
 encrypted link: each row drawn twice, the picture deliberately coarse;
-little memory; good on most VDUs, cropped for the rest.
+little memory; good on most VDUs, cropped for the rest. Then: the bare face
+again as a compile-time option, to weigh its cost; and Aera and Rlaan
+pilots, in heavy gear, mostly anonymous, each in a helmet of their own.
 
-**The art** (`tools/helmet3d.py`, `tools/comms.py`, made in the build into
-build/comms). The helmet is signed distance fields ray-marched in numpy, one
-render for everyone: a dark satin shell, a clear visor in a black gasket,
-air pads at the cheeks, a lamp and camera module, an oxygen mask with its
+**The art** (`tools/helmet3d.py`, `tools/aliens3d.py`, `tools/comms.py`,
+made in the build into build/comms-mask or build/comms-face). The helmets
+are signed distance fields ray-marched in numpy, one render a helmet
+(helmet3d.py's renderer: a model gives its solids, how each looks, an
+optional clear visor and, for an alien, what glows in each state, lit
+afterwards from the hit points so a state costs no second march). The
+pilots' helmet: a dark satin shell, a clear visor in a black gasket, air
+pads at the cheeks, a lamp and camera module, an oxygen mask with its
 regulator, straps and a ribbed hose, a fabric neck seal; key, fill and rim
 lights, soft shadows, occlusion, a studio's reflections (the visor's kept
 apart, laid over the face). Each pilot's portrait goes behind the visor,
 its eyes onto the helmet's eye points, its local contrast raised so the
-eyes survive the reduction. Then the link's look: luminance, a dark ground,
-the range stretched, 56 x 40 kept (shown as 2 x 2 blocks: the user's pick
-of the coarse look; `--cols 112` keeps the full width), eight shades that
-are flight palette entries every cockpit shares (black, the carrier-green
-livery ramp 64..71, a pale green-white), a light ordered dither. What
-differs from pilot to pilot is only the eyes and brows: RV.DAT holds the
-shared helmet (`comm_helmet`), each pilot's window and four eye patches
-(half, shut, glance left, right; `RvPerson.comm` and the four after it),
-24 KB for the ten (eight pilots, both heroes), read in as wanted; and
-`comm_ramp`: the shades' entries, the same two steps down for the scan
-line, where the callsign goes and where the regulator's light is.
+eyes survive the reduction. The aliens (data/aliens.csv, docs/people.md)
+are six helmets, three a side: the Aera's steel helms with an opaque face
+plate, a lit slit or optics for eyes and a vocoder grille that lights as
+they speak; the Rlaan's charcoal shells, smooth and fluted, clusters of
+round lenses, speech lights that pulse. Then the link's look: luminance, a
+dark ground, the range stretched, 56 x 40 kept (shown as 2 x 2 blocks: the
+user's pick of the coarse look; `--cols 112` keeps the full width), eight
+shades that are flight palette entries every cockpit shares (black, the
+carrier-green livery ramp 64..71, a pale green-white), a light ordered
+dither (an alien's lights bloomed first).
 
-**The engine** (`src/comms.c`). `comms_say(person, vdu, text)` puts the
-picture together once in XMS as the VDU shows it (112 x 80, each kept row
-twice, the second through the darker ramp); a blink or a glance rebuilds
-only the rows its patch covers. Each frame `comms_draw` moves the visible
-rows to the screen (an XMS move a row), stencils the callsign at the VDU's
-own resolution in a 4 x 6 pixel font (at the link's it could not be read;
-ink light on a dark shell, dark on a light one, a shadow), lights the
-regulator while a mouth shape is open (`lip_steps` on the text: no mouth
-to animate), and sprinkles three grains a row (a shade up or down).
-Centred on the VDU; a shorter one loses three quarters of its crop at the
-bottom (the mask, the hose), keeping the callsign. The eyes blink every
-1.3-4 s (half, shut, half) or, one time in four, glance aside for half a
-second. A flight frame pays 0.6 ms for a comm at 40,000 cycles (the XMS
-moves, ~70 a frame; the picture held in conventional memory would be 0.1
-ms for 9 KB). `RV.EXE /commdemo`: the pilots say their lines in turn, each
-VDU by turns.
+**Voices.** RV.DAT's `comm_cast` holds a record a speaker
+(`RvCommVoice`): its base picture (the pilots' shared helmet, or an
+alien's own), a window over it (what differs from pilot to pilot: the eyes
+and brows; none for an alien), then its patches (eyes half, shut, glance
+left, right; then its mouths), each patch only the pixels that change (the
+rest 255, clear); how many mouths (0: the regulator's light shows the
+speaking; 8: lipsync's shapes, a bare face; 2: an alien's speech lights,
+lit partly for the closed shapes, fully for the open ones); where the
+callsign is stencilled and the light lit (none for an alien: they are
+anonymous); its own line; the ships it flies. `RvPerson.comm` is a
+person's voice. An alien's eyes do what a pilot's do with light: dimmed,
+dark (a blink is a flicker), the bright point aside (a glance).
+`comm_ramp` is the shades' entries and the same two steps down for the
+scan line.
+
+**The engine** (`src/comms.c`). `comms_say(voice, vdu, text)` (text NULL:
+the voice's own line) puts the picture together once in XMS as the VDU
+shows it (112 x 80, each kept row twice, the second through the darker
+ramp); a blink, a glance or a mouth shape rebuilds only the rows its
+patches cover. Each frame `comms_draw` moves the visible rows to the screen
+(an XMS move a row), stencils the callsign at the VDU's own resolution in
+a 4 x 6 pixel font (at the link's it could not be read; ink light on a dark
+shell, dark on a light one, a shadow), lights the regulator while a mouth
+shape is open (`lip_steps` on the text), and sprinkles three grains a row
+(a shade up or down). Centred on the VDU; a shorter one loses three
+quarters of its crop at the bottom (the mask, the hose), keeping the
+callsign. The eyes blink every 1.3-4 s (half, shut, half) or, one time in
+four, glance aside for half a second. In a flight the launch's comm comes
+three seconds out; after it, the first Aera or Rlaan fighter within 3,000
+km hails the player on the right VDU, once (`comms_voice_for`: the side's
+voice for that ship type, else the side's first).
+
+**The bare face** (`RV_COMMS=face ./build.sh`): the pilots' helmet without
+its breathing gear, the face's mouth speaking in lipsync's eight shapes
+(the portraits' mouth frames), no regulator's light; the engine is the
+same (a voice says how many mouths it has).
+
+**What it costs**, from `RV.EXE /commdemo` (it times a comm before the
+voices say their lines, the aliens first; DOSBox at 40,000 cycles):
+
+| | mask (the default) | bare face |
+|---|---|---|
+| a frame's draw (a 71-row VDU) | 1.30 ms | 1.34 ms |
+| a comm's start (the picture put together) | 5.0 ms, once | 5.0 ms, once |
+| a blink's step (4 a blink, every 1.3-4 s) | 1.38 ms | 2.31 ms |
+| a mouth's step (speaking, about every third frame: lipsync's 100 ms) | none (the light: in the draw) | 2.0 ms (0.67 ms a frame on average) |
+| the pilots' art in RV.DAT (ten) | 24 KB | 38 KB (RV.DAT 17.5 KB bigger with the directory) |
+| XMS while a comm shows | the 9 KB picture | the same |
+
+An alien's speech step is 1.6 ms, its eyes' 0.8 ms; the aliens' art is 18
+KB for six. Nearly all of it is XMS calls: a row rebuilt is four reads and
+a write, a row drawn one move. The picture held in conventional memory
+(9 KB) would make the draw a `rep movsd` a row, about 0.1 ms.
 
 ### Balls: the spherical projectiles
 

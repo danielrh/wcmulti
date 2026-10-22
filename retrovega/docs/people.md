@@ -135,9 +135,28 @@ everyone talking.
 `tools/faces.py`, the procedural painter from before the art arrived, is
 kept as a placeholder generator; its boxes follow the same rules.
 
+## The aliens on the comm
+
+The user's brief (2026-10-22): Rlaan and Aera pilots, heavy gear, mostly
+anonymous to the player, with distinct helmets. Nobody on our side has
+seen one's face, and they give no names: Terran pilots call each after
+their helmet. They are comm voices only (`data/aliens.csv`; their helmets
+are `tools/aliens3d.py`'s, docs/engine.md "The comm link"); a hostile
+fighter's pilot hails the player once a flight.
+
+| key | side | flies | the helmet | says |
+|---|---|---|---|---|
+| HOPLITE | Aera | Nicander, Ariston, Agis | a Corinthian helm, a low crest, the cheek guards closing to a T; the T's bar glows for eyes, its stem lights as they speak; a chevron on the brow | "Terran pilot. Your carrier burns tonight, and you will watch it." |
+| EPHOR | Aera | Convolution (the aces) | tall, a swept blade at each temple, a dark shield face with a V of lit slits, three rank bars | "I have counted your kills, Terran. Now count mine." |
+| PHALANX | Aera | Areus, Cleomenes (heavy) | a boxy helm under a jutting brow, two round optics in a goggle band, a respirator snout whose vents glow, canisters at the cheeks, a hazard stripe | "Hold your formation, Terran. It makes you easier to break." |
+| LANTERN | Rlaan | Shizu, Gaozong (scouts, probes) | a smooth pear-shaped shell fluted at the crown, a pale band, seven lenses in a hexagon, pods at the jaw; speech lights down the throat | "This lane is under Rlaan contract. Keep your guns cold." |
+| ABBOT | Rlaan | Shizong, Xuanzong (disablers, jammers) | a tall ringed crown like an onion dome, a hood flaring wide, one great lens and two small; speech lights down the hood's edges | "We watch. We record. Your war is noted, Terran." |
+| BELLOWS | Rlaan | Zhuangzong, Taizong (line, bombers) | a wide flat spotted carapace, a beak of three lapping plates, a long lens either side, four ribbed breathing tubes | "Your war is bad for trade, little pilot. Go home." |
+
 ## Still to do
 
 - **HERO_M's mouth and blink frames** (Cal Brody has only his portrait; he doesn't move yet).
 - **A face palette:** in flight a comm face shares the flight palette (spec §9). In the bar and briefing rooms the scene palette is free.
 - **Small sizes:** 128 and 64 px versions for the cockpit's comm VDU (`--size`).
 - **The headset set:** only the portraits so far (`comm.png`), no talking frames.
+- **A capital ship's officer** on the comm (the user's brief, 2026-10-22): not made yet.
