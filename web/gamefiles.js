@@ -51,8 +51,9 @@
 // image's own RVHOOK header, as RetroVega has it).  The page asks the file
 // the same question (knownBuild): only a pilot whose game the hooks will fly
 // is let into the public lobby.
-// `fps`: the frame rates the host may fly at, the first the default (the
-// hooks pace the flight: WCFPS; a game that paces itself has none).
+// `fps`: the frame rates the host may fly at, { def, min, max } in whole
+// frames a second (the hooks pace the flight: WCFPS; a game that paces
+// itself has none).
 // `capHull`: the hooks can give capital ships three times their hull (the
 // room's "Capship hull" box: WCCAPHULL).
 // `noFlight`: no missions to pick and nothing to fly yet (the page hides
@@ -170,7 +171,7 @@ const wc2Mission = (m) => `Origin s${m.series} m${m.mis}`;
 
 // Wing Commander moves everything by a step a frame, so its frame rate is
 // its speed: some missions were made for a slower one (the host's choice).
-const WC1_FPS = [30, 25, 20, 15];
+const WC1_FPS = { def: 30, min: 8, max: 60 };
 
 export const GAMES = [
   { id: "wc1", tag: "WC1", title: "Wing Commander", detect: ["WC.EXE"], run: "wc", multiplayer: true,

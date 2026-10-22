@@ -164,8 +164,9 @@
   #missionRow label { display: flex; gap: 6px; align-items: center; min-width: 0; color: var(--muted); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; }
   #missionRow select { min-width: 0; max-width: 100%; }
   #mission { width: 30ch; }
-  #collisions, #latency, #fps { width: auto; }  /* wide enough for the whole option */
-  #latency, #fps { field-sizing: content; }  /* as wide as the choice shown (where the browser can) */
+  /* As wide as the choice shown where the browser can, else as the widest. */
+  #collisions, #latency { width: auto; field-sizing: content; }
+  #fps { width: 6ch; }
   /* (One line: the ellipsis cuts it, the tooltip has the rest.) */
   #missionHint { flex-basis: 100%; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
   #missionHint:empty { display: none; }
@@ -316,16 +317,16 @@
           <label title="The mission the host picked for everyone">Mis <select id="mission"></select></label>
           <label title="The connection: how the host's game and the wingmen's exchange their frames. Low latency (the default): each wingman's game waits for every one of the host's frames, the host runs at most six frames ahead (nearby players); high latency: the wingmen's games pace themselves and take the host's frames as they come, the host runs further ahead (far-away players, a connection with spikes); auto: the host's game measures the connection and switches by itself, which has proved disruptive. The host decides, also while flying; /latency low, /latency high and /latency auto in the chat do the same">Conn
             <select id="latency" class="terse"><option value="low" data-long="fast (low latency)">fast</option><option value="high" data-long="far away (high latency)">far away</option><option value="auto" data-long="auto (not recommended)">auto</option></select></label>
-          <label id="fpsLabel" hidden title="Frames a second in flight. Wing Commander moves everything a step a frame, so this is the game's speed: 30 is the default, and some missions were made for a slower one. The host picks it before the launch">FPS
-            <select id="fps"></select></label>
-          <label title="Asteroid and mine fields, and whether two wingmen's ships touching costs them anything (their guns, missiles and ramming anything else always count). The host decides, also while flying; /rocks on, /rocks soft, /rocks off and /bumps harmless, /bumps game in the chat do the same">Collisions
-            <select id="collisions">
-              <option value="on-harmless">asteroids on, wing bumps harmless</option>
-              <option value="soft-harmless">asteroids soft, wing bumps harmless</option>
-              <option value="off-harmless">asteroids off, wing bumps harmless</option>
-              <option value="on-game">asteroids on, wing bumps hurt</option>
-              <option value="soft-game">asteroids soft, wing bumps hurt</option>
-              <option value="off-game">asteroids off, wing bumps hurt</option>
+          <label id="fpsLabel" hidden title="Frames a second in flight. Wing Commander moves everything a step a frame, so this is the game's speed: 30 is the default, and some missions were made for a slower one. Any whole number from 8 to 60; the host types it before the launch">FPS
+            <input id="fps" type="number" min="8" max="60" step="1" value="30"></label>
+          <label title="Asteroid and mine fields, and whether two wingmen's ships touching costs them anything (their guns, missiles and ramming anything else always count). The host decides, also while flying; /rocks on, /rocks soft, /rocks off and /bumps harmless, /bumps game in the chat do the same">Collide
+            <select id="collisions" class="terse">
+              <option value="on-harmless" data-long="asteroids on, wing bumps harmless">asteroids on, bumps harmless</option>
+              <option value="soft-harmless" data-long="asteroids soft, wing bumps harmless">asteroids soft, bumps harmless</option>
+              <option value="off-harmless" data-long="asteroids off, wing bumps harmless">asteroids off, bumps harmless</option>
+              <option value="on-game" data-long="asteroids on, wing bumps hurt">asteroids on, bumps hurt</option>
+              <option value="soft-game" data-long="asteroids soft, wing bumps hurt">asteroids soft, bumps hurt</option>
+              <option value="off-game" data-long="asteroids off, wing bumps hurt">asteroids off, bumps hurt</option>
             </select></label>
           <label class="check" id="capHullLabel" hidden title="Capital ships (carriers, destroyers, cruisers, transports, friend and foe) take three times the damage before they are destroyed. The host picks it before the launch"><input type="checkbox" id="capHull"> Capship hull</label>
           <div class="hint" id="missionHint"></div>

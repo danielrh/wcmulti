@@ -654,22 +654,14 @@ function renderMission() {
   $("collisions").disabled = !isHost();  // the host may switch them while flying too
   $("latency").value = lobby.latency;
   $("latency").disabled = !isHost();
-  const fpsChoices = lobbyFpsChoices();
-  $("fpsLabel").hidden = !fpsChoices || !lobbyFlies();
-  if (fpsChoices) {
-    const sel = $("fps");
-    if (sel.dataset.choices !== fpsChoices.join()) {
-      sel.dataset.choices = fpsChoices.join();
-      sel.innerHTML = "";
-      fpsChoices.forEach((n) => {
-        const o = document.createElement("option");
-        o.value = String(n);
-        o.textContent = String(n);
-        sel.appendChild(o);
-      });
-    }
-    sel.value = String(fpsInForce());
-    sel.disabled = !isHost() || running;
+  const fpsRange = lobbyFpsRange();
+  $("fpsLabel").hidden = !fpsRange || !lobbyFlies();
+  if (fpsRange) {
+    const inp = $("fps");
+    inp.min = String(fpsRange.min);
+    inp.max = String(fpsRange.max);
+    if (document.activeElement !== inp || !isHost() || running) inp.value = String(fpsInForce());
+    inp.disabled = !isHost() || running;
   }
   $("capHullLabel").hidden = !lobbyCapHull() || !lobbyFlies();
   $("capHull").checked = lobby.capHull;
@@ -715,8 +707,8 @@ const lobby = { game: null, names: new Map(), links: new Map(), flying: new Set(
                 // "auto" (the host's game measures the connection and picks,
                 // which proved disruptive in play): the host's choice
                 latency: "low",
-                // frames a second in flight, for a game the hooks pace (its
-                // registry's `fps`: the first is the default): the host's choice
+                // frames a second in flight, for a game the hooks pace (in its
+                // registry's `fps` range; 0: its default): the host's choice
                 fps: 0,
                 // capital ships with three times their hull: the host's choice
                 capHull: false,
@@ -802,15 +794,19 @@ function setLatency(v) {
 // The frame rate in flight (WCFPS): Wing Commander's speed, since it moves
 // everything a step a frame.  The host picks it before the launch; the
 // host's game gives it to the wingmen's with each mission.  0: the game's
-// default (the first of its registry's `fps`).
-const lobbyFpsChoices = () => { const g = gameById(lobbyGameId()); return (g && g.fps) || null; };
-const fpsValue = (v) => { const c = lobbyFpsChoices(); v = Number(v) || 0; return c && c.includes(v) ? v : 0; };
-const fpsInForce = () => { const c = lobbyFpsChoices(); return c ? (lobby.fps || c[0]) : 0; };
+// default (its registry's `fps.def`); a number out of range is taken to the
+// nearest end of it.
+const lobbyFpsRange = () => { const g = gameById(lobbyGameId()); return (g && g.fps) || null; };
+const fpsValue = (v) => {
+  const r = lobbyFpsRange(); v = Math.round(Number(v));
+  return r && v > 0 ? Math.min(r.max, Math.max(r.min, v)) : 0;
+};
+const fpsInForce = () => { const r = lobbyFpsRange(); return r ? (lobby.fps || r.def) : 0; };
 function setFps(v) {
   if (!isHost()) { chatLine("Only the host can set the frame rate.", "sys"); renderMission(); return; }
   if (running) { chatLine("The frame rate is set before the launch.", "sys"); renderMission(); return; }
   v = fpsValue(v);
-  if (lobby.fps === v) return;
+  if (!v || v === fpsInForce()) { renderMission(); return; }  // (shows what is in force)
   lobby.fps = v;
   renderMission();
   chatLine(`You set ${fpsInForce()} frames a second`, "sys");
@@ -1240,7 +1236,9 @@ for (const sel of document.querySelectorAll("select.terse")) {
   sel.addEventListener("change", close);
   sel.addEventListener("blur", close);
 }
-$("fps").addEventListener("change", () => setFps($("fps").value));
+// (A number input says "change" on Enter or leaving it; the box may still
+// have the focus, which renderMission leaves alone.)
+$("fps").addEventListener("change", () => { setFps($("fps").value); $("fps").value = String(fpsInForce()); });
 $("capHull").addEventListener("change", () => setCapHull($("capHull").checked));
 $("mission").addEventListener("change", () => {
   if (!isHost()) return;
