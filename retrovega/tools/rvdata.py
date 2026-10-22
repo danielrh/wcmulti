@@ -33,7 +33,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 2                             # 2: the ship types' engines
+VERSION = 3                             # 2: the ship types' engines; 3: their hit boxes and vitals
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
           'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
@@ -67,11 +67,17 @@ SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME
             ('unsigned short', 'armor_f', 'H'), ('unsigned short', 'armor_r', 'H'), ('unsigned short', 'armor_l', 'H'),
             ('unsigned short', 'armor_rt', 'H'), ('unsigned short', 'hull', 'H'), ('unsigned short', 'lod0_px', 'H'),
             ('unsigned short', 'missiles', 'H'), ('unsigned char', 'nengines', 'B'), ('unsigned char', 'pad', 'B'),
-            ('signed char', 'engine[RV_ENGINES][4]', '%db' % (4 * 4))]
+            ('signed char', 'engine[RV_ENGINES][4]', '%db' % (4 * 4)),
+            ('unsigned char', 'hit[3]', '3B'), ('unsigned char', 'core', 'B'), ('unsigned char', 'nvitals', 'B'),
+            ('signed char', 'vital[RV_VITALS][3]', '%db' % (3 * 8))]
 SHIPTYPE_FLAG_PLAYER = 1               # the player may fly it (a cockpit kit exists)
 # a ship type's engines (data/engines.csv, tools/engines.py): x, y, z in its sprites' box (127 = the half box; +x
 # the ship's left, +z the nose) and the glow's radius, min(0.3 size, 0.09) of the half box, in 1/1024ths
 ENGINES = 4
+# its hit box and vital points (data/hitboxes.csv, tools/hitboxes.py): the box's half extents across, up and along
+# (127 = the sprites' half box), its core's radius (the biggest sphere about its middle inside its sprite at every
+# view), and points (mounts, nose, tail, wingtips) in the engines' frame
+VITALS = 8
 PILOT = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'callsign[RV_CALLSIGN]', '%ds' % TEXT['CALLSIGN']),
          ('char', 'name[RV_NAME]', '%ds' % TEXT['NAME']), ('unsigned char', 'role', 'B'),
          ('unsigned char', 'pad', 'B'), ('char', 'line[RV_LINE]', '%ds' % TEXT['LINE'])]
@@ -162,6 +168,7 @@ def compile_all():
         raise Fail('ships.csv: %d types, at most %d' % (len(ships_csv), LIMITS['SHIPTYPES']))
     out_types = []
     engines_csv = {r['key']: r for r in load_csv('engines.csv')}
+    hits_csv = {r['key']: r for r in load_csv('hitboxes.csv')}
     for r in ships_csv:
         n = lambda k: int(r[k] or 0)
         eng = []
@@ -172,6 +179,15 @@ def compile_all():
             eng += [clamp(x), clamp(y), clamp(z), max(1, int(round(min(0.3 * size, 0.09) * 1024)))]
         nengines = len(eng) // 4
         eng += [0] * (4 * ENGINES - len(eng))
+        h = hits_csv.get(r['key'])
+        clamp = lambda v: max(-127, min(127, int(round(v * 127))))
+        hit = [max(1, clamp(float(h[c]))) for c in ('hx', 'hy', 'hz')] if h else [90, 40, 120]
+        core = clamp(float(h['core'])) if h else 0
+        vit = []
+        for i in range(int(h['n']) if h else 0):
+            vit += [clamp(float(h['%s%d' % (c, i)])) for c in ('x', 'y', 'z')]
+        nvitals = len(vit) // 3
+        vit += [0] * (3 * VITALS - len(vit))
         count = lambda k: int(r[k].split('x')[0]) if r[k] and 'x' in r[k] else 0
         for k in ('yaw_dps', 'pitch_dps', 'roll_dps'):
             if n(k) > 255:
@@ -183,7 +199,7 @@ def compile_all():
                                      n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), n('yaw_dps'),
                                      n('pitch_dps'), n('roll_dps'), count('guns'), n('shield_f'), n('shield_r'),
                                      n('armor_f'), n('armor_r'), n('armor_l'), n('armor_rt'), n('hull'),
-                                     n('lod0_px'), count('missiles'), nengines, 0, *eng))
+                                     n('lod0_px'), count('missiles'), nengines, 0, *eng, *hit, core, nvitals, *vit))
     talk_ok = {frozenset((r['a'], r['b'])): r['talk'] == 'yes' for r in load_csv('relations.csv')}
     for pair in talk_ok:
         for k in pair:
@@ -362,6 +378,7 @@ def header_text(sizes):
         out.append('#define RV_%s %d' % (k, v))
     out.append('#define RV_ROOMS %d' % len(ROOMS))
     out.append('#define RV_ENGINES %d' % ENGINES)
+    out.append('#define RV_VITALS %d' % VITALS)
     for k, v in TEXT.items():
         out.append('#define RV_%s %d' % (k, v))
     out += ['', '/* node edges */', '#define RV_NODE_NONE 0x%02X' % NONE, '#define RV_NODE_GOOD 0x%02X' % GOOD,

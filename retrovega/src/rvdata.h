@@ -3,7 +3,7 @@
 #define RVDATA_H
 
 #define RVGAME_MAGIC "RVGAME"
-#define RVGAME_VERSION 2
+#define RVGAME_VERSION 3
 
 #define RV_PILOTS 16
 #define RV_NODES 32
@@ -17,6 +17,7 @@
 #define RV_SHIPTYPES 64
 #define RV_ROOMS 2
 #define RV_ENGINES 4
+#define RV_VITALS 8
 #define RV_ID 16
 #define RV_TITLE 48
 #define RV_BRIEFING 640
@@ -170,6 +171,10 @@ typedef struct {
     unsigned char nengines;
     unsigned char pad;
     signed char engine[RV_ENGINES][4];
+    unsigned char hit[3];
+    unsigned char core;
+    unsigned char nvitals;
+    signed char vital[RV_VITALS][3];
 } RvShipType;
 #pragma pack()
 
@@ -177,7 +182,7 @@ typedef struct {
 #define RV_PILOT_SIZE 120
 #define RV_NODE_SIZE 22
 #define RV_MISSION_SIZE 1424
-#define RV_SHIPTYPE_SIZE 86
+#define RV_SHIPTYPE_SIZE 115
 
 /* sin(i/256 x 90 degrees) x 16384, i = 0..256: the simulation's trigonometry (flight.c) */
 #ifdef RV_TABLES

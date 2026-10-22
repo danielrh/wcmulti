@@ -29,6 +29,7 @@
 #include "balls.h"
 #include "missiles.h"
 #include "sky.h"
+#include "collide.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -50,6 +51,7 @@ int g_big_ships = 2;                    /* RV.EXE /bigships N: its big near ship
 int g_bolt_demo = 0;                    /* RV.EXE /boltdemo: the player's own guns' bolts (a test aid) */
 int g_flames_demo = 0;                  /* RV.EXE /flames: six ships turning every way, flames on (a test aid) */
 int g_boxes = 0;                        /* RV.EXE /boxes: every ship's box bracketed (flight_ent_box's check) */
+int g_collide_demo = 0;                 /* RV.EXE /collidedemo: two fighters flown into each other (collide.c's check) */
 int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
                                            30 fps) and g_near_balls near */
 int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept near the camera in it */
@@ -695,6 +697,133 @@ static void boxes_draw(int y0, int y1, const short __far *ext, int ey0, int rows
     }
 }
 
+/* --- the collision demo (RV.EXE /collidedemo): two fighters flown into each other ---
+ *
+ * The user's (2026-10-21): ship to ship collisions, coarse then fine, a
+ * vector back that rectifies the intersection and shoves the ships apart.
+ * Three rounds of four seconds: slot 1 (the enemy's type) flies right and
+ * slot 2 (the player's) left, 2,600 km ahead, 14 km a frame each; slot 1
+ * level with slot 2, then 120 km above it (their boxes overlap: a hit only if
+ * a vital is in the other's box), then 700 km (inside each other's bounding
+ * spheres, nothing in a box).  A hit's push is shared, half each.  Drawn
+ * over them: their hit boxes (red while they hit) and vitals (the core
+ * white, the engines violet, the rest yellow). */
+#define CD_ROUNDS 3
+#define CD_FRAMES 120
+static const short __far g_cd_up[CD_ROUNDS] = { 0, 120, 700 };
+static LfVec __far g_cd_pos[2];
+static unsigned char __far g_cd_hit;
+static int __far g_cd_coarse[CD_ROUNDS], __far g_cd_hits[CD_ROUNDS];
+
+static void collide_demo_step(void)
+{
+    static const char __far s_hit[] = "collide: frame %u round %d: a hit %ld km deep, the push %ld,%ld,%ld km";
+    int r = g_demo_frame / CD_FRAMES, t = g_demo_frame % CD_FRAMES, i;
+    LfVec push;
+    long depth;
+    if (r >= CD_ROUNDS) {
+        missionStatus = 1;              /* landed */
+        return;
+    }
+    if (t == 0) {
+        g_cd_pos[0].x = -256L * 1500;
+        g_cd_pos[0].y = 256L * g_cd_up[r];
+        g_cd_pos[0].z = 256L * 2600;
+        g_cd_pos[1].x = 256L * 1500;
+        g_cd_pos[1].y = 0;
+        g_cd_pos[1].z = 256L * 2600;
+    } else {
+        g_cd_pos[0].x += 256L * 14;
+        g_cd_pos[1].x -= 256L * 14;
+    }
+    face(1, 256, 0);
+    face(2, 768, 0);
+    for (i = 0; i < 2; i++)
+        *(LfVec *)&gPositionVector[1 + i] = g_cd_pos[i];
+    g_cd_hit = 0;
+    if (collide_coarse(1, 2))
+        g_cd_coarse[r]++;
+    if (collide_ships(1, 2, &push, &depth)) {
+        if (g_cd_hits[r]++ < 4)
+            rv_logf(s_hit, frameCounter, r, depth / 256, push.x / 256, push.y / 256, push.z / 256);
+        g_cd_hit = 1;
+        g_cd_pos[0].x -= push.x / 2;    /* (half each) */
+        g_cd_pos[0].y -= push.y / 2;
+        g_cd_pos[0].z -= push.z / 2;
+        g_cd_pos[1].x += push.x - push.x / 2;
+        g_cd_pos[1].y += push.y - push.y / 2;
+        g_cd_pos[1].z += push.z - push.z / 2;
+        for (i = 0; i < 2; i++)
+            *(LfVec *)&gPositionVector[1 + i] = g_cd_pos[i];
+    }
+    g_demo_frame++;
+}
+
+static void collide_report(void)
+{
+    static const char __far s_r[] = "collide: round %d (slot 1 %d km above): in each other's spheres %d frames, a hit %d";
+    int r;
+    for (r = 0; r < CD_ROUNDS; r++)
+        rv_logf(s_r, r, g_cd_up[r], g_cd_coarse[r], g_cd_hits[r]);
+}
+
+/* a world point on the player's screen */
+static int to_screen(const LfVec *w, int *sx, int *sy)
+{
+    LfBasis cam;
+    long rx = (w->x - gPositionVector[0].x) >> 4, ry = (w->y - gPositionVector[0].y) >> 4,
+         rz = (w->z - gPositionVector[0].z) >> 4, X, Y, Z;
+    basis_of(0, &cam);
+    X = (rx * cam.right.x + ry * cam.right.y + rz * cam.right.z) / 256;
+    Y = (rx * cam.up.x + ry * cam.up.y + rz * cam.up.z) / 256;
+    Z = (rx * cam.front.x + ry * cam.front.y + rz * cam.front.z) / 256;
+    if (Z < 16)
+        return 0;
+    X = SCR_W / 2 + X * 400 / Z;
+    Y = g_cam_cy - Y * 400 / Z;
+    *sx = (int)(X < -4000 ? -4000 : X > 4000 ? 4000 : X);
+    *sy = (int)(Y < -4000 ? -4000 : Y > 4000 ? 4000 : Y);
+    return 1;
+}
+
+static void hud_line(int xa, int ya, int xb, int yb, int colour, int y0, int y1, const short __far *ext, int ey0,
+                     int rows)
+{
+    int dx = xb - xa, dy = yb - ya, n = abs(dx) > abs(dy) ? abs(dx) : abs(dy), i;
+    if (!n)
+        n = 1;
+    if (n > 2000)
+        return;
+    for (i = 0; i <= n; i++) {
+        int x = xa + (int)((long)dx * i / n), y = ya + (int)((long)dy * i / n);
+        hud_run(x, x + 1, y, colour, y0, y1, ext, ey0, rows);
+    }
+}
+
+static void collide_overlay(int y0, int y1, const short __far *ext, int ey0, int rows)
+{
+    LfVec c[8], v[16];
+    int sx[8], sy[8], on[8], s, k, b, n, x, y;
+    if (!vid_run(&k, &b))
+        return;
+    for (s = 1; s <= 2; s++) {
+        n = collide_shape(s, c, v, 16);
+        for (k = 0; k < 8; k++)
+            on[k] = to_screen(&c[k], &sx[k], &sy[k]);
+        for (k = 0; k < 8; k++)
+            for (b = 1; b < 8; b <<= 1)
+                if (!(k & b) && on[k] && on[k | b])
+                    hud_line(sx[k], sy[k], sx[k | b], sy[k | b], g_cd_hit ? UI_RED : UI_GREY5, y0, y1, ext, ey0,
+                             rows);
+        for (k = 0; k < n; k++)
+            if (to_screen(&v[k], &x, &y)) {
+                int col = k == 0 ? UI_WHITE : k <= type_of(s)->nengines ? 159 : UI_AMBER4, j;
+                for (j = -1; j <= 1; j++)
+                    hud_run(x - 1, x + 2, y + j, col, y0, y1, ext, ey0, rows);
+            }
+    }
+}
+
 static void draw_world(int y0, int y1)
 {
     int ey0, rows, i;
@@ -760,6 +889,8 @@ static void draw_world(int y0, int y1)
     missiles_draw(y0, y1, ext, ey0, rows);
     if (g_boxes)
         boxes_draw(y0, y1, ext, ey0, rows);
+    if (g_collide_demo)
+        collide_overlay(y0, y1, ext, ey0, rows);
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
@@ -772,7 +903,7 @@ static void __far __cdecl draw_pointer_body(void)
 {
     /* the steering cross where the pointer is, in mouse mode */
     int x = g_scene.px, y = g_scene.py;
-    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo || g_sky_demo)   /* (the demo's middle bolt is where the cross would be) */
+    if (g_keyboard_steer || g_bolt_demo || g_ball_demo || g_missile_demo || g_sky_demo || g_collide_demo)   /* (the demo's middle bolt is where the cross would be) */
         return;
     gfx_fill(x - 5, y, 11, 1, UI_WHITE, g_ptr_y0, g_ptr_y1);
     gfx_fill(x, y - 5, 1, 11, UI_WHITE, g_ptr_y0, g_ptr_y1);
@@ -859,6 +990,11 @@ static void gather(void)
         _fstrcpy((char __far *)g_mfd[0][0], name);   /* (far: DGROUP is full) */
         sprintf(g_mfd[0][1], "T+%d.%d S", k / 30, k % 30 / 3);
         sprintf(g_mfd[0][2], "%ld KM", BOLT_HALF16 / 16 + (long)k * DEMO_SPEED * BOLT_HALF16 / 256);
+    } else if (g_collide_demo) {        /* the demo's readout: the round, a hit */
+        static const char __far name[] = "COLLIDE", hit[] = "HIT", miss[] = "-";
+        _fstrcpy((char __far *)g_mfd[0][0], name);
+        sprintf(g_mfd[0][1], "ROUND %d", g_demo_frame / CD_FRAMES + 1);
+        _fstrcpy((char __far *)g_mfd[0][2], g_cd_hit ? hit : miss);
     } else if (g_sky_demo) {            /* the demo's readout: the time */
         static const char __far name[] = "SKY";
         _fstrcpy((char __far *)g_mfd[0][0], name);
@@ -1746,6 +1882,8 @@ void __far __cdecl flight_frame(void)
     sim_step();
     if (g_sky_demo)
         sky_demo_step();
+    if (g_collide_demo)
+        collide_demo_step();
     stars_place();
     {
         LfBasis cam;
@@ -1762,7 +1900,7 @@ void __far __cdecl flight_frame(void)
             demo_step();
         else if (g_missile_demo)
             missile_demo_step();
-        else if (!g_ball_demo && !g_sky_demo)
+        else if (!g_ball_demo && !g_sky_demo && !g_collide_demo)
             lasers_step();
         balls_step();
         lasers_place();
@@ -1882,6 +2020,8 @@ int flight_fly(const RvMission __far *m)
         lasers_report();
         balls_report();
     }
+    if (g_collide_demo)
+        collide_report();
     g_star_place_ticks = g_star_draw_ticks = 0;
     g_scene.full = 0;
     g_scene.no_room = 0;

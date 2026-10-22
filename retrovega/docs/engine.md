@@ -1288,6 +1288,52 @@ ship is in the slot) gives an `EntBox`:
 cyan, the steady square amber) and logs them now and then; with `/flames
 /record 1` the six turning ships' brackets follow their sprites.
 
+### Ship-to-ship collisions
+
+The user's brief (2026-10-21): collision functions, coarse then fine; the
+fine one the smaller ship's hit box against the other's vitals (engine
+centres, hardpoints, a small core sphere in the middle), one axis-aligned
+compare each; a vector back that rectifies the intersection and shoves the
+ships apart, or 0. Then: the smallest box with the biggest ship's vitals,
+the core conservative, a sphere against the box by growing the box by its
+radius (a rounded, "squircle" box is fine); the core a sphere that fits
+inside the sprite at every view angle, to 95% coverage.
+
+**Data** (`tools/hitboxes.py` -> `data/hitboxes.csv`, packed by
+`rvdata.py` into `RvShipType`, RVGAME.DAT version 3): in the sprites' frame
+(127 = the half box, +x the ship's left), the mesh's half extents (`hit`),
+the core's radius (`core`: in each of the ship's views the biggest disc
+about its middle that is 95% opaque, the least of them: 13% of the half box
+for the Gawain, 24% for the Mule; 0 for ten types whose middle shows space
+in some view), and up to eight vitals (`vital`): the mesh's nose, tail and
+wingtips and the weapon mounts of Vega Strike's units.csv nearest the box's
+edges. The engines are `engine`'s. A ship's half box in the world is
+`lod0_px` x 3.125 km (the flight's scale: full size at 2,500 km, focal
+400).
+
+**`collide.c`.** `collide_coarse(a, b)`: the half boxes' spheres, per axis
+first. `collide_ships(a, b, &push, &depth)`: coarse, then the smaller
+ship's box (by volume) against the bigger's vitals, each taken into the
+box's frame by one 3 x 3 product (the axes dotted, once a pair) and the
+middles' difference: a point is in when inside on all three axes; the core
+is a sphere against the box (the box grown by its radius with rounded edges
+and corners: inside, or within its radius of the box's nearest point). Only
+when that finds nothing, the bigger ship's box against the smaller's
+vitals (a fighter in the middle of a capital ship's hull, between its
+sparse vitals). The push frees the deepest vital: in the box, out the
+nearer face of the axis it is shallowest on; the core off a corner,
+straight away from the box's nearest point. It is b's move (a's is the
+opposite; the demo shares it, half each). `collide_shape` gives a ship's
+box corners and vitals in the world, for drawing.
+
+`RV.EXE /collidedemo` (`tests/boltdemo.txt`, `/record 1`): two fighters
+2,600 km ahead flown at each other at 14 km a frame each, three rounds:
+level (hits in 44 of the 46 frames their spheres touch, pushed back along
+the line of flight, so they press nose to nose), 120 km apart vertically
+(11 hits, pushed apart as they pass), 700 km apart (inside each other's
+spheres 35 frames, no hit). Their boxes (red while they hit) and vitals are
+drawn over them.
+
 ### Pre-rendering: what the numbers allow (the earlier plan, superseded above)
 
 A mission has 2-4 capital ship types and 4-6 fighter types, known at the
