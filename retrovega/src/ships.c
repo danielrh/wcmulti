@@ -1307,7 +1307,8 @@ int ships_turn_wanted(int set_i, int scale256)
     return turn_wanted(ships_set(set_i), scale256);
 }
 
-int g_res = 1;
+int g_res = 2;                          /* the block mode is the game's mode (the user, 2026-10-23: "here is where we need
+                                           to be"); /res 1 keeps the sharp sets for comparison */
 
 int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
                int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)

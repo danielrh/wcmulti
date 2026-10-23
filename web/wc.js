@@ -1508,9 +1508,9 @@ async function start(fromGesture) {
     if (gameInfo() && gameInfo().id === "rv") {
       const t0 = performance.now();
       const sets = [];
-      // ?res=2: the block mode (RV.EXE /res 2): the ladder only, on every view, from half size, the ships
-      // drawn as 2 x 2 blocks; else the sets as they are
-      const blocks = query.get("res") === "2";
+      // the block mode (RV.EXE /res 2, the default): the ladder only, on every view, from half size, the
+      // ships drawn as 2 x 2 blocks; ?res=1 the sharp sets as they were
+      const blocks = query.get("res") !== "1";
       for (const f of source.files) {
         const m = /^(SHIP[0-9A-F]{2})\.RV$/i.exec(f.path);
         if (!m) continue;
@@ -1536,7 +1536,7 @@ async function start(fromGesture) {
     status(source.game.multiplayer ? `Room ${cfg.code}: starting…` : `Starting ${source.game.title}…`);
     canvas.focus();
     // ?cmd=... runs another DOS command instead of the game (debugging aid).
-    const cmd = query.get("cmd") || source.game.run + missionArgs + (query.get("res") === "2" && gameInfo() && gameInfo().id === "rv" ? " /res 2" : "");
+    const cmd = query.get("cmd") || source.game.run + missionArgs + (query.get("res") === "1" && gameInfo() && gameInfo().id === "rv" ? " /res 1" : "");
     // The emulated CPU speed: the game's own good value (the registry), or
     // ?cycles=N; Ctrl+F11 / Ctrl+F12 still adjust it while playing.
     const cycles = Number(query.get("cycles")) || (gameInfo() && gameInfo().cycles) || 0;

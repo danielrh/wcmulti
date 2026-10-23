@@ -902,7 +902,16 @@ both). Test scene: `RV.EXE /sky`
 with tests/sky.txt (three Gawain views painted ahead, high left and low
 right; the player rolls, yaws, pitches).
 
-**The block mode, `RV.EXE /res 2`** (2026-10-23; the user's design after
+**The block mode, `RV.EXE /res 2` — the game's mode since 2026-10-23**
+(the user, on the recordings: "Left is best — no blend. I think here is
+where we need to be"; `/res 1`, `?res=1`, keeps the sharp sets for
+comparison). **A dithered blend at cell crossings was tried and
+rejected**: the view across the nearest boundary dithered in over the
+current one in 2 x 2 blocks (a quarter, then half of them, the same
+pattern either side of the switch so it was a crossfade); on the zoom
+scene at 50 % of the cell it kept the ship speckled most of the time, at
+75 % in the last quarter of each cell, and the user preferred the plain
+switch to either. (The design after
 the pops: "reduce zoomed-in sprite size by 4x (2 in each axis) and draw
 blotches ... does that buy us enough memory to store the dense map without
 a cache and with maximal predictability?"). Two modes from the same

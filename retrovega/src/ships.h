@@ -55,7 +55,7 @@ typedef struct {
                                            headings are empty and made from their pair */
 } ShipSet;
 
-extern int g_res;                       /* RV.EXE /res N: 1 the sets as they are (SHIPnn.RVS); 2 SHIPnn.RVH, the
+extern int g_res;                       /* RV.EXE /res N: 2 (the default) SHIPnn.RVH; 1 the sets as they were (SHIPnn.RVS), the
                                            ladder only on every view of the lattice at half size (capitals a
                                            quarter), every ship turned exactly from it as 2 x 2 (4 x 4) blocks */
 
