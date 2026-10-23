@@ -35,6 +35,7 @@ typedef struct {
     unsigned char lock, warn, burning, lights, autopilot_ready, target_hot;
     int target;                         /* its slot, -1 none */
     int heat, signature;                /* 0 .. 100 */
+    int heat_shown, sig_shown;          /* as the HEAT and SIGNATURE displays show them: taken every 5 s */
     int fuel;                           /* afterburner fuel, 0 .. 1000 */
     int hull;                           /* percent */
     long target_km, nav_km;             /* -1: none */
@@ -47,5 +48,7 @@ void panel_unload(void);
 void panel_dirty(const CockpitState *st);    /* each control's state: the rows of those that changed marked */
 void panel_draw(const CockpitState *st, int y0, int y1);
 int panel_at(int x, int y, int *fn, int *arg);   /* the control under a point: 1, its RV_PF_* and argument */
+int panel_has(int fn);                       /* this cockpit's panel has a control of that function */
+void panel_fuel_bar(int x, int y, int w, int h, int pct, int upright, int y0, int y1);   /* fuel: a backlit bar */
 
 #endif

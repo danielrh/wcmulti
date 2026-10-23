@@ -450,10 +450,22 @@ def pack_cockpits(pack, ships_csv, panels_dir):
             xs = np.nonzero(opening[y])[0]
             ext.append((int(xs[0]), int(xs[-1]) + 1) if len(xs) else (0, 0))
         controls = {cid: Image.open(os.path.join(d, cid + '.png')).convert('RGBA') for cid in cj['controls']}
-        layers = [(e, Image.open(os.path.join(d, e['file'])).convert('RGBA')) for e in cj['damage']]
+        # (no broken stick or throttle: the user's, 2026-10-23 - they are unlikely to break; their systems' damage
+        # shows on the panel)
+        layers = [(e, Image.open(os.path.join(d, e['file'])).convert('RGBA')) for e in cj['damage'] if not e['attach']]
+        # the pilot's hand on the stick: nine poses (tools/joysticks.py), forward / middle / back x left / middle /
+        # right
+        sj = os.path.join(d, 'stick', 'stick.json')
+        stick = json.load(open(sj))['poses'] if os.path.exists(sj) else []
+        stick_ims = [Image.open(os.path.join(d, 'stick', p['file'])).convert('RGBA') for p in stick]
         # the cockpit's colours: median cut over everything it draws, into 208-254
+        # (eight of them the hand's own - skin and sleeve - picked from its poses: in the one median cut they came out
+        # yellow and grey)
+        hand = 8 if stick_ims else 0
         part = make_palette([base] + list(controls.values()) + [im for _e, im in layers] + list(state_ims.values()),
-                            len(CP_FREE), CP_FREE[0])
+                            len(CP_FREE) - hand, CP_FREE[0])
+        if hand:
+            part += make_palette(stick_ims, hand, CP_FREE[0] + len(CP_FREE) - hand)
         pal = Palette(UI + flight[16:CP_FREE[0]] + part + flight[CP_FREE[-1] + 1:])   # the UI's 16 first, as every palette
         allowed = list(range(16)) + CP_FREE
         over_black = Image.alpha_composite(Image.new('RGBA', SCREEN, (0, 0, 0, 255)), base)
@@ -497,10 +509,18 @@ def pack_cockpits(pack, ships_csv, panels_dir):
             if c['kind'] == 'needle':
                 x, y, w, h = int(round(c['at'][0] * 2)), int(round(c['at'][1] * 2)), int(round(c['r'])), 0
                 a0, a1, spr = c['a0'], c['a1'], c['max']
+            elif c['kind'] == 'map':            # (its pixels' values, IMG: the survival display's regions, heat)
+                m = np.asarray(Image.open(os.path.join(pd, c['map'])).convert('L'), dtype=np.uint8)
+                spr = pack.add('cpm_%s_%02d' % (key[:7], n), 'IMG', m.tobytes(), m.shape[1], m.shape[0], x, y)
             prec.append(struct.pack(PANEL_FMT, panels.FUNCTIONS.index(c['fn']), panels.KINDS.index(c['kind']), c['arg'],
                                     len(c['states']), c['painted'], c['flags'], x, y, w, h, a0, a1, spr))
         assert len(prec) <= LIMITS['PANEL']
         panel_i = pack.add('cpn_' + key, 'RAW', b''.join(prec)) if prec else 0xFFFF
+        stick_i = 0xFFFF
+        for i, (p, im) in enumerate(zip(stick, stick_ims)):
+            j = add_sprite(pack, 'cpj_%s_%d' % (key[:7], i), im, pal, p['x'], p['y'], allowed)
+            stick_i = j if i == 0 else stick_i
+        assert len(stick) in (0, 9)
         R = cj['regions']
         recs.append(struct.pack('<8sBBhhHHHH', key.encode(), types[key], len(layers), y0, y1, rec['palette'],
                                 rec['base'], rec['struts'], rec['extents'])
@@ -510,11 +530,14 @@ def pack_cockpits(pack, ships_csv, panels_dir):
                     + struct.pack('<Hhh', ctl['throttle'], cj['controls']['throttle']['x'], cj['controls']['throttle']['y'])
                     + struct.pack('<Hhh', ctl['joystick'], cj['controls']['joystick']['x'], cj['controls']['joystick']['y'])
                     + b''.join(struct.pack('<HBB', a, att, 0) for a, att in layer)
-                    + struct.pack('<HH', panel_i, len(prec)))
+                    + struct.pack('<HHH', panel_i, len(prec), stick_i))
         # the preview: the base as the engine will show it, the controls in place
         shown = idx.copy()
         for cid, im in controls.items():
-            c = cj['controls'][cid]
+            if cid == 'joystick' and stick:    # (the hand in its middle pose in place of the old stick)
+                c, im = {'x': stick[4]['x'], 'y': stick[4]['y']}, stick_ims[4]
+            else:
+                c = cj['controls'][cid]
             a = np.asarray(im)
             sub = shown[c['y']:c['y'] + im.height, c['x']:c['x'] + im.width]
             on = a[..., 3] >= 128
@@ -783,6 +806,9 @@ def header(room_size, person_size, cockpit_size):
         lines.append('#define RV_%s %d' % (k, v))
     lines += ['#define RV_PF_%s %d' % (f.upper(), i) for i, f in enumerate(panels.FUNCTIONS)]
     lines += ['#define RV_PK_%s %d' % (k.upper(), i) for i, k in enumerate(panels.KINDS)]
+    lines += ['#define RV_SV_%s %d' % (k, getattr(panels, 'SV_' + k)) for k in ('SHIP', 'BASE', 'RANKS', 'SHIELD_F',
+                                                                               'SHIELD_R', 'ARMOR_F', 'ARMOR_R',
+                                                                               'ARMOR_L', 'ARMOR_RT')]
     lines += ['#define RV_FACE %d' % FACE, '#define RV_CP_LAYERS %d' % CP_LAYERS,
               '#define RV_CP_FIRST %d' % CP_FREE[0], '']
     for bit in sorted(cockpits.BIT_NAMES):
@@ -920,6 +946,9 @@ typedef struct {
     RvControl throttle, joystick;
     RvDamageLayer layer[RV_CP_LAYERS];   /* by bit of rvCockpitDamage (RV_CPD_*) */
     unsigned short panel, npanel;   /* RAW: its panel's controls (RvPanelControl, tools/panels.py), how many */
+    unsigned short stick;           /* SPR: the pilot's hand on the stick, nine poses from here (tools/joysticks.py:
+                                       row * 3 + column, rows forward / middle / back, columns left / middle / right);
+                                       0xFFFF: the joystick control alone */
 } RvCockpit;
 typedef struct {
     unsigned char fn, kind, arg;    /* RV_PF_* (data/panels.json's functions), RV_PK_*, which (a lamp of a set...) */
@@ -927,7 +956,8 @@ typedef struct {
     unsigned char flags;            /* a bar: 1 upright; a ladder: its lamps */
     short x, y, w, h;               /* its rectangle; a needle: its centre x 2 (x, y), its length (w) */
     short a0, a1;                   /* a needle: its angles at nothing and at full scale (degrees clockwise from up) */
-    unsigned short sprite;          /* its first state's SPR; a needle: its full scale (0: the ship's top speed) */
+    unsigned short sprite;          /* its first state's SPR; a needle: its full scale (0: the ship's top speed); a map:
+                                       its IMG (a byte a pixel: tools/panels.py's SV_* regions, or heat 1 .. 255) */
 } RvPanelControl;
 #pragma pack()''', '', '#define RV_ROOM_SIZE %d' % room_size, '#define RV_PERSON_SIZE %d' % person_size,
               '#define RV_COCKPIT_SIZE %d' % cockpit_size, '',

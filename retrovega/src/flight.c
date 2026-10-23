@@ -1561,6 +1561,14 @@ static void systems_tick(void)
     g_sys.heat = g_heat10 / 10;
     g_sys.signature = (g_sys.emcon == EMCON_ACTIVE ? 50 : g_sys.emcon == EMCON_PASSIVE ? 20 : 5) + g_sys.heat / 2;
     if (g_sys.signature > 100) g_sys.signature = 100;
+    {   /* (the HEAT and SIGNATURE displays take theirs every 5 s: a sensor's sweep, the user's pick) */
+        static unsigned long __far taken;
+        if (frameCounter < 3 || clock240() - taken >= 5 * 240) {
+            g_sys.heat_shown = g_sys.heat;
+            g_sys.sig_shown = g_sys.signature;
+            taken = clock240();
+        }
+    }
     g_sys.hull = t && t->hull ? 100 - (int)((long)damagePoints[0] * 100 / t->hull) : 100;
     if (g_sys.hull < 0) g_sys.hull = 0;
     g_sys.warn = rvCockpitDamage != 0 || (SHIELD_MAX(0, 0) && SHIELD(0, 0) * 4 < SHIELD_MAX(0, 0))

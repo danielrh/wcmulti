@@ -100,6 +100,13 @@ static void dirty_sprite(unsigned a, int dy0, int dy1)
     vid_dirty(as->y + (dy0 < dy1 ? dy0 : dy1), as->y + as->h + (dy0 > dy1 ? dy0 : dy1));
 }
 
+/* the hand's pose on the stick (RvCockpit.stick): row forward (nose down: the steering's y > 0), middle, back;
+ * column left, middle, right */
+static int stick_pose(const CockpitState *st)
+{
+    return (st->stick_y > 0 ? 0 : st->stick_y < 0 ? 2 : 1) * 3 + st->stick_x + 1;
+}
+
 static int throttle_dy(const CockpitState *st)
 {
     return st->max_speed ? -(int)((long)st->set_speed * THROTTLE_TRAVEL / st->max_speed) : 0;
@@ -139,8 +146,14 @@ void cockpit_dirty(const CockpitState *st)
     }
     if (st->set_speed != g_last.set_speed || st->max_speed != g_last.max_speed)
         dirty_sprite(c->throttle.sprite, throttle_dy(&g_last), throttle_dy(st));
-    if (st->stick_x != g_last.stick_x || st->stick_y != g_last.stick_y)
-        dirty_sprite(c->joystick.sprite, g_last.stick_y * STICK_DY, st->stick_y * STICK_DY);
+    if (st->stick_x != g_last.stick_x || st->stick_y != g_last.stick_y) {
+        if (c->stick != 0xFFFF) {       /* (the hand's old pose and its new one) */
+            dirty_sprite(c->stick + stick_pose(&g_last), 0, 0);
+            dirty_sprite(c->stick + stick_pose(st), 0, 0);
+        } else {
+            dirty_sprite(c->joystick.sprite, g_last.stick_y * STICK_DY, st->stick_y * STICK_DY);
+        }
+    }
     changed = st->damage ^ g_last.damage;
     for (i = 0; i < RV_CP_LAYERS; i++)
         if ((changed >> i) & 1)
@@ -169,7 +182,7 @@ static void survival(const RvRect __far *r, const CockpitState *st, int y0, int 
 {
     int cx = r->x + r->w / 2, cy = r->y + r->h / 2, hw = r->w * 3 / 10, hh = r->h * 3 / 10, i, k;
     int pct[4];
-    if (!r->w || y1 <= r->y || y0 >= r->y + r->h)
+    if (!r->w || y1 <= r->y || y0 >= r->y + r->h || panel_has(RV_PF_SURVIVAL))   /* (the panel's map: panel.c) */
         return;
     if (g_sys.surv_page) {              /* (its other pages: the hull and how many systems are damaged; the nav) */
         char a[16], b[16];
@@ -268,14 +281,8 @@ static void speed_fuel(const RvCockpit __far *c, const CockpitState *st, int y0,
         }
     }
     r = &c->fuel;
-    if (r->w >= 12 && y1 > r->y && y0 < r->y + r->h) {   /* (a lamp-sized one is the panel's fuel lamp) */
-        if (r->h >= gfx_font_height(FONT_BODY)) {
-            sprintf(s, "%d%%", st->fuel);
-            gfx_text(FONT_BODY, r->x + 2, r->y + (r->h - gfx_font_height(FONT_BODY)) / 2, s, RV_TEXT_AMBER, y0, y1);
-        } else {
-            bar(r, st->fuel, y0, y1);
-        }
-    }
+    if (r->w >= 12 && y1 > r->y && y0 < r->y + r->h)    /* (a lamp-sized one is the panel's fuel lamp) */
+        panel_fuel_bar(r->x, r->y, r->w, r->h, st->fuel, r->h > r->w, y0, y1);   /* (backlit: the user's) */
 }
 
 static void damage_layers(const RvCockpit __far *c, const CockpitState *st, int attach, int dx, int dy, int y0, int y1)
@@ -311,8 +318,12 @@ void cockpit_draw(int y0, int y1, const CockpitState *st, void (*world)(int y0, 
     tdy = throttle_dy(st);
     gfx_sprite(c->throttle.sprite, 0, tdy, y0, y1);
     damage_layers(c, st, 1, 0, tdy, y0, y1);
-    sdx = st->stick_x * STICK_DX;
-    sdy = st->stick_y * STICK_DY;
-    gfx_sprite(c->joystick.sprite, sdx, sdy, y0, y1);
-    damage_layers(c, st, 2, sdx, sdy, y0, y1);
+    if (c->stick != 0xFFFF) {           /* the pilot's hand on the stick, in its pose */
+        gfx_sprite(c->stick + stick_pose(st), 0, 0, y0, y1);
+    } else {
+        sdx = st->stick_x * STICK_DX;
+        sdy = st->stick_y * STICK_DY;
+        gfx_sprite(c->joystick.sprite, sdx, sdy, y0, y1);
+        damage_layers(c, st, 2, sdx, sdy, y0, y1);
+    }
 }

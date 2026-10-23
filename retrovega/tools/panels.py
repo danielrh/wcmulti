@@ -43,8 +43,17 @@ FUNCTIONS = ['lock', 'warn', 'ab_lamp', 'nav_lamp', 'com_lamp', 'com_on', 'iff_l
              'auto_lamp', 'defence', 'sig_ladder', 'range_ladder', 'cabin', 'radio_digit', 'radio_lit', 'chan_knob',
              'emcon_knob', 'nav_knob', 'iff_knob', 'radar_knob', 'arm_knob', 'vol_knob', 'speed_dial', 'clock_dial',
              'shield_bar', 'armor_bar', 'hull_bar', 'fuel_bar', 'power_bar', 'engine_bar', 'speed_bar', 'range_bar',
-             'heat', 'signature', 'aux_nav', 'target_id', 'throttle_ticks']
-KINDS = ['lamp', 'knob', 'arcs', 'needle', 'ticks', 'bar', 'text']
+             'heat', 'signature', 'aux_nav', 'target_id', 'throttle_ticks', 'survival']
+KINDS = ['lamp', 'knob', 'arcs', 'needle', 'ticks', 'bar', 'text', 'map']
+# a map's pixel values (kind map: the engine colours each by what it stands for), the survival display: SV_SHIP the
+# ship's silhouette; a region's pixel SV_BASE + region * SV_RANKS + its rank (0 .. SV_RANKS - 1, the order the
+# pixels go in as the shield or the armour weakens, pixel by pixel, the outermost first - the user's picks,
+# 2026-10-23: the shields ring by ring like a tree's from the outside in, the front armour front to back, the rear
+# back to front, the left left to right, the right right to left); the regions SV_SHIELD_F, SV_SHIELD_R,
+# SV_ARMOR_F, SV_ARMOR_R, SV_ARMOR_L, SV_ARMOR_RT
+SV_SHIP, SV_BASE, SV_RANKS = 1, 2, 42
+SV_SHIELD_F, SV_SHIELD_R, SV_ARMOR_F, SV_ARMOR_R, SV_ARMOR_L, SV_ARMOR_RT = range(6)
+_SV_AREA = 100                          # (the layout's own codes, before the ranks: 100 + region, 99 the ship)
 
 
 def lum(rgb):
@@ -236,6 +245,202 @@ def darken(a, m):
     return out
 
 
+# --- the survival display and the thermal picture: the ship's silhouette (data/shapes.dat) ---
+
+_TOPS = {}
+
+
+def silhouette(key):
+    """a ship's top view as the player sees it (view 0 of its sprites, art/ships/SHIPnn.RV: drawn from the mesh,
+    its wings and all; the collision silhouettes in data/shapes.dat drop thin parts), nose up: a bool mask (rows
+    from the nose), and its engines (data/engines.csv) on it: [u, v, size], u across (-1 left .. 1 right), v along
+    (1 the nose .. -1 the tail), size as the mesh's"""
+    import csv
+    import pack                         # (tools/pack.py: the sprites' reader)
+    if key in _TOPS:
+        return _TOPS[key]
+    ships = {r['key']: r for r in csv.DictReader(open(os.path.join(ROOT, 'data', 'ships.csv')))}
+    hit = {r['key']: r for r in csv.DictReader(open(os.path.join(ROOT, 'data', 'hitboxes.csv')))}
+    eng = {r['key']: r for r in csv.DictReader(open(os.path.join(ROOT, 'data', 'engines.csv')))}
+    typ = int(ships[key]['type'], 16)
+    files = [os.path.join(ROOT, d, 'SHIP%02X.RV' % typ) for d in ('art/ships', 'build/rvdat')]
+    files = [f for f in files if os.path.exists(f)]
+    if files:
+        views, _rec = pack.read_ship(files[0])
+        pal = [tuple(c) for c in json.load(open(os.path.join(ROOT, 'data', 'palette.json')))['rgb']]
+        a = np.asarray(pack.draw(views[0], pal))[..., 3] > 0      # (nose to the left)
+        ys, xs = np.nonzero(a)
+        a = a[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
+        top = np.ascontiguousarray(np.rot90(a, -1))               # nose up, its right wing on the right
+    else:                               # (no sprites: the collision silhouette, data/shapes.dat's top, over its box)
+        import struct
+        blob = open(os.path.join(ROOT, 'data', 'shapes.dat'), 'rb').read()
+        _v, n, N, _p = struct.unpack_from('<4H', blob, 8)
+        at = 16
+        for _ in range(n):
+            if blob[at] == typ:
+                m = np.unpackbits(np.frombuffer(blob[at + 2:at + 2 + N * N // 8], np.uint8), bitorder='little')
+                break
+            at += 2 + 3 * N * N // 8
+        hx_, hz_ = float(hit[key]['hx']), float(hit[key]['hz'])
+        sq = m.reshape(N, N)[::-1].astype(bool)
+        top = np.asarray(Image.fromarray(sq.astype(np.uint8) * 255).resize((max(8, int(N * hx_ / hz_)), N),
+                                                                         Image.NEAREST)) > 127
+    hs, ws = top.shape
+    hz = float(hit[key]['hz'])                                    # (the mesh's half length: the sprite's)
+    e = eng.get(key)
+    engines = []
+    if e:
+        for i in range(int(e['n'])):
+            ex, ez = float(e['x%d' % i]), float(e['z%d' % i])
+            engines.append([ex / hz * hs / ws, ez / hz, float(e['size%d' % i])])
+    _TOPS[key] = (top, engines)
+    return _TOPS[key]
+
+
+def fit(shape_w, shape_h, w, h):
+    """the scale and offset that fit shape_w x shape_h in w x h, centred, keeping its aspect"""
+    k = min(w / shape_w, h / shape_h)
+    return k, (w - shape_w * k) / 2, (h - shape_h * k) / 2
+
+
+def ship_in(key, w, h, S):
+    """the silhouette at S x over a w x h box (nose up, fitted, its aspect kept): a bool mask, and each pixel's
+    place on the ship (u across, v along: -1 .. 1, the nose v = 1)"""
+    top, _e = silhouette(key)
+    hs, ws = top.shape
+    k, ox, oy = fit(ws, hs, w * S, h * S)
+    ys, xs = np.mgrid[0:h * S, 0:w * S]
+    u = (xs + 0.5 - ox) / (ws * k)                     # 0 .. 1 across the ship
+    v = (ys + 0.5 - oy) / (hs * k)                     # 0 .. 1 from the nose
+    inside = (u >= 0) & (u < 1) & (v >= 0) & (v < 1)
+    m = np.zeros(inside.shape, bool)
+    m[inside] = top[(v[inside] * hs).astype(int), (u[inside] * ws).astype(int)]
+    return m, (u * 2 - 1), (1 - v * 2)
+
+
+def smooth_max(ds, k):
+    m = np.max(ds, axis=0)
+    return m + k * np.log(np.sum(np.exp((ds - m) / k), axis=0))
+
+
+def survival_map(key, w, h):
+    """the survival display (the user's design, 2026-10-23): the front and rear shields two rounded trapezoids
+    round the ship, the armour four trapezoids inside them (a box's frame cut along its diagonals, one a side), the
+    ship's silhouette in the middle; regions apart (a pixel's gap); nose up, or (a wide display) nose to the right.
+    -> (h, w) bytes (SV_*; 0 nothing)"""
+    if w > h * 1.3:
+        return np.ascontiguousarray(np.rot90(survival_map(key, h, w), -1))
+    S = 4
+    W, H = w * S, h * S
+    ys, xs = np.mgrid[0:H, 0:W]
+    px, py = xs + 0.5, ys + 0.5
+    m = 1.0 * S                                         # (a pixel's margin all round)
+    x0, x1, y0, y1 = m, W - m, m, H - m
+    cx, cy = W / 2, H / 2
+    sx, sy = (x1 - x0) * 0.24, (y1 - y0) * 0.26         # the trapezoids' slants
+    # the outline: a rounded octagon (two trapezoids, the front and the back, on a box): the distance inside < 0
+    planes = [(-(px - x0)), (px - x1), (-(py - y0)), (py - y1)]
+    for ax, ay, bx, by in ((x0, y0 + sy, x0 + sx, y0), (x1 - sx, y0, x1, y0 + sy), (x1, y1 - sy, x1 - sx, y1),
+                           (x0 + sx, y1, x0, y1 - sy)):
+        nx, ny = by - ay, ax - bx                       # (the outward normal of the edge a -> b, clockwise)
+        ln = np.hypot(nx, ny)
+        planes.append(((px - ax) * nx + (py - ay) * ny) / ln)
+    d = smooth_max(np.stack(planes), 0.9 * S)
+    t = max(2, round(min(w, h) * 0.09)) * S             # shield band, armour band
+    gap = 1 * S
+    out = np.zeros((H, W), np.uint8)
+    band = (d <= 0) & (d > -t)
+    side_gap = max(1.0, h * 0.07) * S
+    A = _SV_AREA
+    out[band & (py < cy - side_gap)] = A + SV_SHIELD_F
+    out[band & (py > cy + side_gap)] = A + SV_SHIELD_R
+    # the armour: the biggest box (the display's shape) inside the shields' inner edge, its frame (a little thicker
+    # than the shields) cut along the box's diagonals into four trapezoids, a pixel's gap between them
+    def corner_in(a_, b_):                          # (is the box's corner inside the shields' inner edge?)
+        x_, y_ = int(min(W - 1, cx + a_)), int(min(H - 1, cy + b_))
+        return smooth_max(np.stack([pl[y_, x_] for pl in planes])[:, None], 0.9 * S)[0] <= -(t + gap)
+    a = b = 0.0
+    for q in np.linspace(0.5, 2.5, 21):             # (the box's height over its width, against the display's: the
+        k = q * H / W                               #  shape that gives the biggest box)
+        lo, hi = 0.0, W / 2.0
+        for _ in range(24):
+            mid = (lo + hi) / 2
+            fits = mid * k <= H / 2 - m and corner_in(mid, mid * k)
+            lo, hi = (mid, hi) if fits else (lo, mid)
+        if lo * lo * k > a * b:
+            a, b = lo, lo * k
+    ta = max(2, round(min(w, h) * 0.08)) * S
+    u, v = (px - cx) / a, (py - cy) / b
+    box = (np.abs(px - cx) <= a) & (np.abs(py - cy) <= b)
+    frame = box & ~((np.abs(px - cx) <= a - ta) & (np.abs(py - cy) <= b - ta))
+    # (the diagonals of the frame: from each corner of the box to the inner box's; a pixel's gap along them)
+    dgx, dgy = np.abs(px - cx) - (a - ta), np.abs(py - cy) - (b - ta)
+    diag = np.abs(dgx - dgy) < gap * 0.7
+    out[frame & ~diag & (py < cy) & (dgy > dgx)] = A + SV_ARMOR_F
+    out[frame & ~diag & (py > cy) & (dgy > dgx)] = A + SV_ARMOR_R
+    out[frame & ~diag & (px < cx) & (dgx > dgy)] = A + SV_ARMOR_L
+    out[frame & ~diag & (px > cx) & (dgx > dgy)] = A + SV_ARMOR_RT
+    inner = (np.abs(px - cx) <= a - ta - gap) & (np.abs(py - cy) <= b - ta - gap)
+    ys_in, xs_in = np.nonzero(inner)
+    bx0, bx1, by0, by1 = xs_in.min(), xs_in.max() + 1, ys_in.min(), ys_in.max() + 1
+    ship, _u, _v = ship_in(key, (bx1 - bx0) // S, (by1 - by0) // S, S)
+    sub = out[by0:by0 + ship.shape[0], bx0:bx0 + ship.shape[1]]
+    sh = ship[:sub.shape[0], :sub.shape[1]] & inner[by0:by0 + ship.shape[0], bx0:bx0 + ship.shape[1]][:sub.shape[0], :sub.shape[1]]
+    sub[sh] = A - 1
+    # down to the display's pixels: each pixel the region covering most of it (half at least), else nothing
+    area = np.zeros((h, w), np.uint8)
+    for r in [A + k for k in range(6)] + [A - 1]:
+        cover = (out == r).reshape(h, S, w, S).mean(axis=(1, 3))
+        area[(cover >= 0.5) & (area == 0)] = r
+    # each region's pixels ranked, inward: the outermost along its own axis last in the rank (it goes first) - the
+    # front shield and armour by how far ahead of the middle, the rear by how far behind, the left by how far left,
+    # the right by how far right; a row's (or column's) outer ends before its middle
+    cxs, cys = w / 2.0, h / 2.0
+    small = np.where(area == A - 1, SV_SHIP, 0).astype(np.uint8)
+    depth = np.floor(-d.reshape(h, S, w, S).mean(axis=(1, 3)) / S)   # (whole pixels in from the outline)
+    for k in range(6):
+        ys_, xs_ = np.nonzero(area == A + k)
+        if not len(xs_):
+            continue
+        dx, dy = xs_ + 0.5 - cxs, ys_ + 0.5 - cys
+        if k in (SV_SHIELD_F, SV_SHIELD_R):
+            # the shields like a tree's rings (the user's, 2026-10-23): the outermost ring of the band first, then
+            # the next in; round a ring, its ends before its middle (straight ahead of the nose, or behind the tail)
+            out_, side = -depth[ys_, xs_], -np.arctan2(np.abs(dx) / w, np.abs(dy) / h)
+        else:
+            out_, side = {SV_ARMOR_F: (-dy, np.abs(dx)), SV_ARMOR_R: (dy, np.abs(dx)), SV_ARMOR_L: (-dx, np.abs(dy)),
+                          SV_ARMOR_RT: (dx, np.abs(dy))}[k]
+        order = np.lexsort((side, out_))                # (inward first: rank 0 the innermost, the last to go)
+        rank = np.empty(len(order), int)
+        rank[order] = np.arange(len(order))
+        small[ys_, xs_] = (SV_BASE + k * SV_RANKS + rank * (SV_RANKS - 1) // max(1, len(order) - 1)).astype(np.uint8)
+    return small
+
+
+def thermal_map(key, w, h):
+    """the ship's silhouette for the HEAT display, each pixel how hot it runs (1 .. 255; 0 not the ship): the hull
+    warm, its engines hot (data/engines.csv), the nose and the edges cooler; nose up, or (a wide display) nose to
+    the right"""
+    if w > h * 1.3:
+        return np.ascontiguousarray(np.rot90(thermal_map(key, h, w), -1))
+    S = 4
+    ship, u, v = ship_in(key, w - 2, h - 2, S)
+    top, engines = silhouette(key)
+    aspect = top.shape[1] / top.shape[0]               # (across over along: u's units into v's)
+    heat = 0.25 + 0.15 * (1 - np.abs(u)) + 0.1 * (-v)
+    for eu, ev, size in engines:
+        r = max(0.12, size * 0.3)
+        heat += 0.75 * np.exp(-(((u - eu) * aspect) ** 2 + (v - ev) ** 2) / r ** 2)
+    heat = np.clip(heat, 0.05, 1.0) * ship
+    hh, ww = ship.shape[0] // S, ship.shape[1] // S
+    cover = ship.reshape(hh, S, ww, S).mean(axis=(1, 3))
+    val = heat.reshape(hh, S, ww, S).sum(axis=(1, 3)) / np.maximum(ship.reshape(hh, S, ww, S).sum(axis=(1, 3)), 1)
+    small = np.zeros((h, w), np.uint8)
+    small[1:1 + hh, 1:1 + ww] = np.where(cover >= 0.4, np.clip(val * 255, 1, 255), 0).astype(np.uint8)
+    return small
+
+
 # --- a cockpit ---
 
 def changed(a, b):
@@ -273,6 +478,12 @@ def build(key, spec, out_root):
     for f in os.listdir(os.path.join(out_dir, 'states')):
         os.remove(os.path.join(out_dir, 'states', f))
     a = np.asarray(Image.open(os.path.join(ROOT, 'art', 'cockpits', key, 'base.png')).convert('RGBA')).copy()
+    sock = os.path.join(ROOT, 'art', 'cockpits', key, 'stick', 'socket.json')
+    if os.path.exists(sock):            # (the old stick's socket painted out: tools/joysticks.py)
+        sj = json.load(open(sock))
+        patch = np.asarray(Image.open(os.path.join(os.path.dirname(sock), 'socket.png')).convert('RGBA'))
+        sub = a[sj['y']:sj['y'] + patch.shape[0], sj['x']:sj['x'] + patch.shape[1]]
+        sub[patch[..., 3] > 0] = patch[patch[..., 3] > 0]
     controls = spec['controls']
     # the base: relabelled, scales recoloured, needles painted out
     for rl in spec.get('relabel', []):
@@ -320,6 +531,12 @@ def build(key, spec, out_root):
             rec['rect'] = [int(xs.min()), int(ys.min()), int(np.ptp(xs)) + 1, int(np.ptp(ys)) + 1]
         elif c['kind'] == 'needle':
             rec.update({k: c[k] for k in ('at', 'r', 'a0', 'a1', 'max') if k in c})
+        elif c['kind'] == 'map':
+            x, y, w, h = rect
+            mp = survival_map(key, w, h) if c['fn'] == 'survival' else thermal_map(key, w, h)
+            os.makedirs(os.path.join(out_dir, 'maps'), exist_ok=True)
+            Image.fromarray(mp, 'L').save(os.path.join(out_dir, 'maps', '%02d.png' % n))
+            rec['map'] = 'maps/%02d.png' % n
         elif c['kind'] == 'ticks':
             # the lit ticks, the bottom first: state k has the first k lit, the rest dark
             m = box_mask(base.shape, c['rect']) & (((lum(base) > 140) & (sat(base) > 0.1)) | (lum(base) > 190))

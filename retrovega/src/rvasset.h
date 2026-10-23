@@ -58,6 +58,7 @@
 #define RV_PF_AUX_NAV 42
 #define RV_PF_TARGET_ID 43
 #define RV_PF_THROTTLE_TICKS 44
+#define RV_PF_SURVIVAL 45
 #define RV_PK_LAMP 0
 #define RV_PK_KNOB 1
 #define RV_PK_ARCS 2
@@ -65,6 +66,16 @@
 #define RV_PK_TICKS 4
 #define RV_PK_BAR 5
 #define RV_PK_TEXT 6
+#define RV_PK_MAP 7
+#define RV_SV_SHIP 1
+#define RV_SV_BASE 2
+#define RV_SV_RANKS 42
+#define RV_SV_SHIELD_F 0
+#define RV_SV_SHIELD_R 1
+#define RV_SV_ARMOR_F 2
+#define RV_SV_ARMOR_R 3
+#define RV_SV_ARMOR_L 4
+#define RV_SV_ARMOR_RT 5
 #define RV_FACE 352
 #define RV_CP_LAYERS 32
 #define RV_CP_FIRST 208
@@ -270,6 +281,9 @@ typedef struct {
     RvControl throttle, joystick;
     RvDamageLayer layer[RV_CP_LAYERS];   /* by bit of rvCockpitDamage (RV_CPD_*) */
     unsigned short panel, npanel;   /* RAW: its panel's controls (RvPanelControl, tools/panels.py), how many */
+    unsigned short stick;           /* SPR: the pilot's hand on the stick, nine poses from here (tools/joysticks.py:
+                                       row * 3 + column, rows forward / middle / back, columns left / middle / right);
+                                       0xFFFF: the joystick control alone */
 } RvCockpit;
 typedef struct {
     unsigned char fn, kind, arg;    /* RV_PF_* (data/panels.json's functions), RV_PK_*, which (a lamp of a set...) */
@@ -277,12 +291,13 @@ typedef struct {
     unsigned char flags;            /* a bar: 1 upright; a ladder: its lamps */
     short x, y, w, h;               /* its rectangle; a needle: its centre x 2 (x, y), its length (w) */
     short a0, a1;                   /* a needle: its angles at nothing and at full scale (degrees clockwise from up) */
-    unsigned short sprite;          /* its first state's SPR; a needle: its full scale (0: the ship's top speed) */
+    unsigned short sprite;          /* its first state's SPR; a needle: its full scale (0: the ship's top speed); a map:
+                                       its IMG (a byte a pixel: tools/panels.py's SV_* regions, or heat 1 .. 255) */
 } RvPanelControl;
 #pragma pack()
 
 #define RV_ROOM_SIZE 556
 #define RV_PERSON_SIZE 22
-#define RV_COCKPIT_SIZE 228
+#define RV_COCKPIT_SIZE 230
 
 #endif

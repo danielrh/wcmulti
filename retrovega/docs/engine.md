@@ -484,14 +484,30 @@ RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
   kit called them. The Lancelot kit has no display map: its displays were
   found inside its damage regions by the glass colour.
 - **Controls:** the throttle and the joystick as sprites at their place.
-  The throttle slides up to 14 pixels with `setSpeed`; the joystick moves
-  4 x 3 pixels to one of eight sides or back to the middle with the
-  steering (the arrows at full rate, else the pointer's distance from the
-  middle of the opening).
+  The throttle slides up to 14 pixels with `setSpeed`. The joystick is
+  the pilot's hand on it (the user's sprite sheets, 2026-10-23,
+  `tools/joysticks.py` into `art/cockpits/KEY/stick/`): nine poses,
+  pushed forward (nose down), the middle, pulled back, each leaning left,
+  upright or right, picked by the steering (the arrows at full rate, else
+  the pointer's distance from the middle of the opening); the base stays
+  put and only the stick and the hand move. Each cockpit takes the sheet
+  that matches its stick, with the user's three-pose strips where a
+  sheet's column had the arm from the wrong side; the two sidesticks
+  (Franklin, Progeny) are mirrored so it is the pilot's right arm, not the
+  left reaching across. The poses are lined up on the middle one's base
+  (matched by overlap over scales and offsets), scaled to the old stick's
+  height, and set so the base is flush with the bottom of the screen, a
+  sliver cropped (the user's balance: lower and the hand sinks too far;
+  the Franklin's, by the right edge, where it stood); a pose whose sleeve
+  end would still show has its sleeve run on the few pixels to the edge,
+  along the forearm. The old socket under each stick is painted out of
+  the base (its hole and collar filled with the plate round them).
 - **Damage:** every overlay is a sprite with a fixed bit
   (`tools/cockpits.py` BITS: 0 weapons MFD, 1 targeting MFD, 2 radar, ...
   23 canopy, 26 survival VDU), drawn while its bit of `rvCockpitDamage`
-  is set; a layer attached to the throttle or the joystick moves with it.
+  is set. The kits' broken throttle and broken stick are not packed (the
+  user: they are unlikely to break; those systems' damage shows on the
+  panel's lamps).
   The benchmark sets one more bit every three seconds; D sets the next by
   hand, R clears them.
 
@@ -533,14 +549,39 @@ running lights off. A state keeps only the pixels it changes; `rvpack.py`
 packs each as a sprite and a table of `RvPanelControl` records a cockpit,
 the cockpit's palette taking the states' colours in.
 
-**The engine** (`src/panel.c`). Each frame every control's state comes
-from the ship's systems (`ShipSystems`, kept by flight.c); one that
-changed marks its rows, and the band's redraw paints its sprite over the
-restored base (the base shows the kit's own state). Needles (speed dials,
-the Progeny's two-hand mission clock), bars (shields, armour, hull, fuel,
-power plant, engine, speed, target range) and readouts (heat, signature,
-the nav point, the target; a 3 x 5 pixel font where the glass is small)
-are drawn. A click below the canopy works the control under the pointer.
+**The survival display, heat and signature** (the user's design,
+2026-10-23). `tools/panels.py` draws each cockpit's survival display as a
+map, a byte a pixel: the front and rear shields two rounded trapezoids, the
+armour four trapezoids inside them (a box's frame cut along its diagonals,
+one a side), the ship's silhouette in the middle (its sprites' top view,
+art/ships, so the wings are there), a pixel's gap between them; a wide
+display lies sideways, nose to the right. Each shield or armour pixel
+carries its rank, the order it goes in as that side weakens: the shields
+ring by ring from the outside in, like a tree's, the armour straight
+inward (front to back, left to right...). The engine lights a region's
+pixels whose rank is under its strength (shields light blue, armour
+green) and blacks the rest: a 256-entry colour table made when the
+reading changes, then a lookup a pixel. The HEAT display is the ship's
+silhouette in thermal colours (navy through the reds to white), its
+engines hottest (data/engines.csv), as hot as the ship runs; SIGNATURE a
+segmented bar; both take their value every 5 s. Fuel is a backlit amber
+bar that draws shorter as it goes, never a number.
+
+**The engine** (`src/panel.c`). Each frame every lamp's, knob's and
+switch's state comes from the ship's systems (`ShipSystems`, kept by
+flight.c); one that changed marks its rows, and the band's redraw paints
+its sprite over the restored base (the base shows the kit's own state).
+The displays (needles, bars, readouts, maps) take turns: each frame one
+takes a fresh reading (what it shows: a few numbers or two short lines),
+and only a changed reading marks its rows, so a display lags the ship by
+a beat, as a scanning instrument would (the user's). A display is drawn
+from its reading alone, so when other things wipe its rows (the base is
+restored by the band) it is drawn again unchanged without being worked
+out again. Needles (speed dials, the Progeny's two-hand mission clock),
+bars (shields, armour, hull, fuel, power plant, engine, speed, target
+range) and readouts (the nav point, the target: the body font when it
+fits the glass, else a 3 x 5 pixel font, cut to the box) are drawn. A
+click below the canopy works the control under the pointer.
 
 **The systems.** EMCON (K): ACTIVE (the radar emitting: every contact
 identified), PASSIVE (the scope unidentified), OFF (a dark scope, the
