@@ -36,6 +36,10 @@ const query = new URLSearchParams(location.search);
 // an RV- room, and its pilots meet in a lobby of their own (RV-LOBBY).
 // Later it can be every fileless page's game.
 const retrovega = query.has("retrovega") || /retrovega/i.test(location.hash) || /^RV-/i.test(query.get("room") || "");
+// The "Capship hull" box is offered only with ?capship (or &capship, or
+// #capship) in the address (the user's call, 2026-10-22); a wingman's game
+// takes the host's choice either way.
+const capshipOption = query.has("capship") || /capship/i.test(location.hash) || query.get("caphull") === "1";
 
 // The lobby server only introduces the browsers to each other, and any
 // lobbylink server does that: should the public one be down, pilots agree on
@@ -663,7 +667,7 @@ function renderMission() {
     if (document.activeElement !== inp || !isHost() || running) inp.value = String(fpsInForce());
     inp.disabled = !isHost() || running;
   }
-  $("capHullLabel").hidden = !lobbyCapHull() || !lobbyFlies();
+  $("capHullLabel").hidden = !capshipOption || !lobbyCapHull() || !lobbyFlies();
   $("capHull").checked = lobby.capHull;
   $("capHull").disabled = !isHost() || running;
   const hints = (c && c.hints) || {};
