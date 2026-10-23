@@ -48,11 +48,12 @@
 #include <stdint.h>
 #include "lightfield.h"
 
-#define NSIZES 13
+#define NSIZES 13                      /* the ladder of a set: its sizes k = 0 .. nsizes - 1 are the steps k + step0 of SCALES */
+#define NSCALES 21
 #define NROLLS 32
 #define ROLL_SIZES 4
 #define MAXV 620                       /* 17 x 19 at 10 degrees with the mirrored headings */
-static const int SCALES[NSIZES] = { 256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32 };
+static const int SCALES[NSCALES] = { 256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32, 27, 22, 19, 16, 13, 11, 9, 8 };
 
 typedef struct { int w, h, ox, oy; unsigned char *px; } Dense;
 
@@ -299,18 +300,30 @@ int main(int argc, char **argv)
     const unsigned char *rec;
     Dense views[MAXV];
     int type, nviews, asym, v, k, r, nblocks = 0, first_size = 0, roll_from = 0, roll_sizes = ROLL_SIZES, nb, nh;
-    Dense sub[62];
-    int nview0;
+    Dense sub[MAXV];
+    int nview0, nsub, sub_step = 3, factor = 1, step0 = 0;
     struct { int size, roll, nv; long at, len; unsigned char *data; int w[MAXV], h[MAXV], ox[MAXV], oy[MAXV]; long vat[MAXV]; } *blocks;
     long at;
     if (argc < 3) {
-        fprintf(stderr, "usage: rvsprites IN.RV OUT.RVS\n");
+        fprintf(stderr, "usage: rvsprites IN.RV OUT.RVS [first_size roll_from roll_sizes [lattice factor]]\n"
+                        "  lattice: 3 = the sets on the 30-degree sub-lattice (62 views; the default), 1 = on every view\n"
+                        "  factor: 1 = the sets at full size; 2 or 4 = half or quarter size, drawn that many times\n"
+                        "          bigger as 2 x 2 or 4 x 4 blocks (their ladder starts 4 or 8 steps down)\n");
         return 2;
     }
     if (argc >= 6) {
         first_size = atoi(argv[3]);
         roll_from = atoi(argv[4]);
         roll_sizes = atoi(argv[5]);
+    }
+    if (argc >= 8) {
+        sub_step = atoi(argv[6]);
+        factor = atoi(argv[7]);
+        step0 = factor == 4 ? 8 : factor == 2 ? 4 : 0;
+        if ((sub_step != 1 && sub_step != 3) || (factor != 1 && factor != 2 && factor != 4)) {
+            fprintf(stderr, "lattice 1 or 3, factor 1, 2 or 4\n");
+            return 2;
+        }
     }
     f = fopen(argv[1], "rb");
     if (!f) { perror(argv[1]); return 1; }
@@ -339,13 +352,31 @@ int main(int argc, char **argv)
         decode(g_file + off, (long)(end - off), &views[v]);
     }
     nview0 = nviews;                   /* block 0: the lattice's views as stored */
-    /* the sets' 62 views: the 30-degree sub-lattice, its mirrored headings made */
-    for (v = 0; v < 62; v++) {
-        int m, src = sub_view(v, nb, nh, asym, &m);
-        if (src >= 0)
-            sub[v] = views[src];
-        else
-            mirror(&views[m], &sub[v]);
+    if (sub_step == 3) {
+        /* the sets' 62 views: the 30-degree sub-lattice, its mirrored headings made */
+        nsub = 62;
+        for (v = 0; v < 62; v++) {
+            int m, src = sub_view(v, nb, nh, asym, &m);
+            if (src >= 0)
+                sub[v] = views[src];
+            else
+                mirror(&views[m], &sub[v]);
+        }
+    } else if (roll_sizes == 0) {
+        /* a ladder only, on every view of the lattice as stored (the engine mirrors a symmetric ship's
+         * other headings as it does the full-size views', and turns every sprite itself) */
+        nsub = nviews;
+        for (v = 0; v < nsub; v++)
+            sub[v] = views[v];
+    } else {
+        /* the sets on every view of the lattice: the stored ones, then a symmetric ship's mirrored
+         * headings made (the engine's indices for them: lf_pair_of's) */
+        nsub = asym ? nviews : 2 + nb * nh + nb * (nh - 2);
+        for (v = 0; v < nsub; v++)
+            if (v < nviews && views[v].w)
+                sub[v] = views[v];
+            else
+                mirror(&views[lf_pair_of(v, nb, nh)], &sub[v]);
     }
     blocks = calloc(NSIZES * NROLLS, sizeof *blocks);
     for (k = 0; k < NSIZES; k++)
@@ -353,7 +384,7 @@ int main(int argc, char **argv)
             long cap = 0, n = 0;
             unsigned char *data;
             const Dense *src = (k == 0 && r == 0) ? views : sub;
-            int nv = (k == 0 && r == 0) ? nview0 : 62;
+            int nv = (k == 0 && r == 0) ? nview0 : nsub;
             if (k < first_size || (r && (k < roll_from || k >= roll_from + roll_sizes)))
                 continue;
             for (v = 0; v < nv; v++) {
@@ -371,7 +402,7 @@ int main(int argc, char **argv)
                     blocks[nblocks].w[v] = 0;
                     continue;
                 }
-                one = render(&src[v], SCALES[k], r * (1024 / NROLLS), &w, &h, &ox, &oy, &len);
+                one = render(&src[v], SCALES[k + step0], r * (1024 / NROLLS), &w, &h, &ox, &oy, &len);
                 memcpy(data + n, one, len);
                 blocks[nblocks].w[v] = w; blocks[nblocks].h[v] = h;
                 blocks[nblocks].ox[v] = ox; blocks[nblocks].oy[v] = oy;
@@ -393,10 +424,11 @@ int main(int argc, char **argv)
     if (!f) { perror(argv[2]); return 1; }
     fwrite("RVSP", 1, 4, f);
     fputc(type, f); fputc(nview0 & 255, f); fputc(NSIZES, f); fputc(NROLLS, f);
-    fputc(roll_sizes, f); fputc(asym, f); fputc(nb, f); fputc(nh, f);
-    for (k = 0; k < 16; k++)
-        put16(f, k < NSIZES ? SCALES[k] : 0);
-    fputc(5, f); fputc(7, f); put16(f, nview0);   /* the view count whole (266 overflows the byte) */
+    fputc(roll_sizes, f); fputc(asym | (factor == 2 ? 2 : factor == 4 ? 4 : 0), f); fputc(nb, f); fputc(nh, f);
+    for (k = 0; k < 16; k++)            /* the sizes relative to the ship at full size: a half set's start at 128 */
+        put16(f, k < NSIZES ? SCALES[k + step0] : 0);
+    if (sub_step == 3) { fputc(5, f); fputc(7, f); } else { fputc(nb, f); fputc(nh, f); }   /* the sets' lattice */
+    put16(f, nview0);                   /* the view count whole (266 overflows the byte) */
     put32(f, nblocks);
     at = 4 + 8 + 32 + 4 + 4;
     for (i = 0; i < (unsigned long)nblocks; i++)

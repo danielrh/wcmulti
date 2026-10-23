@@ -27,6 +27,7 @@ typedef struct {
 /* one (size, roll) block of a pre-rendered set (SHIPnn.RVS, tools/rvsprites.c) */
 typedef struct {
     unsigned char size, roll, loaded, pad;
+    unsigned short nv;                  /* views in its table (a ladder-only set's blocks hold the lattice's own only) */
     unsigned long at, length;           /* in the file */
     unsigned long index_at;             /* its view table in the set's index block */
     XmsBlock blk;                       /* its data, once loaded: a size's rolls share one XMS block (they lie together
@@ -35,7 +36,10 @@ typedef struct {
 } SetBlock;
 
 typedef struct {
-    unsigned char type, asym, rvs, pad;      /* rvs: a pre-rendered set; else the .RV views at full size only */
+    unsigned char type, asym, rvs, factor;
+    unsigned char rvh;                  /* its file is SHIPnn.RVH (the block mode's), not .RVS: the loaders open it */   /* rvs: a pre-rendered set; else the .RV views at full size only.
+                                                factor 2 or 4: a SHIPnn.RVH set, its sprites half or quarter size,
+                                                drawn that many times bigger as blocks (RV.EXE /res 2) */
     unsigned short nviews;
     unsigned char nb0, nh0;             /* the full-size views' lattice (the exact draw's) */
     unsigned char nb1, nh1;             /* the sets' (the copies') lattice: 5 x 7 */
@@ -50,6 +54,10 @@ typedef struct {
                                            blk 0, at and len in the file): a symmetric ship's mirrored
                                            headings are empty and made from their pair */
 } ShipSet;
+
+extern int g_res;                       /* RV.EXE /res N: 1 the sets as they are (SHIPnn.RVS); 2 SHIPnn.RVH, the
+                                           ladder only on every view of the lattice at half size (capitals a
+                                           quarter), every ship turned exactly from it as 2 x 2 (4 x 4) blocks */
 
 /* the lattice a set's views are in: the exact draw's (block 0) or the copies' */
 void ships_lattice(int set, int exact, int *nb, int *nh);

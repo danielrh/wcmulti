@@ -516,6 +516,9 @@ static void plan_draws(void)
         budget -= px[best] / detail;
         order[n_exact] = best;
     }
+    if (g_res == 2)                     /* the block mode: every ship turned exactly from its ladder, as blocks */
+        for (i = 0; i < g_nplan; i++)
+            g_plan[i].exact = 4;
     for (s = 0; s <= RV_MAX_SHIP_SLOT; s++) {
         int now = 0;
         for (i = 0; i < n_exact; i++)

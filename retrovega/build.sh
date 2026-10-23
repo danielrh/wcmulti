@@ -56,11 +56,16 @@ for f in art/ships/SHIP*.RV; do
     # (the nearest ships are drawn exactly in flight: rolls at every size from half down, so a far
     # ship turns with the player's roll - the user's ruling, 2026-10-20)
     [ "$s" -nt "$f" ] && [ "$s" -nt tools/rvsprites.c ] && [ "$s" -nt src/lightfield.c ] || build/host/rvsprites "$f" "$s" 0 4 9 > /dev/null
+    # and the block mode's (RV.EXE /res 2): the ladder only, on every view, from half size, drawn as 2 x 2 blocks
+    h="${s%.RVS}.RVH"
+    [ "$h" -nt "$f" ] && [ "$h" -nt tools/rvsprites.c ] && [ "$h" -nt src/lightfield.c ] || build/host/rvsprites "$f" "$h" 0 0 0 1 2 > /dev/null
 done
 # the carrier (a test aid, RV.EXE /capital): from half size down, rolls at two sizes
 if [ -f build/rvdat/SHIP20.RV ]; then
     s="$OUT/SHIP20.RVS"
     [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
+    h="$OUT/SHIP20.RVH"             # (the block mode: a capital at a quarter, drawn as 4 x 4 blocks)
+    [ "$h" -nt build/rvdat/SHIP20.RV ] && [ "$h" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$h" 0 0 0 1 4 > /dev/null
 fi
 ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls missiles sky collide flames comms panel cockpit flight game main"
 for c in $ENGINE hello; do

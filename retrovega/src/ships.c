@@ -304,7 +304,7 @@ static void file_to_xms(FILE *f, unsigned long at, unsigned long n, XmsBlock blk
 static int set_view(const ShipSet __far *s, const SetBlock __far *b, int v, ShipView *out)
 {
     unsigned char e[12];
-    if (!b || b->loaded != 1)           /* (2: the full-size block, the exact draw's: its views are the dense lattice's) */
+    if (!b || !b->loaded || !b->blk || v >= (int)b->nv)   /* (2: the full block, resident for the exact draw) */           /* (2: the full-size block, the exact draw's: its views are the dense lattice's) */
         return 0;
     xms_get(s->blk, b->index_at + 12UL * v, e, 12);
     out->w = e[0] | (e[1] << 8);
@@ -326,7 +326,7 @@ static int load_block(ShipSet __far *s, SetBlock __far *b)
     b->xoff = 0;
     if (!b->blk)
         return 0;
-    sprintf(name, "SHIP%02X.RVS", s->type);
+    sprintf(name, "SHIP%02X.RV%c", s->type, s->rvh ? 'H' : 'S');
     f = fopen(name, "rb");
     if (!f)
         return 0;
@@ -355,7 +355,8 @@ static int load_rvs(ShipSet __far *s, const char *name)
     s->nsizes = hd[6];
     s->nrolls = hd[7];
     s->roll_sizes = hd[8];
-    s->asym = hd[9];
+    s->asym = hd[9] & 1;
+    s->factor = (hd[9] & 2) ? 2 : (hd[9] & 4) ? 4 : 1;
     s->nb0 = hd[10] ? hd[10] : 5;
     s->nh0 = hd[11] ? hd[11] : 7;
     for (k = 0; k < 16; k++)
@@ -379,6 +380,7 @@ static int load_rvs(ShipSet __far *s, const char *name)
         b->at = bh[4] | ((unsigned long)bh[5] << 8) | ((unsigned long)bh[6] << 16) | ((unsigned long)bh[7] << 24);
         b->length = bh[8] | ((unsigned long)bh[9] << 8) | ((unsigned long)bh[10] << 16) | ((unsigned long)bh[11] << 24);
         b->index_at = index_len + 12;
+        b->nv = (unsigned short)(bh[2] | (bh[3] << 8));
         b->loaded = 0;
         index_len += 12 + 12UL * (bh[2] | (bh[3] << 8));
     }
@@ -435,8 +437,18 @@ int ships_load(unsigned type)
     RV_ASSERT(s != 0);
     _fmemset(s, 0, sizeof(ShipSet));
     s->type = (unsigned char)type;
-    sprintf(name, "SHIP%02X.RVS", type);
-    ok = load_rvs(s, name);
+    ok = 0;
+    if (g_res == 2) {                   /* the block mode's set, when it is there */
+        sprintf(name, "SHIP%02X.RVH", type);
+        s->rvh = 1;
+        ok = load_rvs(s, name);
+        if (!ok)
+            s->rvh = 0;
+    }
+    if (!ok) {
+        sprintf(name, "SHIP%02X.RVS", type);
+        ok = load_rvs(s, name);
+    }
     if (!ok) {
         sprintf(name, "SHIP%02X.RV", type);
         ok = load_rv(s, name);
@@ -480,7 +492,7 @@ static unsigned long load_rolls(ShipSet __far *s, int k, unsigned long room)
     span = s->block[last].at + s->block[last].length - s->block[first].at;
     if (span + 2 > room || !(blk = xms_alloc(span + 2, XMS_MISSION)))
         return 0;
-    sprintf(name, "SHIP%02X.RVS", s->type);
+    sprintf(name, "SHIP%02X.RV%c", s->type, s->rvh ? 'H' : 'S');
     if (!(f = fopen(name, "rb")))
         return 0;
     file_to_xms(f, s->block[first].at, span, blk, 0);
@@ -1092,6 +1104,29 @@ static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256,
             rv_rotate_row(g_dense, w, h, &r, oy - top, xs, xe, row);
             continue;
         }
+        if (detail >= 8) {              /* 4 x 4 blocks (the quarter-size sets: capital ships) */
+            int ry = oy - top, x4;
+            if (ry & 3) {
+                if (oy > y0 && oy - 1 >= 0)
+                    _fmemcpy(row + (ca - left), vid_row(oy - 1) + ca, cb - ca);
+                continue;
+            }
+            for (x4 = xs & ~3; x4 < xe; x4 += 4) {
+                long u = r.u00 + (long)ry * r.dru + (long)x4 * r.du, vv = r.v00 + (long)ry * r.drv + (long)x4 * r.dv;
+                long su = u >> 16, sv = vv >> 16;
+                unsigned char pix;
+                int n;
+                if (su < 0 || sv < 0 || su >= w || sv >= h)
+                    continue;
+                pix = g_dense[(unsigned)sv * w + (unsigned)su];
+                if (!pix)
+                    continue;
+                for (n = 0; n < 4; n++)
+                    if (x4 + n >= ca - left && x4 + n < cb - left)
+                        row[x4 + n] = pix;
+            }
+            continue;
+        }
         if (((oy - top) & 1) && pl < pr)   /* (a dropped row) */
             ed = rv_turn_dropped(g_dense, w, h, &r, oy - top, xs, xe, pl, pr, row, vid_row(oy - 1) + left);
         else if (detail >= 4) {
@@ -1103,6 +1138,27 @@ static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256,
         pl = (int)ed;
         pr = (int)(ed >> 16);
     }
+}
+
+static const SetBlock __far *block_of(const ShipSet __far *s, int size, int roll);
+
+/* the turned draw of ladder size k's view v (the block modes: every sprite turned from the ladder, which holds the
+ * lattice's own views; a mirrored heading is its pair's copy backwards, as for the full-size views): the dense
+ * copy keyed by size and view, kscale the kernel's scale for the view (256 = as stored) */
+static int draw_turned_at(const ShipSet __far *s, int set_i, int k, int v, int x, int y, int kscale, int roll,
+                          int detail, int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
+{
+    ShipView view;
+    const SetBlock __far *b = block_of(s, k, 0);
+    int mir, src = stored_view(s, v, &mir);
+    if (!b || !set_view(s, b, src, &view) || (unsigned long)view.w * view.h > DENSE_MAX)
+        return 0;
+    if (!dense_from(set_i, k * 1024 + v, &view, mir))
+        return 0;
+    if (mir)
+        view.ox = view.w - 1 - view.ox;
+    turn_rows(view.w, view.h, view.ox, view.oy, x, y, kscale, roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows);
+    return 1;
 }
 
 /* the turned draw of a full-size view: inverse mapping from its dense copy */
@@ -1154,6 +1210,11 @@ static int find_sprite(const ShipSet __far *s, int k, int v, int r, ShipView *ou
     int q = s->nrolls / 4, half = s->nrolls / 2, n = s->nrolls, src_v = v, src_r = r, flags = 0;
     int bottom = 1 + s->nb1 * s->nh1;
     const SetBlock __far *b;
+    if (s->factor > 1) {                /* a ladder-only set: the lattice's own views, no turns stored */
+        int mir, src = stored_view(s, v, &mir);
+        const SetBlock __far *b0 = r == 0 ? block_of(s, k, 0) : 0;
+        return b0 && set_view(s, b0, src, out) ? mir : -1;
+    }
     r %= n;
     if ((b = block_of(s, k, r)) != 0 && set_view(s, b, v, out))
         return 0;
@@ -1246,6 +1307,8 @@ int ships_turn_wanted(int set_i, int scale256)
     return turn_wanted(ships_set(set_i), scale256);
 }
 
+int g_res = 1;
+
 int ships_draw(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256,
                int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
@@ -1290,6 +1353,19 @@ int ships_draw_exact(int set_i, const LfVec *rel, const LfBasis *cam, const LfBa
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, &p);
     if (!p.on_screen || scale256 < 8)
         return 1;
+    if (s->factor > 1) {
+        /* a block mode: the ladder's smallest sprite still at least the ship's size over the factor, turned and
+         * scaled to the ship's size as 2 x 2 (4 x 4) blocks */
+        int k, want = scale256 / s->factor;
+        for (k = s->nsizes - 1; k > 0 && s->scale[k] < want; k--)
+            ;
+        if (draw_turned_at(s, set_i, k, p.view, p.sx, p.sy, (int)((long)scale256 * 256 / s->scale[k]), p.roll,
+                           s->factor == 4 ? 8 : 4, y0, y1, xa, xb, ext, ext_y0, ext_rows)) {
+            drawn(SHIP_PATH_EXACT, p.view, p.roll);
+            return 1;
+        }
+        return 0;
+    }
     if (scale256 == 256 && ((p.roll + 8) & 1023) < 16) {
         ships_blit(s, p.view, p.sx, p.sy, y0, y1, xa, xb, ext, ext_y0, ext_rows);
         drawn(SHIP_PATH_EXACT_BLIT, p.view, 0);
@@ -1417,7 +1493,7 @@ long ships_size_of(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasi
         return 0;
     v = mirrored_index(s, p->view) ? lf_pair_of(p->view, s->nb0, s->nh0) : p->view;
     RV_CHECK(v, SHIP_VIEWS);
-    return (long)s->view[v].w * s->view[v].h * scale256 / 256 * scale256 / 256;
+    return (long)s->view[v].w * s->view[v].h * scale256 / 256 * scale256 / 256 * s->factor * s->factor;
 }
 
 /* --- the kernels checked, and the paths timed --- */

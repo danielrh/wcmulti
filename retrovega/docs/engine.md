@@ -902,6 +902,44 @@ both). Test scene: `RV.EXE /sky`
 with tests/sky.txt (three Gawain views painted ahead, high left and low
 right; the player rolls, yaws, pitches).
 
+**The block mode, `RV.EXE /res 2`** (2026-10-23; the user's design after
+the pops: "reduce zoomed-in sprite size by 4x (2 in each axis) and draw
+blotches ... does that buy us enough memory to store the dense map without
+a cache and with maximal predictability?"). Two modes from the same
+10-degree views, a runtime switch, the page's `?res=2`:
+- `/res 1`, the sets as they are: SHIPnn.RVS, the hybrid above (the near
+  field turned exactly from the full-size block at 10 degrees, the mid
+  field copied from the 30-degree sub-lattice at 11.25-degree roll steps),
+  ~5.3 MB a fighter type.
+- `/res 2`, SHIPnn.RVH (`rvsprites IN OUT 0 0 0 1 2`: lattice 1 = every
+  view of the ship's lattice, factor 2 = the ladder from half size, the
+  mirrored headings not stored): the ladder only, 13 sizes of the lattice's
+  own views, **~2 MB a fighter type at 10 degrees**; no roll blocks at all.
+  Every ship is drawn exactly (`plan_draws` marks them all; `turn_wanted`
+  is true throughout, the sets having no turns): `ships_draw_exact` picks
+  the ladder's smallest sprite still at least the ship's size over the
+  factor, and `draw_turned_at` turns and scales it from a dense copy keyed
+  by size and view (`dense_from`, key size x 1024 + view) as 2 x 2 blocks
+  (detail 4: 2 x 1 blocks on the drawn rows, the rows between copied). So
+  every ship rolls continuously and the only remaining steps are the
+  lattice's 10 degrees; the ships are 320 x 200 pixels under a 640 x 400
+  cockpit, which is WC1's pixel size. Cost: ~1.3 ms a big ship, 4 ms for
+  one filling the opening (the zoom scene's frame-time line: "ships drawn
+  exactly 4.25"); the sets load in 100 ms. Capital ships take factor 4
+  (`0 0 0 1 4`, the ladder from a quarter, drawn as 4 x 4 blocks: detail
+  8, a C row kernel copying three rows of four) — the user: "it's ok if
+  they are pretty blocky way up close if it gives us space to store those
+  10 degree views"; ~2 MB a capital at 10 degrees, no turns stored. The
+  factor is in the header (byte 9, bits 1-2), `ShipSet.factor`; a set's
+  blocks hold only the lattice's own views, so `set_view` is bounded by
+  the block's view count (`SetBlock.nv`) and `find_sprite` maps a mirrored
+  heading to its pair with a mirror flag for such sets. The page makes the
+  matching sets (`makeSet(rv, 0, 0, 0, 1, 2)`, 0.3-0.7 s a type under
+  node) and passes `/res 2`; the check covers both recipes (38 sets). An
+  action sphere of two capitals and four fighter types is ~12 MB of the 62.
+  The zoom scene at 10 degrees: 110 view switches against 74 at 15, each a
+  third smaller; the next remedy is the dithered blend at a crossing.
+
 **Against WC1** (the user's recording, 2026-10-20): WC1 turned and scaled
 its sprites on the fly, continuously, which the earlier note here got
 wrong; at 320×200 and ~12 fps it had ten times our pixel-time budget per

@@ -7,7 +7,7 @@
 
 const QSIN = [0,101,201,302,402,503,603,704,804,904,1005,1105,1205,1306,1406,1506,1606,1706,1806,1906,2006,2105,2205,2305,2404,2503,2603,2702,2801,2900,2999,3098,3196,3295,3393,3492,3590,3688,3786,3883,3981,4078,4176,4273,4370,4467,4563,4660,4756,4852,4948,5044,5139,5235,5330,5425,5520,5614,5708,5803,5897,5990,6084,6177,6270,6363,6455,6547,6639,6731,6823,6914,7005,7096,7186,7276,7366,7456,7545,7635,7723,7812,7900,7988,8076,8163,8250,8337,8423,8509,8595,8680,8765,8850,8935,9019,9102,9186,9269,9352,9434,9516,9598,9679,9760,9841,9921,10001,10080,10159,10238,10316,10394,10471,10549,10625,10702,10778,10853,10928,11003,11077,11151,11224,11297,11370,11442,11514,11585,11656,11727,11797,11866,11935,12004,12072,12140,12207,12274,12340,12406,12472,12537,12601,12665,12729,12792,12854,12916,12978,13039,13100,13160,13219,13279,13337,13395,13453,13510,13567,13623,13678,13733,13788,13842,13896,13949,14001,14053,14104,14155,14206,14256,14305,14354,14402,14449,14497,14543,14589,14635,14680,14724,14768,14811,14854,14896,14937,14978,15019,15059,15098,15137,15175,15213,15250,15286,15322,15357,15392,15426,15460,15493,15525,15557,15588,15619,15649,15679,15707,15736,15763,15791,15817,15843,15868,15893,15917,15941,15964,15986,16008,16029,16049,16069,16088,16107,16125,16143,16160,16176,16192,16207,16221,16235,16248,16261,16273,16284,16295,16305,16315,16324,16332,16340,16347,16353,16359,16364,16369,16373,16376,16379,16381,16383,16384,16384];
 const NSIZES = 13, NROLLS = 32;   // (32 steps of 11.25 degrees since 2026-10-22: tools/rvsprites.c's)
-const SCALES = [256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32];
+const SCALES = [256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32, 27, 22, 19, 16, 13, 11, 9, 8];   // (a set's NSIZES sizes start step0 in)
 
 function lfSin(a) {
   a &= 1023;
@@ -198,8 +198,27 @@ function subView(j, nb, nh, asym) {
 }
 
 // the set for a .RV's bytes: a Uint8Array of the .RVS
-function makeSet(rv, firstSize, rollFrom, rollSizes) {
+// lf_pair_of: the mirrored heading's index of view v, or its own (the poles, nose on, tail on)
+function lfPairOf(v, nb, nh) {
+  const base = 2 + nb * nh;
+  if (v === 0 || v === 1 + nb * nh) return v;
+  if (v < base) {
+    const band = Math.floor((v - 1) / nh), j = (v - 1) % nh;
+    if (j === 0 || j === nh - 1) return v;
+    return base + band * (nh - 2) + (nh - 2 - j);
+  }
+  const band = Math.floor((v - base) / (nh - 2)), k = (v - base) % (nh - 2);
+  return 1 + band * nh + (nh - 2 - k);
+}
+
+// The recipe, as tools/rvsprites.c takes it: firstSize rollFrom rollSizes, then lattice (3: the sets on the
+// 30-degree sub-lattice, 62 views; 1: on every view of the ship's lattice) and factor (1: full size; 2 or 4: the
+// ladder from half or quarter size, the engine drawing the sprites that many times bigger as blocks - RV.EXE
+// /res 2's SHIPnn.RVH is `0 0 0 1 2`: the ladder only, every ship turned exactly from it)
+function makeSet(rv, firstSize, rollFrom, rollSizes, lattice, factor) {
   firstSize = firstSize || 0; rollFrom = rollFrom || 0; rollSizes = rollSizes === undefined ? 4 : rollSizes;
+  lattice = lattice || 3; factor = factor || 1;
+  const step0 = factor === 4 ? 8 : factor === 2 ? 4 : 0;
   const dv = new DataView(rv.buffer, rv.byteOffset, rv.byteLength);
   const b0 = dv.getUint32(4, true) & 0xffffff, b1 = dv.getUint32(8, true) & 0xffffff;
   if (String.fromCharCode(rv[b1], rv[b1 + 1], rv[b1 + 2], rv[b1 + 3]) !== "RVSH") throw new Error("not a ship file");
@@ -213,23 +232,34 @@ function makeSet(rv, firstSize, rollFrom, rollSizes) {
     const end = v + 1 < nv ? b0 + (dv.getUint32(b0 + 4 + 4 * (v + 1), true) & 0xffffff) : b0 + total;
     views[v] = decode(rv, off, end - off);
   }
-  // block 0 keeps the lattice's views; the sets use the 30-degree sub-lattice, mirrored headings made
+  // block 0 keeps the lattice's views; the sets use the 30-degree sub-lattice (mirrored headings made), or every
+  // view: the stored ones alone for a ladder, else with the mirrored headings made (the engine's indices for them)
   const nview0 = nviews;
   const sub = [];
-  for (let v = 0; v < 62; v++) {
-    const src = subView(v, nb, nh, asym);
-    sub[v] = typeof src === "number" ? views[src] : mirror(views[src.mirrorOf]);
+  let nsub;
+  if (lattice === 3) {
+    nsub = 62;
+    for (let v = 0; v < 62; v++) {
+      const src = subView(v, nb, nh, asym);
+      sub[v] = typeof src === "number" ? views[src] : mirror(views[src.mirrorOf]);
+    }
+  } else if (rollSizes === 0) {
+    nsub = nviews;
+    for (let v = 0; v < nsub; v++) sub[v] = views[v];
+  } else {
+    nsub = asym ? nviews : 2 + nb * nh + nb * (nh - 2);
+    for (let v = 0; v < nsub; v++) sub[v] = (v < nviews && views[v].w) ? views[v] : mirror(views[lfPairOf(v, nb, nh)]);
   }
   const blocks = [];
   for (let k = 0; k < NSIZES; k++)
     for (let r = 0; r < NROLLS; r++) {
       if (k < firstSize || (r && (k < rollFrom || k >= rollFrom + rollSizes))) continue;
-      const srcViews = (k === 0 && r === 0) ? views : sub, nv = (k === 0 && r === 0) ? nview0 : 62;
+      const srcViews = (k === 0 && r === 0) ? views : sub, nv = (k === 0 && r === 0) ? nview0 : nsub;
       const parts = [], meta = [];
       let n = 0;
       for (let v = 0; v < nv; v++) {
         if (!stored(v, r, asym)) { meta.push({ w: 0, h: 0, ox: 0, oy: 0, at: 0 }); continue; }
-        const one = render(srcViews[v], SCALES[k], r * (1024 / NROLLS));
+        const one = render(srcViews[v], SCALES[k + step0], r * (1024 / NROLLS));
         meta.push({ w: one.w, h: one.h, ox: one.ox, oy: one.oy, at: n });
         parts.push(one.data); n += one.data.length;
       }
@@ -242,10 +272,12 @@ function makeSet(rv, firstSize, rollFrom, rollSizes) {
   for (const b of blocks) total2 += b.len;
   const out = new Uint8Array(total2), o = new DataView(out.buffer);
   out.set([82, 86, 83, 80], 0);                // "RVSP"
-  out[4] = type; out[5] = nview0 & 255; out[6] = NSIZES; out[7] = NROLLS; out[8] = rollSizes; out[9] = asym;
+  out[4] = type; out[5] = nview0 & 255; out[6] = NSIZES; out[7] = NROLLS; out[8] = rollSizes;
+  out[9] = asym | (factor === 2 ? 2 : factor === 4 ? 4 : 0);
   out[10] = nb; out[11] = nh;
-  for (let k = 0; k < 16; k++) o.setUint16(12 + 2 * k, k < NSIZES ? SCALES[k] : 0, true);
-  out[44] = 5; out[45] = 7; o.setUint16(46, nview0, true);
+  for (let k = 0; k < 16; k++) o.setUint16(12 + 2 * k, k < NSIZES ? SCALES[k + step0] : 0, true);
+  if (lattice === 3) { out[44] = 5; out[45] = 7; } else { out[44] = nb; out[45] = nh; }
+  o.setUint16(46, nview0, true);
   o.setUint32(48, blocks.length, true);
   let p = 52;
   for (const b of blocks) {
