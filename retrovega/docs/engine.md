@@ -1234,8 +1234,9 @@ apart, laid over the face). Each pilot's portrait goes behind the visor,
 its eyes onto the helmet's eye points, its local contrast raised so the
 eyes survive the reduction. The aliens (data/aliens.csv, docs/people.md)
 are six helmets, three a side: the Aera's steel helms with an opaque face
-plate, a lit slit or optics for eyes and a vocoder grille that lights as
-they speak; the Rlaan's charcoal shells, smooth and fluted, clusters of
+plate, a lit slit for eyes and a vocoder grille that lights as they speak
+(the heavy pilot's a blend of the other two: the user's pick over a boxy
+one); the Rlaan's charcoal shells, smooth and fluted, clusters of
 round lenses, speech lights that pulse. Then the link's look: luminance, a
 dark ground, the range stretched, 56 x 40 kept (shown as 2 x 2 blocks: the
 user's pick of the coarse look; `--cols 112` keeps the full width), eight

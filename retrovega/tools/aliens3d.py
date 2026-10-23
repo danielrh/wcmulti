@@ -3,8 +3,8 @@
 The user's brief (2026-10-22): Rlaan and Aera pilots, heavy gear, mostly anonymous to the player, with distinct
 helmets.  Each pilot (data/aliens.csv) has a helmet of their own in their side's manner (docs/spec.md's looks):
 
-  Aera, steel and teal with glowing trim, ships named for Sparta's kings: hard angular steel helms, an opaque face
-  plate with a lit slit for eyes, a vocoder grille that lights as they speak, heavy gorgets.
+  Aera, steel and teal with glowing trim, ships named for Sparta's kings: hard steel helms, an opaque face plate
+  with a lit slit for eyes, a vocoder grille that lights as they speak, heavy gorgets.
   Rlaan, charcoal and violet, organic: smooth fluted shells like a seed or a beetle's, clusters of round lenses for
   eyes, soft ribbed tubes, the speech a row of lights that pulse.
 
@@ -144,55 +144,59 @@ class Ephor(Aera):
 
 
 class Phalanx(Aera):
-    """the heavy pilot's helm (Areus, Cleomenes): a broad rounded box under a jutting brow, a dark goggle band
-    beneath it with two round optics lit in it, a respirator snout below with its vents, a canister at each cheek,
-    a hazard stripe over the top"""
-    view = {'span': 1.66, 'look': (0.0, 0.10, 0.0)}
-    scan = 0.0
-    optics = [np.array([-0.17, 0.10]), np.array([0.17, 0.10])]
+    """the heavy pilot's helm (Areus, Cleomenes; the user's ruling, 2026-10-22: a blend of the first two, not a box):
+    the Hoplite's helm, broader, its crest raised; short swept fins at the temples (the Ephor's, cut down); the
+    Ephor's dark shield of a face, wider, its eye slit a shallow V; the Hoplite's lit grille down the shield's
+    middle; two chevrons on the brow"""
+    scan = 0.15
+    view = {'span': 1.72, 'look': (0.0, 0.14, 0.0)}
 
     def solids(self, p):
         x, y, z = p[..., 0], p[..., 1], p[..., 2]
         pm = mirror_x(p)
-        helm = rbox(p, np.array([0.0, 0.08, -0.04]), np.array([0.56, 0.56, 0.56]), 0.22)
-        brow = rbox(p, np.array([0.0, 0.25, 0.50]), np.array([0.52, 0.05, 0.14]), 0.035)
-        steel = smin(helm, brow, 0.04)
-        # the goggle band: cut across under the brow, the dark plate behind; the optics' rims in it
-        band_cut = rbox(p, np.array([0.0, 0.10, 0.62]), np.array([0.40, 0.085, 0.2]), 0.05)
-        steel = smax(steel, -band_cut, 0.01)
-        plate = rbox(p, np.array([0.0, 0.08, -0.08]), np.array([0.54, 0.54, 0.54]), 0.22)
-        rim = np.maximum(np.abs(cyl_z(pm, np.array([0.17, 0.10, 0.53]), 0.085, 0.02)) - 0.012, -(z - 0.5))
-        # the snout: a rounded block forward of the mouth, vents down its front; canisters at the cheeks
-        snout = rbox(p, np.array([0.0, -0.24, 0.52]), np.array([0.17, 0.13, 0.12]), 0.07)
-        can = cyl_z(pm, np.array([0.36, -0.26, 0.44]), 0.10, 0.11) - 0.008 * np.cos(z * 90) * (z > 0.36)
-        gorget = np.minimum(ellipsoid(p, np.array([0, -0.62, -0.06]), np.array([0.78, 0.16, 0.66])),
-                            ellipsoid(p, np.array([0, -0.80, -0.06]), np.array([0.92, 0.18, 0.74])))
-        return {'steel': smin(steel, snout, 0.05), 'plate': plate, 'trim': rim,
-                'gorget': smin(gorget, can, 0.03), 'grille': np.full(x.shape, 1e3)}
+        C, R = np.array([0.0, 0.10, -0.06]), np.array([0.55, 0.69, 0.66])
+        helm = ellipsoid(p, C, R)
+        crest = np.maximum(np.abs(x) - 0.04, ellipsoid(p, C, R + 0.08))
+        crest = np.maximum(crest, -(y - 0.16))
+        jaw = np.maximum(ellipsoid(p, np.array([0.0, -0.22, 0.05]), np.array([0.44, 0.42, 0.50])),
+                         np.abs(x) * 0.8 + (y + 0.62) * -0.62 - 0.02)
+        steel = smin(smin(helm, crest, 0.02), jaw, 0.06)
+        # the fins: short swept blades at the temples
+        u, v = pm[..., 0] - 0.40, pm[..., 1] - 0.18
+        tri = np.maximum.reduce([-u, (v - 0.80 * u) * 0.78 - 0.05, -(v - 0.45 * u) * 0.91 - 0.02, u - 0.28])
+        fin = np.maximum(tri, np.abs(pm[..., 2] + 0.05 + 0.35 * u) - 0.035)
+        steel = smin(steel, fin, 0.04)
+        # the face: a broad shield from the brow to a blunt point, set in; a brow band over it
+        shield = np.maximum.reduce([np.abs(x) - 0.31, y - 0.18, np.abs(x) * 1.0 - (y + 0.50)])
+        cut = np.maximum(shield, -(z - 0.30))
+        steel = smax(steel, -cut, 0.012)
+        brow = rbox(p, np.array([0.0, 0.23, 0.52]), np.array([0.35, 0.035, 0.12]), 0.03)
+        brow = np.maximum(brow, helm - 0.03)
+        plate = ellipsoid(p, C + np.array([0, -0.04, -0.03]), R - np.array([0.03, 0.02, 0.035]))
+        plate = smin(plate, jaw + 0.03, 0.06)
+        trim = np.maximum(np.abs(shield) - 0.012, np.abs(helm) - 0.04)
+        gorget = np.minimum(ellipsoid(p, np.array([0, -0.68, -0.08]), np.array([0.74, 0.20, 0.64])),
+                            ellipsoid(p, np.array([0, -0.88, -0.08]), np.array([0.94, 0.20, 0.72])))
+        grille = rbox(p, np.array([0.0, -0.21, 0.50]), np.array([0.05, 0.14, 0.04]), 0.02)
+        return {'steel': smin(steel, brow, 0.02), 'plate': plate, 'trim': trim, 'gorget': gorget, 'grille': grille}
 
     def albedo(self, P, mat, alb):
-        # a hazard stripe down the helm's middle; the snout's vents dark
-        x, y, z = P[:, 0], P[:, 1], P[:, 2]
-        stripe = band(x, 0.0, 0.05) * (y > 0.33) * (z > 0.0)
-        vents = sum(band(x, c, 0.012) for c in (-0.09, -0.03, 0.03, 0.09)) * band(y, -0.25, 0.08) * (z > 0.6)
-        return np.where(mat == 0, alb + 0.35 * stripe - 0.6 * alb * vents, alb)
+        x, y = P[:, 0], P[:, 1]
+        chev = (band(y - 0.38 + 0.55 * np.abs(x), 0.0, 0.018) + band(y - 0.44 + 0.55 * np.abs(x), 0.0, 0.018)) * \
+            (np.abs(x) < 0.12) * (P[:, 2] > 0.3)
+        return np.where(mat == 0, alb + 0.45 * np.clip(chev, 0, 1), alb)
 
-    def eye_glow(self, P, state):
-        e = state.get('eyes', 'open')
-        g = GLANCE.get(e, 0)
-        out = np.zeros(len(P))
-        for c in self.optics:
-            d = np.hypot(P[:, 0] - c[0], P[:, 1] - c[1])
-            iris = band(d, 0.050, 0.022 if e != 'half' else 0.010, 0.01)
-            pupil = np.exp(-((P[:, 0] - c[0] - 0.04 * g) ** 2 + (P[:, 1] - c[1] - 0.015) ** 2) / 0.02 ** 2)
-            out += (P[:, 2] > 0.4) * (d < 0.08) * EYE_LIGHT[e] * (0.8 * iris + 1.2 * pupil)
-        return out
+    def slit(self, P):
+        x, y = P[:, 0], P[:, 1]
+        return band(y - (0.01 + 0.12 * np.abs(x)), 0.0, 0.019) * (np.abs(x) < 0.25) * (P[:, 2] > 0.3)
 
     def speech(self, P, level):
-        x, y = P[:, 0], P[:, 1]
-        vents = sum(band(x, c, 0.012) for c in (-0.09, -0.03, 0.03, 0.09)) * band(y, -0.25, 0.08) * (P[:, 2] > 0.6)
-        inner = np.abs(x) < 0.06
-        return vents * {0: 0.0, 1: 0.7 * inner, 2: 1.2}[level]
+        y = P[:, 1]
+        bars = sum(band(y, c, 0.012) for c in (-0.10, -0.17, -0.24, -0.31))
+        on = bars * (np.abs(P[:, 0]) < 0.04) * (P[:, 2] > 0.45)
+        lit = {0: 0.10, 1: 0.6, 2: 1.3}[level]
+        inner = band(y, -0.205, 0.06 if level == 1 else 0.2, 0.01)
+        return on * (0.10 + (lit - 0.10) * inner)
 
 
 # --- Rlaan ---
