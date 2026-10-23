@@ -482,17 +482,17 @@ static void joystick_on(bool on) {
 // good when a reading times out (the stick taken away): a stick that comes
 // later is given to the game as its joy_init takes one at rest, with the
 // steps the game asked for when it took one (WC1 9 either way of the
-// centre, WC2 8; the dead zone 1).  (Given before the game looks, it is
-// looked for and found all the same.)
+// centre, WC2 8) and no dead zone (see joystick_tick).  (Given before the
+// game looks, it is looked for and found all the same.)
 static void arm_game_joystick() {
     if (DS == 0 || !ds::known(ds::joyStick) || rd16(ds::joyStick) != 0xFFFF) {
         return;
     }
     const int centre = 64;                        // (RANGE in src/hardware/joystick.cpp)
-    int range = (Bit16s)rd16(ds::joyRange), dead = (Bit16s)rd16(ds::joyDead);
-    if (range < 1 || range > 30 || dead < 0 || dead > range) {
+    int range = (Bit16s)rd16(ds::joyRange);
+    const int dead = 0;
+    if (range < 1 || range > 30) {
         range = is_wc2() ? 8 : 9;                 // (none taken yet: what joy_init is called with)
-        dead = 1;
     }
     const int below = centre - 10, step = below / range;
     int loops = 0x40;                             // the first of 64, 128, ... a reading at rest stays under
@@ -521,6 +521,14 @@ static void joystick_tick() {
     }
     if (g_joyOn) {
         arm_game_joystick();
+        // The game's own dead zone (joy_init's 1: a reading of one step is
+        // none) goes while the stick is ours: on top of the page's, it hid
+        // another fifth of the travel, and the first turn was step 2 of 9.
+        if (joystick_state() == 2 && ds::known(ds::joyDead) && (rd16(ds::joyDead) || rd16((Bit16u)(ds::joyDead + 2)))) {
+            wr16(ds::joyDead, 0);
+            wr16((Bit16u)(ds::joyDead + 2), 0);
+            wclog(1, "joystick: the game's dead zone taken out");
+        }
     } else if (g_joyDropping) {
         joystick_drop(false);
     }
@@ -529,6 +537,28 @@ static void joystick_tick() {
 static int joystick_state() {
     if (!g_joyOn) return 0;
     return DS != 0 && ds::known(ds::joyStick) && rd16(ds::joyStick) != 0xFFFF ? 2 : 1;
+}
+// The page's stick (-1..1 an axis, 0 x, 1 y; past the page's dead zone) as
+// the game's steps: the game reads whole steps of joyPerStep counts from
+// its centre, at most joyRange of them, so each step gets an equal share of
+// the travel, step 1 from the first movement on, and the reading is put in
+// the middle of its step (where it truncates to that step whatever the
+// rounding).  Until the game reads the stick, as it is.
+static double joystick_port_value(double v, int axis) {
+    if (joystick_state() != 2 || !ds::known(ds::joyPerStep)) {
+        return v;
+    }
+    const int range = (Bit16s)rd16((Bit16u)(ds::joyRange + 2 * axis));
+    const int centre = (Bit16s)rd16((Bit16u)(ds::joyCentre + 2 * axis));
+    const int step = (Bit16s)rd16((Bit16u)(ds::joyPerStep + (v < 0 ? 0 : 4) + 2 * axis));   // (below the centre, above)
+    if (range < 1 || range > 30 || step < 1 || centre < 1 || centre > 127) {
+        return v;
+    }
+    const double m = v < 0 ? -v : v;
+    int n = (int)ceil(m * range - 1e-6);
+    n = n < 0 ? 0 : n > range ? range : n;
+    const int count = centre + (v < 0 ? -1 : 1) * (n ? n * step + step / 2 : 0);
+    return (count - 64) / 64.0;                   // (the port counts 64 + 64 x: RANGE in src/hardware/joystick.cpp)
 }
 
 static bool enemy_ship(int slot);
@@ -1654,7 +1684,7 @@ static void web_input_tick() {
         g_webJoyMoved = true;            // (on at rest: then where the page has it)
     }
     if (g_webJoyMoved && wc::g_joyOn) {
-        wc::joystick_set(g_webJoyX, g_webJoyY, g_webJoyButtons);
+        wc::joystick_set(wc::joystick_port_value(g_webJoyX, 0), wc::joystick_port_value(g_webJoyY, 1), g_webJoyButtons);
     }
     g_webJoyMoved = false;
     if (g_webRocksWanted >= 0) {

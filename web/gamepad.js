@@ -96,10 +96,16 @@ const padOf = (choice) => (isBuiltIn(choice) ? choice.slice(BUILT_IN.length) : c
 // stick asks for: 100%, the stick being analog anyway (it was 70%, which
 // stopped at step 5 of the game's 8).  Version 2 of the saved settings:
 // a sensitivity saved by version 1 was the old default, not a choice.
+// The dead zone is 5% (it was 15%): the system has one of its own before
+// the browser sees the stick (Linux: a sixteenth of the axis for most USB
+// sticks), and the two add up.  Version 3: a dead zone of 15% saved by an
+// earlier version was the old default.
 export function defaultConfig() {
   // (pointer: the game's own crosshair stays on the screen in flight.  It
-  // is what a mouse steers by; a stick moves it too, for nothing.)
-  const cfg = { version: 2, buttons: {}, axes: {}, deadzone: 0.15, burner: 0.9, sensitivity: 1.0, pointer: false };
+  // is what a mouse steers by; a stick moves it too, for nothing.  curve:
+  // the stick's travel past the dead zone squared, half stick a quarter of
+  // the full turn: more of the travel for the slow turns.)
+  const cfg = { version: 3, buttons: {}, axes: {}, deadzone: 0.05, burner: 0.9, sensitivity: 1.0, pointer: false, curve: false };
   for (const a of ACTIONS) cfg.buttons[a.id] = a.bind ? { ...a.bind } : null;
   for (const a of AXES) cfg.axes[a.id] = { ...a.bind };
   return cfg;
@@ -108,11 +114,12 @@ function loadConfig() {
   const cfg = defaultConfig();
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
-    if (saved && (saved.version === 1 || saved.version === 2)) {
+    if (saved && saved.version >= 1 && saved.version <= 3) {
       for (const a of ACTIONS) if (a.id in (saved.buttons || {})) cfg.buttons[a.id] = saved.buttons[a.id];
       for (const a of AXES) if (saved.axes && saved.axes[a.id]) cfg.axes[a.id] = saved.axes[a.id];
       for (const k of saved.version === 1 ? ["deadzone", "burner"] : ["deadzone", "burner", "sensitivity"]) if (typeof saved[k] === "number") cfg[k] = saved[k];
-      if (typeof saved.pointer === "boolean") cfg.pointer = saved.pointer;
+      if (saved.version < 3 && saved.deadzone === 0.15) cfg.deadzone = defaultConfig().deadzone;
+      for (const k of ["pointer", "curve"]) if (typeof saved[k] === "boolean") cfg[k] = saved[k];
     }
   } catch (e) { /* defaults */ }
   return cfg;
@@ -136,13 +143,18 @@ function pads() {
 // the step nearest to it, with the pointer in the middle of that step's
 // band: a stick at rest is no turn at all in any cockpit, and the same
 // stick is the same turn in a cockpit with a large window and a small one.
+// A stick that is not at rest is step 1 at least: the dead zone before it
+// is the page's (the nearest step alone made another of half a step).
 export function stepped(v, steps, reach, edge, top) {
   const inside = steps.filter((from) => from < reach - edge).length;
   const worth = (n) => (n > inside ? top : n);     // 0: no turn, 1..inside, inside + 1: the edge
   const want = Math.abs(v) * top;
   let best = 0;
   for (let n = 1; n <= inside + 1; n++) if (Math.abs(worth(n) - want) < Math.abs(worth(best) - want)) best = n;
-  if (best === 0) return 0;
+  if (best === 0) {
+    if (v === 0) return 0;
+    best = 1;
+  }
   if (best > inside) return Math.sign(v) * reach;
   const from = steps[best - 1];
   const to = Math.min(reach - edge, best < steps.length ? steps[best] : from + 2 * (from - (steps[best - 2] || 0)));
@@ -277,6 +289,7 @@ export function initControls(host) {
       $(id + "Value").textContent = `${Math.round(cfg[key] * scale)}%`;
     }
     $("padPointer").checked = cfg.pointer;
+    $("padCurve").checked = cfg.curve;
   }
 
   $("padSelect").addEventListener("change", (e) => choose(e.target.value, "selected"));
@@ -301,14 +314,17 @@ export function initControls(host) {
     $(id).addEventListener("input", (e) => { cfg[key] = Number(e.target.value) / 100; $(id + "Value").textContent = `${e.target.value}%`; saveConfig(cfg); });
   }
   $("padPointer").addEventListener("change", (e) => { cfg.pointer = e.target.checked; saveConfig(cfg); });
+  $("padCurve").addEventListener("change", (e) => { cfg.curve = e.target.checked; saveConfig(cfg); });
   $("padReset").addEventListener("click", () => { cfg = defaultConfig(); saveConfig(cfg); capture = null; releaseAll(); render(); });
 
   // -- reading the controller ---------------------------------------------------
 
-  const shaped = (v) => {                      // dead zone, then the rest of the travel rescaled to 0..1
+  const shaped = (v) => {                      // dead zone, then the rest of the travel rescaled to 0..1 (and squared)
     const d = cfg.deadzone;
     const m = Math.abs(v);
-    return m <= d ? 0 : Math.sign(v) * (m - d) / (1 - d);
+    if (m <= d) return 0;
+    const r = Math.min(1, (m - d) / (1 - d));
+    return Math.sign(v) * (cfg.curve ? r * r : r);
   };
   const axisValue = (pad, id) => {
     const b = cfg.axes[id];

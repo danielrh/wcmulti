@@ -71,6 +71,9 @@ for (const [ship, how] of COCKPITS[game]) {
   check(`${ship}: full stick right and left are the fastest turn`, right[0] === 8 && left[0] === -8 && right[1] === 0 && left[1] === 0, [right, left]);
   const half = await held(0, 0.5), little = await held(1, 0.25);
   check(`${ship}: less stick is less turn`, half[0] >= 2 && half[0] <= 5 && little[1] <= -1 && little[1] >= -2, [half, little]);
+  // (The page's dead zone is 5%; just past it is the game's first step.)
+  const tiny = await held(0, 0.1);
+  check(`${ship}: just past the dead zone is step 1`, tiny[0] === 1 && tiny[1] === 0, tiny);
   t = await turn();
   check(`${ship}: and let go it is none again`, t[0] === 0 && t[1] === 0, t);
   // At 70% the stick stops at step 5 where the window has room for it (a
@@ -108,13 +111,16 @@ for (const [ship, how] of COCKPITS[game]) {
 // "Built in": picked before the launch, the pad is the game port's
 // joystick, which the game reads itself: steps of -9..9 in Wing Commander
 // (its joy_init(9, 9, 1, 1)), -8..8 in Wing Commander II, button 1 the guns
-// (the gun energy, dseg:BE3A and dseg:66F8).  Taken away in flight it is
-// dropped without a lurch, and given back it is the game's again.
+// (the gun energy, dseg:BE3A and dseg:66F8).  The game's own dead zone
+// (dseg:76EE, dseg:A8EC) is taken out, so a little stick is step 1, and
+// "Gentler near the centre" makes half stick a smaller step.  Taken away
+// in flight it is dropped without a lurch, and given back it is the game's
+// again.
 {
   const ship = "Built in";
-  const { steps, guns: gunsAt, how } = {
-    wc1: { steps: 9, guns: 0xBE3A, how: { "env.MIS": "0", "env.SERIES": "1", "env.WCNET_AUTOKEYS": "1", "env.WCNET_KEYSCRIPT": "0.5:!poke=00BA:00" } },
-    wc2: { steps: 8, guns: 0x66F8, how: { cmd: "loadfix -34 wc2 Origin -k l s1 m0" } },
+  const { steps, guns: gunsAt, dead, how } = {
+    wc1: { steps: 9, guns: 0xBE3A, dead: 0x76EE, how: { "env.MIS": "0", "env.SERIES": "1", "env.WCNET_AUTOKEYS": "1", "env.WCNET_KEYSCRIPT": "0.5:!poke=00BA:00" } },
+    wc2: { steps: 8, guns: 0x66F8, dead: 0xA8EC, how: { cmd: "loadfix -34 wc2 Origin -k l s1 m0" } },
   }[game];
   const context = await browser.newContext();
   await context.addInitScript(mock);
@@ -147,6 +153,14 @@ for (const [ship, how] of COCKPITS[game]) {
   const back = await held(1, 1), right = await held(0, 1), half = await held(0, 0.5);
   check(`${ship}: stick back raises the nose, right turns right, the game's full step ${steps}`, back[1] === -steps && back[0] === 0 && right[0] === steps && right[1] === 0, [back, right]);
   check(`${ship}: half stick is a smaller step`, half[0] >= 3 && half[0] <= 6, half);
+  const deadZone = await page.evaluate((at) => [window.DOSBox._wc_web_ds_byte(at), window.DOSBox._wc_web_ds_byte(at + 2)], dead);
+  const little = await held(0, 0.1);
+  check(`${ship}: the game's dead zone is out, a little stick is step 1`, deadZone[0] === 0 && deadZone[1] === 0 && little[0] === 1, [deadZone, little]);
+  const curve = (on) => page.$eval("#padCurve", (el, on) => { el.checked = on; el.dispatchEvent(new Event("change")); }, on);
+  await curve(true);
+  const gentle = await held(0, 0.5), gentleFull = await held(0, 1);
+  await curve(false);
+  check(`${ship}: gentler near the centre, half stick is less and full stick still the full step`, gentle[0] >= 1 && gentle[0] < half[0] && gentleFull[0] === steps, [gentle, half, gentleFull]);
   const guns = () => page.evaluate((at) => window.DOSBox._wc_web_ds_byte(at), gunsAt);
   const g0 = await guns();
   await button(0, 1); await page.waitForTimeout(250); const g1 = await guns(); await button(0, 0);

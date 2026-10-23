@@ -308,8 +308,9 @@
         <table id="padMap"><tbody id="padRows"></tbody></table>
         <div id="padOptions">
           <label>Stick sensitivity <input type="range" id="padSensitivity" min="30" max="100" step="5"> <span id="padSensitivityValue"></span></label>
-          <label>Dead zone <input type="range" id="padDeadzone" min="5" max="40" step="1"> <span id="padDeadzoneValue"></span></label>
+          <label title="How far the stick moves from the centre before anything happens. The system zeroes a band of its own before the browser sees the stick (on Linux about an eighth of the travel for most USB sticks; jscal sets it), and this one comes after it">Dead zone <input type="range" id="padDeadzone" min="0" max="40" step="1"> <span id="padDeadzoneValue"></span></label>
           <label>Afterburner when the trigger is past <input type="range" id="padBurner" min="50" max="100" step="5"> <span id="padBurnerValue"></span></label>
+          <label class="check" title="Half stick asks for a quarter of the full turn instead of half: more of the stick's travel for the slow turns, full stick still the fastest"><input type="checkbox" id="padCurve"> Gentler near the centre</label>
           <label class="check" title="The crosshair the game steers by with a mouse; a controller moves it too, and it is not drawn in flight unless this is ticked"><input type="checkbox" id="padPointer"> Show the game's crosshair in flight</label>
           <button type="button" class="secondary" id="padReset">Reset to the gamepad layout</button>
         </div>

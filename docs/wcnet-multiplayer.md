@@ -1031,6 +1031,28 @@ top-level README for the workflow).  What differs:
   the next.  Natively `WCJOY=1` puts the stick on from the start (with
   `[joystick] timed=false` in the configuration) and the key script has
   `!joystick=`, `!joy=` and `!joybutton=`.
+* **One dead zone, the page's.**  A stick that barely turned the ship until
+  it was far from the centre, and then spun it, was three dead zones on top
+  of each other.  The system has one before the browser sees the stick: on
+  Linux both Chrome and Firefox read the joystick device (`/dev/input/js*`),
+  which zeroes the axis's "flat" around the centre, a sixteenth of the range
+  for a USB stick the HID driver serves (about an eighth of each half;
+  `jscal -p` prints it, `jscal -s` sets it).  The page's slider came after
+  it at 15%, and then the game's: in the mouse-style mode the nearest of the
+  game's steps, half a step more before step 1; built in, the game's own
+  dead zone (`joy_init`'s 1: `seg019:0390`, a reading of one step is none),
+  a fifth of the rest, and the first turn step 2 of 9.  Now the slider
+  starts at 5% (and goes to 0; a 15% saved by an earlier version, the old
+  default, is dropped), a stick past it is step 1 at least in the
+  mouse-style mode (`stepped`), and a built-in pad's game has no dead zone
+  of its own (`joyDead` zeroed while the stick is the page's, given back
+  with none) and gets the stick in whole steps, an equal share of the
+  travel each, the reading in the middle of its step
+  (`joystick_port_value`; the key script's `!joy=` stays raw).  "Gentler
+  near the centre" squares the travel past the dead zone: half stick a
+  quarter of the full turn, full stick still the fastest.  The pad tests
+  check step 1 just past the dead zone in both modes and the curve built
+  in.
 * **No crosshair for a controller.**  In flight the games steer by their
   mouse pointer, a crosshair the cockpit code draws on every frame while
   the pointer steers (`cmp word [00C6],1` in WC.EXE's `ovr134:26FE`,
