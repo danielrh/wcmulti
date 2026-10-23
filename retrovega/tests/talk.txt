@@ -8,7 +8,7 @@ move 593 200
 wait 2
 click
 wait 12
-move 205 190
+move 231 239
 wait 6
 click
 wait 18
@@ -37,7 +37,7 @@ move 593 200
 wait 2
 click
 wait 12
-move 205 190
+move 231 239
 wait 6
 click
 wait 18

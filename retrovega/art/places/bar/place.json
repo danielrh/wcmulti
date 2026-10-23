@@ -4,43 +4,43 @@
   400
  ],
  "back": "back.png",
- "about": "The pilots' lounge and bar: Tally behind the counter, a round table with three seats, the simulator, the chalkboard.",
+ "about": "The pilots' lounge and bar: Tally behind the counter, a round table with three seats, the chalkboard, the hatch to the simulator.",
  "seats": {
   "left": {
    "FROST": {
     "talk": {
      "file": "seat-FROST-talk.png",
-     "x": 206,
-     "y": 159
+     "x": 219,
+     "y": 173
     },
     "face": {
      "file": "seat-FROST-face.png",
-     "x": 206,
-     "y": 158
+     "x": 215,
+     "y": 172
     }
    },
    "TORCH": {
     "talk": {
      "file": "seat-TORCH-talk.png",
-     "x": 200,
-     "y": 152
+     "x": 211,
+     "y": 169
     },
     "face": {
      "file": "seat-TORCH-face.png",
-     "x": 200,
-     "y": 151
+     "x": 211,
+     "y": 168
     }
    },
    "TECH": {
     "talk": {
      "file": "seat-TECH-talk.png",
-     "x": 200,
-     "y": 155
+     "x": 213,
+     "y": 170
     },
     "face": {
      "file": "seat-TECH-face.png",
-     "x": 200,
-     "y": 153
+     "x": 212,
+     "y": 169
     }
    }
   },
@@ -48,37 +48,37 @@
    "PRIME": {
     "talk": {
      "file": "seat-PRIME-talk.png",
-     "x": 264,
-     "y": 157
+     "x": 291,
+     "y": 168
     },
     "face": {
      "file": "seat-PRIME-face.png",
-     "x": 264,
-     "y": 156
+     "x": 291,
+     "y": 168
     }
    },
    "KESTREL": {
     "talk": {
      "file": "seat-KESTREL-talk.png",
-     "x": 267,
-     "y": 157
+     "x": 291,
+     "y": 168
     },
     "face": {
      "file": "seat-KESTREL-face.png",
-     "x": 268,
-     "y": 157
+     "x": 291,
+     "y": 167
     }
    },
    "ECHO": {
     "talk": {
      "file": "seat-ECHO-talk.png",
-     "x": 264,
-     "y": 153
+     "x": 290,
+     "y": 167
     },
     "face": {
      "file": "seat-ECHO-face.png",
-     "x": 260,
-     "y": 153
+     "x": 290,
+     "y": 166
     }
    }
   },
@@ -86,37 +86,37 @@
    "DRIFTER": {
     "talk": {
      "file": "seat-DRIFTER-talk.png",
-     "x": 322,
-     "y": 155
+     "x": 386,
+     "y": 171
     },
     "face": {
      "file": "seat-DRIFTER-face.png",
-     "x": 322,
-     "y": 155
+     "x": 386,
+     "y": 170
     }
    },
    "COMET": {
     "talk": {
      "file": "seat-COMET-talk.png",
-     "x": 321,
-     "y": 162
+     "x": 386,
+     "y": 175
     },
     "face": {
      "file": "seat-COMET-face.png",
-     "x": 321,
-     "y": 162
+     "x": 386,
+     "y": 174
     }
    },
    "ANCHOR": {
     "talk": {
      "file": "seat-ANCHOR-talk.png",
-     "x": 321,
-     "y": 156
+     "x": 387,
+     "y": 171
     },
     "face": {
      "file": "seat-ANCHOR-face.png",
-     "x": 321,
-     "y": 147
+     "x": 386,
+     "y": 172
     }
    }
   }
@@ -125,10 +125,10 @@
   "tally": {
    "person": "TALLY",
    "rect": [
-    46,
-    106,
-    72,
-    97
+    31,
+    109,
+    91,
+    91
    ],
    "atlas": "tally.png",
    "columns": 8,
@@ -138,9 +138,7 @@
     "p2",
     "p3",
     "p4",
-    "p5",
-    "table",
-    "p6"
+    "p5"
    ],
    "clips": {
     "idle": [
@@ -165,14 +163,6 @@
       350
      ],
      [
-      "p6",
-      350
-     ],
-     [
-      "p5",
-      350
-     ],
-     [
       "p4",
       350
      ],
@@ -187,7 +177,7 @@
     ],
     "glance": [
      [
-      "table",
+      "p5",
       1500
      ]
     ],
@@ -204,10 +194,10 @@
  "hotspots": {
   "hatch": {
    "rect": [
-    125,
-    112,
-    42,
-    81
+    132,
+    123,
+    33,
+    68
    ],
    "does": "goto:briefing",
    "label": "Briefing room"
@@ -224,10 +214,10 @@
   },
   "simulator": {
    "rect": [
-    438,
-    137,
-    188,
-    196
+    502,
+    89,
+    33,
+    146
    ],
    "does": "simulator",
    "label": "Simulator"
@@ -236,8 +226,8 @@
    "rect": [
     180,
     112,
-    103,
-    61
+    105,
+    64
    ],
    "does": "scores",
    "label": "Tally board"
@@ -245,26 +235,20 @@
  },
  "boards": {
   "chalkboard": [
-   187,
-   117,
-   90,
-   50
-  ],
-  "simulator_screen": [
-   495,
-   138,
-   78,
-   46
+   186,
+   118,
+   92,
+   51
   ]
  },
  "zoom": {
   "chalkboard": {
    "file": "zoom-chalkboard.png",
    "board": [
-    64,
-    56,
-    511,
-    282
+    73,
+    60,
+    491,
+    271
    ]
   }
  }

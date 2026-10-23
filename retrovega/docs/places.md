@@ -43,6 +43,31 @@ plate: it measures the low-frequency colour difference around what
 changed and adds it back. The cut-outs then sit on the plate without a
 seam, and with hard alpha, as the engine draws them.
 
+**Shots that are not edits of the plate.** The barracks shots of
+2026-10-23 (`src/barracks`) redrew the table group: two trios sit at a
+table larger, wider and lower than the plate's, and their chairs stand
+elsewhere. `tools/fitshots.py lounge` makes them edits of the plate first,
+as `src/barracks/fitted/` (data/places.json `lounge.fit`):
+
+- **Fit:** it finds the plate table's front corners and feet (`marks`) in
+  each shot by normalised cross-correlation, and fits the shot's x and y
+  scale and shift through them. The two trios came out at 1.185 x 1.09 and
+  1.277 x 1.18; the third is the plate's own table. Fitting x and y apart
+  makes those pilots about 8% narrower, which keeps the table exact.
+- **Colour:** it matches the shot to the plate in the shot's own frame,
+  where the room still lines up, then warps it onto the plate's table.
+- **Paste:** it pastes the shot's table group, from a matting model's mask
+  (rembg's isnet-general-use, run with onnxruntime; cached in
+  `src/barracks/masks/`), over the plate. The plate keeps its own table
+  front and legs and the chair across the table (`keep`), and the shot's
+  own chair across the table is left out wherever it landed.
+- **The side chairs:** under each pilot, the plate's empty side chairs are
+  painted out (`chairs`, filled along the floor's rows), so a seated pilot
+  brings their own chair. An empty seat shows the plate's chair.
+
+The bar's shots of the same day are true edits of their plate, so they
+need none of this.
+
 ### Seats (bar and lounge)
 
 Each table has three seats. Each seat has the pilots drawn sitting there,
@@ -79,9 +104,11 @@ pixels.
 
 Tally's frames:
 
-- `p1`..`p6`: polishing, looped back and forth at 350 ms.
-- `table`: a glance at the table, now and then.
-- `face`: looking at the player, shown when the mouse is over him.
+- `p1`..`p5`: polishing a glass, looped back and forth at 350 ms, in the
+  order that changes least from one frame to the next.
+- `p5` again for his glance, now and then: his head turns a little
+  towards the table.
+- `face`: smiling at the player, shown when the mouse is over him.
 
 ### The speaker (the XO at the briefing)
 
@@ -115,7 +142,7 @@ rectangles.
 
 | room | hotspots |
 |---|---|
-| bar | simulator, chalkboard (the tally board up close), hatch (exit) |
+| bar | simulator (the hatch in the right wall), chalkboard (the tally board up close), hatch (to the briefing), the floor (to the lounge) |
 | lounge | hatch (exit), bunks (to the quarters) |
 | quarters | bunk (save and load), locker, desk (log), door (exit) |
 | locker | medals, letters, photos, helmet (kills), back (exit) |
@@ -123,7 +150,7 @@ rectangles.
 
 **Boards** are rectangles the engine writes or draws on:
 
-- **bar:** the chalkboard and the simulator's screen. From across the
+- **bar:** the chalkboard. From across the
   room the board shows only chalk scribbles (a heading, the top four's
   names, their tally marks), since printed text looked out of place on it;
   a click shows it **up close** (`zoom` in data/places.json: a 16:10 crop
@@ -285,8 +312,11 @@ amber hangar light from above. No fighter, no people, no shadow, no text.
   colours.
 - **The debriefing room:** no art yet (prompt in
   [location-prompts.md](location-prompts.md)).
-- **Unused shots,** kept in the sources: the bar with an enclosed
-  simulator capsule (bar 009), and two wider views of the bunk room
-  (dorm 006 and 007).
+- **Retired sources:** the first bar, bunk room and cabin (`src/bar`,
+  `src/dorm`), replaced on 2026-10-23 by `src/bar-v2`, `src/barracks`
+  and `src/quarters`. The players found them glossy, "almost oily", with
+  details that did not match. In `src/bar-v2`, "Pilots converse in a
+  starship bar" and "Three Pilots Face the Player" are earlier takes of
+  the trio-two shots and give only Tally's frames.
 - **Ambient gossip:** the seated pilots trading lines in subtitles, each
   turning to whoever speaks.

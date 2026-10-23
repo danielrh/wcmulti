@@ -1,8 +1,8 @@
 {
   "bar": {
-    "about": "The pilots' lounge and bar: Tally behind the counter, a round table with three seats, the simulator, the chalkboard.",
-    "src": "art/places/src/bar",
-    "background": "chat-image-002.png",
+    "about": "The pilots' lounge and bar: Tally behind the counter, a round table with three seats, the chalkboard, the hatch to the simulator.",
+    "src": "art/places/src/bar-v2",
+    "background": "naval-lounge-empty.png",
     "crop": [
       0,
       32,
@@ -10,60 +10,60 @@
       992
     ],
     "table": [
-      460,
-      360,
-      1120,
-      1024
+      470,
+      280,
+      1210,
+      920
     ],
     "seats": {
       "left": {
-        "x": 570,
+        "x": 603,
         "pilots": {
           "FROST": {
-            "talk": "chat-image-003.png",
-            "face": "frost-prime-drifter-face.png"
+            "talk": "Pilots confer in a retro space bar.png",
+            "face": "Three pilots meet your gaze.png"
           },
           "TORCH": {
-            "talk": "chat-image-004.png",
-            "face": "chat-image-005.png"
+            "talk": "trio-two-conversation.png",
+            "face": "trio-two-hover.png"
           },
           "TECH": {
-            "talk": "chat-image-006.png",
-            "face": "chat-image-007.png"
+            "talk": "Pilots' conversation in the starship lounge.png",
+            "face": "Friendly Smiles Across the Space Bar.png"
           }
         }
       },
       "middle": {
-        "x": 740,
+        "x": 810,
         "pilots": {
           "PRIME": {
-            "talk": "chat-image-003.png",
-            "face": "frost-prime-drifter-face.png"
+            "talk": "Pilots confer in a retro space bar.png",
+            "face": "Three pilots meet your gaze.png"
           },
           "KESTREL": {
-            "talk": "chat-image-004.png",
-            "face": "chat-image-005.png"
+            "talk": "trio-two-conversation.png",
+            "face": "trio-two-hover.png"
           },
           "ECHO": {
-            "talk": "chat-image-006.png",
-            "face": "chat-image-007.png"
+            "talk": "Pilots' conversation in the starship lounge.png",
+            "face": "Friendly Smiles Across the Space Bar.png"
           }
         }
       },
       "right": {
-        "x": 915,
+        "x": 1050,
         "pilots": {
           "DRIFTER": {
-            "talk": "chat-image-003.png",
-            "face": "frost-prime-drifter-face.png"
+            "talk": "Pilots confer in a retro space bar.png",
+            "face": "Three pilots meet your gaze.png"
           },
           "COMET": {
-            "talk": "chat-image-004.png",
-            "face": "chat-image-005.png"
+            "talk": "trio-two-conversation.png",
+            "face": "trio-two-hover.png"
           },
           "ANCHOR": {
-            "talk": "chat-image-006.png",
-            "face": "chat-image-007.png"
+            "talk": "Pilots' conversation in the starship lounge.png",
+            "face": "Friendly Smiles Across the Space Bar.png"
           }
         }
       }
@@ -72,20 +72,18 @@
       "tally": {
         "person": "TALLY",
         "search": [
-          0,
-          150,
-          450,
-          640
+          40,
+          250,
+          400,
+          500
         ],
         "frames": {
-          "face": "chat-image-001.png",
-          "p1": "chat-image-002.png",
-          "p2": "chat-image-003.png",
-          "p3": "chat-image-004.png",
-          "p4": "chat-image-005.png",
-          "p5": "chat-image-006.png",
-          "table": "chat-image-007.png",
-          "p6": "frost-prime-drifter-face.png"
+          "face": "Friendly Smiles Across the Space Bar.png",
+          "p1": "Pilots confer in a retro space bar.png",
+          "p2": "Pilots converse in a starship bar.png",
+          "p3": "Three Pilots Face the Player.png",
+          "p4": "Three pilots meet your gaze.png",
+          "p5": "Pilots' conversation in the starship lounge.png"
         },
         "clips": {
           "idle": [
@@ -110,14 +108,6 @@
               350
             ],
             [
-              "p6",
-              350
-            ],
-            [
-              "p5",
-              350
-            ],
-            [
               "p4",
               350
             ],
@@ -132,7 +122,7 @@
           ],
           "glance": [
             [
-              "table",
+              "p5",
               1500
             ]
           ],
@@ -149,10 +139,10 @@
     "hotspots": {
       "hatch": {
         "rect": [
-          300,
-          300,
-          400,
-          495
+          318,
+          328,
+          398,
+          492
         ],
         "does": "goto:briefing",
         "label": "Briefing room"
@@ -169,20 +159,20 @@
       },
       "simulator": {
         "rect": [
-          1050,
-          360,
-          1500,
-          830
+          1205,
+          245,
+          1285,
+          595
         ],
         "does": "simulator",
         "label": "Simulator"
       },
       "chalkboard": {
         "rect": [
-          433,
+          432,
           300,
-          680,
-          447
+          683,
+          454
         ],
         "does": "scores",
         "label": "Tally board"
@@ -190,31 +180,25 @@
     },
     "zoom": {
       "chalkboard": [
-        421,
-        288,
-        693,
-        458
+        413,
+        287,
+        701,
+        467
       ]
     },
     "boards": {
       "chalkboard": [
-        448,
-        312,
-        665,
-        432
-      ],
-      "simulator_screen": [
-        1187,
-        363,
-        1373,
-        473
+        446,
+        314,
+        667,
+        436
       ]
     }
   },
   "lounge": {
-    "about": "The crew lounge in the pilots' quarters: a table under a desk lamp, bunks on both sides, lockers at the back.",
-    "src": "art/places/src/dorm",
-    "background": "chat-image-005.png",
+    "about": "The crew lounge in the pilots' quarters: a table under a pendant lamp, bunks on both sides, lockers and the hatch at the back.",
+    "src": "art/places/src/barracks",
+    "background": "Symmetrical sci-fi bunk room.png",
     "crop": [
       0,
       32,
@@ -223,59 +207,59 @@
     ],
     "table": [
       380,
-      300,
-      1260,
+      330,
+      1200,
       1000
     ],
     "seats": {
       "left": {
-        "x": 540,
+        "x": 545,
         "pilots": {
           "KESTREL": {
-            "talk": "chat-image-009.png",
-            "face": "chat-image-001.png"
+            "talk": "fitted/Three crew converse around the barracks table-2.png",
+            "face": "fitted/Three Crew Members Meet Your Gaze-5.png"
           },
           "COMET": {
-            "talk": "chat-image-008.png",
-            "face": "chat-image-002.png"
+            "talk": "fitted/Three Crew at the Barracks Table-1.png",
+            "face": "fitted/Three crew members meet your gaze-4.png"
           },
           "TECH": {
-            "talk": "chat-image-003.png",
-            "face": "chat-image-004.png"
+            "talk": "fitted/Three Crew Members Chat in the Barracks-3.png",
+            "face": "fitted/Three crew members face the player-6.png"
           }
         }
       },
       "middle": {
-        "x": 745,
+        "x": 775,
         "pilots": {
           "ECHO": {
-            "talk": "chat-image-009.png",
-            "face": "chat-image-001.png"
+            "talk": "fitted/Three crew converse around the barracks table-2.png",
+            "face": "fitted/Three Crew Members Meet Your Gaze-5.png"
           },
           "TORCH": {
-            "talk": "chat-image-008.png",
-            "face": "chat-image-002.png"
+            "talk": "fitted/Three Crew at the Barracks Table-1.png",
+            "face": "fitted/Three crew members meet your gaze-4.png"
           },
           "DRIFTER": {
-            "talk": "chat-image-003.png",
-            "face": "chat-image-004.png"
+            "talk": "fitted/Three Crew Members Chat in the Barracks-3.png",
+            "face": "fitted/Three crew members face the player-6.png"
           }
         }
       },
       "right": {
-        "x": 1065,
+        "x": 1005,
         "pilots": {
           "ANCHOR": {
-            "talk": "chat-image-009.png",
-            "face": "chat-image-001.png"
+            "talk": "fitted/Three crew converse around the barracks table-2.png",
+            "face": "fitted/Three Crew Members Meet Your Gaze-5.png"
           },
           "FROST": {
-            "talk": "chat-image-008.png",
-            "face": "chat-image-002.png"
+            "talk": "fitted/Three Crew at the Barracks Table-1.png",
+            "face": "fitted/Three crew members meet your gaze-4.png"
           },
           "PRIME": {
-            "talk": "chat-image-003.png",
-            "face": "chat-image-004.png"
+            "talk": "fitted/Three Crew Members Chat in the Barracks-3.png",
+            "face": "fitted/Three crew members face the player-6.png"
           }
         }
       }
@@ -283,10 +267,10 @@
     "hotspots": {
       "hatch": {
         "rect": [
-          980,
-          320,
-          1093,
-          560
+          958,
+          318,
+          1102,
+          580
         ],
         "does": "goto:bar",
         "label": "Bar"
@@ -294,19 +278,115 @@
       "bunks": {
         "rect": [
           0,
-          150,
-          380,
-          750
+          60,
+          405,
+          800
         ],
         "does": "goto:quarters",
         "label": "Your quarters"
       }
+    },
+    "fit": {
+      "shots": [
+        "Three Crew at the Barracks Table-1.png",
+        "Three crew converse around the barracks table-2.png",
+        "Three Crew Members Chat in the Barracks-3.png",
+        "Three crew members meet your gaze-4.png",
+        "Three Crew Members Meet Your Gaze-5.png",
+        "Three crew members face the player-6.png"
+      ],
+      "segment": [
+        150,
+        300,
+        1450,
+        1024
+      ],
+      "marks": {
+        "face-left": [
+          520,
+          636,
+          600,
+          700,
+          538,
+          671
+        ],
+        "face-right": [
+          950,
+          636,
+          1030,
+          700,
+          1012,
+          671
+        ],
+        "foot-left": [
+          535,
+          860,
+          605,
+          912,
+          552,
+          901
+        ],
+        "foot-right": [
+          950,
+          860,
+          1012,
+          912,
+          998,
+          901
+        ]
+      },
+      "keep": [
+        [
+          534,
+          642,
+          1016,
+          686
+        ],
+        [
+          540,
+          672,
+          590,
+          912
+        ],
+        [
+          960,
+          672,
+          1000,
+          912
+        ],
+        [
+          652,
+          650,
+          898,
+          972
+        ]
+      ],
+      "chairs": [
+        [
+          458,
+          552,
+          662,
+          852
+        ],
+        [
+          893,
+          552,
+          1107,
+          858
+        ]
+      ],
+      "across": [
+        652,
+        650,
+        898,
+        972
+      ]
     }
   },
   "quarters": {
     "about": "The player's own cabin: the bunk (save and load), the desk, the locker (personal belongings), the door.",
-    "src": "art/places/src/dorm",
-    "background": "chat-image-010.png",
+    "src": "art/places/src/quarters",
+    "background": "cabin.png",
     "crop": [
       0,
       32,
@@ -317,36 +397,36 @@
       "bunk": {
         "rect": [
           80,
-          230,
+          205,
           490,
-          860
+          870
         ],
         "does": "bunk",
         "label": "Bunk: save or load"
       },
       "locker": {
         "rect": [
-          1007,
+          1005,
           140,
-          1247,
-          840
+          1250,
+          845
         ],
         "does": "goto:locker",
         "label": "Locker"
       },
       "desk": {
         "rect": [
-          520,
-          373,
-          960,
-          800
+          515,
+          365,
+          965,
+          840
         ],
         "does": "log",
         "label": "Campaign log"
       },
       "door": {
         "rect": [
-          1313,
+          1320,
           0,
           1536,
           1024

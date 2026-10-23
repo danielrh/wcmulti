@@ -9,38 +9,42 @@
   "bunk": {
    "rect": [
     33,
-    82,
+    72,
     171,
-    262
+    277
    ],
-   "does": "save"
+   "does": "bunk",
+   "label": "Bunk: save or load"
   },
   "locker": {
    "rect": [
-    420,
+    419,
     45,
-    100,
-    292
+    102,
+    294
    ],
-   "does": "locker"
+   "does": "goto:locker",
+   "label": "Locker"
   },
   "desk": {
    "rect": [
-    217,
-    142,
-    183,
-    178
+    215,
+    139,
+    188,
+    198
    ],
-   "does": "log"
+   "does": "log",
+   "label": "Campaign log"
   },
   "door": {
    "rect": [
-    547,
+    550,
     -13,
-    93,
+    90,
     427
    ],
-   "does": "exit"
+   "does": "goto:lounge",
+   "label": "Crew lounge"
   }
  },
  "boards": {}

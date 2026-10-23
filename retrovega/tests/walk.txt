@@ -25,7 +25,7 @@ wait 2
 click
 wait 12
 shot S04LOUNG
-move 205 190
+move 231 239
 wait 14
 shot S05TURN
 click
