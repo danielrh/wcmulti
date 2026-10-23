@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """The music, one General MIDI loop per cue (CC0, ours).
 
-    midi.py [--out build/dos]     BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID LOUNGE.MID
+    midi.py [--out build/dos]     BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID LOUNGE.MID,
+                                  and the flight's (tools/flightsongs.py): CRUISE1..6 RETURN1..2 BATTLE1..4
+                                  PANIC1..3 VICTORY1..3 TRAGEDY
 
 Each is a loop in a type 1 Standard MIDI File: a tempo track, then a track
 per instrument.  The four room songs are written out in tools/songs.py for
@@ -139,8 +141,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'build', 'dos'))
     args = ap.parse_args()
-    import songs                        # (it imports this module: not at the top)
+    import songs                        # (they import this module: not at the top)
+    import flightsongs
     SONGS.update(songs.SONGS)
+    SONGS.update(flightsongs.SONGS)
     os.makedirs(args.out, exist_ok=True)
     for name, make in SONGS.items():
         make().write(os.path.join(args.out, name))

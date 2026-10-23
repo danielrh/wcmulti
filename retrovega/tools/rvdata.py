@@ -45,7 +45,13 @@ ROOMS = ['bar', 'lounge']
 SEAT_NAMES = ['left', 'middle', 'right']
 FIXED_PLACES = {'TECH': 'the deck', 'TALLY': 'the bar', 'XO': 'the briefing room'}
 TYPES = {'patrol': 0}
+# the music's cues, in their files' order: the rooms' songs (tools/songs.py, tools/midi.py), then the flight's
+# (tools/flightsongs.py; src/score.c picks them), the stings last (played once: music_sting)
+MUSIC_FILES = ['BRIEF', 'BAR', 'LAUNCH', 'WIN', 'LOSE', 'QUARTERS', 'LOUNGE', 'CRUISE1', 'CRUISE2', 'CRUISE3',
+               'CRUISE4', 'CRUISE5', 'CRUISE6', 'RETURN1', 'RETURN2', 'BATTLE1', 'BATTLE2', 'BATTLE3', 'BATTLE4',
+               'PANIC1', 'PANIC2', 'PANIC3', 'VICTORY1', 'VICTORY2', 'VICTORY3', 'TRAGEDY']
 MUSIC = {'briefing': 0, 'bar': 1, 'launch': 2, 'win': 3, 'lose': 4, 'quarters': 5, 'lounge': 6}
+MUSIC.update({f.lower(): i for i, f in enumerate(MUSIC_FILES) if i >= len(MUSIC)})
 ROLES = {'pilot': 0, 'hero': 1, 'barman': 2, 'xo': 3, 'tech': 4}
 
 # record layouts: (C type, field, struct format)
@@ -392,6 +398,9 @@ def header_text(sizes):
         out.append('#define RV_FIELD_%s %d' % (k.upper(), v))
     for k, v in MUSIC.items():
         out.append('#define RV_MUSIC_%s %d' % (k.upper(), v))
+    out.append('#define RV_MUSIC_COUNT %d' % len(MUSIC_FILES))
+    out.append('#define RV_MUSIC_STINGS %d     /* from here on the cues are played once */' % MUSIC_FILES.index('VICTORY1'))
+    out.append('#define RV_MUSIC_FILES %s' % ', '.join('"%s.MID"' % f for f in MUSIC_FILES))
     for k, v in ROLES.items():
         out.append('#define RV_ROLE_%s %d' % (k.upper(), v))
     out.append('#define RV_SHIPTYPE_FLAG_PLAYER %d' % SHIPTYPE_FLAG_PLAYER)

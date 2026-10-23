@@ -32,6 +32,7 @@
 #include "missiles.h"
 #include "sky.h"
 #include "collide.h"
+#include "score.h"
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
@@ -2503,6 +2504,7 @@ void __far __cdecl flight_startup(void)
     flames_init();                      /* (its colours from that palette) */
     comms_flight_start();
     systems_start();
+    score_start();                      /* (the first calm song: the deck's launch music gives way) */
     g_hailed = 0;
     missiles_init();
     sky_clear();
@@ -2679,6 +2681,7 @@ void __far __cdecl flight_frame(void)
 void __far __cdecl flight_music(void)
 {
     music_poll();
+    score_tick(g_landing != 0);
 }
 
 void __far __cdecl flight_autopilot(void)

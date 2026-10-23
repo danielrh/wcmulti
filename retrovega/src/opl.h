@@ -43,6 +43,7 @@ void opl_init(void);                /* OPL3 mode, every voice quiet */
 void opl_event(unsigned char st, unsigned char d1, unsigned char d2);  /* a MIDI channel message */
 void opl_fade(int level);           /* the master fade, 0..1024 */
 void opl_silence(void);             /* every voice off at once; controllers back to their defaults */
+void opl_uncache(void);             /* every voice's patch written again at its next note (a log begun late) */
 void opl_tick(void);                /* the music clock (240 Hz): ages the voices */
 extern unsigned long opl_steals;    /* notes that took a sounding voice */
 extern int opl_peak;                /* the most voices sounding at once */

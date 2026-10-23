@@ -14,7 +14,13 @@
  * fade_ms, waiting first for the next beat or bar if asked (music_cue_at),
  * then silences every channel, starts the cue's song and fades it in over
  * half that: 150-300 ms gives the quick cuts between rooms.  The engine
- * keeps playing through every load: it is resident. */
+ * keeps playing through every load: it is resident.
+ *
+ * A sting (the flight's victories and its tragedy, RV_MUSIC_STINGS on) is
+ * played once over whatever plays: music_sting cuts the song short, notes
+ * where it was, plays the sting and then goes on with the song from there,
+ * its channels' programs, volumes, pans and expressions as they stood
+ * played first (the chase).  The cues' files are rvdata.h's RV_MUSIC_FILES. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +35,7 @@
 #define TICK_HZ 240U
 #define PIT_HZ 1193182UL
 #define DIVISOR ((unsigned)(PIT_HZ / TICK_HZ))
-#define MAX_SONGS 8
+#define MAX_SONGS RV_MUSIC_COUNT
 #define MPU_DATA 0x330
 #define MPU_STAT 0x331
 #define OPL_PORT 0x388
@@ -64,9 +70,15 @@ static Ring g_ring[2];
 static volatile int g_play, g_next_ring;
 static volatile unsigned long g_starved;
 
-static const char *g_files[] = { "BRIEF.MID", "BAR.MID", "LAUNCH.MID", "WIN.MID", "LOSE.MID", "QUARTERS.MID",
-                                  "LOUNGE.MID" };
-static Song g_song[MAX_SONGS];
+static const char __far g_files[MAX_SONGS][13] = { RV_MUSIC_FILES };
+static Song __far g_song[MAX_SONGS];    /* (far, all of it: DGROUP is full) */
+static volatile unsigned __far g_loops;         /* times the playing song came round (music_loops) */
+static volatile unsigned char __far g_sting_over;   /* a sting played to its end: music_poll goes back */
+static int __far g_back = -1;           /* the song a sting cut short, */
+static unsigned __far g_back_at;        /* ... the event it was at */
+static unsigned long __far g_start_ticks;   /* where in its bar the next song starts (a chase's) */
+static int __far g_last = -2;           /* the last cue asked for: asked again, it is left alone */
+static void cue_song(int song, int fade_ms, int at, unsigned from);
 static int g_dev, g_want = MUSIC_AUTO;
 
 /* the interrupt's state */
@@ -87,7 +99,7 @@ static int g_installed;
  * music clock's tick, u32, and the byte) or every OPL3 register written
  * (OPLLOG.BIN: the tick, the register u16, the value), little-endian.  The
  * interrupt puts them in a ring; music_poll writes them out. */
-#define REC_MAX 4096U
+#define REC_MAX 1024U                   /* (7 KB: written out every frame, some 14 entries a frame) */
 static unsigned long __far *g_rec_tick;
 static unsigned short __far *g_rec_reg;
 static unsigned char __far *g_rec_val;
@@ -97,14 +109,39 @@ static int g_recording;
 static FILE *g_rec_file;
 static volatile unsigned long g_clock;
 
+static unsigned char __far g_want_rec;
+static void record(unsigned reg, unsigned char val);
+
 void music_record(int on)
 {
-    if (on && !g_rec_tick) {
-        g_rec_tick = (unsigned long __far *)_fmalloc(REC_MAX * 4UL);
-        g_rec_reg = (unsigned short __far *)_fmalloc(REC_MAX * 2UL);
-        g_rec_val = (unsigned char __far *)_fmalloc(REC_MAX);
+    g_want_rec = (unsigned char)on;
+}
+
+/* the log begins at the first music_poll, once the game runs: its buffers taken at start-up from the far heap
+ * left the fonts no room (the heap grew round them), and upper memory is the ships' dense buffers' to the byte.
+ * So the chip's set-up is written into it first, as opl_init wrote it, and every voice's patch again at its
+ * next note. */
+static void record_start(void)
+{
+    g_want_rec = 0;
+    g_rec_tick = (unsigned long __far *)_fmalloc(REC_MAX * 4UL);
+    g_rec_reg = (unsigned short __far *)_fmalloc(REC_MAX * 2UL);
+    g_rec_val = (unsigned char __far *)_fmalloc(REC_MAX);
+    if (!g_rec_tick || !g_rec_reg || !g_rec_val
+        || !(g_rec_file = fopen(g_dev == DEV_OPL3 ? "OPLLOG.BIN" : "MIDILOG.BIN", "wb"))) {
+        rv_log("music: no room for the log");
+        return;
     }
-    g_recording = on && g_rec_tick && g_rec_reg && g_rec_val;
+    _disable();
+    g_recording = 1;
+    if (g_dev == DEV_OPL3) {
+        record(0x105, 1);
+        record(0x104, 0);
+        record(0x001, 0x20);
+        record(0x0BD, 0);
+        opl_uncache();
+    }
+    _enable();
 }
 
 static void record(unsigned reg, unsigned char val)
@@ -123,7 +160,7 @@ static void record(unsigned reg, unsigned char val)
 /* tops up a ring from its song in XMS, round to the start again at the end */
 static void fill(Ring *r)
 {
-    const Song *s;
+    const Song __far *s;
     if (r->song < 0)
         return;
     s = &g_song[r->song];
@@ -141,6 +178,17 @@ static void fill(Ring *r)
 
 void music_poll(void)
 {
+    if (g_want_rec && g_dev != DEV_NONE)
+        record_start();
+    if (g_sting_over) {
+        g_sting_over = 0;
+        if (g_back >= 0 && g_next == -1) {      /* the sting over: the song it cut short goes on */
+            int back = g_back;
+            g_back = -1;
+            g_last = back;
+            cue_song(back, 600, MUSIC_NOW, g_back_at);
+        }
+    }
     if (g_dev != DEV_NONE) {
         fill(&g_ring[g_play]);
         if (g_next != -1)
@@ -276,7 +324,8 @@ static void start(int song, int ring)
     silence();
     g_cur = song;
     g_play = ring;
-    g_song_ticks = 0;
+    g_song_ticks = g_start_ticks;
+    g_loops = 0;
     g_have_pend = 0;
 }
 
@@ -329,7 +378,7 @@ static void __interrupt __far isr(void)
             g_step *= 2;                        /* in over half the time it took to go */
         }
         if (g_cur >= 0) {
-            const Song *s = &g_song[g_cur];
+            const Song __far *s = &g_song[g_cur];
             int beat_due = 0;
             g_song_ticks++;
             if (g_wait && g_next != -1) {
@@ -358,8 +407,15 @@ static void __interrupt __far isr(void)
                 }
                 g_have_pend = 0;
                 play(&g_pend);
-                if (g_pend.flags & EV_LAST)
+                if (g_pend.flags & EV_LAST) {
                     g_song_ticks = 0;           /* round again */
+                    g_loops++;
+                    if (g_cur >= RV_MUSIC_STINGS) {
+                        g_cur = -1;             /* a sting: once, then quiet until music_poll goes back */
+                        g_sting_over = 1;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -569,10 +625,6 @@ int music_init(void)
         g_dev = mpu_init() ? DEV_MPU : DEV_NONE;
         rv_log("music: MPU-401 %s", g_dev ? "in UART mode" : "not answering (silent)");
     }
-    if (g_recording) {
-        g_rec_file = fopen(g_dev == DEV_OPL3 ? "OPLLOG.BIN" : "MIDILOG.BIN", "wb");
-        g_recording = g_rec_file != 0;
-    }
     for (i = 0; i < 2; i++) {
         g_ring[i].ev = (Ev __far *)_fmalloc(sizeof(Ev) * RING);
         g_ring[i].song = -1;
@@ -582,15 +634,20 @@ int music_init(void)
         }
     }
     g_chunk = (Ev __far *)_fmalloc(sizeof(Ev) * CHUNK_EV);    /* only while reading */
-    for (i = 0; g_chunk && i < (int)RV_COUNT(g_files) && i < MAX_SONGS; i++)
-        if (load_song(g_files[i], &g_song[i])) {
+    for (i = 0; g_chunk && i < MAX_SONGS; i++) {
+        char name[13];
+        Song song;
+        _fstrcpy(name, g_files[i]);
+        if (load_song(name, &song)) {
+            _fmemcpy(&g_song[i], &song, sizeof song);
             loaded++;
-            rv_log("music: %s, %u events, beat %u ticks, %u to the bar", g_files[i], g_song[i].n, g_song[i].beat,
-                   g_song[i].beats_bar);
+            rv_log("music: %s, %u events, beat %u ticks, %u to the bar", name, song.n, song.beat, song.beats_bar);
         }
+    }
     if (g_chunk)
         _ffree(g_chunk);
     g_chunk = 0;
+    _fheapshrink();                     /* (the tracks read are given back to DOS: the far heap grew for them) */
     g_old8 = _dos_getvect(8);
     atexit(music_shutdown);             /* a stop (rv_fail) gives the timer back too */
     g_installed = 1;
@@ -633,34 +690,136 @@ void music_shutdown(void)
     }
 }
 
-void music_cue_at(int cue, int fade_ms, int at)
+static int playable(int cue)
 {
-    static int last = -2;
-    int song = cue >= 0 && cue < MAX_SONGS && g_song[cue].n && g_dev != DEV_NONE ? cue : -1;
+    return cue >= 0 && cue < MAX_SONGS && g_song[cue].n && g_dev != DEV_NONE ? cue : -1;
+}
+
+/* the channels' programs, volumes, pans and expressions as they stood before event `upto` of the song, put in
+ * the ring to be played at once (the chase); returns the music ticks into its bar at that event */
+static unsigned long chase(Ring *r, int song, unsigned upto)
+{
+    static const unsigned char cc[3] = { 7, 10, 11 };
+    const Song __far *s = &g_song[song];
+    unsigned long ticks = 0, bar = (unsigned long)s->beat * s->beats_bar;
+    unsigned char st[16][4];            /* the program, then controllers 7, 10, 11; 0xFF: never set */
+    Ev buf[32];
+    unsigned i, n, k, ch;
+    memset(st, 0xFF, sizeof st);
+    for (i = 0; i < upto; i += n) {
+        n = upto - i < 32 ? upto - i : 32;
+        xms_get(s->x, (unsigned long)i * sizeof(Ev), (void __far *)buf, (unsigned long)n * sizeof(Ev));
+        for (k = 0; k < n; k++) {
+            const Ev *e = &buf[k];
+            ch = e->status & 15;
+            ticks += e->delta;
+            if ((e->status & 0xF0) == 0xC0)
+                st[ch][0] = e->d1;
+            else if ((e->status & 0xF0) == 0xB0 && (e->d1 == 7 || e->d1 == 10 || e->d1 == 11))
+                st[ch][e->d1 == 7 ? 1 : e->d1 == 10 ? 2 : 3] = e->d2;
+        }
+    }
+    for (ch = 0; ch < 16; ch++)
+        for (k = 0; k < 4; k++)
+            if (st[ch][k] != 0xFF) {
+                Ev __far *e = &r->ev[r->wr % RING];
+                e->delta = 0;
+                e->flags = 0;
+                e->status = (unsigned char)((k ? 0xB0 : 0xC0) | ch);
+                e->d1 = k ? cc[k - 1] : st[ch][0];
+                e->d2 = k ? st[ch][k] : 0;
+                r->wr++;
+            }
+    return bar ? ticks % bar : 0;
+}
+
+/* the song (or none) into the waiting ring, from event `from` (its channels chased there), and the switch to it
+ * once the playing one has faded out */
+static void cue_song(int song, int fade_ms, int at, unsigned from)
+{
     int step = fade_ms > 0 ? (int)(1024L * 1000 / ((long)fade_ms * TICK_HZ)) : 1024;
-    if (cue == last)
-        return;
-    last = cue;
-    rv_log("music: cue %d (%s), fade %d ms%s", cue, song >= 0 ? g_files[cue] : "none", fade_ms,
-           at == MUSIC_BAR ? " on the bar" : at == MUSIC_BEAT ? " on the beat" : "");
+    unsigned long ticks = 0;
     _disable();
     g_next = -1;                        /* no switch to a ring while it is filled */
     _enable();
-    if (song >= 0 && g_dev != DEV_NONE) {
+    if (song >= 0) {
         Ring *r = &g_ring[1 - g_play];
+        unsigned first;
         r->song = song;
-        r->src = 0;
         r->rd = r->wr = 0;
+        if (from)
+            ticks = chase(r, song, from);
+        first = r->wr;
+        r->src = from;
         fill(r);
+        if (from && r->wr != first)
+            r->ev[first % RING].delta = 0;      /* (where it was cut: at once) */
     }
     _disable();
     g_step = step < 1 ? 1 : step;
     g_next_ring = 1 - g_play;
     g_next = song;
+    g_start_ticks = ticks;
     g_wait = g_cur >= 0 ? at : 0;
+    if (g_cur < 0)
+        g_level = 0;                    /* (nothing sounding: no fade out to wait for) */
     if (!g_wait)
         g_target = 0;
     _enable();
+}
+
+void music_cue_at(int cue, int fade_ms, int at)
+{
+    int song = playable(cue);
+    char name[13];
+    if (cue == g_last)
+        return;
+    g_last = cue;
+    if (song >= 0)
+        _fstrcpy(name, g_files[cue]);
+    if (song >= 0 && song < RV_MUSIC_STINGS && g_cur >= RV_MUSIC_STINGS && g_next == -1) {
+        g_back = song;                  /* a sting playing: the new song after it, from its start */
+        g_back_at = 0;
+        rv_log("music: cue %d (%s) after the sting", cue, name);
+        return;
+    }
+    g_back = -1;
+    rv_log("music: cue %d (%s), fade %d ms%s", cue, song >= 0 ? name : "none", fade_ms,
+           at == MUSIC_BAR ? " on the bar" : at == MUSIC_BEAT ? " on the beat" : "");
+    cue_song(song, fade_ms, at, 0);
+}
+
+void music_sting(int cue)
+{
+    int song = playable(cue);
+    char name[13];
+    if (song < 0)
+        return;
+    _disable();
+    if (g_next >= 0 && g_next < RV_MUSIC_STINGS) {         /* (a switch under way: then the song coming) */
+        g_back = g_next;
+        g_back_at = 0;
+    } else if (g_cur >= 0 && g_cur < RV_MUSIC_STINGS) {    /* (a sting over a sting: the first one's song) */
+        const Ring *r = &g_ring[g_play];
+        long n = g_song[g_cur].n, at = (long)r->src - (long)(unsigned)(r->wr - r->rd) - (g_have_pend ? 1 : 0);
+        g_back = g_cur;
+        g_back_at = (unsigned)(((at % n) + n) % n);
+    }
+    _enable();
+    _fstrcpy(name, g_files[cue]);
+    rv_log("music: sting %d (%s), then cue %d from event %u", cue, name, g_back, g_back_at);
+    g_last = cue;
+    cue_song(song, 40, MUSIC_NOW, 0);
+}
+
+unsigned music_loops(void)
+{
+    return g_loops;
+}
+
+int music_playing(void)
+{
+    return g_cur;
 }
 
 void music_cue(int cue, int fade_ms) { music_cue_at(cue, fade_ms, MUSIC_NOW); }

@@ -332,6 +332,13 @@ void opl_fade(int level_)
             level(v);
 }
 
+void opl_uncache(void)
+{
+    int v;
+    for (v = 0; v < VOICES; v++)
+        g_v[v].cached = 0;
+}
+
 void opl_silence(void)
 {
     int v;

@@ -10,5 +10,8 @@ void music_record(int on);              /* tests: OPLLOG.BIN or MIDILOG.BIN, eve
 void music_poll(void);                  /* the main loop's: writes out what was recorded */
 void music_cue(int cue, int fade_ms);   /* fade the current song out over fade_ms, then the cue's in */
 void music_cue_at(int cue, int fade_ms, int at);   /* ... starting the fade on the next beat or bar */
+void music_sting(int cue);              /* a sting, once: then the song it cut short goes on from there */
+unsigned music_loops(void);             /* times the playing song has come round since it began */
+int music_playing(void);                /* the cue sounding now (-1 none; a sting) */
 unsigned long clock240(void);          /* the music clock: 240 ticks a second */
 #endif

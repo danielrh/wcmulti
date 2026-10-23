@@ -166,6 +166,21 @@ patch('trumpet', [layer(op(1, 20, 9, 2, 2, 6), op(1, 0, 9, 0, 0, 6, vib=1), fb=6
 patch('muted trumpet', [layer(op(2, 30, 9, 3, 4, 6), op(1, 2, 9, 0, 0, 6, vib=1), fb=4, vsense=10)], programs=[59])
 patch('synth lead', [layer(op(1, 24, 13, 2, 2, 6), op(1, 0, 13, 0, 0, 6, vib=1), fb=5, vsense=8)],
       programs=list(range(80, 87)))
+# For the flight's music (tools/flightsongs.py, 2026-10-23): a plucked saw for the
+# arpeggios (full feedback, its brightness falling with the note: half a second
+# heard, so a run of sixteenths keeps to a few voices), a deep sub bass (nearly a
+# sine), a glassy bell (3:1, short enough for arpeggios too), the soft lead on a
+# program of its own, and a noise swell that rises while held (the turns, the
+# panic's breath).
+patch('saw pluck', [layer(op(1, 22, 15, 6, 10, 7, egt=0), op(1, 0, 15, 6, 15, 6, egt=0, ksr=1), fb=6, vsense=12)],
+      programs=[81])
+patch('short pluck', [layer(op(1, 20, 15, 7, 10, 8, egt=0), op(1, 0, 15, 7, 15, 7, egt=0, ksr=1), fb=6, vsense=10)],
+      programs=[84])
+patch('sub bass', [layer(op(1, 44, 15, 3, 6, 8), op(1, 0, 15, 1, 1, 8), fb=1, vsense=8)], programs=[39])
+patch('glass bell', [layer(op(3, 36, 15, 5, 15, 5, egt=0), op(1, 2, 15, 5, 15, 5, egt=0, ksr=1), fb=1, vsense=20)],
+      programs=[98])
+PROGRAMS[85] = 'soft lead'
+patch('noise swell', [layer(op(15, 0, 15, 0, 0, 6), op(5, 8, 2, 0, 0, 5), fb=7)], programs=[119])
 patch('timpani', [layer(op(1, 34, 15, 6, 15, 6, egt=0), op(1, 0, 15, 3, 15, 4, egt=0), fb=2, vsense=12)],
       programs=[47, 115, 116, 117, 118, 119])
 for fam in (range(109, 112),):
