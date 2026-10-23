@@ -132,7 +132,10 @@ Tally's frames:
 
 When the briefing ends, the crowd goes from seated (the plate) to halfway
 to standing, 350 ms a step. Each stage is what changed from the reference
-shot, drawn over the XO.
+shot, drawn over the XO. As they rise, the big screen switches off: the
+mission map goes, and the plate's screen is dimmed to a quarter under the
+pilots, who now stand in front of it (the user's call, 2026-10-23; the map
+had been drawn over their heads).
 
 ### Hotspots and boards
 

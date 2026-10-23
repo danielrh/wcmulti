@@ -23,7 +23,10 @@ frame the tool finds the scale and shift that best fit it onto the base
 (edges of the whole bust, coarse to fine), then cuts the two boxes.  Each
 box frame is the base with the edit blended in towards the middle, so its
 border matches the base exactly and no seam shows when the engine pastes
-it.
+it.  The mouth box is only the lips and what moves with them, centred on
+the row the mouth frames change most and blended in through an ellipse:
+every frame redraws the chin, neck and collar a little, and patched in
+whole they made the XO's neck swell and shrink as she talked.
 
 For each character OUT/KEY/ holds, at --size:
 
@@ -302,25 +305,33 @@ def boxes(base, frames, covers, sigma):
     ye = (yl + yr) / 2.0
     eye = [xl - 0.62 * d, ye - 0.42 * d, xr + 0.62 * d, ye + 0.30 * d]
     d_m = np.max(d_ms, 0) if d_ms else np.zeros((h, w))
-    xc = (xl + xr) / 2.0
-    zone = np.zeros((h, w), bool)
-    zone[int(ye + 0.75 * d):int(ye + 2.3 * d), int(xc - 0.9 * d):int(xc + 0.9 * d)] = True
-    floor = np.percentile(d_m[zone], 50) if zone.any() else 0
-    hot = (d_m > max(floor * 3, 0.12)) & zone
-    if hot.sum() > 50:
-        ys, xs = np.nonzero(hot)
-        ym = float(np.percentile(ys, 50))
-        top = min(np.percentile(ys, 2), ym - 0.30 * d)
-        bot = max(np.percentile(ys, 99), ym + 0.40 * d)
-        left = min(np.percentile(xs, 1), xc - 0.55 * d)
-        right = max(np.percentile(xs, 99), xc + 0.55 * d)
-    else:
-        ym = ye + 1.25 * d
-        top, bot, left, right = ym - 0.32 * d, ym + 0.48 * d, xc - 0.6 * d, xc + 0.6 * d
-    pad = 0.10 * d
-    mouth = [left - pad, max(top - pad, eye[3] + 2), right + pad, bot + pad]
+    mouth = lips_box(d_m, (xl + xr) / 2.0, ye, d)
+    mouth[1] = max(mouth[1], eye[3] + 2)
     return [int(round(v)) for v in eye], [int(round(v)) for v in mouth], dict(
         eyes=[[xl, yl], [xr, yr]], span=d)
+
+
+def lips_box(d_m, xc, ye, d):
+    """The mouth patch (x0, y0, x1, y1): about the lips, the row between the
+    nose and the chin where the mouth frames change most (d_m), sized in eye
+    spans (d), so the chin and the neck stay the base's."""
+    y0, y1 = int(ye + 0.8 * d), int(min(d_m.shape[0], ye + 1.6 * d))
+    prof = d_m[y0:y1, int(xc - 0.5 * d):int(xc + 0.5 * d)].sum(1)
+    if prof.size and prof.max() > 0:
+        ym = y0 + float(np.argmax(ndimage.gaussian_filter1d(prof, 0.05 * d)))
+    else:
+        ym = ye + 1.2 * d
+    return [xc - MOUTH_W * d, ym - MOUTH_UP * d, xc + MOUTH_W * d, ym + MOUTH_DOWN * d]
+
+
+def oval(shape, box, soft=0.35):
+    """1 in the middle of box, falling to 0 at the ellipse inscribed in it
+    over the outer soft part of its radius."""
+    h, w = shape
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    x0, y0, x1, y1 = box
+    r = np.hypot((xx - (x0 + x1 - 1) / 2.0) / ((x1 - x0) / 2.0), (yy - (y0 + y1 - 1) / 2.0) / ((y1 - y0) / 2.0))
+    return np.clip((1 - r) / soft, 0, 1)
 
 
 def window(shape, box, feather):
@@ -332,8 +343,9 @@ def window(shape, box, feather):
     return np.clip(dist / feather, 0, 1)
 
 
-def blend_in(base, edit, box, sigma, cover=None):
-    """The edit inside box, blended to the base at its edges, tone-matched to it."""
+def blend_in(base, edit, box, sigma, cover=None, round_=False):
+    """The edit inside box, blended to the base at its edges (round_: at the
+    ellipse inscribed in it), tone-matched to it."""
     x0, y0, x1, y1 = box
     d = change(base, edit, sigma, cover)
     moved = ndimage.binary_dilation(d > 0.10, iterations=int(sigma * 2) + 1)
@@ -347,7 +359,7 @@ def blend_in(base, edit, box, sigma, cover=None):
     toned = edit.copy()
     toned[..., :3] = np.clip(edit[..., :3] + num / den, 0, 1)
     m = np.clip(ndimage.gaussian_filter(moved.astype(np.float32), sigma) * 1.6, 0, 1)
-    m *= window(base.shape[:2], box, max(4.0, 0.18 * min(x1 - x0, y1 - y0)))
+    m *= oval(base.shape[:2], box) if round_ else window(base.shape[:2], box, max(4.0, 0.18 * min(x1 - x0, y1 - y0)))
     out = base * (1 - m[..., None]) + toned * m[..., None]
     return out[y0:y1, x0:x1]
 
@@ -356,6 +368,8 @@ def blend_in(base, edit, box, sigma, cover=None):
 
 EYE_SPAN = 0.16     # the eyes' distance apart, as a fraction of the output width
 EYE_Y = 0.44        # their height, as a fraction of the output height
+# the mouth patch about the lips, in eye spans: half its width, above, below
+MOUTH_W, MOUTH_UP, MOUTH_DOWN = 0.62, 0.34, 0.42
 
 
 def read_manifest(path):
@@ -441,7 +455,9 @@ def build(key, entry, person, src, out, gifs, size, log=print):
         ye = (eyes[0][1] + eyes[1][1]) / 2.0
         xc = (eyes[0][0] + eyes[1][0]) / 2.0
         eye_box = [int(eyes[0][0] - 0.62 * d), int(ye - 0.42 * d), int(eyes[1][0] + 0.62 * d), int(ye + 0.30 * d)]
-        mouth_box = [int(xc - 0.7 * d), int(ye + 0.85 * d), int(xc + 0.7 * d), int(ye + 1.85 * d)]
+        d_ms = [change(base, frames[n], sigma, covers[n]) for n in frames if n.startswith('mouth_')]
+        d_m = np.max(d_ms, 0) if d_ms else np.zeros(base.shape[:2])
+        mouth_box = [int(round(v)) for v in lips_box(d_m, xc, ye, d)]
         geo = dict(eyes=[list(eyes[0]), list(eyes[1])], span=float(d), guessed=True)
     if 'olive' in entry['fix']:
         chin = np.mean([e[1] for e in geo['eyes']]) + 1.45 * geo['span']
@@ -459,7 +475,7 @@ def build(key, entry, person, src, out, gifs, size, log=print):
         box = mouth_box if name.startswith('mouth_') else eye_box
         x0, y0, x1, y1 = box
         f = base.copy()
-        f[y0:y1, x0:x1] = blend_in(base, frames[k], box, sigma, covers[k])
+        f[y0:y1, x0:x1] = blend_in(base, frames[k], box, sigma, covers[k], round_=name.startswith('mouth_'))
         full[name] = f
     dest = os.path.join(out, key)
     os.makedirs(dest, exist_ok=True)

@@ -37,8 +37,10 @@ wait 8
 shot B06BRIEF
 key esc
 wait 3
+shot B06RISE
 key esc
 wait 3
+shot B06STAND
 key esc
 wait 14
 move 478 176

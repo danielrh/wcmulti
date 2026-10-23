@@ -557,10 +557,23 @@ static void situation_display(int y0, int y1)
 #undef MAPR
 }
 
+/* the briefing over, the screen is switched off: dimmed under the pilots
+ * as they rise, who stand in front of it (the user's call, 2026-10-23) */
+static void screen_off(int y0, int y1)
+{
+    const RvRoom __far *r = dat_room(RV_R_BRIEFING);
+    int i;
+    for (i = 0; i < 4; i++)
+        if (r->board[i].kind == 2 && r->board[i].w)
+            gfx_mix_to_black(r->board[i].x, r->board[i].y, r->board[i].w, r->board[i].h, y0, y1);
+}
+
 static void xo_underlay(int y0, int y1)
 {
     const RvSpeaker __far *s = &dat_room(RV_R_BRIEFING)->speaker;
     int mouth = s->mouth_of_viseme[mouth_now()];
+    if (g_mode == MODE_BRIEF && g_stage > 0)
+        screen_off(y0, y1);
     gfx_sprite(s->cell0 + g_gesture * s->nmouths + mouth, 0, 0, y0, y1);
     if (g_stage > 0 && s->stage[g_stage - 1] != 0xFFFF)
         gfx_sprite(s->stage[g_stage - 1], 0, 0, y0, y1);
@@ -571,7 +584,7 @@ static void brief_overlay(int y0, int y1)
     static char shown[RV_BRIEFING];
     char head[80];
     int n = _fstrlen(g_said), k = speech_done() ? n : (int)((long)n * speaking_step() / (g_nlip ? g_nlip : 1));
-    if (g_mode == MODE_BRIEF)
+    if (g_mode == MODE_BRIEF && g_stage == 0)
         situation_display(y0, y1);
     sprintf(head, "%s  //  %.40Fs", g_mode == MODE_BRIEF ? "BRIEFING" : g_won ? "DEBRIEF: WON" : "DEBRIEF: LOST",
             (char __far *)g_m.title);
@@ -1065,7 +1078,7 @@ int game_run(void)
                     if (g_mode == MODE_BRIEF && g_stage < 2) {
                         g_stage++;
                         g_stage_at = g_now + 7;
-                        vid_dirty(100, SCR_H);
+                        vid_dirty(g_stage == 1 ? 0 : 100, SCR_H);   /* the first: the screen goes off too */
                     } else {
                         int brief = g_mode == MODE_BRIEF;
                         g_stage_at = 0;

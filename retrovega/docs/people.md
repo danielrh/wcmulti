@@ -114,11 +114,16 @@ git) and `art/people/manifest.csv` says which file is which frame.
    Each frame is scaled and shifted onto the base by matching the edges of
    the whole bust, coarse to fine.
 2. **Boxes.** The eye box comes from where the blink frames differ from the
-   base (the two eye centres also set the framing). The mouth box covers
-   what the mouth frames change, below the eyes.
+   base (the two eye centres also set the framing). The mouth box is only
+   the lips and what moves with them. It is centred on the row between the
+   nose and the chin where the mouth frames change most, 1.24 eye spans
+   wide and 0.76 tall. Every frame also redraws the chin, neck and collar a
+   little. While the box took all of that in, the XO's neck swelled and
+   shrank as she talked (the user, 2026-10-23), and the others' less so.
 3. **Blend.** Each box frame is the base with the edit blended in towards
    the middle, tone-matched to the base, so its border is the base's own
-   pixels and no seam shows when the engine pastes it.
+   pixels and no seam shows when the engine pastes it. The mouth blends in
+   through the ellipse inside its box.
 4. **Frame.** Everyone is scaled and placed the same way: the eyes 16% of
    the width apart, at 44% of the height.
 5. **Fixes.** `olive` recolours a slate-blue hero suit and its gold patch
