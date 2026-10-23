@@ -7,12 +7,15 @@
  * on four sides), speed and fuel, the radar's contacts, the MFDs, the
  * throttle slid by the set speed, the joystick at one of nine places, and
  * the damage overlays whose bits are set, each with its control when it is
- * attached to one.  cockpit_dirty marks the rows a frame changes: the
+ * attached to one; the panel's lamps, knobs, needles and readouts (panel.c)
+ * over the instruments.  cockpit_dirty marks the rows a frame changes: the
  * opening and the radar always, the rest only when their values moved. */
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#include "rvhooks.h"
 #include "cockpit.h"
+#include "panel.h"
 
 static RvCockpit __far *g_cp;
 static short __far *g_ext;
@@ -20,6 +23,7 @@ static int g_ext_y0, g_ext_rows;
 static CockpitState g_last;
 static int g_last_valid;
 static int g_cockpit_index = -1;
+static unsigned char __far g_last_page;   /* the survival display's page last drawn */
 
 #define THROTTLE_TRAVEL 14              /* pixels the throttle slides over the speed range */
 #define STICK_DX 4
@@ -53,6 +57,7 @@ int cockpit_load(int ship_type)
             dat_read(ex->at, g_ext, ex->size);
             g_cockpit_index = (int)i;   /* (the palette goes in with cockpit_palette, once the flight's loading is done) */
             g_last_valid = 0;
+            panel_load(g_cp);
             rv_log("cockpit: %.8Fs for ship type %d, rows %d-%d open, %d damage layers", (char __far *)c->key,
                    ship_type, c->open_y0, c->open_y1, c->nlayers);
             return 1;
@@ -70,6 +75,7 @@ void cockpit_palette(void)
 
 void cockpit_unload(void)
 {
+    panel_unload();
     if (g_cp) _ffree(g_cp);
     if (g_ext) _ffree(g_ext);
     g_cp = 0;
@@ -108,20 +114,21 @@ void cockpit_dirty(const CockpitState *st)
         return;
     vid_dirty(c->open_y0, c->open_y1);
     vid_dirty(c->radar_y - c->radar_r, c->radar_y + c->radar_r + 1);
+    panel_dirty(st);
     if (!g_last_valid) {
         vid_dirty(0, SCR_H);
         g_last = *st;
         g_last_valid = 1;
         return;
     }
-    if (st->shield_f != g_last.shield_f || st->shield_r != g_last.shield_r || memcmp(st->armor, g_last.armor, sizeof st->armor))
+    if (st->shield_f != g_last.shield_f || st->shield_r != g_last.shield_r || memcmp(st->armor, g_last.armor, sizeof st->armor)
+        || g_sys.surv_page != g_last_page || (g_sys.surv_page && (frameCounter & 15) == 0))
         dirty_rect(&c->survival);
+    g_last_page = g_sys.surv_page;
     if (st->speed != g_last.speed || st->set_speed != g_last.set_speed)
         dirty_rect(&c->speed);
     if (st->fuel != g_last.fuel)
         dirty_rect(&c->fuel);
-    if (st->lock != g_last.lock) dirty_rect(&c->lamp_lock);
-    if (st->warn != g_last.warn) dirty_rect(&c->lamp_warn);
     for (i = 0; i < 2; i++) {
         int k, diff = 0;
         for (k = 0; k < 4; k++)
@@ -164,6 +171,24 @@ static void survival(const RvRect __far *r, const CockpitState *st, int y0, int 
     int pct[4];
     if (!r->w || y1 <= r->y || y0 >= r->y + r->h)
         return;
+    if (g_sys.surv_page) {              /* (its other pages: the hull and how many systems are damaged; the nav) */
+        char a[16], b[16];
+        unsigned long d = st->damage;
+        int n = 0, h = gfx_font_height(FONT_BODY);
+        for (; d; d >>= 1)
+            n += (int)(d & 1);
+        if (g_sys.surv_page == 1) {
+            sprintf(a, "HULL %d%%", g_sys.hull);
+            sprintf(b, "DMG %d", n);
+        } else {
+            sprintf(a, "NAV %d", g_sys.nav + 1);
+            if (g_sys.nav_km < 0) strcpy(b, "-");
+            else sprintf(b, "%ldK", g_sys.nav_km / 1000);
+        }
+        gfx_text(FONT_BODY, r->x + 2, r->y + (r->h - 2 * h) / 2, a, RV_TEXT_AMBER, y0, y1);
+        gfx_text(FONT_BODY, r->x + 2, r->y + (r->h - 2 * h) / 2 + h, b, RV_TEXT_AMBER, y0, y1);
+        return;
+    }
     /* the hull */
     gfx_frame(cx - hw / 2, cy - hh / 2, hw, hh, UI_GREY4, y0, y1);
     /* armour: front and rear bars, left and right bars, shortened as they wear */
@@ -243,7 +268,7 @@ static void speed_fuel(const RvCockpit __far *c, const CockpitState *st, int y0,
         }
     }
     r = &c->fuel;
-    if (r->w && y1 > r->y && y0 < r->y + r->h) {
+    if (r->w >= 12 && y1 > r->y && y0 < r->y + r->h) {   /* (a lamp-sized one is the panel's fuel lamp) */
         if (r->h >= gfx_font_height(FONT_BODY)) {
             sprintf(s, "%d%%", st->fuel);
             gfx_text(FONT_BODY, r->x + 2, r->y + (r->h - gfx_font_height(FONT_BODY)) / 2, s, RV_TEXT_AMBER, y0, y1);
@@ -251,12 +276,6 @@ static void speed_fuel(const RvCockpit __far *c, const CockpitState *st, int y0,
             bar(r, st->fuel, y0, y1);
         }
     }
-}
-
-static void lamp(const RvRect __far *r, int on, int y0, int y1)
-{
-    if (r->w && on)
-        gfx_fill(r->x, r->y, r->w, r->h, UI_RED, y0, y1);
 }
 
 static void damage_layers(const RvCockpit __far *c, const CockpitState *st, int attach, int dx, int dy, int y0, int y1)
@@ -287,8 +306,7 @@ void cockpit_draw(int y0, int y1, const CockpitState *st, void (*world)(int y0, 
     radar(c, st, y0, y1);
     mfd(&c->mfd[0], 0, st, y0, y1);
     mfd(&c->mfd[1], 1, st, y0, y1);
-    lamp(&c->lamp_lock, st->lock, y0, y1);
-    lamp(&c->lamp_warn, st->warn, y0, y1);
+    panel_draw(st, y0, y1);             /* (the lamps, the dials, the readouts: panel.c) */
     damage_layers(c, st, 0, 0, 0, y0, y1);
     tdy = throttle_dy(st);
     gfx_sprite(c->throttle.sprite, 0, tdy, y0, y1);

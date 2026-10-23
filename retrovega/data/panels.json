@@ -1,92 +1,12 @@
 {
- "_": "Every cockpit control (the user, 2026-10-22: every dial, button and light has to do something, or is blanked): per ship, [label, kind, function, rect x y w h]; functions[fn] = [what it does, status]. Draft for review.",
+ "_": "Every cockpit control made to work (the user, 2026-10-22: every dial, button and light does something, or is blanked; the power-distribution knobs repainted as a radio's frequency dials). functions[fn] = [what it does, status]; cockpits[KEY] = {displays: glass rects (tools/panels.py's lamp search leaves them alone), relabel: [{erase: [x0, y0, x1, y1], labels: [text, cx, cy, px, slant]}], controls: [{fn, kind (lamp, knob, arcs, needle, ticks, bar, text, cabin), arg, at [x, y] + r or rect [x, y, w, h], ...}]}: tools/panels.py makes their states",
  "functions": {
-  "mfd": [
-   "MFD: comm faces, the target view; the page its bezel buttons choose",
-   "works"
-  ],
-  "mfd_pages": [
-   "MFD bezel buttons: choose the page (left: weapons, damage, nav map, comm log; right: target, contacts, emissions); the chosen page's button lit",
-   "new"
-  ],
-  "radar": [
-   "radar scope: contacts round the nose; what it can see follows EMCON, the sensor mode and IFF; its range the range knob",
-   "works"
-  ],
-  "radar_range": [
-   "radar range knob: 4,000 / 8,000 / 16,000 km",
-   "new"
-  ],
-  "survival": [
-   "survival display: shields and armour",
-   "works"
-  ],
-  "surv_pages": [
-   "buttons by the survival display: what it shows (shields + armour, hull + systems, power split)",
-   "new"
-  ],
-  "speed": [
-   "speed readout (digital)",
-   "works"
-  ],
-  "speed_dial": [
-   "analog speed dial: a needle at the speed (one short line, redrawn only when the speed changes); else blanked",
-   "new"
-  ],
-  "clock_dial": [
-   "two-hand dial: the mission clock",
-   "new"
-  ],
-  "fuel": [
-   "fuel readout: afterburner fuel, spent while burning (now a stand-in timer)",
-   "works"
-  ],
-  "fuel_bar": [
-   "fuel bar: afterburner fuel",
-   "new"
-  ],
-  "shield_bar": [
-   "shield bar: front and rear shields",
-   "new"
-  ],
-  "armor_bar": [
-   "armour bar: the weakest side",
-   "new"
-  ],
-  "hull_bar": [
-   "hull bar: hull points left",
-   "new"
-  ],
-  "power_bar": [
-   "power bar: the reactor's load (the power split's draw)",
-   "new"
-  ],
-  "engine_bar": [
-   "engine bar: thrust, speed against the most the power split allows",
-   "new"
-  ],
-  "heat": [
-   "heat: engine + afterburner + guns, less cooling; what an IR seeker locks on",
-   "new"
-  ],
-  "signature": [
-   "signature: how far off the enemy can find and lock you (EMCON, sensor mode, heat, speed)",
-   "new"
-  ],
-  "target_id": [
-   "target ID: the target's type and range",
-   "new"
-  ],
-  "aux_nav": [
-   "spare display: the nav point and its distance",
-   "new"
-  ],
   "lock": [
-   "LOCK lamp: a missile lock on the target (lock rules follow EMCON, sensor mode, IFF; until missiles exist: the target held in the gunsight)",
+   "LOCK lamp: a missile lock on the target (until missiles exist: the target held in the gunsight; the lock rules follow EMCON, the sensor mode and IFF)",
    "new"
   ],
   "warn": [
-   "MASTER WARN lamp: a damaged system, shields under 25%, a missile inbound; blinks",
+   "MASTER WARN: a damaged system or shields under 25%; blinks",
    "new"
   ],
   "ab_lamp": [
@@ -94,390 +14,225 @@
    "new"
   ],
   "nav_lamp": [
-   "NAV lamp: nav computer on; blinks while autopilot is available",
+   "NAV lamp: the nav computer on; blinks while the autopilot is available",
    "new"
   ],
   "com_lamp": [
-   "COM lamp: a transmission coming in (lit while a comm shows); dark when comms are muted",
+   "COM lamp: a transmission coming in (lit while a comm shows)",
+   "new"
+  ],
+  "com_on": [
+   "COM-on lamp: comms not muted",
    "new"
   ],
   "iff_lamp": [
    "IFF lamp: the IFF on",
-   "new"
+   "flag"
   ],
   "em_lamp": [
-   "E/M lamp: the radar emitting (EMCON ACTIVE)",
+   "E/M or RADAR lamp: the radar emitting (EMCON ACTIVE)",
    "new"
   ],
-  "emcon_lamps": [
-   "EMCON OFF / PASSIVE / ACTIVE lamps: the switch's position",
-   "new"
+  "emcon_lamp": [
+   "EMCON lamps: arg 0 OFF, 1 PASSIVE, 2 ACTIVE (the switch's position), 3 STEALTH (anything but ACTIVE)",
+   "flag"
   ],
-  "sensor_lamps": [
-   "sensor mode lamps: the radar ACTIVE (radar locks) or PASSIVE (IR locks only, scope shows only hot or emitting ships)",
-   "new"
+  "sensor_lamp": [
+   "sensor mode lamps: arg 0 radar (NORMAL / ACTIVE: radar-guided, friend-or-foe locks), 1 infrared (PASSIVE: IR locks on hot targets only)",
+   "flag"
   ],
   "target_lamp": [
    "TARGET lamp: a target chosen",
    "new"
   ],
-  "status_lamps": [
-   "status lamps (shields, armour, hull, fuel, power, engine): lit when that system is low or damaged",
+  "status_lamp": [
+   "status lamps, lit when that system is low or damaged: arg 0 shields, 1 armour, 2 hull, 3 fuel, 4 power plant, 5 engine",
    "new"
   ],
-  "throttle_ticks": [
-   "throttle ticks: lit up to the throttle's setting",
+  "mfd_lamp": [
+   "MFD bezel lamps: lit while that MFD works (arg 0 left, 1 right); dark when it is damaged",
+   "new"
+  ],
+  "surv_page": [
+   "survival display buttons: lit on the page shown (arg: 0 shields + armour, 1 hull + systems, 2 nav)",
+   "new"
+  ],
+  "radio_chan": [
+   "radio channel lamps / buttons: lit on the channel tuned (arg 0 WING, 1 CARRIER, 2 GUARD)",
+   "new"
+  ],
+  "arm_lamp": [
+   "master arm lamp: the guns armed (safe on the deck)",
+   "flag"
+  ],
+  "auto_lamp": [
+   "AUTO lamps: arg 0 autopilot available, 1 match the target's speed, 2 keep the nearest enemy targeted, 3 decoys dropped on a missile lock",
+   "flag"
+  ],
+  "defence": [
+   "DEFENCE lamp: decoys left",
+   "flag"
+  ],
+  "sig_ladder": [
+   "a column of lamps: the signature (arg: the lamp, 0 the bottom; lit while the signature is above it)",
+   "new"
+  ],
+  "range_ladder": [
+   "a column of lamps: the radar range (arg: the lamp, 0 the bottom)",
    "new"
   ],
   "cabin": [
-   "cabin and canopy lamps (unlabelled lights): the ship's running lights: dark under EMCON OFF and when the reactor is damaged, a flicker when hit",
+   "every other lamp: the running lights, dark under EMCON OFF and with the power plant damaged, a flicker when hit",
    "new"
   ],
-  "power_knobs": [
-   "POWER DISTRIB knobs ENG / SHD / WPN: the power split, 6 notches shared: engines (top speed, afterburner refill), shields (recharge), guns (recharge); each knob turns to its notches",
+  "radio_digit": [
+   "COMM FREQ knobs (the kits painted POWER DISTRIB; the user's pick): the frequency a digit a knob (arg 0 hundreds, 1 tens, 2 units of MHz), turning to whoever talks: WING 267, the carrier 315, GUARD 243 (the real military distress frequency: where an enemy hails you)",
    "new"
   ],
-  "nav_sw": [
-   "NAV switch / knob / buttons: the nav computer on; the knob or buttons pick the nav point; autopilot when clear",
+  "radio_lit": [
+   "the scales over the frequency knobs: dim, lit while a transmission is coming in",
    "new"
   ],
-  "com_sw": [
-   "COM switch / knob / buttons: comms on or muted (a muted ship gets no comm faces or hails)",
+  "chan_knob": [
+   "a channel knob: WING / CARRIER / GUARD",
    "new"
   ],
-  "iff_sw": [
-   "IFF switch / knob: IFF on or off. Off: contacts all one colour, no friend-or-foe (FF) missile lock, and you don't squawk",
+  "emcon_knob": [
+   "an E/M knob: EMCON OFF / PASSIVE / ACTIVE",
    "flag"
   ],
-  "emcon_sw": [
-   "EMCON / E/M switch or knob: OFF (everything dark: no scope, no locks, no running lights, smallest signature), PASSIVE (receive only: scope shows hot or emitting ships, no FF lock), ACTIVE (radar on, every lock, biggest signature)",
-   "flag"
-  ],
-  "sensor_sw": [
-   "SENSOR MODE switch / buttons: which seeker the lock feeds: ACTIVE / NORMAL = radar (FF missiles), PASSIVE = infrared (IR missiles, on hot targets only)",
-   "flag"
-  ],
-  "wpn_sw": [
-   "weapon switches / knob: gun groups armed and the missile chosen (master arm: safe on the deck)",
-   "flag"
-  ],
-  "target_btns": [
-   "TARGET buttons: next target, nearest enemy, clear",
+  "nav_knob": [
+   "a NAV knob: the nav point chosen (four positions)",
    "new"
   ],
-  "lock_sw": [
-   "LOCK switch: hold the lock (the target stays chosen while it is in view)",
+  "iff_knob": [
+   "an IFF knob: off / on",
    "flag"
   ],
-  "auto_btns": [
-   "AUTO buttons: autopilot, match the target's speed, nearest enemy, level",
+  "radar_knob": [
+   "a radar knob: the range, 4,000 / 8,000 / 16,000 km",
    "new"
   ],
-  "defence": [
-   "DEFENCE button: drop a decoy (missiles chase the decoy)",
+  "arm_knob": [
+   "a WPN knob: safe / armed",
    "flag"
   ],
-  "eject": [
-   "EJECT handle: eject (guarded: twice); the mission ends, ejected",
+  "vol_knob": [
+   "a VOL knob: muted / on (comms)",
    "new"
   ],
-  "misc_unlit": [
-   "unlabelled, unlit buttons / knobs / toggles: nothing to show",
-   "blank"
+  "speed_dial": [
+   "an analog speed dial: a needle at the speed (its painted needle painted out)",
+   "new"
+  ],
+  "clock_dial": [
+   "a two-hand dial: the mission clock (minutes and seconds)",
+   "new"
+  ],
+  "shield_bar": [
+   "shield bar (the weaker of fore and aft)",
+   "new"
+  ],
+  "armor_bar": [
+   "armour bar (the weakest side)",
+   "new"
+  ],
+  "hull_bar": [
+   "hull bar",
+   "new"
+  ],
+  "fuel_bar": [
+   "fuel bar (afterburner fuel)",
+   "new"
+  ],
+  "power_bar": [
+   "power plant bar (its health)",
+   "new"
+  ],
+  "engine_bar": [
+   "engine bar (thrust: the speed against the top speed)",
+   "new"
+  ],
+  "speed_bar": [
+   "speed bar",
+   "new"
+  ],
+  "range_bar": [
+   "target range bar (full: the target near)",
+   "new"
+  ],
+  "heat": [
+   "HEAT readout: engine + afterburner, less cooling (what an IR seeker locks on)",
+   "new"
+  ],
+  "signature": [
+   "SIGNATURE readout: how far off the enemy finds and locks you (EMCON, the sensor mode, heat, speed)",
+   "new"
+  ],
+  "aux_nav": [
+   "a spare display: the nav point and its distance",
+   "new"
+  ],
+  "target_id": [
+   "target readout: its type and range",
+   "new"
+  ],
+  "throttle_ticks": [
+   "the throttle's lit ticks: lit up to the throttle's setting",
+   "new"
   ]
  },
  "cockpits": {
-  "SCHROED": [
-   [
-    "MFD L",
-    "mfd",
-    "mfd",
+  "SCHROED": {
+   "displays": [
     [
      50,
      165,
      84,
      85
-    ]
-   ],
-   [
-    "MFD R",
-    "mfd",
-    "mfd",
+    ],
     [
      505,
      165,
      83,
      85
-    ]
-   ],
-   [
-    "bezel L (10)",
-    "buttons",
-    "mfd_pages",
-    [
-     26,
-     160,
-     134,
-     90
-    ]
-   ],
-   [
-    "bezel R (10)",
-    "buttons",
-    "mfd_pages",
-    [
-     481,
-     160,
-     134,
-     90
-    ]
-   ],
-   [
-    "speed dial 200-800",
-    "dial",
-    "speed_dial",
-    [
-     177,
-     193,
-     40,
-     38
-    ]
-   ],
-   [
-    "LOCK",
-    "lamp",
-    "lock",
-    [
-     208,
-     240,
-     32,
-     18
-    ]
-   ],
-   [
-    "MASTER WARN",
-    "lamp",
-    "warn",
-    [
-     213,
-     263,
-     35,
-     20
-    ]
-   ],
-   [
-    "ENG / SHD / WPN knobs",
-    "knobs",
-    "power_knobs",
-    [
-     78,
-     312,
-     100,
-     30
-    ]
-   ],
-   [
-    "NAV toggle",
-    "toggle",
-    "nav_sw",
-    [
-     75,
-     350,
-     16,
-     22
-    ]
-   ],
-   [
-    "NAV light",
-    "lamp",
-    "nav_lamp",
-    [
-     96,
-     363,
-     8,
-     8
-    ]
-   ],
-   [
-    "COM toggle",
-    "toggle",
-    "com_sw",
-    [
-     114,
-     354,
-     16,
-     22
-    ]
-   ],
-   [
-    "COM light",
-    "lamp",
-    "com_lamp",
-    [
-     137,
-     367,
-     8,
-     8
-    ]
-   ],
-   [
-    "IFF toggle",
-    "toggle",
-    "iff_sw",
-    [
-     152,
-     358,
-     16,
-     22
-    ]
-   ],
-   [
-    "IFF light",
-    "lamp",
-    "iff_lamp",
-    [
-     168,
-     371,
-     8,
-     8
-    ]
-   ],
-   [
-    "survival",
-    "display",
-    "survival",
+    ],
     [
      225,
      301,
      51,
      27
-    ]
-   ],
-   [
-    "small display",
-    "display",
-    "aux_nav",
+    ],
     [
      292,
      295,
      52,
      24
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     215,
-     332,
-     48,
-     61
-    ]
-   ],
-   [
-    "FUEL",
-    "display",
-    "fuel",
+    ],
     [
      434,
      207,
      27,
      12
-    ]
-   ],
-   [
-    "SPEED",
-    "display",
-    "speed",
+    ],
     [
      433,
      235,
      29,
      14
-    ]
-   ],
-   [
-    "orange tube",
-    "lamp",
-    "ab_lamp",
-    [
-     393,
-     238,
-     18,
-     28
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+    ],
     [
      361,
      290,
      72,
      72
-    ]
-   ],
-   [
-    "knob by radar",
-    "knob",
-    "radar_range",
-    [
-     415,
-     350,
-     20,
-     20
-    ]
-   ],
-   [
-    "EMCON toggle + green light",
-    "toggle",
-    "emcon_sw",
-    [
-     462,
-     325,
-     17,
-     39
-    ]
-   ],
-   [
-    "EMCON OFF / PASSIVE / ACTIVE",
-    "lamps",
-    "emcon_lamps",
-    [
-     479,
-     326,
-     9,
-     33
-    ]
-   ],
-   [
-    "SENSOR MODE toggle + light",
-    "toggle",
-    "sensor_sw",
-    [
-     513,
-     320,
-     17,
-     39
-    ]
-   ],
-   [
-    "HEAT",
-    "display",
-    "heat",
+    ],
     [
      567,
      305,
      52,
      22
-    ]
-   ],
-   [
-    "SIGNATURE",
-    "display",
-    "signature",
+    ],
     [
      572,
      340,
@@ -485,564 +240,354 @@
      22
     ]
    ],
-   [
-    "canopy / side lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     130,
-     640,
-     130
-    ]
+   "relabel": [
+    {
+     "erase": [
+      [
+       99,
+       292,
+       150,
+       307
+      ],
+      [
+       88,
+       302,
+       104,
+       311
+      ],
+      [
+       124,
+       307,
+       140,
+       316
+      ],
+      [
+       157,
+       311,
+       175,
+       321
+      ]
+     ],
+     "labels": [
+      [
+       "COMM FREQ",
+       124,
+       299.5,
+       8,
+       -5
+      ],
+      [
+       "100",
+       95.5,
+       306.5,
+       7,
+       -5
+      ],
+      [
+       "10",
+       131.5,
+       311,
+       7,
+       -5
+      ],
+      [
+       "1",
+       166,
+       316,
+       7,
+       -5
+      ]
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      92.5,
+      328.5
+     ],
+     "r": 9.5,
+     "painted": 8,
+     "digits": true,
+     "arg": 0
+    },
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      129,
+      332
+     ],
+     "r": 9.5,
+     "painted": 8,
+     "digits": true,
+     "arg": 1
+    },
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      164,
+      335.5
+     ],
+     "r": 9.5,
+     "painted": 5,
+     "digits": true,
+     "arg": 2
+    },
+    {
+     "fn": "radio_lit",
+     "kind": "arcs",
+     "knobs": [
+      [
+       92.5,
+       328.5,
+       10.5,
+       15.5
+      ],
+      [
+       129,
+       332,
+       10.5,
+       15.5
+      ],
+      [
+       164,
+       335.5,
+       10.5,
+       15.5
+      ]
+     ]
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "rect": [
+      208,
+      240,
+      32,
+      18
+     ]
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      213,
+      263,
+      35,
+      20
+     ],
+     "colour": "red",
+     "dark": true
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "at": [
+      100,
+      367
+     ],
+     "r": 4.5,
+     "colour": "green"
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "at": [
+      141,
+      371
+     ],
+     "r": 4.5,
+     "colour": "green"
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "at": [
+      172,
+      375
+     ],
+     "r": 4.5,
+     "colour": "green"
+    },
+    {
+     "fn": "ab_lamp",
+     "kind": "lamp",
+     "rect": [
+      393,
+      238,
+      18,
+      28
+     ]
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "rect": [
+      469,
+      326,
+      12,
+      16
+     ],
+     "colour": "green",
+     "arg": 3
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      484.5,
+      330.5
+     ],
+     "r": 3.5,
+     "arg": 0
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      485.5,
+      342.5
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      487,
+      354.5
+     ],
+     "r": 3.5,
+     "arg": 2
+    },
+    {
+     "fn": "sensor_lamp",
+     "kind": "lamp",
+     "rect": [
+      514,
+      322,
+      15,
+      18
+     ],
+     "colour": "green",
+     "arg": 0
+    },
+    {
+     "fn": "speed_dial",
+     "kind": "needle",
+     "at": [
+      196.5,
+      215
+     ],
+     "r": 11,
+     "painted": -117,
+     "a0": -117,
+     "a1": 130,
+     "max": 800
+    },
+    {
+     "fn": "heat",
+     "kind": "text",
+     "rect": [
+      567,
+      305,
+      52,
+      22
+     ]
+    },
+    {
+     "fn": "signature",
+     "kind": "text",
+     "rect": [
+      572,
+      340,
+      55,
+      22
+     ]
+    },
+    {
+     "fn": "aux_nav",
+     "kind": "text",
+     "rect": [
+      292,
+      295,
+      52,
+      24
+     ]
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ],
-  "FRANKLN": [
-   [
-    "FLIGHT (MFD L)",
-    "mfd",
-    "mfd",
-    [
-     88,
-     247,
-     162,
-     49
-    ]
-   ],
-   [
-    "SYSTEMS (MFD R)",
-    "mfd",
-    "mfd",
-    [
-     391,
-     247,
-     162,
-     49
-    ]
-   ],
-   [
-    "buttons L of FLIGHT (2 lit)",
-    "buttons",
-    "mfd_pages",
-    [
-     62,
-     254,
-     17,
-     34
-    ]
-   ],
-   [
-    "buttons R of SYSTEMS (2 lit)",
-    "buttons",
-    "mfd_pages",
-    [
-     561,
-     254,
-     17,
-     34
-    ]
-   ],
-   [
-    "3 squares L of SENSOR",
-    "lamps",
-    "lock",
-    [
-     265,
-     236,
-     15,
-     42
-    ]
-   ],
-   [
-    "3 squares R of SENSOR",
-    "lamps",
-    "warn",
-    [
-     360,
-     236,
-     15,
-     42
-    ]
-   ],
-   [
-    "SENSOR",
-    "scope",
-    "radar",
-    [
-     295,
-     246,
-     52,
-     52
-    ]
-   ],
-   [
-    "small display",
-    "display",
-    "survival",
-    [
-     294,
-     306,
-     54,
-     32
-    ]
-   ],
-   [
-    "3 lit buttons each side of it",
-    "buttons",
-    "surv_pages",
-    [
-     271,
-     299,
-     15,
-     38
-    ]
-   ],
-   [
-    "SPEED",
-    "display",
-    "speed",
-    [
-     111,
-     315,
-     52,
-     8
-    ]
-   ],
-   [
-    "FUEL",
-    "display",
-    "fuel",
-    [
-     181,
-     315,
-     57,
-     8
-    ]
-   ],
-   [
-    "lit button by FUEL",
-    "lamp",
-    "ab_lamp",
-    [
-     244,
-     312,
-     12,
-     12
-    ]
-   ],
-   [
-    "POWER (3 buttons)",
-    "buttons",
-    "power_knobs",
-    [
-     117,
-     352,
-     47,
-     16
-    ]
-   ],
-   [
-    "NAV (3 buttons)",
-    "buttons",
-    "nav_sw",
-    [
-     169,
-     352,
-     45,
-     16
-    ]
-   ],
-   [
-    "COM (3 buttons)",
-    "buttons",
-    "com_sw",
-    [
-     219,
-     352,
-     39,
-     16
-    ]
-   ],
-   [
-    "3 buttons L (white, dark, blue)",
-    "buttons",
-    "iff_sw",
-    [
-     84,
-     336,
-     22,
-     55
-    ]
-   ],
-   [
-    "lit button by ID",
-    "button",
-    "target_btns",
-    [
-     384,
-     311,
-     12,
-     13
-    ]
-   ],
-   [
-    "ID",
-    "display",
-    "target_id",
-    [
-     398,
-     308,
-     58,
-     17
-    ]
-   ],
-   [
-    "AUTO (4 buttons)",
-    "buttons",
-    "auto_btns",
-    [
-     464,
-     309,
-     60,
-     17
-    ]
-   ],
-   [
-    "DEFENCE",
-    "button",
-    "defence",
-    [
-     529,
-     307,
-     24,
-     24
-    ]
-   ],
-   [
-    "3 buttons R (white, blue, dark)",
-    "buttons",
-    "emcon_sw",
-    [
-     509,
-     336,
-     24,
-     52
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     292,
-     345,
-     58,
-     30
-    ]
-   ],
-   [
-    "canopy / sill lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     230,
-     640,
-     170
-    ]
-   ]
-  ],
-  "GAWAIN": [
-   [
-    "MFD L",
-    "mfd",
-    "mfd",
+  },
+  "GAWAIN": {
+   "displays": [
     [
      46,
      242,
      142,
      67
-    ]
-   ],
-   [
-    "MFD R",
-    "mfd",
-    "mfd",
+    ],
     [
      471,
      242,
      122,
      67
-    ]
-   ],
-   [
-    "bezel L (8)",
-    "buttons",
-    "mfd_pages",
-    [
-     21,
-     238,
-     191,
-     72
-    ]
-   ],
-   [
-    "bezel R (8)",
-    "buttons",
-    "mfd_pages",
-    [
-     445,
-     238,
-     173,
-     72
-    ]
-   ],
-   [
-    "top-left display",
-    "display",
-    "speed",
-    [
-     118,
-     210,
-     93,
-     17
-    ]
-   ],
-   [
-    "speed dial 0-800",
-    "dial",
-    "speed_dial",
-    [
-     221,
-     197,
-     46,
-     34
-    ]
-   ],
-   [
-    "LOCK",
-    "lamp",
-    "lock",
-    [
-     287,
-     205,
-     37,
-     22
-    ]
-   ],
-   [
-    "MASTER WARN",
-    "lamp",
-    "warn",
-    [
-     326,
-     205,
-     37,
-     22
-    ]
-   ],
-   [
-    "NAV / COM / IFF lights",
-    "lamps",
-    "nav_lamp",
-    [
-     377,
-     205,
-     79,
-     14
-    ]
-   ],
-   [
-    "FUEL",
-    "display",
-    "fuel",
-    [
-     474,
-     211,
-     74,
-     16
-    ]
-   ],
-   [
-    "upper centre display",
-    "display",
-    "survival",
+    ],
     [
      226,
      242,
      54,
      35
-    ]
-   ],
-   [
-    "lower centre display",
-    "display",
-    "aux_nav",
+    ],
     [
      222,
      283,
      62,
      27
-    ]
-   ],
-   [
-    "5 buttons by them",
-    "buttons",
-    "surv_pages",
+    ],
     [
-     292,
-     238,
-     14,
-     76
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+     118,
+     210,
+     93,
+     17
+    ],
+    [
+     474,
+     211,
+     74,
+     16
+    ],
     [
      326,
      242,
      72,
      72
-    ]
-   ],
-   [
-    "knob by radar",
-    "knob",
-    "radar_range",
+    ],
     [
-     419,
-     236,
+     410,
+     258,
      22,
-     20
-    ]
-   ],
-   [
-    "narrow display by radar",
-    "display",
-    "power_bar",
-    [
-     406,
-     256,
-     28,
-     62
-    ]
-   ],
-   [
-    "small display low",
-    "display",
-    "target_id",
+     60
+    ],
     [
      389,
      329,
      47,
      58
-    ]
-   ],
-   [
-    "THROTTLE green ticks",
-    "lamps",
-    "throttle_ticks",
-    [
-     22,
-     333,
-     16,
-     58
-    ]
-   ],
-   [
-    "2 big buttons",
-    "buttons",
-    "misc_unlit",
-    [
-     61,
-     326,
-     22,
-     68
-    ]
-   ],
-   [
-    "ENG / SHD / WPN knobs",
-    "knobs",
-    "power_knobs",
-    [
-     94,
-     340,
-     94,
-     28
-    ]
-   ],
-   [
-    "NAV / COM / IFF toggles + lights",
-    "toggles",
-    "nav_sw",
-    [
-     94,
-     374,
-     82,
-     22
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     216,
-     322,
-     52,
-     71
-    ]
-   ],
-   [
-    "EMCON toggle",
-    "toggle",
-    "emcon_sw",
-    [
-     466,
-     347,
-     18,
-     34
-    ]
-   ],
-   [
-    "EMCON OFF / PASSIVE / ACTIVE",
-    "lamps",
-    "emcon_lamps",
-    [
-     486,
-     349,
-     9,
-     32
-    ]
-   ],
-   [
-    "SENSOR MODE PASSIVE / ACTIVE",
-    "buttons",
-    "sensor_sw",
-    [
-     519,
-     349,
-     15,
-     36
-    ]
-   ],
-   [
-    "HEAT",
-    "display",
-    "heat",
+    ],
     [
      567,
      343,
      56,
      17
-    ]
-   ],
-   [
-    "SIGNATURE",
-    "display",
-    "signature",
+    ],
     [
      570,
      371,
@@ -1050,298 +595,410 @@
      17
     ]
    ],
-   [
-    "canopy lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     0,
-     640,
-     230
-    ]
+   "relabel": [
+    {
+     "erase": [
+      [
+       107,
+       323,
+       159,
+       331
+      ],
+      [
+       100,
+       334,
+       118,
+       341
+      ],
+      [
+       135,
+       334,
+       151,
+       341
+      ],
+      [
+       167,
+       334,
+       183,
+       341
+      ]
+     ],
+     "labels": [
+      [
+       "COMM FREQ",
+       133,
+       327,
+       8,
+       0
+      ],
+      [
+       "100",
+       108.5,
+       337.5,
+       7,
+       0
+      ],
+      [
+       "10",
+       143,
+       337.5,
+       7,
+       0
+      ],
+      [
+       "1",
+       174.5,
+       337.5,
+       7,
+       0
+      ]
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      109,
+      356
+     ],
+     "r": 9,
+     "painted": 0,
+     "digits": true,
+     "arg": 0
+    },
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      143,
+      356
+     ],
+     "r": 9,
+     "painted": 0,
+     "digits": true,
+     "arg": 1
+    },
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      174,
+      356
+     ],
+     "r": 9,
+     "painted": 0,
+     "digits": true,
+     "arg": 2
+    },
+    {
+     "fn": "radio_lit",
+     "kind": "arcs",
+     "knobs": [
+      [
+       109,
+       356,
+       10,
+       14.5
+      ],
+      [
+       143,
+       356,
+       10,
+       14.5
+      ],
+      [
+       174,
+       356,
+       10,
+       14.5
+      ]
+     ]
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "rect": [
+      288,
+      206,
+      30,
+      15
+     ]
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      327,
+      206,
+      34,
+      17
+     ],
+     "colour": "red",
+     "dark": true
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "rect": [
+      383,
+      208,
+      11,
+      6
+     ],
+     "colour": "green",
+     "dark": true
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "rect": [
+      409,
+      208,
+      12,
+      6
+     ],
+     "colour": "green",
+     "dark": true
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "rect": [
+      437,
+      208,
+      11,
+      6
+     ],
+     "colour": "green",
+     "dark": true
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "at": [
+      118,
+      390
+     ],
+     "r": 4,
+     "colour": "green"
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "at": [
+      154,
+      390
+     ],
+     "r": 4,
+     "colour": "green"
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      489.3,
+      353.6
+     ],
+     "r": 3.5,
+     "arg": 0
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      490,
+      364.3
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      490.4,
+      376.4
+     ],
+     "r": 3.5,
+     "arg": 2
+    },
+    {
+     "fn": "sensor_lamp",
+     "kind": "lamp",
+     "at": [
+      526.4,
+      356.4
+     ],
+     "r": 6,
+     "colour": "green",
+     "arg": 1
+    },
+    {
+     "fn": "sensor_lamp",
+     "kind": "lamp",
+     "rect": [
+      522,
+      370,
+      11,
+      12
+     ],
+     "colour": "green",
+     "arg": 0,
+     "face": "all"
+    },
+    {
+     "fn": "speed_dial",
+     "kind": "needle",
+     "at": [
+      242,
+      223
+     ],
+     "r": 16,
+     "painted": -55,
+     "a0": -93,
+     "a1": 92,
+     "max": 800
+    },
+    {
+     "fn": "radar_knob",
+     "kind": "knob",
+     "at": [
+      430,
+      245
+     ],
+     "r": 8,
+     "painted": 30,
+     "angles": [
+      -45,
+      0,
+      45
+     ]
+    },
+    {
+     "fn": "throttle_ticks",
+     "kind": "ticks",
+     "rect": [
+      22,
+      333,
+      17,
+      60
+     ]
+    },
+    {
+     "fn": "heat",
+     "kind": "text",
+     "rect": [
+      567,
+      343,
+      56,
+      17
+     ]
+    },
+    {
+     "fn": "signature",
+     "kind": "text",
+     "rect": [
+      570,
+      371,
+      56,
+      17
+     ]
+    },
+    {
+     "fn": "aux_nav",
+     "kind": "text",
+     "rect": [
+      222,
+      283,
+      62,
+      27
+     ]
+    },
+    {
+     "fn": "target_id",
+     "kind": "text",
+     "rect": [
+      389,
+      329,
+      47,
+      58
+     ]
+    },
+    {
+     "fn": "range_bar",
+     "kind": "bar",
+     "rect": [
+      410,
+      258,
+      22,
+      60
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ],
-  "LANCELT": [
-   [
-    "MFD L",
-    "mfd",
-    "mfd",
+  },
+  "LANCELT": {
+   "displays": [
     [
      37,
      235,
      154,
      87
-    ]
-   ],
-   [
-    "MFD R",
-    "mfd",
-    "mfd",
+    ],
     [
      468,
      235,
      140,
      88
-    ]
-   ],
-   [
-    "bezel L (10)",
-    "buttons",
-    "mfd_pages",
-    [
-     23,
-     237,
-     182,
-     82
-    ]
-   ],
-   [
-    "bezel R (10)",
-    "buttons",
-    "mfd_pages",
-    [
-     448,
-     237,
-     178,
-     82
-    ]
-   ],
-   [
-    "top display",
-    "display",
-    "speed",
-    [
-     150,
-     204,
-     62,
-     22
-    ]
-   ],
-   [
-    "speed dial 0-800",
-    "dial",
-    "speed_dial",
-    [
-     220,
-     198,
-     47,
-     32
-    ]
-   ],
-   [
-    "LOCK",
-    "lamp",
-    "lock",
-    [
-     289,
-     204,
-     32,
-     21
-    ]
-   ],
-   [
-    "MASTER WARN",
-    "lamp",
-    "warn",
-    [
-     326,
-     204,
-     37,
-     22
-    ]
-   ],
-   [
-    "NAV / COM / IFF lights",
-    "lamps",
-    "nav_lamp",
-    [
-     377,
-     204,
-     79,
-     14
-    ]
-   ],
-   [
-    "FUEL",
-    "display",
-    "fuel",
-    [
-     476,
-     206,
-     76,
-     21
-    ]
-   ],
-   [
-    "centre-left display",
-    "display",
-    "survival",
+    ],
     [
      213,
      235,
      80,
      87
-    ]
-   ],
-   [
-    "its buttons (6)",
-    "buttons",
-    "surv_pages",
+    ],
     [
-     294,
-     238,
-     14,
-     80
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+     150,
+     204,
+     62,
+     22
+    ],
+    [
+     476,
+     206,
+     76,
+     21
+    ],
     [
      320,
      235,
      88,
      88
-    ]
-   ],
-   [
-    "knob by radar",
-    "knob",
-    "radar_range",
+    ],
     [
-     422,
-     234,
-     22,
-     22
-    ]
-   ],
-   [
-    "narrow display by radar",
-    "display",
-    "power_bar",
-    [
-     397,
-     259,
-     37,
-     62
-    ]
-   ],
-   [
-    "ALT display",
-    "display",
-    "aux_nav",
+     409,
+     261,
+     24,
+     61
+    ],
     [
      389,
      334,
      49,
      57
-    ]
-   ],
-   [
-    "THROTTLE ticks",
-    "lamps",
-    "throttle_ticks",
-    [
-     12,
-     344,
-     22,
-     54
-    ]
-   ],
-   [
-    "2 big buttons",
-    "buttons",
-    "misc_unlit",
-    [
-     67,
-     336,
-     22,
-     60
-    ]
-   ],
-   [
-    "ENG / SHD / WPN knobs",
-    "knobs",
-    "power_knobs",
-    [
-     98,
-     350,
-     92,
-     28
-    ]
-   ],
-   [
-    "NAV / COM / IFF toggles + lights",
-    "toggles",
-    "nav_sw",
-    [
-     100,
-     384,
-     82,
-     16
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     216,
-     340,
-     52,
-     58
-    ]
-   ],
-   [
-    "EMCON toggle",
-    "toggle",
-    "emcon_sw",
-    [
-     469,
-     357,
-     17,
-     34
-    ]
-   ],
-   [
-    "EMCON OFF / PASSIVE / ACTIVE",
-    "lamps",
-    "emcon_lamps",
-    [
-     489,
-     359,
-     9,
-     30
-    ]
-   ],
-   [
-    "SENSOR MODE PASSIVE / ACTIVE",
-    "buttons",
-    "sensor_sw",
-    [
-     522,
-     359,
-     16,
-     33
-    ]
-   ],
-   [
-    "HEAT",
-    "display",
-    "heat",
+    ],
     [
      566,
      352,
      60,
      18
-    ]
-   ],
-   [
-    "SIGNATURE",
-    "display",
-    "signature",
+    ],
     [
      571,
      379,
@@ -1349,111 +1006,877 @@
      18
     ]
    ],
-   [
-    "canopy lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     0,
-     640,
-     230
-    ]
+   "relabel": [
+    {
+     "erase": [
+      [
+       108,
+       334,
+       160,
+       342
+      ],
+      [
+       106,
+       344,
+       124,
+       351
+      ],
+      [
+       138,
+       344,
+       154,
+       351
+      ],
+      [
+       169,
+       344,
+       186,
+       351
+      ]
+     ],
+     "labels": [
+      [
+       "COMM FREQ",
+       134,
+       338,
+       8,
+       0
+      ],
+      [
+       "100",
+       114,
+       347.5,
+       7,
+       0
+      ],
+      [
+       "10",
+       146,
+       347.5,
+       7,
+       0
+      ],
+      [
+       "1",
+       177,
+       347.5,
+       7,
+       0
+      ]
+     ]
+    }
+   ],
+   "controls": [
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      112,
+      364
+     ],
+     "r": 9,
+     "painted": 0,
+     "digits": true,
+     "arg": 0
+    },
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      146,
+      364
+     ],
+     "r": 9,
+     "painted": 0,
+     "digits": true,
+     "arg": 1
+    },
+    {
+     "fn": "radio_digit",
+     "kind": "knob",
+     "at": [
+      177,
+      364
+     ],
+     "r": 9,
+     "painted": 0,
+     "digits": true,
+     "arg": 2
+    },
+    {
+     "fn": "radio_lit",
+     "kind": "arcs",
+     "knobs": [
+      [
+       112,
+       364,
+       10,
+       15
+      ],
+      [
+       146,
+       364,
+       10,
+       15
+      ],
+      [
+       177,
+       364,
+       10,
+       15
+      ]
+     ]
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "rect": [
+      290,
+      206,
+      30,
+      14
+     ]
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      328,
+      205,
+      34,
+      18
+     ],
+     "colour": "red",
+     "dark": true
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "rect": [
+      383,
+      208,
+      10,
+      6
+     ],
+     "colour": "green",
+     "dark": true
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "rect": [
+      410,
+      208,
+      10,
+      6
+     ],
+     "colour": "green",
+     "dark": true
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "rect": [
+      438,
+      208,
+      10,
+      6
+     ],
+     "colour": "green",
+     "dark": true
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "at": [
+      121,
+      397
+     ],
+     "r": 3.5,
+     "colour": "green"
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "at": [
+      158,
+      397
+     ],
+     "r": 3.5,
+     "colour": "green"
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      493.3,
+      363
+     ],
+     "r": 3.5,
+     "arg": 0
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      493.7,
+      374.2
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      494.2,
+      385
+     ],
+     "r": 3.5,
+     "arg": 2
+    },
+    {
+     "fn": "sensor_lamp",
+     "kind": "lamp",
+     "rect": [
+      525,
+      360,
+      12,
+      12
+     ],
+     "colour": "green",
+     "arg": 1
+    },
+    {
+     "fn": "sensor_lamp",
+     "kind": "lamp",
+     "rect": [
+      527,
+      379,
+      13,
+      12
+     ],
+     "colour": "green",
+     "arg": 0,
+     "face": "all"
+    },
+    {
+     "fn": "speed_dial",
+     "kind": "needle",
+     "at": [
+      241.25,
+      222
+     ],
+     "r": 17,
+     "painted": -65,
+     "a0": -92,
+     "a1": 92,
+     "max": 800
+    },
+    {
+     "fn": "radar_knob",
+     "kind": "knob",
+     "at": [
+      432,
+      249
+     ],
+     "r": 8,
+     "painted": 30,
+     "angles": [
+      -45,
+      0,
+      45
+     ]
+    },
+    {
+     "fn": "throttle_ticks",
+     "kind": "ticks",
+     "rect": [
+      24,
+      344,
+      14,
+      52
+     ]
+    },
+    {
+     "fn": "heat",
+     "kind": "text",
+     "rect": [
+      566,
+      352,
+      60,
+      18
+     ]
+    },
+    {
+     "fn": "signature",
+     "kind": "text",
+     "rect": [
+      571,
+      379,
+      60,
+      18
+     ]
+    },
+    {
+     "fn": "aux_nav",
+     "kind": "text",
+     "rect": [
+      389,
+      334,
+      49,
+      57
+     ]
+    },
+    {
+     "fn": "range_bar",
+     "kind": "bar",
+     "rect": [
+      409,
+      261,
+      24,
+      61
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ],
-  "REDEEMR": [
-   [
-    "MFD L",
-    "mfd",
-    "mfd",
+  },
+  "FRANKLN": {
+   "displays": [
+    [
+     88,
+     247,
+     162,
+     49
+    ],
+    [
+     391,
+     247,
+     162,
+     49
+    ],
+    [
+     294,
+     306,
+     54,
+     32
+    ],
+    [
+     111,
+     315,
+     52,
+     8
+    ],
+    [
+     181,
+     315,
+     57,
+     8
+    ],
+    [
+     295,
+     246,
+     52,
+     52
+    ],
+    [
+     399,
+     310,
+     52,
+     15
+    ]
+   ],
+   "relabel": [
+    {
+     "erase": [
+      [
+       129,
+       344,
+       153,
+       350
+      ]
+     ],
+     "labels": [
+      [
+       "CHAN",
+       140.5,
+       347,
+       6.5,
+       0
+      ]
+     ],
+     "dark": true
+    }
+   ],
+   "controls": [
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      64,
+      257,
+      13,
+      28
+     ],
+     "colour": "white",
+     "arg": 0
+    },
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      561,
+      257,
+      13,
+      28
+     ],
+     "colour": "white",
+     "arg": 1
+    },
+    {
+     "fn": "em_lamp",
+     "kind": "lamp",
+     "rect": [
+      266,
+      233,
+      10,
+      9
+     ],
+     "dark": true,
+     "face": "all"
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "rect": [
+      269,
+      249,
+      10,
+      10
+     ],
+     "dark": true,
+     "face": "all"
+    },
+    {
+     "fn": "target_lamp",
+     "kind": "lamp",
+     "rect": [
+      269,
+      263,
+      10,
+      10
+     ],
+     "dark": true,
+     "face": "all"
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      362,
+      233,
+      10,
+      9
+     ],
+     "colour": "red",
+     "dark": true,
+     "face": "all"
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "rect": [
+      361,
+      249,
+      10,
+      10
+     ],
+     "colour": "green",
+     "dark": true,
+     "face": "all"
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "rect": [
+      361,
+      263,
+      10,
+      10
+     ],
+     "dark": true,
+     "face": "all",
+     "arg": 3
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "rect": [
+      274,
+      300,
+      10,
+      10
+     ],
+     "colour": "white",
+     "arg": 0
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "rect": [
+      274,
+      312,
+      10,
+      10
+     ],
+     "colour": "white",
+     "arg": 1
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "rect": [
+      273,
+      324,
+      10,
+      10
+     ],
+     "colour": "white",
+     "arg": 2
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "rect": [
+      357,
+      301,
+      10,
+      10
+     ],
+     "colour": "white",
+     "arg": 2
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "rect": [
+      357,
+      313,
+      10,
+      10
+     ],
+     "colour": "white",
+     "arg": 1
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "rect": [
+      357,
+      325,
+      10,
+      10
+     ],
+     "colour": "white",
+     "arg": 0
+    },
+    {
+     "fn": "ab_lamp",
+     "kind": "lamp",
+     "rect": [
+      245,
+      313,
+      10,
+      10
+     ],
+     "colour": "white"
+    },
+    {
+     "fn": "radio_chan",
+     "kind": "lamp",
+     "rect": [
+      119,
+      354,
+      12,
+      12
+     ],
+     "colour": "white",
+     "arg": 0
+    },
+    {
+     "fn": "radio_chan",
+     "kind": "lamp",
+     "rect": [
+      134,
+      354,
+      12,
+      12
+     ],
+     "colour": "white",
+     "arg": 1
+    },
+    {
+     "fn": "radio_chan",
+     "kind": "lamp",
+     "rect": [
+      150,
+      354,
+      12,
+      12
+     ],
+     "colour": "white",
+     "arg": 2,
+     "face": "all"
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "rect": [
+      171,
+      354,
+      13,
+      12
+     ],
+     "colour": "white",
+     "face": "all"
+    },
+    {
+     "fn": "auto_lamp",
+     "kind": "lamp",
+     "rect": [
+      186,
+      354,
+      13,
+      12
+     ],
+     "colour": "white",
+     "face": "all",
+     "arg": 0
+    },
+    {
+     "fn": "com_on",
+     "kind": "lamp",
+     "rect": [
+      220,
+      354,
+      12,
+      12
+     ],
+     "colour": "white"
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "rect": [
+      232,
+      354,
+      11,
+      12
+     ],
+     "colour": "white",
+     "face": "all"
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "rect": [
+      95,
+      338,
+      11,
+      10
+     ],
+     "colour": "white"
+    },
+    {
+     "fn": "sensor_lamp",
+     "kind": "lamp",
+     "rect": [
+      89,
+      355,
+      13,
+      11
+     ],
+     "face": "all",
+     "arg": 1
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "rect": [
+      83,
+      370,
+      12,
+      10
+     ],
+     "colour": "blue"
+    },
+    {
+     "fn": "target_lamp",
+     "kind": "lamp",
+     "rect": [
+      384,
+      312,
+      11,
+      11
+     ],
+     "colour": "white"
+    },
+    {
+     "fn": "auto_lamp",
+     "kind": "lamp",
+     "rect": [
+      467,
+      310,
+      13,
+      13
+     ],
+     "colour": "white",
+     "arg": 0
+    },
+    {
+     "fn": "auto_lamp",
+     "kind": "lamp",
+     "rect": [
+      484,
+      310,
+      13,
+      13
+     ],
+     "colour": "white",
+     "arg": 1
+    },
+    {
+     "fn": "auto_lamp",
+     "kind": "lamp",
+     "rect": [
+      496,
+      310,
+      13,
+      13
+     ],
+     "colour": "white",
+     "arg": 2,
+     "face": "all"
+    },
+    {
+     "fn": "auto_lamp",
+     "kind": "lamp",
+     "rect": [
+      509,
+      310,
+      13,
+      13
+     ],
+     "colour": "white",
+     "arg": 3,
+     "face": "all"
+    },
+    {
+     "fn": "defence",
+     "kind": "lamp",
+     "rect": [
+      535,
+      311,
+      15,
+      16
+     ],
+     "colour": "red",
+     "dark": true
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "rect": [
+      511,
+      337,
+      13,
+      12
+     ],
+     "colour": "white",
+     "arg": 2
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "rect": [
+      518,
+      354,
+      13,
+      12
+     ],
+     "colour": "blue",
+     "arg": 1
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "rect": [
+      524,
+      374,
+      14,
+      12
+     ],
+     "arg": 0,
+     "face": "all"
+    },
+    {
+     "fn": "target_id",
+     "kind": "text",
+     "rect": [
+      399,
+      310,
+      52,
+      15
+     ]
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
+   ]
+  },
+  "REDEEMR": {
+   "displays": [
     [
      112,
      223,
      103,
      71
-    ]
-   ],
-   [
-    "MFD R",
-    "mfd",
-    "mfd",
+    ],
     [
      425,
      223,
      105,
      70
-    ]
-   ],
-   [
-    "WPN / TARGET / RADAR / COM buttons (lit)",
-    "buttons",
-    "mfd_pages",
+    ],
     [
-     78,
-     232,
-     19,
-     66
-    ]
-   ],
-   [
-    "bezels by the MFDs (16)",
-    "buttons",
-    "mfd_pages",
-    [
-     97,
-     230,
-     444,
-     54
-    ]
-   ],
-   [
-    "E/M light",
-    "lamp",
-    "em_lamp",
-    [
-     555,
-     242,
-     11,
-     10
-    ]
-   ],
-   [
-    "IFF light",
-    "lamp",
-    "iff_lamp",
-    [
-     555,
-     265,
-     11,
-     10
-    ]
-   ],
-   [
-    "LOCK light",
-    "lamp",
-    "lock",
-    [
-     555,
-     287,
-     11,
-     10
-    ]
-   ],
-   [
-    "lamp by the radar (top left)",
-    "lamp",
-    "warn",
-    [
+     241,
      255,
-     216,
-     14,
+     35,
+     33
+    ],
+    [
+     341,
+     285,
+     59,
      10
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+    ],
+    [
+     204,
+     315,
+     113,
+     12
+    ],
+    [
+     358,
+     315,
+     38,
+     9
+    ],
     [
      288,
      203,
@@ -1461,210 +1884,368 @@
      62
     ]
    ],
-   [
-    "survival",
-    "display",
-    "survival",
-    [
-     241,
-     255,
-     35,
-     33
-    ]
+   "relabel": [
+    {
+     "erase": [
+      [
+       423,
+       307,
+       436,
+       313
+      ],
+      [
+       445,
+       307,
+       459,
+       313
+      ]
+     ],
+     "labels": [
+      [
+       "CHAN",
+       429,
+       310,
+       5.5,
+       0
+      ],
+      [
+       "VOL",
+       452.5,
+       310,
+       5.5,
+       0
+      ]
+     ]
+    }
    ],
-   [
-    "3 buttons by it",
-    "buttons",
-    "surv_pages",
-    [
-     281,
-     262,
-     10,
-     27
-    ]
-   ],
-   [
-    "speed dial",
-    "dial",
-    "speed_dial",
-    [
-     373,
-     252,
-     22,
-     22
-    ]
-   ],
-   [
-    "SPEED",
-    "display",
-    "speed",
-    [
-     341,
-     285,
-     59,
-     10
-    ]
-   ],
-   [
-    "SHIELD / ARMOR / HULL",
-    "displays",
-    "shield_bar",
-    [
-     204,
-     315,
-     113,
-     12
-    ]
-   ],
-   [
-    "FUEL",
-    "display",
-    "fuel",
-    [
-     360,
-     317,
-     36,
-     7
-    ]
-   ],
-   [
-    "PWR / ENG lights",
-    "lamps",
-    "status_lamps",
-    [
-     404,
-     314,
-     8,
-     14
-    ]
-   ],
-   [
-    "PWR / ENG knobs",
-    "knobs",
-    "power_knobs",
-    [
-     418,
-     310,
-     45,
-     20
-    ]
-   ],
-   [
-    "NAV / COM toggles + lamp",
-    "toggles",
-    "nav_sw",
-    [
-     128,
-     327,
-     56,
-     30
-    ]
-   ],
-   [
-    "toggles right (3) + buttons",
-    "toggles",
-    "wpn_sw",
-    [
-     421,
-     337,
-     48,
-     31
-    ]
-   ],
-   [
-    "toggles (2) + lamp",
-    "toggles",
-    "emcon_sw",
-    [
-     471,
-     327,
-     34,
-     28
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     555,
-     337,
-     22,
-     42
-    ]
-   ],
-   [
-    "canopy / panel lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     200,
-     640,
-     200
-    ]
+   "controls": [
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      80,
+      234,
+      11,
+      8
+     ],
+     "arg": 0
+    },
+    {
+     "fn": "target_lamp",
+     "kind": "lamp",
+     "rect": [
+      80,
+      252,
+      11,
+      8
+     ]
+    },
+    {
+     "fn": "em_lamp",
+     "kind": "lamp",
+     "rect": [
+      80,
+      270,
+      11,
+      8
+     ]
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "rect": [
+      80,
+      288,
+      11,
+      8
+     ]
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      256,
+      215,
+      13,
+      8
+     ]
+    },
+    {
+     "fn": "em_lamp",
+     "kind": "lamp",
+     "rect": [
+      550,
+      239,
+      11,
+      8
+     ]
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "rect": [
+      550,
+      263,
+      11,
+      8
+     ]
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "rect": [
+      550,
+      288,
+      11,
+      8
+     ]
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "rect": [
+      281,
+      262,
+      10,
+      7
+     ],
+     "arg": 0
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "rect": [
+      281,
+      272,
+      10,
+      7
+     ],
+     "arg": 1
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "rect": [
+      281,
+      282,
+      10,
+      7
+     ],
+     "arg": 2
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "at": [
+      136,
+      350.75
+     ],
+     "r": 3.5
+    },
+    {
+     "fn": "com_on",
+     "kind": "lamp",
+     "at": [
+      157.5,
+      331
+     ],
+     "r": 2.5
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      173.75,
+      331
+     ],
+     "r": 2.5
+    },
+    {
+     "fn": "ab_lamp",
+     "kind": "lamp",
+     "rect": [
+      225,
+      337,
+      9,
+      19
+     ]
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      403,
+      313,
+      6,
+      7
+     ],
+     "arg": 4
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      403,
+      322,
+      6,
+      7
+     ],
+     "arg": 5
+    },
+    {
+     "fn": "chan_knob",
+     "kind": "knob",
+     "at": [
+      428.75,
+      320.5
+     ],
+     "r": 7,
+     "painted": 15,
+     "angles": [
+      -45,
+      0,
+      45
+     ]
+    },
+    {
+     "fn": "vol_knob",
+     "kind": "knob",
+     "at": [
+      452.5,
+      320.5
+     ],
+     "r": 7,
+     "painted": 15,
+     "angles": [
+      -110,
+      15
+     ]
+    },
+    {
+     "fn": "speed_dial",
+     "kind": "needle",
+     "at": [
+      382.5,
+      261.25
+     ],
+     "r": 9,
+     "painted": -127,
+     "a0": -130,
+     "a1": 130,
+     "max": 0
+    },
+    {
+     "fn": "shield_bar",
+     "kind": "bar",
+     "rect": [
+      206,
+      317,
+      30,
+      8
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "armor_bar",
+     "kind": "bar",
+     "rect": [
+      244,
+      317,
+      30,
+      7
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "hull_bar",
+     "kind": "bar",
+     "rect": [
+      282,
+      317,
+      33,
+      8
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "fuel_bar",
+     "kind": "bar",
+     "rect": [
+      360,
+      317,
+      36,
+      7
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ],
-  "PACIFER": [
-   [
-    "MFD L (WPN / TARGET)",
-    "mfd",
-    "mfd",
+  },
+  "PACIFER": {
+   "displays": [
     [
      133,
      234,
      105,
      62
-    ]
-   ],
-   [
-    "MFD R (NAV / COM / IFF / E/M)",
-    "mfd",
-    "mfd",
+    ],
     [
      402,
      234,
      105,
      62
-    ]
-   ],
-   [
-    "lit bezels by MFD L (8)",
-    "buttons",
-    "mfd_pages",
+    ],
     [
-     116,
-     238,
-     139,
-     52
-    ]
-   ],
-   [
-    "lit bezels by MFD R (8)",
-    "buttons",
-    "mfd_pages",
+     266,
+     299,
+     41,
+     26
+    ],
     [
-     385,
-     238,
-     139,
-     52
-    ]
-   ],
-   [
-    "lit buttons by the radar (10)",
-    "buttons",
-    "radar_range",
+     335,
+     308,
+     77,
+     17
+    ],
     [
-     258,
-     226,
-     125,
-     58
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+     541,
+     263,
+     46,
+     6
+    ],
+    [
+     52,
+     259,
+     36,
+     6
+    ],
+    [
+     47,
+     281,
+     29,
+     6
+    ],
+    [
+     46,
+     301,
+     31,
+     5
+    ],
+    [
+     541,
+     284,
+     20,
+     8
+    ],
+    [
+     572,
+     290,
+     21,
+     8
+    ],
     [
      286,
      215,
@@ -1672,276 +2253,429 @@
      66
     ]
    ],
-   [
-    "SYSTEMS",
-    "display",
-    "survival",
-    [
-     266,
-     299,
-     41,
-     26
-    ]
-   ],
-   [
-    "2 lit buttons by it",
-    "buttons",
-    "surv_pages",
-    [
-     313,
-     302,
-     12,
-     21
-    ]
-   ],
-   [
-    "SHIELD / ARMOR / HULL",
-    "displays",
-    "shield_bar",
-    [
-     45,
-     257,
-     45,
-     52
-    ]
-   ],
-   [
-    "FUEL",
-    "display",
-    "fuel",
-    [
-     541,
-     263,
-     46,
-     6
-    ]
-   ],
-   [
-    "POWER / ENGINE",
-    "displays",
-    "power_bar",
-    [
-     540,
-     282,
-     54,
-     18
-    ]
-   ],
-   [
-    "SPEED",
-    "display",
-    "speed",
-    [
-     335,
-     308,
-     77,
-     17
-    ]
-   ],
-   [
-    "speed dial",
-    "dial",
-    "speed_dial",
-    [
-     423,
-     304,
-     27,
-     27
-    ]
-   ],
-   [
-    "switch bank (4) + lit button",
-    "toggles",
-    "wpn_sw",
-    [
-     118,
-     305,
-     72,
-     24
-    ]
-   ],
-   [
-    "knob + vent",
-    "knob",
-    "misc_unlit",
-    [
-     194,
-     307,
-     19,
-     20
-    ]
-   ],
-   [
-    "2nd row: toggles (4) + 2 lit buttons",
-    "toggles",
-    "wpn_sw",
-    [
-     157,
-     329,
-     89,
-     19
-    ]
-   ],
-   [
-    "knobs (3) low",
-    "knobs",
-    "misc_unlit",
-    [
-     151,
-     352,
-     68,
-     23
-    ]
-   ],
-   [
-    "NAV / COM / IFF buttons",
-    "buttons",
-    "nav_sw",
-    [
-     467,
-     310,
-     44,
-     20
-    ]
-   ],
-   [
-    "LOCK / MASTER WARN lamps",
-    "lamps",
-    "lock",
-    [
-     512,
-     310,
-     12,
-     21
-    ]
-   ],
-   [
-    "E/M panel (knobs, toggles, lamp)",
-    "knobs",
-    "emcon_sw",
-    [
-     527,
-     337,
-     62,
-     57
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     402,
-     349,
-     16,
-     28
-    ]
-   ],
-   [
-    "canopy / sill lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     0,
-     640,
-     400
-    ]
+   "controls": [
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      117,
+      241,
+      10,
+      50
+     ],
+     "arg": 0
+    },
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      243,
+      241,
+      10,
+      50
+     ],
+     "arg": 0
+    },
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      387,
+      241,
+      10,
+      50
+     ],
+     "arg": 1
+    },
+    {
+     "fn": "mfd_lamp",
+     "kind": "lamp",
+     "rect": [
+      513,
+      241,
+      10,
+      50
+     ],
+     "arg": 1
+    },
+    {
+     "fn": "sig_ladder",
+     "kind": "lamp",
+     "at": [
+      264,
+      278.5
+     ],
+     "r": 3.5,
+     "arg": 0
+    },
+    {
+     "fn": "sig_ladder",
+     "kind": "lamp",
+     "at": [
+      264,
+      266
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "sig_ladder",
+     "kind": "lamp",
+     "at": [
+      264,
+      255
+     ],
+     "r": 3.5,
+     "arg": 2
+    },
+    {
+     "fn": "sig_ladder",
+     "kind": "lamp",
+     "at": [
+      264,
+      244.5
+     ],
+     "r": 3.5,
+     "arg": 3
+    },
+    {
+     "fn": "sig_ladder",
+     "kind": "lamp",
+     "at": [
+      264,
+      234
+     ],
+     "r": 3.5,
+     "arg": 4
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "at": [
+      376,
+      278
+     ],
+     "r": 3.5,
+     "arg": 0
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "at": [
+      376,
+      267
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "at": [
+      376,
+      256
+     ],
+     "r": 3.5,
+     "arg": 2
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "at": [
+      376,
+      245
+     ],
+     "r": 3.5,
+     "arg": 3
+    },
+    {
+     "fn": "range_ladder",
+     "kind": "lamp",
+     "at": [
+      376,
+      234
+     ],
+     "r": 3.5,
+     "arg": 4
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "at": [
+      319,
+      307.5
+     ],
+     "r": 3.5,
+     "arg": 0
+    },
+    {
+     "fn": "surv_page",
+     "kind": "lamp",
+     "at": [
+      319,
+      318.5
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "at": [
+      473.5,
+      322
+     ],
+     "r": 3
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "at": [
+      482.5,
+      322
+     ],
+     "r": 3
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "at": [
+      503.5,
+      323
+     ],
+     "r": 2.5
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "at": [
+      516.5,
+      314
+     ],
+     "r": 3.5,
+     "colour": "red"
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "at": [
+      516.5,
+      321.5
+     ],
+     "r": 3,
+     "colour": "red",
+     "dark": true
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      126,
+      315.5
+     ],
+     "r": 4.5
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      145,
+      311
+     ],
+     "r": 2
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      158.5,
+      311
+     ],
+     "r": 2
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      172,
+      311
+     ],
+     "r": 2
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      186,
+      311
+     ],
+     "r": 2
+    },
+    {
+     "fn": "ab_lamp",
+     "kind": "lamp",
+     "at": [
+      163,
+      337
+     ],
+     "r": 4
+    },
+    {
+     "fn": "target_lamp",
+     "kind": "lamp",
+     "at": [
+      238,
+      339
+     ],
+     "r": 5
+    },
+    {
+     "fn": "em_lamp",
+     "kind": "lamp",
+     "at": [
+      560.5,
+      349
+     ],
+     "r": 3,
+     "colour": "red"
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      579.5,
+      364.5
+     ],
+     "r": 3.5,
+     "arg": 3
+    },
+    {
+     "fn": "emcon_knob",
+     "kind": "knob",
+     "at": [
+      546,
+      361.5
+     ],
+     "r": 6.5,
+     "painted": 0,
+     "angles": [
+      -50,
+      0,
+      50
+     ]
+    },
+    {
+     "fn": "speed_dial",
+     "kind": "needle",
+     "at": [
+      436,
+      317
+     ],
+     "r": 12,
+     "painted": -135,
+     "a0": -135,
+     "a1": 135,
+     "max": 0,
+     "tail": 4
+    },
+    {
+     "fn": "shield_bar",
+     "kind": "bar",
+     "rect": [
+      52,
+      259,
+      36,
+      6
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "armor_bar",
+     "kind": "bar",
+     "rect": [
+      47,
+      281,
+      29,
+      6
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "hull_bar",
+     "kind": "bar",
+     "rect": [
+      46,
+      301,
+      31,
+      5
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "fuel_bar",
+     "kind": "bar",
+     "rect": [
+      541,
+      263,
+      46,
+      6
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "power_bar",
+     "kind": "bar",
+     "rect": [
+      541,
+      284,
+      20,
+      8
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "engine_bar",
+     "kind": "bar",
+     "rect": [
+      572,
+      290,
+      21,
+      8
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ],
-  "PROGENY": [
-   [
-    "MFD L",
-    "mfd",
-    "mfd",
+  },
+  "PROGENY": {
+   "displays": [
     [
      137,
      239,
      108,
      74
-    ]
-   ],
-   [
-    "MFD R",
-    "mfd",
-    "mfd",
+    ],
     [
      394,
      240,
      109,
      73
-    ]
-   ],
-   [
-    "buttons under MFD L (5)",
-    "buttons",
-    "mfd_pages",
+    ],
     [
-     149,
-     317,
-     85,
-     14
-    ]
-   ],
-   [
-    "buttons under MFD R (5)",
-    "buttons",
-    "mfd_pages",
+     293,
+     299,
+     54,
+     43
+    ],
     [
-     407,
-     317,
-     84,
-     14
-    ]
-   ],
-   [
-    "WPN toggles (3)",
-    "toggles",
-    "wpn_sw",
-    [
-     67,
+     527,
      249,
-     50,
-     21
-    ]
-   ],
-   [
-    "NAV knob",
-    "knob",
-    "nav_sw",
-    [
-     65,
-     277,
-     19,
-     25
-    ]
-   ],
-   [
-    "COM knob",
-    "knob",
-    "com_sw",
-    [
-     89,
-     277,
-     19,
-     25
-    ]
-   ],
-   [
-    "2 lights by COM",
-    "lamps",
-    "com_lamp",
-    [
-     106,
-     279,
-     9,
-     16
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+     54,
+     11
+    ],
     [
      289,
      226,
@@ -1949,309 +2683,285 @@
      62
     ]
    ],
-   [
-    "survival",
-    "display",
-    "survival",
-    [
-     293,
-     299,
-     54,
-     43
-    ]
-   ],
-   [
-    "buttons under it (3)",
-    "buttons",
-    "surv_pages",
-    [
-     289,
-     344,
-     58,
-     10
-    ]
-   ],
-   [
-    "SHD / ARM / HULL lights",
-    "lamps",
-    "status_lamps",
-    [
-     266,
-     308,
-     16,
-     48
-    ]
-   ],
-   [
-    "FUEL / PWR / ENG lights",
-    "lamps",
-    "status_lamps",
-    [
-     360,
-     308,
-     16,
-     48
-    ]
-   ],
-   [
-    "SPEED",
-    "display",
-    "speed",
-    [
-     527,
-     249,
-     54,
-     11
-    ]
-   ],
-   [
-    "two-hand dial",
-    "dial",
-    "clock_dial",
-    [
-     594,
-     246,
-     20,
-     20
-    ]
-   ],
-   [
-    "TARGET light-button",
-    "lamp",
-    "target_lamp",
-    [
-     528,
-     282,
-     11,
-     10
-    ]
-   ],
-   [
-    "RADAR light-button",
-    "lamp",
-    "em_lamp",
-    [
-     554,
-     282,
-     11,
-     10
-    ]
-   ],
-   [
-    "IFF light-button",
-    "lamp",
-    "iff_lamp",
-    [
-     579,
-     282,
-     11,
-     10
-    ]
-   ],
-   [
-    "LOCK light-button",
-    "lamp",
-    "lock",
-    [
-     605,
-     282,
-     11,
-     10
-    ]
-   ],
-   [
-    "E/M knob + 2 lights",
-    "knob",
-    "emcon_sw",
-    [
-     530,
-     305,
-     37,
-     32
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     591,
-     314,
-     19,
-     22
-    ]
-   ],
-   [
-    "frame lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     0,
-     640,
-     400
-    ]
+   "controls": [
+    {
+     "fn": "target_lamp",
+     "kind": "lamp",
+     "rect": [
+      527,
+      275,
+      11,
+      17
+     ]
+    },
+    {
+     "fn": "em_lamp",
+     "kind": "lamp",
+     "rect": [
+      551,
+      275,
+      11,
+      17
+     ]
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "rect": [
+      575,
+      275,
+      12,
+      17
+     ]
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "rect": [
+      600,
+      275,
+      11,
+      17
+     ]
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      533.5,
+      311
+     ],
+     "r": 3.5,
+     "arg": 1
+    },
+    {
+     "fn": "emcon_lamp",
+     "kind": "lamp",
+     "at": [
+      533.5,
+      322.5
+     ],
+     "r": 3.5,
+     "arg": 2
+    },
+    {
+     "fn": "emcon_knob",
+     "kind": "knob",
+     "at": [
+      551,
+      315
+     ],
+     "r": 7.5,
+     "painted": 0,
+     "angles": [
+      -50,
+      0,
+      50
+     ]
+    },
+    {
+     "fn": "nav_knob",
+     "kind": "knob",
+     "at": [
+      70,
+      288
+     ],
+     "r": 7.5,
+     "painted": 0,
+     "angles": [
+      -60,
+      -20,
+      20,
+      60
+     ]
+    },
+    {
+     "fn": "chan_knob",
+     "kind": "knob",
+     "at": [
+      94,
+      288
+     ],
+     "r": 7.5,
+     "painted": 0,
+     "angles": [
+      -45,
+      0,
+      45
+     ]
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "at": [
+      111,
+      282
+     ],
+     "r": 3
+    },
+    {
+     "fn": "com_on",
+     "kind": "lamp",
+     "at": [
+      111,
+      292.5
+     ],
+     "r": 3
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      266,
+      309,
+      11,
+      6
+     ],
+     "arg": 0
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      266,
+      326,
+      11,
+      6
+     ],
+     "arg": 1
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      266,
+      343,
+      11,
+      6
+     ],
+     "arg": 2
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      360,
+      309,
+      11,
+      6
+     ],
+     "arg": 3
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      360,
+      326,
+      11,
+      6
+     ],
+     "arg": 4
+    },
+    {
+     "fn": "status_lamp",
+     "kind": "lamp",
+     "rect": [
+      360,
+      343,
+      11,
+      6
+     ],
+     "arg": 5
+    },
+    {
+     "fn": "clock_dial",
+     "kind": "needle",
+     "at": [
+      604,
+      255
+     ],
+     "r": 9,
+     "painted": 45,
+     "tail": 9,
+     "a0": 0,
+     "a1": 360,
+     "max": 60
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ],
-  "GODDARD": [
-   [
-    "MFD L",
-    "mfd",
-    "mfd",
+  },
+  "GODDARD": {
+   "displays": [
     [
      154,
      237,
      89,
      58
-    ]
-   ],
-   [
-    "MFD R",
-    "mfd",
-    "mfd",
+    ],
     [
      397,
      237,
      89,
      58
-    ]
-   ],
-   [
-    "bezels by MFD L (14)",
-    "buttons",
-    "mfd_pages",
-    [
-     141,
-     238,
-     114,
-     58
-    ]
-   ],
-   [
-    "bezels by MFD R (14)",
-    "buttons",
-    "mfd_pages",
-    [
-     385,
-     238,
-     114,
-     58
-    ]
-   ],
-   [
-    "support VDU",
-    "display",
-    "aux_nav",
-    [
-     20,
-     211,
-     29,
-     23
-    ]
-   ],
-   [
-    "FUEL / POWER / ENG bars",
-    "displays",
-    "fuel_bar",
-    [
-     54,
-     259,
-     60,
-     31
-    ]
-   ],
-   [
-    "lamp + 3 small knobs",
-    "knobs",
-    "misc_unlit",
-    [
-     121,
-     243,
-     13,
-     46
-    ]
-   ],
-   [
-    "big knob",
-    "knob",
-    "misc_unlit",
-    [
-     111,
-     292,
-     18,
-     19
-    ]
-   ],
-   [
-    "side lamps",
-    "lamps",
-    "cabin",
-    [
-     14,
-     264,
-     13,
-     38
-    ]
-   ],
-   [
-    "NAV / COM / IFF / E/M knobs",
-    "knobs",
-    "nav_sw",
-    [
-     132,
-     327,
-     77,
-     32
-    ]
-   ],
-   [
-    "toggles (3) + lamp under them",
-    "toggles",
-    "com_sw",
-    [
-     151,
-     346,
-     53,
-     15
-    ]
-   ],
-   [
-    "survival",
-    "display",
-    "survival",
+    ],
     [
      219,
      315,
      46,
      37
-    ]
-   ],
-   [
-    "4 lit buttons by it",
-    "buttons",
-    "surv_pages",
+    ],
     [
-     269,
-     316,
+     20,
+     211,
+     29,
+     23
+    ],
+    [
+     551,
+     303,
+     61,
+     6
+    ],
+    [
+     56,
+     261,
+     9,
+     27
+    ],
+    [
+     79,
+     261,
      10,
-     31
-    ]
-   ],
-   [
-    "red lamps top (2)",
-    "lamps",
-    "warn",
+     27
+    ],
     [
-     266,
-     232,
-     112,
-     10
-    ]
-   ],
-   [
-    "radar",
-    "scope",
-    "radar",
+     102,
+     261,
+     10,
+     27
+    ],
+    [
+     517,
+     261,
+     8,
+     25
+    ],
+    [
+     543,
+     261,
+     7,
+     28
+    ],
+    [
+     567,
+     262,
+     7,
+     28
+    ],
     [
      288,
      242,
@@ -2259,127 +2969,286 @@
      62
     ]
    ],
-   [
-    "knobs + lamps by the radar",
-    "knobs",
-    "radar_range",
-    [
-     261,
-     246,
-     117,
-     50
-    ]
-   ],
-   [
-    "3 lit buttons low centre",
-    "buttons",
-    "ab_lamp",
-    [
-     359,
-     313,
-     17,
-     31
-    ]
-   ],
-   [
-    "WPN knob + lit button",
-    "knob",
-    "wpn_sw",
-    [
-     417,
-     327,
-     16,
-     31
-    ]
-   ],
-   [
-    "TARGET buttons (6)",
-    "buttons",
-    "target_btns",
-    [
-     436,
-     327,
-     41,
-     29
-    ]
-   ],
-   [
-    "LOCK toggle",
-    "toggle",
-    "lock",
-    [
-     494,
-     330,
-     12,
-     17
-    ]
-   ],
-   [
-    "SHIELD / ARMOR / HULL bars",
-    "displays",
-    "shield_bar",
-    [
-     515,
-     259,
-     61,
-     32
-    ]
-   ],
-   [
-    "SPEED dial",
-    "dial",
-    "speed_dial",
-    [
-     589,
-     264,
-     26,
-     26
-    ]
-   ],
-   [
-    "speed bar",
-    "display",
-    "speed",
-    [
-     551,
-     303,
-     61,
-     6
-    ]
-   ],
-   [
-    "lamps by the bars",
-    "lamps",
-    "status_lamps",
-    [
-     508,
-     294,
-     35,
-     50
-    ]
-   ],
-   [
-    "EJECT",
-    "handle",
-    "eject",
-    [
-     575,
-     336,
-     15,
-     24
-    ]
-   ],
-   [
-    "canopy / frame lamps",
-    "lamps",
-    "cabin",
-    [
-     0,
-     0,
-     640,
-     230
-    ]
+   "controls": [
+    {
+     "fn": "nav_knob",
+     "kind": "knob",
+     "at": [
+      139,
+      331.5
+     ],
+     "r": 6.5,
+     "painted": 0,
+     "angles": [
+      -60,
+      -20,
+      20,
+      60
+     ]
+    },
+    {
+     "fn": "chan_knob",
+     "kind": "knob",
+     "at": [
+      158.5,
+      331
+     ],
+     "r": 6.5,
+     "painted": 0,
+     "angles": [
+      -45,
+      0,
+      45
+     ]
+    },
+    {
+     "fn": "iff_knob",
+     "kind": "knob",
+     "at": [
+      178.5,
+      331
+     ],
+     "r": 6.5,
+     "painted": 0,
+     "angles": [
+      -60,
+      0
+     ]
+    },
+    {
+     "fn": "emcon_knob",
+     "kind": "knob",
+     "at": [
+      198.5,
+      331.5
+     ],
+     "r": 6.5,
+     "painted": 0,
+     "angles": [
+      -50,
+      0,
+      50
+     ]
+    },
+    {
+     "fn": "com_lamp",
+     "kind": "lamp",
+     "at": [
+      169,
+      352
+     ],
+     "r": 3.5
+    },
+    {
+     "fn": "arm_knob",
+     "kind": "knob",
+     "at": [
+      425,
+      331
+     ],
+     "r": 6,
+     "painted": 0,
+     "angles": [
+      -60,
+      0
+     ]
+    },
+    {
+     "fn": "arm_lamp",
+     "kind": "lamp",
+     "at": [
+      424,
+      348
+     ],
+     "r": 3.5
+    },
+    {
+     "fn": "target_lamp",
+     "kind": "lamp",
+     "at": [
+      475,
+      349
+     ],
+     "r": 3.5
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      268,
+      233,
+      9,
+      6
+     ],
+     "colour": "red"
+    },
+    {
+     "fn": "warn",
+     "kind": "lamp",
+     "rect": [
+      362,
+      233,
+      9,
+      6
+     ],
+     "colour": "red"
+    },
+    {
+     "fn": "em_lamp",
+     "kind": "lamp",
+     "at": [
+      272,
+      290
+     ],
+     "r": 4.5
+    },
+    {
+     "fn": "iff_lamp",
+     "kind": "lamp",
+     "at": [
+      366,
+      290
+     ],
+     "r": 4.5
+    },
+    {
+     "fn": "nav_lamp",
+     "kind": "lamp",
+     "at": [
+      269.5,
+      270
+     ],
+     "r": 3.5
+    },
+    {
+     "fn": "lock",
+     "kind": "lamp",
+     "at": [
+      370.5,
+      270
+     ],
+     "r": 3.5
+    },
+    {
+     "fn": "radar_knob",
+     "kind": "knob",
+     "at": [
+      270,
+      258
+     ],
+     "r": 4.5,
+     "painted": 0,
+     "angles": [
+      -45,
+      0,
+      45
+     ]
+    },
+    {
+     "fn": "speed_dial",
+     "kind": "needle",
+     "at": [
+      602.5,
+      277.5
+     ],
+     "r": 11,
+     "painted": -135,
+     "a0": -135,
+     "a1": 135,
+     "max": 0
+    },
+    {
+     "fn": "fuel_bar",
+     "kind": "bar",
+     "rect": [
+      56,
+      261,
+      9,
+      27
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "power_bar",
+     "kind": "bar",
+     "rect": [
+      79,
+      261,
+      10,
+      27
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "engine_bar",
+     "kind": "bar",
+     "rect": [
+      102,
+      261,
+      10,
+      27
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "shield_bar",
+     "kind": "bar",
+     "rect": [
+      517,
+      261,
+      8,
+      25
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "armor_bar",
+     "kind": "bar",
+     "rect": [
+      543,
+      261,
+      7,
+      28
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "hull_bar",
+     "kind": "bar",
+     "rect": [
+      567,
+      262,
+      7,
+      28
+     ],
+     "dir": "v"
+    },
+    {
+     "fn": "speed_bar",
+     "kind": "bar",
+     "rect": [
+      551,
+      303,
+      61,
+      6
+     ],
+     "dir": "h"
+    },
+    {
+     "fn": "aux_nav",
+     "kind": "text",
+     "rect": [
+      20,
+      211,
+      29,
+      23
+     ]
+    },
+    {
+     "fn": "cabin",
+     "kind": "cabin"
+    }
    ]
-  ]
+  }
  }
 }

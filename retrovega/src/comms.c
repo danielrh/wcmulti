@@ -251,6 +251,11 @@ int comms_on(int vdu)
     return g_c.on && g_c.vdu == vdu;
 }
 
+int comms_side(void)
+{
+    return g_c.on ? g_c.v.side : -1;
+}
+
 /* lipsync's shape now (0 at rest or after the line) */
 static int shape(void)
 {

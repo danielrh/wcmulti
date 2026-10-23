@@ -506,6 +506,62 @@ by XMS moves that cost the emulated CPU a few instructions. On a real
 486 those moves would be the bottleneck (some 250 KB a frame through the
 bus); in DOSBox the sprites are.
 
+### The panel: every control does something
+
+The user's ruling (2026-10-22): every dial, display and light of each
+cockpit is hooked to a game function, or blanked; the power-distribution
+knobs, which the game has no use for, repainted as a radio's frequency
+dials that turn to whoever is talking (wing, the carrier for landing, an
+enemy). The table is `data/panels.json`: for each cockpit, each control's
+place, kind and function (213 in all; the functions and their meanings at
+its head). Unlabelled, unlit buttons and knobs stay as art: with no light
+or needle there is nothing for them to show.
+
+**The art** (`tools/panels.py`, made in the build into build/panels). From
+the kit's base: a lamp's other state (a lit one darkened, a dark one lit in
+its colour, a plain button given a glow), a knob turned to each of its
+positions (rendered 4x, rotated, back down), the throttle's ticks lit to
+each level, the frequency knobs' scales recoloured one green (dim, and a
+lit state), the gauges' painted needles painted out (the engine draws
+moving ones), lettering painted out and relettered (Roboto Condensed Bold,
+the kits' light-with-shadow look, at the panel's slant): POWER DISTRIB /
+ENG / SHD / WPN become COMM FREQ / 100 / 10 / 1 on the Schroedinger,
+Gawain and Lancelot, the Franklin's POWER buttons CHAN, the Redeemer's
+PWR / ENG knobs CHAN / VOL. Every other lit lamp of the cockpit (found by
+colour, away from the controls and the glass) is one more state: the
+running lights off. A state keeps only the pixels it changes; `rvpack.py`
+packs each as a sprite and a table of `RvPanelControl` records a cockpit,
+the cockpit's palette taking the states' colours in.
+
+**The engine** (`src/panel.c`). Each frame every control's state comes
+from the ship's systems (`ShipSystems`, kept by flight.c); one that
+changed marks its rows, and the band's redraw paints its sprite over the
+restored base (the base shows the kit's own state). Needles (speed dials,
+the Progeny's two-hand mission clock), bars (shields, armour, hull, fuel,
+power plant, engine, speed, target range) and readouts (heat, signature,
+the nav point, the target; a 3 x 5 pixel font where the glass is small)
+are drawn. A click below the canopy works the control under the pointer.
+
+**The systems.** EMCON (K): ACTIVE (the radar emitting: every contact
+identified), PASSIVE (the scope unidentified), OFF (a dark scope, the
+running lights off, the smallest signature). The sensor mode (V): the
+lock's seeker, radar (needs EMCON ACTIVE and the IFF) or infrared (needs a
+hot target: its engines toward us, or burning). IFF (I): off, every
+contact one colour. Master arm (M), decoys (X), hold the lock (L), the
+radar range (G: 4,000 / 8,000 / 16,000 km), the survival display's page
+(H: shields and armour, hull and damage, the nav point), the nav point
+(N), the target (T next, Y the nearest enemy; the nearest at launch;
+AUTO keeps it so), comms muted (C: no comm faces, no hails), the
+afterburner (Tab held: the ship's afterburner speed, fuel for about 11 s,
+heat), eject (Ctrl+E twice within two seconds, or the handle: the mission
+ends ejected). The LOCK lamp is the target held in an 11-degree cone
+within 6,000 km by a seeker the switches allow; MASTER WARN blinks for a
+damaged system or a shield under a quarter. The radio tunes itself to
+whoever starts talking (WING 267 MHz for a pilot, GUARD 243 for an
+alien's hail: the real military distress frequency; CARRIER 315 for the
+carrier), its digit knobs stepping there a notch every third frame. The
+switches are flags combat will read: the lock rules already do.
+
 ### The benchmark
 
 Off by default since 2026-10-20 (`g_bench_wanted` 0): the copies tiled the

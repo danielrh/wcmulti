@@ -27,6 +27,7 @@
 #include "bolts.h"
 #include "flames.h"
 #include "comms.h"
+#include "panel.h"
 #include "balls.h"
 #include "missiles.h"
 #include "sky.h"
@@ -56,6 +57,7 @@ int g_collide_demo = 0;                 /* RV.EXE /collidedemo: two fighters flo
 int g_hull_demo = 0;                    /* RV.EXE /hulldemo: a turning fighter shot through by a grid of rays */
 int g_flame_test = 0;                   /* RV.EXE /flametest: the flames' self-test (with the flames scene's types) */
 int g_comm_demo = 0;                    /* RV.EXE /commdemo: the pilots on the comm in turn, each VDU by turns */
+int g_test_ship = 0;                    /* RV.EXE /ship T: the player flies ship type T (hex) whatever the deck chose, + 1 */
 int g_hull_type = -1;                   /* RV.EXE /hulltype N: its ship's type (decimal; an asymmetric one checks the
                                            silhouettes' left and right) */
 int g_balls = 0;                        /* RV.EXE /balls N: balls in the laser benchmark, N far ones (-1: as many as hold
@@ -216,6 +218,8 @@ static void ship_physics(int s)
     int yaw = 0, pitch = 0;
     if (!t)
         return;
+    if (s == 0 && g_sys.burning)        /* (the afterburner: its own top speed) */
+        want = t->ab_kps > t->max_kps ? t->ab_kps : t->max_kps * 3L / 2;
     if (rvController[s] == 1) {
         yaw = g_steer_x;
         pitch = g_steer_y;
@@ -1058,7 +1062,7 @@ static void flame_test(void)
 static void comm_launch(void)
 {
     int i;
-    if (!g_m)
+    if (!g_m || g_sys.muted)
         return;
     for (i = 0; i < (int)g_m->ntalk; i++)
         if (comms_say(comms_voice(g_m->talk[i].speaker), 0, (const char __far *)g_pilots[g_m->talk[i].speaker].line))
@@ -1075,7 +1079,7 @@ static void comm_hail(void)
 {
     static const char __far s_hail[] = "flight: frame %u: slot %d (type %02X, side %d) hails, voice %d";
     int s, v;
-    if (!g_m || g_hailed || frameCounter <= 90 || (frameCounter & 7) || comms_on(0) || comms_on(1))
+    if (!g_m || g_hailed || g_sys.muted || frameCounter <= 90 || (frameCounter & 7) || comms_on(0) || comms_on(1))
         return;
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
         long dx, dy, dz;
@@ -1338,11 +1342,12 @@ static void mfd_draw(int which, const RvRect __far *r, int y0, int y1)
 {
     /* a comm on this VDU, else on the right one the target's view, clipped to the glass */
     const ShipSet __far *set;
+    int si = g_sys.target >= 0 ? ships_find(gInstanceShipTypes[g_sys.target]) : g_set_enemy;
     if (comms_draw(which, r, y0, y1))
         return;
-    if (which != 1 || g_set_enemy < 0)
+    if (which != 1 || si < 0 || (rvCockpitDamage >> 1 & 1))   /* (the target's view; none with the MFD damaged) */
         return;
-    set = ships_set(g_set_enemy);
+    set = ships_set(si);
     if (y1 <= r->y || y0 >= r->y + r->h)
         return;
     ships_blit_size(set, 1, 10, r->x + r->w / 2, r->y + r->h / 2, y0 > r->y ? y0 : r->y,
@@ -1351,11 +1356,236 @@ static void mfd_draw(int which, const RvRect __far *r, int y0, int y1)
 
 static int lasers_far(void);
 
+/* --- the ship's systems (panel.h): what the cockpit's controls show and set ---
+ *
+ * The user's table (data/panels.json, 2026-10-22): EMCON, the sensor mode, the IFF and master arm are switches whose
+ * flags combat will read (the lock rules already do); the radio tunes to whoever talks (WING 267, the carrier 315,
+ * GUARD 243 for an alien's hail) and its frequency knobs step there; the afterburner (Tab) burns fuel and heat; the
+ * signature is what an enemy will find you by.  Keys: K EMCON, V sensor, I IFF, C comms mute, N nav point, M master
+ * arm, T next target, Y the nearest enemy, L hold the lock, G radar range, H the survival display's page, X a decoy,
+ * Tab the afterburner (held), Ctrl+E twice eject; a click on a control works it. */
+static const unsigned char __far g_freq[3][3] = { { 2, 6, 7 }, { 3, 1, 5 }, { 2, 4, 3 } };   /* MHz: WING, CARRIER, GUARD */
+static unsigned long __far g_eject_at;  /* Ctrl+E (or the handle) once: when; a second within 2 s ejects */
+static int __far g_heat10;              /* heat x 10, following the engine with a lag */
+static int __far g_last_side = -1;      /* who talked last frame */
+static unsigned __far g_shield_was;     /* the shields last frame (a drop flickers the lights) */
+static int __far g_flicker;             /* frames of flicker left */
+
+static void systems_start(void)
+{
+    _fmemset(&g_sys, 0, sizeof g_sys);
+    g_sys.emcon = EMCON_ACTIVE;
+    g_sys.iff = 1;
+    g_sys.armed = 1;                    /* (out of the launch tube: armed) */
+    g_sys.decoys = 6;
+    g_sys.radar_range = 1;
+    g_sys.chan = CHAN_WING;
+    _fmemcpy(g_sys.digit, g_freq[CHAN_WING], 3);
+    g_sys.target = -1;
+    g_sys.fuel = 1000;
+    g_sys.hull = 100;
+    g_sys.lights = 1;
+    g_sys.target_km = g_sys.nav_km = -1;
+    g_heat10 = 0;
+    g_last_side = -1;
+    g_eject_at = 0;
+    g_flicker = 0;
+}
+
+static long km_to(int s)                /* km from the player, roughly (the largest axis and half the rest) */
+{
+    long dx = labs(gPositionVector[s].x - gPositionVector[0].x) / 256, dy = labs(gPositionVector[s].y - gPositionVector[0].y) / 256,
+         dz = labs(gPositionVector[s].z - gPositionVector[0].z) / 256, m = dx > dy ? (dx > dz ? dx : dz) : (dy > dz ? dy : dz);
+    return m + (dx + dy + dz - m) / 2;
+}
+
+static int is_ship(int s)
+{
+    return s > 0 && s <= RV_MAX_SHIP_SLOT && (maybeEntityType[s] == 0xC || maybeEntityType[s] == 0xD);
+}
+
+/* the target: the next ship after the one chosen (then none), or the nearest enemy */
+static void target_next(void)
+{
+    int s;
+    for (s = g_sys.target + 1; s <= RV_MAX_SHIP_SLOT; s++)
+        if (is_ship(s)) {
+            g_sys.target = s;
+            return;
+        }
+    g_sys.target = -1;
+}
+
+static void target_nearest(void)
+{
+    int s, best = -1;
+    long d, bd = 0;
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
+        if (is_ship(s) && commAnimInfo[s] != 0 && ((d = km_to(s)) < bd || best < 0)) {
+            best = s;
+            bd = d;
+        }
+    if (best >= 0)
+        g_sys.target = best;
+}
+
+static void eject_pull(void)
+{
+    unsigned long now = clock240();
+    if (g_eject_at && now - g_eject_at < 480) {
+        rv_log("flight: ejected");
+        missionStatus = 2;
+    }
+    g_eject_at = now;
+}
+
+/* a control worked (a key's or a click's): its function and argument (RV_PF_*) */
+static void system_action(int fn, int arg)
+{
+    switch (fn) {
+    case RV_PF_EMCON_LAMP:
+        if (arg < 3) { g_sys.emcon = (unsigned char)arg; break; }
+        /* (fall through: the STEALTH lamp cycles) */
+    case RV_PF_EMCON_KNOB: case RV_PF_EM_LAMP:
+        g_sys.emcon = (unsigned char)((g_sys.emcon + 2) % 3);
+        break;
+    case RV_PF_SENSOR_LAMP: g_sys.sensor = (unsigned char)arg; break;
+    case RV_PF_IFF_LAMP: case RV_PF_IFF_KNOB: g_sys.iff ^= 1; break;
+    case RV_PF_COM_LAMP: case RV_PF_COM_ON: case RV_PF_VOL_KNOB: g_sys.muted ^= 1; break;
+    case RV_PF_NAV_LAMP: case RV_PF_NAV_KNOB: case RV_PF_AUX_NAV:
+        if (g_m && g_m->nnav) g_sys.nav = (unsigned char)((g_sys.nav + 1) % g_m->nnav);
+        break;
+    case RV_PF_TARGET_LAMP: case RV_PF_TARGET_ID: case RV_PF_RANGE_BAR: target_next(); break;
+    case RV_PF_LOCK: g_sys.hold ^= 1; break;
+    case RV_PF_ARM_LAMP: case RV_PF_ARM_KNOB: g_sys.armed ^= 1; break;
+    case RV_PF_AUTO_LAMP:
+        if (arg == 0) rv_autopilot_key();
+        else if (arg == 1) g_sys.match ^= 1;
+        else if (arg == 2) g_sys.autotarget ^= 1;
+        else g_sys.autodecoy ^= 1;
+        break;
+    case RV_PF_DEFENCE: if (g_sys.decoys) g_sys.decoys--; break;
+    case RV_PF_SURV_PAGE: g_sys.surv_page = (unsigned char)arg; break;
+    case RV_PF_RADAR_KNOB: case RV_PF_RANGE_LADDER: g_sys.radar_range = (unsigned char)((g_sys.radar_range + 1) % 3); break;
+    case RV_PF_RADIO_CHAN: g_sys.chan = (unsigned char)arg; break;
+    case RV_PF_CHAN_KNOB: case RV_PF_RADIO_DIGIT: case RV_PF_RADIO_LIT:
+        g_sys.chan = (unsigned char)((g_sys.chan + 1) % 3);
+        break;
+    }
+}
+
+/* once a frame, before the cockpit's state: the systems from the slots, the keys held, the comms */
+static void systems_tick(void)
+{
+    const RvShipType __far *t = g_my_type;
+    int side = comms_side(), k, s;
+    unsigned shield = SHIELD(0, 0) + SHIELD(0, 1);
+    /* the radio: tuned to whoever starts talking; the knobs a notch every third frame toward its frequency */
+    g_sys.talking = side >= 0;
+    if (side >= 0 && side != g_last_side)
+        g_sys.chan = side ? CHAN_GUARD : CHAN_WING;
+    g_last_side = side;
+    if (frameCounter % 3 == 0)
+        for (k = 0; k < 3; k++)
+            if (g_sys.digit[k] != g_freq[g_sys.chan][k])
+                g_sys.digit[k] += g_sys.digit[k] < g_freq[g_sys.chan][k] ? 1 : -1;
+    /* the target: gone ones dropped; the nearest enemy at launch, and kept so with AUTO */
+    if (g_sys.target >= 0 && !is_ship(g_sys.target))
+        g_sys.target = -1;
+    if ((frameCounter == 2 && g_sys.target < 0) || (g_sys.autotarget && frameCounter % 30 == 0))
+        target_nearest();
+    g_sys.target_km = -1;
+    g_sys.target_hot = g_sys.lock = 0;
+    g_sys.target_name[0] = 0;
+    if ((s = g_sys.target) >= 0) {
+        const RvShipType __far *tt = type_of(s);
+        RvVec3 d;
+        long z, len;
+        g_sys.target_km = km_to(s);
+        if (tt)
+            _fstrncpy(g_sys.target_name, tt->name, sizeof g_sys.target_name - 1);
+        d.x = (gPositionVector[s].x - gPositionVector[0].x) / 16;
+        d.y = (gPositionVector[s].y - gPositionVector[0].y) / 16;
+        d.z = (gPositionVector[s].z - gPositionVector[0].z) / 16;
+        z = vec_dot(&d, &gOrientationFrontVector[0]) / 256;
+        len = (long)lf_sqrt((unsigned long)((d.x / 16) * (d.x / 16) + (d.y / 16) * (d.y / 16) + (d.z / 16) * (d.z / 16))) * 16;
+        /* hot: its engines toward us (we are behind it) or its afterburner lit */
+        g_sys.target_hot = vec_dot(&d, &gOrientationFrontVector[s]) > 0 || burning(s);
+        /* the lock (until missiles: the target held in the gunsight, 11 degrees, 6,000 km): radar-guided needs the
+           radar on (EMCON ACTIVE) and the IFF; infrared a hot target and not EMCON OFF */
+        if (len > 0 && z * 100 / len > 98 && g_sys.target_km < 6000)
+            g_sys.lock = g_sys.sensor == SENSOR_RADAR ? g_sys.emcon == EMCON_ACTIVE && g_sys.iff
+                                                      : g_sys.emcon != EMCON_OFF && g_sys.target_hot;
+        if (g_sys.match && t)
+            setSpeed[0] = speedLo[s] < t->max_kps ? speedLo[s] : t->max_kps;
+    }
+    /* the afterburner: Tab held, while there is fuel (a third of a second's worth a frame... 11 s in all) */
+    g_sys.burning = in_key_down(0x0F) && g_sys.fuel > 0 && t;
+    rvAfterburner[0] = g_sys.burning;
+    if (g_sys.burning)
+        g_sys.fuel -= 3;
+    if (g_sys.fuel < 0)
+        g_sys.fuel = 0;
+    /* heat follows the engine; the signature is EMCON's, the heat's and the radar's */
+    k = t && t->max_kps ? (int)((long)speedLo[0] * 50 / t->max_kps) : 0;
+    if (k > 50) k = 50;
+    k = (k + (g_sys.burning ? 50 : 0)) * 10;
+    g_heat10 += (k - g_heat10) / 20;
+    g_sys.heat = g_heat10 / 10;
+    g_sys.signature = (g_sys.emcon == EMCON_ACTIVE ? 50 : g_sys.emcon == EMCON_PASSIVE ? 20 : 5) + g_sys.heat / 2;
+    if (g_sys.signature > 100) g_sys.signature = 100;
+    g_sys.hull = t && t->hull ? 100 - (int)((long)damagePoints[0] * 100 / t->hull) : 100;
+    if (g_sys.hull < 0) g_sys.hull = 0;
+    g_sys.warn = rvCockpitDamage != 0 || (SHIELD_MAX(0, 0) && SHIELD(0, 0) * 4 < SHIELD_MAX(0, 0))
+                 || (SHIELD_MAX(0, 1) && SHIELD(0, 1) * 4 < SHIELD_MAX(0, 1));
+    /* the running lights: off under EMCON OFF or with the power plant damaged; a hit flickers them */
+    if (shield < g_shield_was)
+        g_flicker = 8;
+    g_shield_was = shield;
+    if (g_flicker)
+        g_flicker--;
+    g_sys.lights = g_sys.emcon != EMCON_OFF && !(rvCockpitDamage >> 9 & 1) && !(g_flicker & 2);
+    /* the nav point: how far; the autopilot when no enemy is within 8,000 km */
+    g_sys.nav_km = -1;
+    if (g_m && g_sys.nav < g_m->nnav) {
+        long dx = labs((long)g_m->nav[g_sys.nav].x - gPositionVector[0].x / 256);
+        long dz = labs((long)g_m->nav[g_sys.nav].z - gPositionVector[0].z / 256);
+        g_sys.nav_km = (dx > dz ? dx : dz) + (dx > dz ? dz : dx) / 2;
+    }
+    g_sys.autopilot_ready = g_m && g_m->nnav;
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
+        if (is_ship(s) && commAnimInfo[s] == 1 && km_to(s) < 8000)
+            g_sys.autopilot_ready = 0;
+}
+
+/* the keys of the systems (a character typed): 1 if it was one */
+static int system_key(int ch)
+{
+    if (ch >= 'A' && ch <= 'Z')
+        ch += 32;
+    switch (ch) {
+    case 'k': system_action(RV_PF_EMCON_KNOB, 0); return 1;
+    case 'v': g_sys.sensor ^= 1; return 1;
+    case 'i': system_action(RV_PF_IFF_KNOB, 0); return 1;
+    case 'c': system_action(RV_PF_VOL_KNOB, 0); return 1;
+    case 'n': system_action(RV_PF_NAV_KNOB, 0); return 1;
+    case 'm': system_action(RV_PF_ARM_KNOB, 0); return 1;
+    case 't': target_next(); return 1;
+    case 'y': target_nearest(); return 1;
+    case 'l': system_action(RV_PF_LOCK, 0); return 1;
+    case 'g': system_action(RV_PF_RADAR_KNOB, 0); return 1;
+    case 'h': g_sys.surv_page = (unsigned char)((g_sys.surv_page + 1) % 3); return 1;
+    case 'x': system_action(RV_PF_DEFENCE, 0); return 1;
+    }
+    return 0;
+}
+
 /* the cockpit's state from the slots */
 static void gather(void)
 {
     const RvCockpit __far *c = cockpit_record();
     int s, n = 0, i;
+    systems_tick();
     g_st.shield_f = SHIELD_MAX(0, 0) ? (int)(SHIELD(0, 0) * 100L / SHIELD_MAX(0, 0)) : 0;
     g_st.shield_r = SHIELD_MAX(0, 1) ? (int)(SHIELD(0, 1) * 100L / SHIELD_MAX(0, 1)) : 0;
     for (i = 0; i < 4; i++) {
@@ -1366,18 +1596,21 @@ static void gather(void)
     g_st.speed = (int)speedLo[0];
     g_st.set_speed = (int)setSpeed[0];
     g_st.max_speed = g_my_type ? g_my_type->max_kps : 500;
-    g_st.fuel = 100 - (int)((clock240() - g_t0) / 240 * 100 / 600);
+    g_st.fuel = g_sys.fuel / 10;
     g_st.stick_x = g_steer_x > 0 ? 1 : g_steer_x < 0 ? -1 : 0;
     g_st.stick_y = g_steer_y > 0 ? 1 : g_steer_y < 0 ? -1 : 0;
     g_st.damage = rvCockpitDamage;
-    g_st.lock = 0;
-    g_st.warn = g_st.shield_f < 34 || g_st.shield_r < 34;
+    g_st.lock = g_sys.lock;
+    g_st.warn = g_sys.warn;
     /* the radar: the nearest contacts, where they are relative to the nose */
     for (s = 1; s <= RV_MAX_SHIP_SLOT && n < CP_CONTACTS; s++) {
         RvVec3 d;
         long x, y, z, len, ang;
         int a, rr;
         if (maybeEntityType[s] != 0xC && maybeEntityType[s] != 0xD)
+            continue;
+        /* (EMCON OFF: a dark scope; beyond the range knob's: not shown) */
+        if (g_sys.emcon == EMCON_OFF || km_to(s) > (4000L << g_sys.radar_range))
             continue;
         d.x = (gPositionVector[s].x - gPositionVector[0].x) / 16;
         d.y = (gPositionVector[s].y - gPositionVector[0].y) / 16;
@@ -1394,7 +1627,9 @@ static void gather(void)
         a = lf_atan2(y, x);
         g_st.contact[n].x = (short)((lf_cos(a) * rr) >> 14);
         g_st.contact[n].y = (short)(-((lf_sin(a) * rr) >> 14));   /* up is up the screen */
-        g_st.contact[n].colour = commAnimInfo[s] == 0 ? UI_HILITE : commAnimInfo[s] == 1 ? UI_RED : UI_AMBER4;
+        g_st.contact[n].colour = s == g_sys.target ? UI_WHITE   /* (unidentified without IFF or the radar emitting) */
+                                 : !g_sys.iff || g_sys.emcon != EMCON_ACTIVE ? UI_GREY5
+                                 : commAnimInfo[s] == 0 ? UI_HILITE : commAnimInfo[s] == 1 ? UI_RED : UI_AMBER4;
         n++;
     }
     g_st.ncontacts = n;
@@ -2097,6 +2332,8 @@ void __far __cdecl flight_startup(void)
     rvBenchCount = 0;
     rvFps = 0;
     playerCanBeDamaged = 1;
+    if (g_test_ship)
+        g_camp.player_ship = (unsigned char)(g_test_ship - 1);
     g_my_type = ship_type(g_camp.player_ship);
     cockpit_load(g_camp.player_ship);
     spawn(0, g_camp.player_ship, 0, 1, 0, 0, 0, 0);
@@ -2234,6 +2471,7 @@ void __far __cdecl flight_startup(void)
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
     comms_flight_start();
+    systems_start();
     g_hailed = 0;
     missiles_init();
     sky_clear();
@@ -2261,6 +2499,7 @@ unsigned short __far __cdecl flight_keys(void)
         if (in.ch == 'f' || in.ch == 'F') setSpeed[0] = g_st.max_speed;
         if (in.ch == 's' || in.ch == 'S') setSpeed[0] = 0;
         if (in.ch == 'a' || in.ch == 'A') rv_autopilot_key();
+        else system_key(in.ch);
         if (in.ch == 'd' || in.ch == 'D') {   /* the next damage layer the cockpit has */
             int k;
             for (k = 0; k < RV_CP_LAYERS; k++) {
@@ -2273,6 +2512,15 @@ unsigned short __far __cdecl flight_keys(void)
             }
         }
         if (in.ch == 'r' || in.ch == 'R') rvCockpitDamage = 0;
+    }
+    {   /* Ctrl+E pulls the eject handle (twice within two seconds ejects); a click on the panel works its control */
+        static unsigned char __far ctrl_e;
+        int fn, arg, e = in_key_down(0x1D) && in_key_down(0x12);
+        if (e && !ctrl_e)
+            eject_pull();
+        ctrl_e = (unsigned char)e;
+        if (in.clicked && c && in.y >= c->open_y1 && panel_at(in.x, in.y, &fn, &arg))
+            system_action(fn, arg);
     }
     if (setSpeed[0] > (unsigned long)g_st.max_speed)
         setSpeed[0] = g_st.max_speed;

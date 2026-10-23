@@ -1,0 +1,48 @@
+# the panel scene (run with /ship 2 /flight 60): the deck, the launch, then the panel's switches by key and by click
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 30
+# the panel (run with /ship 2: the Gawain): its switches by key and by click, a shot after each
+wait 120
+shot P0
+key k
+wait 18
+shot P1
+key k
+wait 18
+shot P2
+key k
+key v
+key i
+key c
+key m
+key g
+key h
+key t
+wait 18
+shot P3
+move 527 376
+click
+move 478 176
+wait 18
+shot P4
+log done
+quit

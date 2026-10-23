@@ -48,6 +48,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import cockpits  # noqa: E402
+import panels  # noqa: E402
 import places  # noqa: E402
 
 VERSION = 4
@@ -70,7 +71,7 @@ KIND = {'PAL': 1, 'PALPART': 2, 'IMG': 3, 'SPR': 4, 'FONT': 5, 'RAW': 6}
 ACTIONS = ['NONE', 'GOTO', 'BUNK', 'LOG', 'SCORES', 'SIMULATOR', 'CLOSEUP', 'CUSTOMIZE', 'LAUNCH', 'MEDALS',
            'LETTERS', 'PHOTOS', 'KILLS']
 LIMITS = {'HOTS': 8, 'POSES': 12, 'IDLE': 16, 'DECK_SHIPS': 8, 'CLIPS': 3, 'PEOPLE': 16, 'ACTOR_FRAMES': 12,
-          'COMM_VOICES': 24}
+          'COMM_VOICES': 24, 'PANEL': 48}
 
 
 class Pack:
@@ -422,7 +423,10 @@ def rect4(r):
     return struct.pack('<4h', *(r if r else (0, 0, 0, 0)))
 
 
-def pack_cockpits(pack, ships_csv):
+PANEL_FMT = '<6B6hH'                     # RvPanelControl (header())
+
+
+def pack_cockpits(pack, ships_csv, panels_dir):
     """A record per cockpit (data/cockpits.json): returns (records, previews)."""
     cfg = json.load(open(os.path.join(ROOT, 'data', 'cockpits.json')))
     flight = [tuple(c) for c in json.load(open(os.path.join(ROOT, 'data', 'palette.json')))['rgb']]
@@ -431,7 +435,12 @@ def pack_cockpits(pack, ships_csv):
     for key in cfg['ships']:
         d = os.path.join(ROOT, 'art', 'cockpits', key)
         cj = json.load(open(os.path.join(d, 'cockpit.json')))
-        base = Image.open(os.path.join(d, 'base.png')).convert('RGBA')
+        pd = os.path.join(panels_dir, key)       # (tools/panels.py: the base relabelled, the controls' states)
+        has_panel = os.path.exists(os.path.join(pd, 'panel.json'))
+        base = Image.open(os.path.join(pd if has_panel else d, 'base.png')).convert('RGBA')
+        panel = json.load(open(os.path.join(pd, 'panel.json')))['controls'] if has_panel else []
+        state_ims = {st[0]: Image.open(os.path.join(pd, 'states', st[0])).convert('RGBA')
+                     for c in panel for st in c['states'] if st}
         alpha = np.asarray(base)[..., 3]
         opening = alpha < 128
         rows = np.nonzero(opening.any(axis=1))[0]
@@ -443,7 +452,8 @@ def pack_cockpits(pack, ships_csv):
         controls = {cid: Image.open(os.path.join(d, cid + '.png')).convert('RGBA') for cid in cj['controls']}
         layers = [(e, Image.open(os.path.join(d, e['file'])).convert('RGBA')) for e in cj['damage']]
         # the cockpit's colours: median cut over everything it draws, into 208-254
-        part = make_palette([base] + list(controls.values()) + [im for _e, im in layers], len(CP_FREE), CP_FREE[0])
+        part = make_palette([base] + list(controls.values()) + [im for _e, im in layers] + list(state_ims.values()),
+                            len(CP_FREE), CP_FREE[0])
         pal = Palette(UI + flight[16:CP_FREE[0]] + part + flight[CP_FREE[-1] + 1:])   # the UI's 16 first, as every palette
         allowed = list(range(16)) + CP_FREE
         over_black = Image.alpha_composite(Image.new('RGBA', SCREEN, (0, 0, 0, 255)), base)
@@ -472,6 +482,25 @@ def pack_cockpits(pack, ships_csv):
         for e, im in layers:
             layer[e['bit']] = (add_sprite(pack, 'cpd_%s_%02d' % (key[:7], e['bit']), im, pal, e['x'], e['y'], allowed),
                                cockpits.ATTACH[e['attach']])
+        # the panel: a record a control (RvPanelControl), its states' sprites one after another (the base's own: empty)
+        prec = []
+        for n, c in enumerate(panel):
+            first = None
+            for i, st in enumerate(c['states']):
+                name = 'cpp_%s_%02d_%d' % (key[:7], n, i)
+                j = (add_sprite(pack, name, state_ims[st[0]], pal, st[1], st[2], allowed) if st
+                     else pack.add(name, 'SPR', b'', 0, 0, 0, 0))
+                first = j if first is None else first
+            x, y, w, h = c['rect']
+            a0 = a1 = 0
+            spr = first if first is not None else 0xFFFF
+            if c['kind'] == 'needle':
+                x, y, w, h = int(round(c['at'][0] * 2)), int(round(c['at'][1] * 2)), int(round(c['r'])), 0
+                a0, a1, spr = c['a0'], c['a1'], c['max']
+            prec.append(struct.pack(PANEL_FMT, panels.FUNCTIONS.index(c['fn']), panels.KINDS.index(c['kind']), c['arg'],
+                                    len(c['states']), c['painted'], c['flags'], x, y, w, h, a0, a1, spr))
+        assert len(prec) <= LIMITS['PANEL']
+        panel_i = pack.add('cpn_' + key, 'RAW', b''.join(prec)) if prec else 0xFFFF
         R = cj['regions']
         recs.append(struct.pack('<8sBBhhHHHH', key.encode(), types[key], len(layers), y0, y1, rec['palette'],
                                 rec['base'], rec['struts'], rec['extents'])
@@ -480,7 +509,8 @@ def pack_cockpits(pack, ships_csv):
                     + struct.pack('<3h', R['radar']['cx'], R['radar']['cy'], R['radar']['r'])
                     + struct.pack('<Hhh', ctl['throttle'], cj['controls']['throttle']['x'], cj['controls']['throttle']['y'])
                     + struct.pack('<Hhh', ctl['joystick'], cj['controls']['joystick']['x'], cj['controls']['joystick']['y'])
-                    + b''.join(struct.pack('<HBB', a, att, 0) for a, att in layer))
+                    + b''.join(struct.pack('<HBB', a, att, 0) for a, att in layer)
+                    + struct.pack('<HH', panel_i, len(prec)))
         # the preview: the base as the engine will show it, the controls in place
         shown = idx.copy()
         for cid, im in controls.items():
@@ -492,7 +522,8 @@ def pack_cockpits(pack, ships_csv):
         pim = Image.fromarray(shown, 'P')
         pim.putpalette([v for rgb in pal.colours for v in rgb])
         previews.append((key, pim.convert('RGB'), len(layers)))
-        print('  cockpit %-8s rows %d-%d open, %d damage layers, %d strut pixels' % (key, y0, y1, len(layers), len(ys)))
+        print('  cockpit %-8s rows %d-%d open, %d damage layers, %d strut pixels, %d panel controls'
+              % (key, y0, y1, len(layers), len(ys), len(prec)))
     return recs, previews
 
 
@@ -662,6 +693,7 @@ def main():
     ap.add_argument('--out', default=os.path.join(ROOT, 'build', 'dos', 'RV.DAT'))
     ap.add_argument('--header', default=os.path.join(ROOT, 'src', 'rvasset.h'))
     ap.add_argument('--comms', default=os.path.join(ROOT, 'build', 'comms'), help="tools/comms.py's output")
+    ap.add_argument('--panels', default=os.path.join(ROOT, 'build', 'panels'), help="tools/panels.py's output")
     args = ap.parse_args()
     table = json.load(open(os.path.join(ROOT, 'data', 'places.json')))
     with open(os.path.join(ROOT, 'data', 'people.csv')) as f:
@@ -710,7 +742,7 @@ def main():
                      + hot + poses + rec['actor'] + speaker + deck + boards)
     comm_cast, comm_ramp, comm_voices = pack_comms(pack, args.comms, ships_csv)
     persons = pack_people(pack, people, comm_voices)
-    cockpits_recs, previews = pack_cockpits(pack, ships_csv)
+    cockpits_recs, previews = pack_cockpits(pack, ships_csv, args.panels)
     preview_cockpits(previews, os.path.join(ROOT, 'docs', 'cockpits-packed.png'))
     # lay out: header, directory, rooms, people, cockpits, payloads
     hdr_fmt = '<8sHHLHLHLHHHHHHHHLHHHH4hHH6s'
@@ -749,6 +781,8 @@ def header(room_size, person_size, cockpit_size):
              '#ifndef RVASSET_H', '#define RVASSET_H', '', '#define RVDAT_VERSION %d' % VERSION, '']
     for k, v in L.items():
         lines.append('#define RV_%s %d' % (k, v))
+    lines += ['#define RV_PF_%s %d' % (f.upper(), i) for i, f in enumerate(panels.FUNCTIONS)]
+    lines += ['#define RV_PK_%s %d' % (k.upper(), i) for i, k in enumerate(panels.KINDS)]
     lines += ['#define RV_FACE %d' % FACE, '#define RV_CP_LAYERS %d' % CP_LAYERS,
               '#define RV_CP_FIRST %d' % CP_FREE[0], '']
     for bit in sorted(cockpits.BIT_NAMES):
@@ -885,7 +919,16 @@ typedef struct {
     short radar_x, radar_y, radar_r;
     RvControl throttle, joystick;
     RvDamageLayer layer[RV_CP_LAYERS];   /* by bit of rvCockpitDamage (RV_CPD_*) */
+    unsigned short panel, npanel;   /* RAW: its panel's controls (RvPanelControl, tools/panels.py), how many */
 } RvCockpit;
+typedef struct {
+    unsigned char fn, kind, arg;    /* RV_PF_* (data/panels.json's functions), RV_PK_*, which (a lamp of a set...) */
+    unsigned char nstates, painted; /* its states' sprites from `sprite` on (the base shows `painted`: an empty one) */
+    unsigned char flags;            /* a bar: 1 upright; a ladder: its lamps */
+    short x, y, w, h;               /* its rectangle; a needle: its centre x 2 (x, y), its length (w) */
+    short a0, a1;                   /* a needle: its angles at nothing and at full scale (degrees clockwise from up) */
+    unsigned short sprite;          /* its first state's SPR; a needle: its full scale (0: the ship's top speed) */
+} RvPanelControl;
 #pragma pack()''', '', '#define RV_ROOM_SIZE %d' % room_size, '#define RV_PERSON_SIZE %d' % person_size,
               '#define RV_COCKPIT_SIZE %d' % cockpit_size, '',
               '#endif', '']

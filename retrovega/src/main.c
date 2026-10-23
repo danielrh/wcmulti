@@ -2,7 +2,7 @@
  *
  *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
  *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo] [/flames]
- *          [/balls N [/nearballs N]] [/balldemo] [/missiledemo] [/skydemo] [/skyrows N] [/boxes] [/collidedemo] [/hulldemo [/hulltype N]] [/flametest] [/commdemo]
+ *          [/balls N [/nearballs N]] [/balldemo] [/missiledemo] [/skydemo] [/skyrows N] [/boxes] [/collidedemo] [/hulldemo [/hulltype N]] [/flametest] [/commdemo] [/ship T]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -27,7 +27,7 @@ char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
     g_ball_demo, g_missile_demo, g_sky_demo, g_boxes, g_collide_demo, g_hull_demo, g_hull_type, g_flame_test,
-    g_comm_demo;
+    g_comm_demo, g_test_ship;
 extern long g_onfly_px;
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -102,6 +102,12 @@ int main(int argc, char **argv)
             g_flames_demo = g_flame_test = 1;
         else if (!strcmp(argv[i], "/commdemo"))        /* tests: the pilots on the comm in turn */
             g_comm_demo = 1;
+        else if (!strcmp(argv[i], "/ship")) {          /* tests: the player's ship type (hex), whatever the deck chose */
+            const char *h = argv[++i];
+            for (g_test_ship = 0; *h; h++)
+                g_test_ship = g_test_ship * 16 + (*h <= '9' ? *h - '0' : (*h | 32) - 'a' + 10);
+            g_test_ship++;
+        }
         else if (!strcmp(argv[i], "/balls")) {          /* tests: balls in the laser benchmark, N far (-1 adapting) */
             g_balls = atoi(argv[++i]);
             if (!g_lasers) {            /* (alone: the scene with one bolt) */

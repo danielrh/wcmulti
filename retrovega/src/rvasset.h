@@ -12,6 +12,59 @@
 #define RV_PEOPLE 16
 #define RV_ACTOR_FRAMES 12
 #define RV_COMM_VOICES 24
+#define RV_PANEL 48
+#define RV_PF_LOCK 0
+#define RV_PF_WARN 1
+#define RV_PF_AB_LAMP 2
+#define RV_PF_NAV_LAMP 3
+#define RV_PF_COM_LAMP 4
+#define RV_PF_COM_ON 5
+#define RV_PF_IFF_LAMP 6
+#define RV_PF_EM_LAMP 7
+#define RV_PF_EMCON_LAMP 8
+#define RV_PF_SENSOR_LAMP 9
+#define RV_PF_TARGET_LAMP 10
+#define RV_PF_STATUS_LAMP 11
+#define RV_PF_MFD_LAMP 12
+#define RV_PF_SURV_PAGE 13
+#define RV_PF_RADIO_CHAN 14
+#define RV_PF_ARM_LAMP 15
+#define RV_PF_AUTO_LAMP 16
+#define RV_PF_DEFENCE 17
+#define RV_PF_SIG_LADDER 18
+#define RV_PF_RANGE_LADDER 19
+#define RV_PF_CABIN 20
+#define RV_PF_RADIO_DIGIT 21
+#define RV_PF_RADIO_LIT 22
+#define RV_PF_CHAN_KNOB 23
+#define RV_PF_EMCON_KNOB 24
+#define RV_PF_NAV_KNOB 25
+#define RV_PF_IFF_KNOB 26
+#define RV_PF_RADAR_KNOB 27
+#define RV_PF_ARM_KNOB 28
+#define RV_PF_VOL_KNOB 29
+#define RV_PF_SPEED_DIAL 30
+#define RV_PF_CLOCK_DIAL 31
+#define RV_PF_SHIELD_BAR 32
+#define RV_PF_ARMOR_BAR 33
+#define RV_PF_HULL_BAR 34
+#define RV_PF_FUEL_BAR 35
+#define RV_PF_POWER_BAR 36
+#define RV_PF_ENGINE_BAR 37
+#define RV_PF_SPEED_BAR 38
+#define RV_PF_RANGE_BAR 39
+#define RV_PF_HEAT 40
+#define RV_PF_SIGNATURE 41
+#define RV_PF_AUX_NAV 42
+#define RV_PF_TARGET_ID 43
+#define RV_PF_THROTTLE_TICKS 44
+#define RV_PK_LAMP 0
+#define RV_PK_KNOB 1
+#define RV_PK_ARCS 2
+#define RV_PK_NEEDLE 3
+#define RV_PK_TICKS 4
+#define RV_PK_BAR 5
+#define RV_PK_TEXT 6
 #define RV_FACE 352
 #define RV_CP_LAYERS 32
 #define RV_CP_FIRST 208
@@ -216,11 +269,20 @@ typedef struct {
     short radar_x, radar_y, radar_r;
     RvControl throttle, joystick;
     RvDamageLayer layer[RV_CP_LAYERS];   /* by bit of rvCockpitDamage (RV_CPD_*) */
+    unsigned short panel, npanel;   /* RAW: its panel's controls (RvPanelControl, tools/panels.py), how many */
 } RvCockpit;
+typedef struct {
+    unsigned char fn, kind, arg;    /* RV_PF_* (data/panels.json's functions), RV_PK_*, which (a lamp of a set...) */
+    unsigned char nstates, painted; /* its states' sprites from `sprite` on (the base shows `painted`: an empty one) */
+    unsigned char flags;            /* a bar: 1 upright; a ladder: its lamps */
+    short x, y, w, h;               /* its rectangle; a needle: its centre x 2 (x, y), its length (w) */
+    short a0, a1;                   /* a needle: its angles at nothing and at full scale (degrees clockwise from up) */
+    unsigned short sprite;          /* its first state's SPR; a needle: its full scale (0: the ship's top speed) */
+} RvPanelControl;
 #pragma pack()
 
 #define RV_ROOM_SIZE 556
 #define RV_PERSON_SIZE 22
-#define RV_COCKPIT_SIZE 224
+#define RV_COCKPIT_SIZE 228
 
 #endif

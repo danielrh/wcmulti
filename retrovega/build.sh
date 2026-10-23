@@ -32,7 +32,12 @@ COMMS=build/comms-$RV_COMMS
     && [ $COMMS/comms.json -nt data/people.csv ] \
     && [ -z "$(find art/people/faces -newer $COMMS/comms.json -print -quit)" ] \
     || python3 -W ignore tools/comms.py --out $COMMS --cols 56 $FACE > /dev/null   # (56: 2 x 2 blocks, the coarse link)
-~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h --comms $COMMS
+# the cockpits' panels (every control's states; the power knobs repainted as radio dials: ~15 s), when they change
+[ build/panels/.made -nt tools/panels.py ] && [ build/panels/.made -nt data/panels.json ] \
+    && [ -z "$(find art/cockpits -name base.png -newer build/panels/.made -print -quit)" ] \
+    || { python3 -W ignore tools/panels.py --out build/panels > /dev/null && touch build/panels/.made; }
+~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h --comms $COMMS \
+    --panels build/panels
 # the balls' sprites (the spherical projectiles: every kind, frame and diameter)
 [ "$OUT/BALLS.DAT" -nt tools/balls.py ] && [ "$OUT/BALLS.DAT" -nt data/palette.json ] \
     || ~/.venvs/retrovega-art/bin/python -P tools/balls.py --out "$OUT/BALLS.DAT" --preview docs/balls.png > /dev/null
@@ -57,7 +62,7 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     s="$OUT/SHIP20.RVS"
     [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
 fi
-ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts balls missiles sky collide flames comms cockpit flight game main"
+ENGINE="util xms video dat gfx input room lipsync opl music campaign lightfield ships lasers bolts balls missiles sky collide flames comms panel cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done

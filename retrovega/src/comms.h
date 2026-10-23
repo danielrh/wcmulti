@@ -33,6 +33,7 @@ int comms_voice_for(int side, int type);   /* an alien of side (1 Aera, 2 Rlaan)
  * ends a second after): 0 when there is no such voice */
 int comms_say(int voice, int vdu, const char __far *text);
 int comms_on(int vdu);                  /* a comm shows on this VDU now */
+int comms_side(void);                   /* who talks now: their side (0 Terran, 1 Aera, 2 Rlaan), -1 no one */
 void comms_tick(void);                  /* once a frame: the mouth, the blinks, the end */
 
 /* the comm into the run y0 .. y1-1 of VDU rect r: 1 when it drew it (the VDU's other content is not drawn) */
