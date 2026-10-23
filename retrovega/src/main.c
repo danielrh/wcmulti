@@ -24,7 +24,7 @@
 #include "collide.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
-extern int g_winrate, g_flight_seconds, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
+extern int g_winrate, g_flight_seconds, g_flight_timed, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
     g_ball_demo, g_missile_demo, g_sky_demo, g_boxes, g_collide_demo, g_hull_demo, g_hull_type, g_flame_test,
     g_comm_demo, g_test_ship;
@@ -64,8 +64,8 @@ int main(int argc, char **argv)
             script_open(argv[++i]);
         else if (!strcmp(argv[i], "/winrate"))          /* tests: how often a launch is won */
             g_winrate = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "/flight"))           /* tests: seconds a flight lasts (20) */
-            g_flight_seconds = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/flight"))           /* tests: a flight lands by itself after N s (else on C) */
+            g_flight_seconds = atoi(argv[++i]), g_flight_timed = 1;
         else if (!strcmp(argv[i], "/bench"))            /* tests: benchmark copies, fixed (0 none; else adapting) */
             g_bench_wanted = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/record"))           /* tests: a screenshot every N frames of flight */

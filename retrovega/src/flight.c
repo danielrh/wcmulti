@@ -35,6 +35,8 @@
 #include "flight.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
+int g_flight_timed = 0;                 /* /flight N given: the flight lands by itself after N seconds (the tests);
+                                           else it lands when the player calls the carrier (C) */
 int g_bench_wanted = 0;                 /* RV.EXE /bench N: that many copies, no adapting; 0 none (the default: the
                                            copies tiled the sky for the user); -1 adapt, the measurement */
 int g_record = 0;                       /* RV.EXE /record N: a screenshot (Rnnnnn.BMP) every N frames of flight */
@@ -1361,9 +1363,9 @@ static int lasers_far(void);
  * The user's table (data/panels.json, 2026-10-22): EMCON, the sensor mode, the IFF and master arm are switches whose
  * flags combat will read (the lock rules already do); the radio tunes to whoever talks (WING 267, the carrier 315,
  * GUARD 243 for an alien's hail) and its frequency knobs step there; the afterburner (Tab) burns fuel and heat; the
- * signature is what an enemy will find you by.  Keys: K EMCON, V sensor, I IFF, C comms mute, N nav point, M master
+ * signature is what an enemy will find you by.  Keys: K EMCON, V sensor, I IFF, U comms mute, N nav point, M master
  * arm, T next target, Y the nearest enemy, L hold the lock, G radar range, H the survival display's page, X a decoy,
- * Tab the afterburner (held), Ctrl+E twice eject; a click on a control works it. */
+ * C call the carrier to land, Tab the afterburner (held), Ctrl+E twice eject; a click on a control works it. */
 static const unsigned char __far g_freq[3][3] = { { 2, 6, 7 }, { 3, 1, 5 }, { 2, 4, 3 } };   /* MHz: WING, CARRIER, GUARD */
 static unsigned long __far g_eject_at;  /* Ctrl+E (or the handle) once: when; a second within 2 s ejects */
 static int __far g_heat10;              /* heat x 10, following the engine with a lag */
@@ -1371,9 +1373,33 @@ static int __far g_last_side = -1;      /* who talked last frame */
 static unsigned __far g_shield_was;     /* the shields last frame (a drop flickers the lights) */
 static int __far g_flicker;             /* frames of flicker left */
 
+/* C calls the carrier to land (the user's call, 2026-10-23: no more landing when a timer ran out): the player's
+ * own voice asks on the left VDU, and the flight ends when the line is said (at once with the comms muted) */
+static unsigned char __far g_landing;   /* 1 the call made, 2 and on the VDU */
+static unsigned long __far g_land_at;   /* when to land, if the call shows no face */
+
+static void call_carrier(void)
+{
+    static const char __far s_call[] = "Vigilance, Wildcard. Requesting clearance to land.";
+    int i;
+    if (g_landing)
+        return;
+    g_landing = 1;
+    g_land_at = clock240() + 240;
+    rv_log("flight: C: the player calls the carrier to land");
+    if (g_sys.muted)
+        return;
+    for (i = 0; i < (int)g_npilots; i++)
+        if (g_pilots[i].role == RV_ROLE_HERO && comms_say(comms_voice(i), 0, s_call)) {
+            g_landing = 2;              /* (on the VDU: landing when it is said) */
+            return;
+        }
+}
+
 static void systems_start(void)
 {
     _fmemset(&g_sys, 0, sizeof g_sys);
+    g_landing = 0;
     g_sys.emcon = EMCON_ACTIVE;
     g_sys.iff = 1;
     g_sys.armed = 1;                    /* (out of the launch tube: armed) */
@@ -1567,7 +1593,8 @@ static int system_key(int ch)
     case 'k': system_action(RV_PF_EMCON_KNOB, 0); return 1;
     case 'v': g_sys.sensor ^= 1; return 1;
     case 'i': system_action(RV_PF_IFF_KNOB, 0); return 1;
-    case 'c': system_action(RV_PF_VOL_KNOB, 0); return 1;
+    case 'c': call_carrier(); return 1;
+    case 'u': system_action(RV_PF_VOL_KNOB, 0); return 1;
     case 'n': system_action(RV_PF_NAV_KNOB, 0); return 1;
     case 'm': system_action(RV_PF_ARM_KNOB, 0); return 1;
     case 't': target_next(); return 1;
@@ -1692,8 +1719,12 @@ static void gather(void)
         int lines, fats;
         bolts_on_screen(&lines, &fats);
         sprintf(g_mfd[0][3], "%d FAT %d LN", fats, lines);
-    } else
+    } else if (g_flight_timed)
         sprintf(g_mfd[0][3], "T-%lu", (FLIGHT_TICKS - (clock240() - g_t0) + 239) / 240);
+    else {
+        static const char __far s_home[] = "C: CALL HOME", s_calling[] = "CALLING HOME";
+        _fstrcpy((char __far *)g_mfd[0][3], g_landing ? s_calling : s_home);
+    }
     g_st.mfd_text[0][0] = comms_on(0) ? 0 : g_mfd[0][0];   /* (a comm takes the whole VDU) */
     g_st.mfd_text[0][1] = g_mfd[0][1];
     g_st.mfd_text[0][2] = g_mfd[0][2];
@@ -2628,8 +2659,10 @@ void __far __cdecl flight_frame(void)
         shot_save(name);
     }
     rvFrameDone();
-    if (now - g_t0 >= FLIGHT_TICKS)
+    if (g_flight_timed && now - g_t0 >= FLIGHT_TICKS)
         missionStatus = 1;              /* landed */
+    if (g_landing == 2 ? !comms_on(0) : g_landing && now >= g_land_at)
+        missionStatus = 1;              /* landed: the call said */
     if (g_flames_demo && g_record && ++g_flames_frames >= FLAMES_FRAMES)
         missionStatus = 1;              /* (its recording is so many frames, however slowly they are made) */
     /* the frame rate capped at FPS_WANT: the simulation is per frame (a kps is 12.8 units a frame), so

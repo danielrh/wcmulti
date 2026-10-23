@@ -1,4 +1,4 @@
-# the flight benchmark: quarters, bar, briefing, deck, launch, 20 seconds of flight
+# the flight benchmark: the rooms, the launch, 20 s of flight, then C to land
 wait 10
 click
 wait 3
@@ -35,6 +35,7 @@ key d
 move 320 120
 wait 60
 shot F04LATE
+key c
 wait 220
 shot F05DEBR
 key esc

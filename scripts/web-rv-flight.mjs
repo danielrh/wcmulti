@@ -107,6 +107,10 @@ const flying = logs.some((l) => /runHangarMission/.test(l)) || /flight: slot/.te
 console.log(flying ? "ok   the flight started" : "FAIL no flight started (" + (t.split("\n").slice(-3).join(" | ")) + ")");
 await sleep(4000); await shot("flight-4s");
 await sleep(8000); await shot("flight-12s");
+if (!/\/flight /.test(process.env.CMD || "")) {    // (a flight lands when the player calls the carrier: C)
+  await sleep(Math.max(0, flightS - 12) * 1000);
+  await page.keyboard.press("c");
+}
 t = await waitLog(/flight: over/, (flightS + 20) * 1000);
 console.log(/flight: over/.test(t) ? "ok   the flight ended" : "FAIL the flight did not end");
 await sleep(3000); await shot("after");

@@ -70,6 +70,7 @@ wait 2
 click
 wait 10
 shot S13LAUN
+key c
 wait 40
 shot S14DEBR
 key esc

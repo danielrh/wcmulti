@@ -32,7 +32,7 @@ shot P2
 key k
 key v
 key i
-key c
+key u
 key m
 key g
 key h
