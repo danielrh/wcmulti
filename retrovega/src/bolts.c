@@ -200,6 +200,7 @@ void bolts_ticks(unsigned long out[4])
 
 void bolts_ticks_reset(void) { g_t_place = g_t_far = g_t_near = g_t_move = 0; }
 
+#ifdef RV_TESTS                         /* (the test build, RVT.EXE: flight.c's laser benchmark calls these) */
 /* --- the checks and the timings, on bolts of their own in a band of their own --- */
 
 #define TEST_ROWS 40
@@ -667,3 +668,4 @@ out:
     t_l = 0;
     t_band = 0;
 }
+#endif /* RV_TESTS */

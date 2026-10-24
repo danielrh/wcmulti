@@ -10,9 +10,11 @@
  * until missionStatus is set, frees them; returns the final missionStatus */
 int flight_fly(const RvMission __far *m);
 
+#ifdef RV_TESTS
 /* the benchmark's result, after a flight: sprites a frame at 30 fps, and the
- * sprite's size */
+ * sprite's size (the test build, RVT.EXE) */
 int flight_bench_result(int *w, int *h);
+#endif
 
 /* --- where a ship is on a screen: targeting, its lock, the cockpit's animations --- */
 

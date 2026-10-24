@@ -266,6 +266,7 @@ void balls_ticks(unsigned long out[3])
     g_t_place = g_t_far = g_t_near = 0;
 }
 
+#ifdef RV_TESTS                         /* (the test build, RVT.EXE: flight.c's balls benchmark calls these) */
 /* --- the checks and the timings (with balls_init's buffers) --- */
 
 #define TEST_ROWS 40
@@ -480,3 +481,4 @@ out:
     t_o = 0;
     t_band = 0;
 }
+#endif /* RV_TESTS */

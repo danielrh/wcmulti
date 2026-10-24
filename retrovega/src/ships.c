@@ -1469,6 +1469,7 @@ long ships_size_of(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasi
     }
 }
 
+#ifdef RV_TESTS                         /* (the test build, RVT.EXE: every flight of it starts with these) */
 /* --- the kernels checked, and the paths timed --- */
 
 /* the asm kernels against the C ones (lightfield.c) and a C mirror, on a
@@ -1584,3 +1585,4 @@ void ships_time_paths(int set_i, int v, long out[5])
     }
     vid_flip();
 }
+#endif /* RV_TESTS */

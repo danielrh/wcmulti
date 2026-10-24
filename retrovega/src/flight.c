@@ -38,6 +38,9 @@
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
 int g_flight_timed = 0;                 /* /flight N given: the flight lands by itself after N seconds (the tests);
                                            else it lands when the player calls the carrier (C) */
+/* the test aids' switches.  Their code (the demos, the benchmarks, the self-tests) is in the test build only,
+ * RVT.EXE (build.sh compiles the modules that have it again with -dRV_TESTS: docs/engine.md, "The test build");
+ * the game's RV.EXE keeps the switches, never set, so the flight reads the same either way. */
 int g_bench_wanted = 0;                 /* RV.EXE /bench N: that many copies, no adapting; 0 none (the default: the
                                            copies tiled the sky for the user); -1 adapt, the measurement */
 int g_record = 0;                       /* RV.EXE /record N: a screenshot (Rnnnnn.BMP) every N frames of flight */
@@ -70,17 +73,22 @@ int g_ball_demo = 0;                    /* RV.EXE /balldemo: the four kinds of b
 int g_missile_demo = 0;                 /* RV.EXE /missiledemo: six missiles seen every way (a test aid) */
 int g_sky_demo = 0;                     /* RV.EXE /skydemo: the sky's far things as the camera rolls (a test aid) */
 #define SKY_FRAMES 450                  /* its length: fifteen seconds at 30 fps */
+static int __far g_bl_cap;              /* the balls' pool (0: none): the far ones are drawn behind the ships */
+#ifdef RV_TESTS
 static unsigned char __far *__far g_bl_life;   /* the balls' frames left each */
-static int __far g_bl_far, __far g_bl_cap, __far g_bl_n, __far g_bl_frames;   /* (far: DGROUP is nearly full) */
+static int __far g_bl_far, __far g_bl_n, __far g_bl_frames;   /* (far: DGROUP is nearly full) */
 static long __far g_bl_sum;
 static unsigned long __far g_t_bl_step;
+#endif
 #define FLAMES_FRAMES 450               /* its recording's length (/record): fifteen seconds at 30 fps */
 static int g_flames_frames;
 #define DEMO_BOLTS 11
 #define DEMO_FRAMES 300                 /* ten seconds at 30 fps */
 #define DEMO_SPEED (27L * 64 / BOLT_HALF16)   /* positions per sixteenth of a km of half axis: 6.75 km a frame */
 #define DEMO_METRE 32                   /* km a metre */
+#ifdef RV_TESTS
 static int g_demo_frame;                /* its frames so far */
+#endif
 /* the hybrid: the biggest ships on screen are drawn exactly (turned and scaled
  * at draw time, sixteen cycles a pixel) while their pixels fit this budget
  * a frame and they are big enough for the steps to show, and every ship the
@@ -133,11 +141,13 @@ static int g_exit;
 static unsigned long g_damage_at;
 static int g_damage_next;
 
+#ifdef RV_TESTS
 /* the benchmark's sprites: screen positions drifting about the opening */
 static struct { short x, y, dx, dy; } __far g_bench[BENCH_MAX];
 static int g_nbench, g_bench_view = 17, g_bench_w, g_bench_h, g_tv_w, g_tv_h;
 static long g_bench_sum;                /* the count summed over the settled half, for the result */
 static int g_bench_frames;
+#endif
 static unsigned long g_vseed = 12345;   /* visual randomness: outside the ABI's stream */
 
 static unsigned vrnd(void)
@@ -563,8 +573,11 @@ static void plan_draws(void)
     }
 }
 
+#ifdef RV_TESTS
 static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int rows);
+#endif
 static unsigned long g_t_exact, g_t_sets;   /* what the slots' ships cost to draw: exactly, and from the sets */
+static unsigned long g_t_draw, g_t_wait;   /* what a frame costs to draw, and the wait for the next */
 static unsigned long g_world_calls;     /* draw_world's calls: the bands a frame draws the world in */
 
 /* --- where a ship is on a screen (flight.h): targeting, its lock, the cockpit's animations --- */
@@ -644,6 +657,7 @@ int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
     return 1;
 }
 
+#ifdef RV_TESTS
 /* the /boxes check: brackets at each box's corners (the sprite's cyan, the steady square amber), clipped to the band
  * and the opening as the world is */
 static void hud_run(int xa, int xb, int y, int colour, int y0, int y1, const short __far *ext, int ey0, int rows)
@@ -1063,6 +1077,8 @@ static void flame_test(void)
     flames_frame();
 }
 
+#endif /* RV_TESTS */
+
 /* a flight's first comm, three seconds out: the first of the mission's people with comm art (its talk's speakers,
  * the squadron's pilots) says their own line on the left VDU (until the missions have comm lines of their own) */
 static void comm_launch(void)
@@ -1105,6 +1121,7 @@ static void comm_hail(void)
     }
 }
 
+#ifdef RV_TESTS
 /* --- the comm demo (RV.EXE /commdemo): what a comm costs (in the log), then every voice says its own line, the
  * aliens first, on each VDU by turns --- */
 static void comm_demo_next(void)
@@ -1251,11 +1268,15 @@ static void hull_overlay(int y0, int y1, const short __far *ext, int ey0, int ro
         }
 }
 
+#endif /* RV_TESTS */
+
 static void draw_world(int y0, int y1)
 {
     int ey0, rows, i;
     const short __far *ext = cockpit_extents(&ey0, &rows);
+#ifdef RV_TESTS
     const ShipSet __far *bench = g_set_enemy >= 0 ? ships_set(g_set_enemy) : 0;
+#endif
     LfBasis cam, ship;
     int path;
     unsigned long t0;
@@ -1264,8 +1285,10 @@ static void draw_world(int y0, int y1)
                                            over them (planets) */
     draw_stars(y0, y1);
     sky_draw(1, y0, y1, ext, ey0, rows);
+#ifdef RV_TESTS
     if (g_lasers)
         lasers_draw_far(y0, y1, ext, ey0, rows);
+#endif
     if (g_bl_cap)                       /* the far balls: a pixel or a few */
         balls_draw_far(y0, y1, ext, ey0, rows);
     if (g_sky && g_set_enemy >= 0) {
@@ -1312,6 +1335,7 @@ static void draw_world(int y0, int y1)
     if (g_bl_cap)
         balls_draw_near(y0, y1, ext, ey0, rows);
     missiles_draw(y0, y1, ext, ey0, rows);
+#ifdef RV_TESTS
     if (g_boxes)
         boxes_draw(y0, y1, ext, ey0, rows);
     if (g_collide_demo)
@@ -1322,6 +1346,7 @@ static void draw_world(int y0, int y1)
     if (bench)
         for (i = 0; i < g_nbench; i++)
             ships_blit_size(bench, 1, g_bench_view, g_bench[i].x, g_bench[i].y, y0, y1, 0, SCR_W, ext, ey0, rows);
+#endif
 }
 
 static int g_ptr_y0, g_ptr_y1;
@@ -1360,7 +1385,9 @@ static void mfd_draw(int which, const RvRect __far *r, int y0, int y1)
                     y1 < r->y + r->h ? y1 : r->y + r->h, r->x, r->x + r->w, 0, 0, 0);
 }
 
+#ifdef RV_TESTS
 static int lasers_far(void);
+#endif
 
 /* --- the ship's systems (panel.h): what the cockpit's controls show and set ---
  *
@@ -1673,6 +1700,7 @@ static void gather(void)
     }
     g_st.ncontacts = n;
     (void)c;
+#ifdef RV_TESTS
     if (g_flames_demo) {
         strcpy(g_mfd[0][0], "FLAMES");
         strcpy(g_mfd[0][1], "2 4 6 BURN");
@@ -1722,16 +1750,21 @@ static void gather(void)
         sprintf(g_mfd[0][0], "SPRITES %d", g_nbench);
         sprintf(g_mfd[0][1], "%d.%d FPS", g_fps10 / 10, g_fps10 % 10);
         sprintf(g_mfd[0][2], "%dx%d VIEW", g_bench_w, g_bench_h);
-    } else {
+    } else
+#endif
+    {
         strcpy(g_mfd[0][0], "ARROWS TURN");
         strcpy(g_mfd[0][1], "Q E ROLL");
         strcpy(g_mfd[0][2], "+ - F S SPD");
     }
+#ifdef RV_TESTS
     if (g_bolt_demo) {
         int lines, fats;
         bolts_on_screen(&lines, &fats);
         sprintf(g_mfd[0][3], "%d FAT %d LN", fats, lines);
-    } else if (g_flight_timed)
+    } else
+#endif
+    if (g_flight_timed)
         sprintf(g_mfd[0][3], "T-%lu", (FLIGHT_TICKS - (clock240() - g_t0) + 239) / 240);
     else {
         static const char __far s_home[] = "C: CALL HOME", s_calling[] = "CALLING HOME";
@@ -1745,6 +1778,7 @@ static void gather(void)
     g_st.mfd_draw = mfd_draw;
 }
 
+#ifdef RV_TESTS
 /* --- the benchmark --- */
 
 static void bench_add(int n)
@@ -1812,7 +1846,7 @@ static struct { short x, y, z; } __far g_lz_dir[LZ_DIRS];   /* bolts' half axes,
 static unsigned char __far *g_lz_life;  /* frames each bolt has left */
 static int g_lz_far, g_lz_cap, g_lz_n, g_lz_frames;
 static long g_lz_sum;
-static unsigned long g_t_far_ships, g_t_draw, g_t_lz_step, g_t_wait;
+static unsigned long g_t_far_ships, g_t_lz_step;
 
 static void lz_aim(LzBolt __far *b)
 {
@@ -1940,6 +1974,8 @@ static void sky_demo_step(void)
         missionStatus = 1;              /* landed */
 }
 
+#endif /* RV_TESTS */
+
 static void missiles_frame(void)
 {
     LfBasis cam;
@@ -1949,6 +1985,7 @@ static void missiles_frame(void)
                    c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H);
 }
 
+#ifdef RV_TESTS
 /* --- the balls in the laser benchmark (RV.EXE /balls N) ---
  *
  * The user's (2026-10-21): spherical projectiles, far more common than the
@@ -2288,12 +2325,15 @@ static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int
     bolts_draw_far(y0, y1, ext, ey0, rows);
 }
 
+#endif /* RV_TESTS */
+
 /* ms a frame x 100 from 240 Hz ticks over `frames` */
 static unsigned long per_frame(unsigned long ticks, unsigned frames)
 {
     return ticks * 100000UL / 240 / (frames ? frames : 1);
 }
 
+#ifdef RV_TESTS
 static void lasers_report(void)
 {
     static const char __far s_held[] = "lasers: %ld far bolts and %d near held %d fps (the settled half's average; "
@@ -2357,6 +2397,8 @@ static void balls_report(void)
     balls_free();
 }
 
+#endif /* RV_TESTS */
+
 /* --- the loop's calls (rvflight.inc) --- */
 
 void __far __cdecl flight_startup(void)
@@ -2411,10 +2453,12 @@ void __far __cdecl flight_startup(void)
     }
     if (g_hull_demo && g_hull_type >= 0)
         enemy_type = g_hull_type;       /* (/hulltype: its ship) */
+#ifdef RV_TESTS
     if (g_lasers) {
         lasers_setup(enemy_type);
         n = 3;
     }
+#endif
     if (g_flames_demo) {
         /* a test aid: six ships 3,000 .. 3,500 km ahead in two rows of three, standing, turning every way */
         static const unsigned char types[6] = { 0x08, 0x02, 0x04, 0x0A, 0x09, 0x06 };
@@ -2444,8 +2488,10 @@ void __far __cdecl flight_startup(void)
     g_set_wing = ships_load(g_camp.player_ship);
     for (i = 1; i < n; i++)
         ships_load(gInstanceShipTypes[i]);
+#ifdef RV_TESTS
     if (g_lasers)
         lasers_sets();
+#endif
     {
         /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
         unsigned long free_kb = xms_free_kb(), taken, t0 = clock240();
@@ -2455,6 +2501,7 @@ void __far __cdecl flight_startup(void)
     }
     g_cam_cy = cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2;
     ships_set_camera(SCR_W / 2, g_cam_cy, 400);
+#ifdef RV_TESTS
     if (g_set_enemy >= 0) {
         /* the benchmark's sprite: the biggest of the type's band views at the sets' first resident step (84 %) */
         const ShipSet __far *set = ships_set(g_set_enemy);
@@ -2496,6 +2543,7 @@ void __far __cdecl flight_startup(void)
     g_nbench = 0;
     g_bench_sum = 0;
     g_bench_frames = 0;
+#endif
     g_steer_x = g_steer_y = 0;
     g_exit = 0;
     g_damage_next = 0;
@@ -2518,8 +2566,12 @@ void __far __cdecl flight_startup(void)
     cockpit_dirty(&g_st);
     scene_draw();
     vid_fade(64);
+#ifdef RV_TESTS
     rv_log("flight: %.16Fs, %d ships, benchmark view %d (%dx%d)", (char __far *)m->id, n - 1, g_bench_view, g_bench_w,
            g_bench_h);
+#else
+    rv_log("flight: %.16Fs, %d ships", (char __far *)m->id, n - 1);
+#endif
     cockpit_palette();                  /* only now: the deck kept its own palette while all that loaded (seconds in the
                                            browser: the user saw it go "all crazy" in the flight's palette) */
     flames_init();                      /* (its colours from that palette) */
@@ -2529,8 +2581,10 @@ void __far __cdecl flight_startup(void)
     g_hailed = 0;
     missiles_init();
     sky_clear();
+#ifdef RV_TESTS
     if (g_sky_demo)
         sky_demo_setup();
+#endif
     g_t_flames = g_t_flames_set = g_t_plan = 0;
     g_t_exact = g_t_sets = g_t_draw = g_t_wait = 0;
 }
@@ -2607,24 +2661,28 @@ void __far __cdecl flight_frame(void)
 {
     unsigned long now = clock240(), dt;
     int k = (int)(frameCounter % FPS_WINDOW);
+#ifdef RV_TESTS
     if (g_flame_test == 1) {            /* (the self-test: once, before the first frame's plan) */
         g_flame_test = 2;
         flame_test();
     }
     if (g_comm_demo && !comms_on(0) && !comms_on(1))
         comm_demo_next();
-    else if (!g_comm_demo && frameCounter == 90)
+#endif
+    if (!g_comm_demo && frameCounter == 90)
         comm_launch();
     else if (!g_comm_demo)
         comm_hail();
     comms_tick();
     sim_step();
+#ifdef RV_TESTS
     if (g_sky_demo)
         sky_demo_step();
     if (g_collide_demo)
         collide_demo_step();
     if (g_hull_demo)
         hull_demo_step();
+#endif
     stars_place();
     {
         LfBasis cam;
@@ -2636,6 +2694,7 @@ void __far __cdecl flight_frame(void)
         plan_draws();
         g_t_plan += clock240() - t0;
     }
+#ifdef RV_TESTS
     if (g_lasers) {
         if (g_bolt_demo)
             demo_step();
@@ -2646,13 +2705,16 @@ void __far __cdecl flight_frame(void)
         balls_step();
         lasers_place();
     }
+#endif
     missiles_frame();                   /* (after the plan: the ships' flames are the frame's first) */
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];
     g_frame_t[k] = now;
     g_fps10 = dt ? (int)(2400UL * FPS_WINDOW / dt) : 999;
     rvFps = (unsigned short)g_fps10;
+#ifdef RV_TESTS
     bench_step();
+#endif
     /* the benchmark's scenery: a damage layer more every three seconds (not in the laser benchmark: they hid its readout) */
     if (now >= g_damage_at && !g_lasers) {
         const RvCockpit __far *c = cockpit_record();
@@ -2720,13 +2782,18 @@ void __far __cdecl autoAnimation_c(unsigned short camShipType, unsigned short ca
 int flight_fly(const RvMission __far *m)
 {
     unsigned short status;
-    int w, h, n;
     g_m = m;
     uiMode(0);
     status = rv_flight_run();           /* (its loop begins with flight_startup: the loading, then the palette) */
-    n = flight_bench_result(&w, &h);
-    rv_log("flight: over with status %u after %u frames; benchmark %d sprites of %dx%d a frame at %d fps (%ld pixels a second)",
-           status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
+#ifdef RV_TESTS
+    {
+        int w, h, n = flight_bench_result(&w, &h);
+        rv_log("flight: over with status %u after %u frames; benchmark %d sprites of %dx%d a frame at %d fps (%ld pixels a second)",
+               status, frameCounter, n, w, h, FPS_WANT, (long)n * w * h * FPS_WANT);
+    }
+#else
+    rv_log("flight: over with status %u after %u frames", status, frameCounter);
+#endif
     {
         unsigned long f = frameCounter, frame = (clock240() - g_t0) - g_t_wait;
         static const char __far s_ms[] = "flight: ms a frame: the plan %lu.%02lu; the picture %lu.%02lu (ships drawn "
@@ -2761,6 +2828,7 @@ int flight_fly(const RvMission __far *m)
            (g_star_place_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100,
            g_star_draw_ticks * 1000 / 240 / (frameCounter ? frameCounter : 1),
            (g_star_draw_ticks * 100000 / 240 / (frameCounter ? frameCounter : 1)) % 100);
+#ifdef RV_TESTS
     if (g_lasers) {
         lasers_report();
         balls_report();
@@ -2769,6 +2837,7 @@ int flight_fly(const RvMission __far *m)
         collide_report();
     if (g_hull_demo)
         hull_report();
+#endif
     g_star_place_ticks = g_star_draw_ticks = 0;
     g_scene.full = 0;
     g_scene.no_room = 0;

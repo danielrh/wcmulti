@@ -59,7 +59,10 @@ static struct {
 #define BENCH_REPS 16
 static int __far g_bench_frames;
 static unsigned long __far g_bench_ticks, __far g_bench_rows;
-static int __far g_bench_h, __far g_bench_voice;
+static int __far g_bench_h;
+#ifdef RV_TESTS
+static int __far g_bench_voice;
+#endif
 
 static unsigned rnd(void)
 {
@@ -385,6 +388,7 @@ static int draw(int vdu, const RvRect __far *r, int y0, int y1)
     return 1;
 }
 
+#ifdef RV_TESTS                         /* (the test build, RVT.EXE /commdemo) */
 /* --- what a comm costs (RV.EXE /commdemo logs it first) --- */
 
 static const char __far s_copy[] = "Copy that.";
@@ -446,3 +450,4 @@ void comms_bench(void)
     g_bench_frames = 8;
     g_bench_ticks = g_bench_rows = 0;
 }
+#endif /* RV_TESTS */

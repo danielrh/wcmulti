@@ -71,6 +71,13 @@ ENGINE="util xms video dat gfx input room lipsync opl music score campaign light
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
+# the test build, RVT.EXE (docs/engine.md, "The test build"): the modules with test code (the demos, the
+# benchmarks, the self-tests, under RV_TESTS) compiled again with it on; RV.EXE, the game's, goes without
+TESTED=$(cd src && grep -l 'RV_TESTS' $(for c in $ENGINE; do printf '%s.c ' "$c"; done) | sed 's/\.c$//' | tr '\n' ' ')
+mkdir -p "$OUT/t"
+for c in $TESTED; do
+    wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/$c.obj" "src/$c.c"
+done
 # RVHOOK first (image paragraph 0), the C code, then DGROUP last as Watcom's
 # startup needs it, with the fixed block (RVFIXED) ahead of Watcom's _NULL so
 # it starts at DS:0000 (docs/engine.md).
@@ -92,4 +99,6 @@ link() {
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
 link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
-echo "built $OUT/RV.EXE and $OUT/HELLO.EXE"
+link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" $(for c in $ENGINE; do
+    case " $TESTED " in *" $c "*) printf ' file %s/t/%s.obj' "$OUT" "$c";; *) printf ' file %s/%s.obj' "$OUT" "$c";; esac; done)
+echo "built $OUT/RV.EXE, $OUT/RVT.EXE (the test build) and $OUT/HELLO.EXE"

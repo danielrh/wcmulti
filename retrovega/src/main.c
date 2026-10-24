@@ -1,8 +1,13 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
- *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/bench N] [/record N] [/mpu | /nomusic] [/midilog]
- *          [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo] [/flames]
- *          [/balls N [/nearballs N]] [/balldemo] [/missiledemo] [/skydemo] [/skyrows N] [/boxes] [/collidedemo] [/hulldemo [/hulltype N]] [/flametest] [/commdemo] [/ship T] [/scoretest]
+ *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/res 1|2] [/onfly N] [/skyrows N] [/mpu | /nomusic] [/noquit]
+ *
+ * RVT.EXE, the test build (build.sh compiles the modules that have test code
+ * again with -dRV_TESTS; tests/run.sh runs it when a test switch is given),
+ * takes those and the aids: [/bench N] [/record N] [/zoom N] [/capital] [/sky]
+ *          [/midilog] [/scoretest] [/ship T] [/lasers N [/near N] [/farships N] [/bigships N]] [/boltdemo]
+ *          [/flames] [/flametest] [/balls N [/nearballs N]] [/balldemo] [/missiledemo] [/skydemo] [/boxes]
+ *          [/collidedemo] [/hulldemo [/hulltype N]] [/commdemo]
  *
  * The music plays on the Sound Blaster's OPL3; /mpu sends it to a General
  * MIDI synthesizer on the MPU-401 instead.
@@ -25,11 +30,14 @@
 #include "collide.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
-extern int g_winrate, g_flight_seconds, g_flight_timed, g_score_test, g_bench_wanted, g_record, g_capital, g_zoom, g_sky, g_can_quit, g_res;
+extern int g_winrate, g_flight_seconds, g_flight_timed, g_can_quit, g_res;
+extern long g_onfly_px;
+#ifdef RV_TESTS                         /* the test build's aids (flight.c, score.c) */
+extern int g_score_test, g_bench_wanted, g_record, g_capital, g_zoom, g_sky;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
     g_ball_demo, g_missile_demo, g_sky_demo, g_boxes, g_collide_demo, g_hull_demo, g_hull_type, g_flame_test,
     g_comm_demo, g_test_ship;
-extern long g_onfly_px;
+#endif
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
 void __far __cdecl uiMode_impl(unsigned short on) { (void)on; }
@@ -105,6 +113,9 @@ int main(int argc, char **argv)
 {
     int i, ok;
     rvHello();
+#ifdef RV_TESTS
+    rv_log("RVT.EXE: the test build (the demos, the benchmarks and the self-tests are in)");
+#endif
     for (i = 1; i + 1 < argc; i++) {
         if (!strcmp(argv[i], "/script") || !strcmp(argv[i], "-script"))
             script_open(argv[++i]);
@@ -112,12 +123,20 @@ int main(int argc, char **argv)
             g_winrate = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/flight"))           /* tests: a flight lands by itself after N s (else on C) */
             g_flight_seconds = atoi(argv[++i]), g_flight_timed = 1;
+        else if (!strcmp(argv[i], "/res"))              /* 1 the sets as they are; 2 the block mode (SHIPnn.RVH) */
+            g_res = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "/onfly"))            /* the exact draws' pixel budget a frame (32000) */
+            g_onfly_px = atol(argv[++i]);
+        else if (!strcmp(argv[i], "/skyrows"))          /* the sky's far things: 0 each its own way, 1 all rows, 2
+                                                           doubled, 3 interlaced */
+            sky_rows(atoi(argv[++i]));
+#ifdef RV_TESTS
         else if (!strcmp(argv[i], "/bench"))            /* tests: benchmark copies, fixed (0 none; else adapting) */
             g_bench_wanted = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/record"))           /* tests: a screenshot every N frames of flight */
             g_record = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "/onfly"))            /* the exact draws' pixel budget a frame (32000) */
-            g_onfly_px = atol(argv[++i]);
+        else if (!strcmp(argv[i], "/zoom"))             /* tests: one ship ahead, swinging in and out: 1 it rolls, 2 it yaws, 3 yaws far out */
+            g_zoom = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/lasers"))           /* tests: the laser benchmark, N far bolts (-1 adapting) */
             g_lasers = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/near"))             /* tests: its near bolts (12) */
@@ -169,10 +188,7 @@ int main(int argc, char **argv)
             g_lasers = 1;
             g_near_bolts = 0;
             g_big_ships = g_far_ships = 0;
-        } else if (!strcmp(argv[i], "/skyrows"))        /* the sky's far things: 0 each its own way, 1 all rows, 2
-                                                           doubled, 3 interlaced */
-            sky_rows(atoi(argv[++i]));
-        else if (!strcmp(argv[i], "/skydemo")) {      /* tests: the sky's far things as the camera rolls */
+        } else if (!strcmp(argv[i], "/skydemo")) {      /* tests: the sky's far things as the camera rolls */
             g_sky_demo = 1;
             g_lasers = 1;
             g_near_bolts = 0;
@@ -188,26 +204,25 @@ int main(int argc, char **argv)
             g_near_bolts = 0;
             g_big_ships = g_far_ships = 0;
         }
+#endif
     }
     for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "/midilog"))               /* tests: what the music sent, and when */
-            music_record(1);
-        else if (!strcmp(argv[i], "/mpu"))
+        if (!strcmp(argv[i], "/mpu"))
             music_device(MUSIC_MPU401);
+        else if (!strcmp(argv[i], "/nomusic"))
+            music_device(MUSIC_OFF);
+        else if (!strcmp(argv[i], "/noquit"))           /* the page: no Q in the bunk menu (reload is the way out) */
+            g_can_quit = 0;
+#ifdef RV_TESTS
+        else if (!strcmp(argv[i], "/midilog"))          /* tests: what the music sent, and when */
+            music_record(1);
         else if (!strcmp(argv[i], "/capital"))          /* tests: the carrier in the flight */
             g_capital = 1;
         else if (!strcmp(argv[i], "/scoretest"))        /* tests: the flight's music by the clock (score.c) */
             g_score_test = 1;
-        else if (!strcmp(argv[i], "/zoom"))             /* tests: one ship ahead, swinging in and out: 1 it rolls, 2 it yaws, 3 yaws far out */
-            g_zoom = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "/res"))              /* 1 the sets as they are; 2 the block mode (SHIPnn.RVH) */
-            g_res = atoi(argv[++i]);
         else if (!strcmp(argv[i], "/sky"))              /* tests: three ship views painted on the sky, to roll and turn round */
             g_sky = 1;
-        else if (!strcmp(argv[i], "/noquit"))           /* the page: no Q in the bunk menu (reload is the way out) */
-            g_can_quit = 0;
-        else if (!strcmp(argv[i], "/nomusic"))
-            music_device(MUSIC_OFF);
+#endif
     }
     if (!xms_init(32768UL, 0x7FFFFFFFUL)) {
         printf("RetroVega needs 32 MB of XMS (HIMEM.SYS or DOSBox's xms=true, memsize=63).\n");

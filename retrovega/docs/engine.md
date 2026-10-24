@@ -635,6 +635,7 @@ the rate, and the mean N over the second half is logged:
 
 `RV.EXE /bench N` fixes the count (0: none, so `tests/ships.txt` can look
 at the real ships, logged every 100 frames as `lightfield: frame ...`).
+Since 2026-10-23 the benchmark is in the test build only (below).
 
 At `cycles=40000` (tests/rv.conf) that is about two emulated cycles a
 pixel, the XMS fetch of each sprite's rows and the per-row call into
@@ -645,6 +646,31 @@ the live page through the rooms with Tab and Enter (the deck's launch
 hotspot sits at 478,176) and reading RVLOG.TXT; a desktop browser on a
 faster machine will sit between the two. The number is live in
 `rvBenchCount` while the flight runs.
+
+### The test build: RVT.EXE
+
+The demos, the benchmarks and the self-tests (`/bench`, `/record`, `/zoom`,
+`/capital`, `/sky`, `/midilog`, `/scoretest`, `/ship`, `/lasers` and its
+scene's knobs, `/boltdemo`, `/flames`, `/flametest`, `/balls`, `/balldemo`,
+`/missiledemo`, `/skydemo`, `/boxes`, `/collidedemo`, `/hulldemo`,
+`/commdemo`; the kernel check and the path timings every flight began with)
+sit under `#ifdef RV_TESTS`: regions of flight.c (the whole demo and
+benchmark half of it), the checks and timings at the ends of bolts.c,
+balls.c, ships.c and comms.c, and their switches in main.c. build.sh finds
+the modules that mention it, compiles them again with `-dRV_TESTS` into
+build/dos/t/, and links **RVT.EXE** from those; **RV.EXE**, the game's and
+the page's, goes without: 56 KB smaller on disk (304 KB from 360), 48 KB
+more conventional memory in the flight. The switches themselves stay
+variables in both builds (never set in the game's), so the flight's code
+reads the same either way and a dead branch costs a compare, not a warning.
+`tests/run.sh` runs RV.EXE unless a test switch is given (anything but
+`/script`, `/flight`, `/winrate`, `/res`, `/onfly`, `/skyrows`, `/mpu`,
+`/nomusic`, `/noquit`), then RVT.EXE; `EXE=` picks one regardless. The log's
+first line says `RVT.EXE: the test build` when it is. The game's flight log
+ends `flight: over with status N after F frames`; the test build's adds
+the benchmark as before. Not gated, since each is a few hundred bytes: the
+music log (`/midilog`'s recorder in music.c), score.c's clock test, the
+flames scene's spawning and the carrier's.
 
 ### The lightfield: one function draws a ship
 
@@ -1187,6 +1213,28 @@ for upper memory (DOSBox has 128 KB of UMBs at D000 with EMS off, as both
 configs run it; 64 KB with EMS on) and `ships.c` puts the dense buffers
 there first, else in conventional memory as before: the flight then has
 ~155 KB left, and the bolts' pool takes 39 bytes a bolt of it (2,400).
+
+**Memory again, 2026-10-23** (the user: "lets do 1-4", trading conventional
+memory for XMS). Measured by a startup log that walks DOS's arena chain
+below A000 (the DOS largest-block call did not move when a table under a
+later block went) and the far heap (`_fheapwalk`, after `_fheapshrink`
+gives whole free segments back): free in DOS after the screen and the
+fonts, 120 KB before, 216 after, the largest block 163 KB from 115. The
+steps: (1) the exact
+draw's dense copies in **one 64 KB slab** (`g_slab`, `SLAB_MAX` 32 entries,
+ring allocation, an overlapped entry evicted) in upper memory, the two
+64 KB buffers and the eight XMS copies (`g_dc`) gone — a copy evicted is
+re-expanded from its rows, and the flight test shows 199 expansions to
+3,047 hits in 20 s; and video.c's 64,000-byte band buffer in upper memory
+too (+65 KB). (2) RV.DAT's 49 KB directory in resident XMS, read a record
+at a time through a rotating pair of far buffers (`dir_at`, `dat_asset`),
+and the sets' view records no longer copied into `ShipSet` (`full_view`
+reads the record from the set's own index block; the .RV fallback writes
+a 12-byte record a view): +48 KB. (3) The test build above: +48 KB. (4)
+The 32 KB C runtime (stdio) left as is: a last resort. Code is 206 KB in 62
+segments (flight 41 KB, the runtime 32, ships 17, lasers 14) and static far
+data 85 KB (the stars 28): overlays would have saved ~35 KB for a slower
+room change, so the test build was the trade.
 
 **A Watcom pitfall** found on the way: `-ox` compiled
 `if (s == 0) A; else { B; C; }` in `ship_physics` so that slot 0 ran the
