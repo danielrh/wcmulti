@@ -1,0 +1,25 @@
+# the score's remixes by the clock (run with /scoretest 2 /flight 220 /midilog)
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 4000
+key esc
+wait 16
+log done

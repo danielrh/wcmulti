@@ -226,8 +226,8 @@ int main(int argc, char **argv)
             music_record(1);
         else if (!strcmp(argv[i], "/capital"))          /* tests: the carrier in the flight */
             g_capital = 1;
-        else if (!strcmp(argv[i], "/scoretest"))        /* tests: the flight's music by the clock (score.c) */
-            g_score_test = 1;
+        else if (!strcmp(argv[i], "/scoretest"))        /* tests: the flight's music by the clock (score.c); 2: the remixes */
+            g_score_test = i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '9' ? atoi(argv[++i]) : 1;
         else if (!strcmp(argv[i], "/sky"))              /* tests: three ship views painted on the sky, to roll and turn round */
             g_sky = 1;
 #endif

@@ -20,7 +20,14 @@
  * played once over whatever plays: music_sting cuts the song short, notes
  * where it was, plays the sting and then goes on with the song from there,
  * its channels' programs, volumes, pans and expressions as they stood
- * played first (the chase).  The cues' files are rvdata.h's RV_MUSIC_FILES. */
+ * played first (the chase).  The cues' files are rvdata.h's RV_MUSIC_FILES.
+ *
+ * The score's remixes (2026-10-24, the user: the flight music "remixable and
+ * loopable"): a song's "sect" markers are its blocks, and music_then queues
+ * a follow-on, another song from its loop or one of its blocks, after the
+ * playing song's pass or after so many more of its blocks.  When music_poll's
+ * fill reaches that point it splices the next song in on the bar line, as
+ * one piece: all notes off, the new song's channels chased, its events. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +54,8 @@ typedef struct {
 } Ev;
 #define EV_LAST 1                       /* the song's last event: it goes round again after it */
 #define EV_CHASE 2                      /* a chase's controller, not the song's own (not counted) */
+#define EV_SWITCH 4                     /* a follow-on begins: d1 the song, d2 its slot in g_switch_from */
+#define MAX_SECT 24
 
 typedef struct {
     XmsBlock x;                         /* the events, in XMS (resident) */
@@ -54,6 +63,8 @@ typedef struct {
     unsigned loop;                      /* where it goes round again from: the event of its "loop" marker (0: the start) */
     unsigned beat;                      /* music ticks a beat, from the first tempo */
     unsigned char beats_bar;
+    unsigned char nsect;
+    unsigned sect[MAX_SECT];            /* its "sect" markers' events: the blocks the score may cut between */
 } Song;
 
 /* The interrupt plays from a ring in conventional memory, which music_poll
@@ -68,6 +79,8 @@ typedef struct {
     int song;                           /* -1: none */
     unsigned src;                       /* the song's next event to put */
     unsigned char wrapped;              /* the next put is the loop's first: its delta 0 (the bar is whole) */
+    int then_song;                      /* the follow-on (music_then), -1 none: */
+    unsigned then_from, then_at;        /* its first event, and the playing song's event it comes after */
 } Ring;
 static Ring g_ring[2];
 static volatile int g_play, g_next_ring;
@@ -83,6 +96,9 @@ static unsigned long __far g_start_ticks;   /* where in its bar the next song st
 static unsigned __far g_start_idx;      /* and its first event */
 static volatile unsigned __far g_next_idx;      /* the playing song's next event to take */
 static volatile unsigned __far g_pend_idx;      /* and the one taken, waiting */
+static unsigned __far g_switch_from[8];         /* a follow-on's first event, by its switch's slot */
+static unsigned char __far g_switch_n;
+static volatile int __far g_then_cue = -1;      /* the follow-on asked for, until it is heard (music_then_cue) */
 static int __far g_last = -2;           /* the last cue asked for: asked again, it is left alone */
 static void cue_song(int song, int fade_ms, int at, unsigned from);
 static int g_dev, g_want = MUSIC_AUTO;
@@ -163,7 +179,38 @@ static void record(unsigned reg, unsigned char val)
     g_rec_head = next;
 }
 
-/* tops up a ring from its song in XMS, round to the start again at the end */
+static unsigned long chase(Ring *r, int song, unsigned upto);
+
+static void put_ev(Ring *r, unsigned char status, unsigned char d1, unsigned char d2, unsigned char flags)
+{
+    Ev __far *e = &r->ev[r->wr % RING];
+    e->delta = 0;
+    e->status = status;
+    e->d1 = d1;
+    e->d2 = d2;
+    e->flags = flags;
+    r->wr++;
+}
+
+/* the follow-on into the ring, on the bar line the playing song has just reached: every note off (the blocks
+ * are written so that nothing need hang over a cut), the switch, the new song's channels as they stand at its
+ * first event, then its events from there */
+static void splice(Ring *r)
+{
+    int ch;
+    unsigned char slot = (unsigned char)(g_switch_n++ & 7);
+    for (ch = 0; ch < 16; ch++)
+        put_ev(r, (unsigned char)(0xB0 | ch), 123, 0, EV_CHASE);
+    g_switch_from[slot] = r->then_from;
+    put_ev(r, 0, (unsigned char)r->then_song, slot, EV_CHASE | EV_SWITCH);
+    chase(r, r->then_song, r->then_from);
+    r->song = r->then_song;
+    r->src = r->then_from;
+    r->wrapped = 1;                     /* (its first event, a marker, at once) */
+    r->then_song = -1;
+}
+
+/* tops up a ring from its song in XMS, round to the start again at the end (or on to the follow-on) */
 static void fill(Ring *r)
 {
     const Song __far *s;
@@ -171,22 +218,28 @@ static void fill(Ring *r)
         return;
     s = &g_song[r->song];
     while (RING - (unsigned)(r->wr - r->rd) >= REFILL) {
-        unsigned at = r->wr % RING, n = REFILL;
+        unsigned at = r->wr % RING, n = REFILL, stop;
+        if (r->then_song >= 0 && r->src == r->then_at) {
+            splice(r);                  /* (at most 16 + 1 + 64 events: the room is there) */
+            s = &g_song[r->song];
+            continue;
+        }
+        stop = r->then_song >= 0 && r->then_at > r->src ? r->then_at : s->n;
         if (n > RING - at)
             n = RING - at;
-        if (n > s->n - r->src)
-            n = s->n - r->src;
+        if (n > stop - r->src)
+            n = stop - r->src;
         xms_get(s->x, (unsigned long)r->src * sizeof(Ev), r->ev + at, (unsigned long)n * sizeof(Ev));
         if (r->wrapped) {
             r->ev[at].delta = 0;        /* (the loop's marker: the last bar's rest has brought it to the bar line) */
             r->wrapped = 0;
         }
         r->src += n;
-        if (r->src >= s->n) {
+        r->wr += n;                     /* (after the move: the interrupt may take them now) */
+        if (r->src >= s->n && !(r->then_song >= 0 && r->src == r->then_at)) {
             r->src = s->loop;           /* round again: from the loop's marker, the intro once only */
             r->wrapped = s->loop != 0;
         }
-        r->wr += n;                     /* (after the move: the interrupt may take them now) */
     }
 }
 
@@ -418,6 +471,8 @@ static void __interrupt __far isr(void)
                     if (!(g_pend.flags & EV_CHASE)) {   /* (which of the song's events: for a sting's way back) */
                         g_pend_idx = g_next_idx;
                         g_next_idx = g_pend.flags & EV_LAST ? g_song[g_cur].loop : g_next_idx + 1;
+                    } else if (g_pend.flags & EV_SWITCH) {
+                        g_next_idx = g_switch_from[g_pend.d2 & 7];
                     }
                 }
                 if (g_left) {
@@ -426,6 +481,13 @@ static void __interrupt __far isr(void)
                 }
                 g_have_pend = 0;
                 play(&g_pend);
+                if (g_pend.flags & EV_SWITCH) {
+                    g_cur = g_pend.d1;          /* the follow-on, from the bar line */
+                    s = &g_song[g_cur];
+                    g_song_ticks = 0;
+                    g_loops = 0;
+                    g_then_cue = -1;
+                }
                 if (g_pend.flags & EV_LAST) {
                     g_song_ticks = 0;           /* round again */
                     g_loops++;
@@ -507,6 +569,11 @@ static int advance(Cursor *c, unsigned char *beats_bar)
                 c->st = 0xFE;           /* the loop's marker: where the song goes round again from */
                 return 1;
             }
+            if (type == 0x06 && len == 4 && c->p[0] == 's' && c->p[1] == 'e' && c->p[2] == 'c' && c->p[3] == 't') {
+                c->p += len;
+                c->st = 0xFD;           /* a block's marker: where the score may cut */
+                return 1;
+            }
             c->p += len;
             continue;
         }
@@ -561,6 +628,7 @@ static int load_song(const char *path, Song *song)
     for (pass = 0; pass < 2; pass++) {
         unsigned long tempo = 500000UL, last_tick = 0, n = 0;
         double us = 0, last_us_out = 0;
+        song->nsect = 0;
         song->beat = (unsigned)((double)tempo * TICK_HZ / 1e6 + 0.5);
         for (t = 0; t < ntrk; t++) {
             cur[t].p = trk[t];
@@ -587,11 +655,13 @@ static int load_song(const char *path, Song *song)
             } else {
                 if (c->st == 0xFE)
                     song->loop = (unsigned)n;   /* (a do-nothing event marks it) */
+                else if (c->st == 0xFD && song->nsect < MAX_SECT)
+                    song->sect[song->nsect++] = (unsigned)n;
                 if (pass) {
                     Ev __far *e = &g_chunk[(unsigned)(n % CHUNK_EV)];
                     e->delta = (unsigned short)((us - last_us_out) * TICK_HZ / 1e6 + 0.5);
                     last_us_out += (double)e->delta * 1e6 / TICK_HZ;
-                    e->status = c->st == 0xFE ? 0 : c->st;
+                    e->status = c->st >= 0xFD ? 0 : c->st;
                     e->d1 = c->d1;
                     e->d2 = c->d2;
                     e->flags = 0;
@@ -775,6 +845,8 @@ static void cue_song(int song, int fade_ms, int at, unsigned from)
         unsigned first;
         r->song = song;
         r->rd = r->wr = 0;
+        r->then_song = -1;
+        g_then_cue = -1;
         if (from)
             ticks = chase(r, song, from);
         first = r->wr;
@@ -840,6 +912,44 @@ void music_sting(int cue)
     rv_log("music: sting %d (%s), then cue %d from event %u @%lu", cue, name, g_back, g_back_at, g_clock);
     g_last = cue;
     cue_song(song, 40, MUSIC_NOW, 0);
+}
+
+static const char __far g_then_fmt[] = "music: then cue %d from %u after event %u of cue %d @%lu";
+
+void music_then(int cue, int from_sect, int at_sects)
+{
+    int song = playable(cue), k;
+    Ring *r;
+    const Song __far *s;
+    unsigned at;
+    if (song < 0 || song >= RV_MUSIC_STINGS)
+        return;
+    _disable();
+    r = g_next != -1 ? &g_ring[g_next_ring] : &g_ring[g_play];
+    _enable();
+    if (r->song < 0 || r->song >= RV_MUSIC_STINGS)
+        return;                         /* (nothing playing, or a sting: no follow-on) */
+    s = &g_song[r->song];
+    at = s->n;                          /* after its pass, */
+    for (k = 0; at_sects > 0 && k < s->nsect; k++)
+        if (s->sect[k] >= r->src && --at_sects == 0)
+            at = s->sect[k] + 1;        /* or after so many more of its blocks' markers (the bar line reached) */
+    r->then_from = from_sect >= 0 && from_sect < g_song[song].nsect ? g_song[song].sect[from_sect] : g_song[song].loop;
+    r->then_at = at;
+    r->then_song = song;
+    g_then_cue = cue;
+    g_last = cue;
+    rv_logf(g_then_fmt, cue, r->then_from, at, r->song, g_clock);
+}
+
+int music_then_cue(void)
+{
+    return g_then_cue;                  /* (spliced into the ring long before it is heard: asked for until then) */
+}
+
+int music_sects(int cue)
+{
+    return playable(cue) >= 0 ? g_song[cue].nsect : 0;
 }
 
 unsigned music_loops(void)

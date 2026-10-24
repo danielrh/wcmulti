@@ -12,6 +12,11 @@ void music_cue(int cue, int fade_ms);   /* fade the current song out over fade_m
 void music_cue_at(int cue, int fade_ms, int at);   /* ... starting the fade on the next beat or bar */
 void music_cue_body(int cue, int fade_ms, int at);   /* ... from its loop's marker: past its intro (the battles' chain) */
 void music_sting(int cue);              /* a sting, once: then the song it cut short goes on from there */
+void music_then(int cue, int from_sect, int at_sects);   /* then this cue, from its loop (from_sect -1) or that
+                                        block, after the playing song's pass (at_sects 0) or so many more of its
+                                        blocks: spliced on the bar line, as one piece (the score's remixes) */
+int music_then_cue(void);               /* the follow-on asked for and not yet heard (-1 none) */
+int music_sects(int cue);               /* its blocks ("sect" markers) */
 unsigned music_loops(void);             /* times the playing song has come round since it began */
 int music_playing(void);                /* the cue sounding now (-1 none; a sting) */
 unsigned long clock240(void);          /* the music clock: 240 ticks a second */

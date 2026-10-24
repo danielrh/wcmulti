@@ -72,77 +72,76 @@ where we had a beat or nothing, and short (30 to 40 s loops ending in a
 riser). The plan: a new set of cruise pieces in that style and the way
 home in two versions, step 1 first for the user's verdict.
 
-**Step 1 (this commit):**
+**Step 1** (commit 744050f0) built the orchestra, Outbound and the way
+home. The user: Outbound "hits on all counts... fix all the flight music
+to have that same style but their own unique character and be remixable
+and loopable so the orchestral score is complete". **Step 2** did that:
+every flight piece rewritten for the orchestra, and the score's remixes.
 
-- **The orchestra** on programs no song used: spiccato strings (44) for
-  the eighth-note motor, an orchestra hit (55), a piccolo (72), a synth
-  brass that bites (62, 63). The crash is 6 dB down, the user's note: it
-  stood 4 dB over the mix (A-weighted).
+- **The orchestra** (`tools/orch.py`) on programs no room song uses:
+  spiccato strings (44) for the motor, an orchestra hit (55), a piccolo
+  (72), a synth brass that bites (62, 63); with the horns, strings,
+  timpani and harp. The crash is 6 dB down, the user's note: it stood 4 dB
+  over the mix (A-weighted).
 - **The balance** of the parts is the reference render's (the user liked
   it), measured K-weighted against the motor: the brass 8 dB over it, the
-  horns 5, the piccolo 4, the hits 7, the crash 5. `ORCH` in
-  flightsongs.py sets each part's channel, program and level.
-- **Outbound** (CRUISE1) is the proof piece. **HOMEWARD** is rewritten in
-  the style. **HOMELOSS** is new: the user asked for a way home for a
-  mission lost, "mostly just a bit slower and sadder but otherwise same".
-- **The guardrail:** `tools/songcheck.py` measures the cruise and home
-  songs against bands from the two cues (notes a second, motor, voices,
-  off-key share, fast notes, drum hits, bars without a change) and names
-  every band a song falls outside. Outbound and the way home pass; the
-  second draft's five other cruise songs do not, and are next.
+  horns 5, the piccolo 4, the hits 7, the crash 5. `ORCH` sets each
+  part's channel, program and level; `orchestra(s)` puts them on.
+- **The guardrail:** `tools/songcheck.py` measures every flight song
+  against bands from the two cues (notes a second, motor, voices, off-key
+  share, fast notes, drum hits, bars without a change), the fights and the
+  rock field in bands of their own, and checks the markers: a loop marker,
+  blocks on bar lines, at least four blocks in a fight, nothing just past
+  a bar line. Every piece passes.
 
-## The songs (tools/flightsongs.py, CC0)
-
-The second draft, with the third's first step:
+## The songs (CC0, ours)
 
 | cue | title | key, tempo | what |
 |---|---|---|---|
-| CRUISE1 | Outbound | E minor, G# minor, C, E; 160 | third draft: the motor in octaves, a synth-brass call and horn answers, hits on 3+3+2, a break into C, the horn's tune, home to E major, a timpani riser; the second pass rescored |
-| CRUISE2 | Deep Field | E lydian, 72 | new: strings, horn's long tune, flute, the minor turn, build, violins high with choir |
-| CRUISE3 | Long Watch | E minor, 100 | the draft's 0:58 flute passage, piano eighths, oboe, a lift into G, the passage again full |
-| CRUISE4 | Quiet Instruments | C minor drone, 92 | ticking that quickens into a payoff (horns, violins, choir), flurries, an oboe passage |
-| CRUISE5 | Beacon | F# minor into A, 76 | a string pulse, horn's tune, violins' passage, climax, lift into A |
-| CRUISE6 | Nav Point | G dorian, 108 | as the draft, looping past its intro |
-| HOMEWARD | Homeward, won | B flat, 12/8 at 108 | third draft: harp eighths, the horn's tune, a lift into D for a brass chorale, home through B flat |
+| CRUISE1 | Outbound | E minor, G# minor, C, E; 160 | launch: the motor in octaves, a synth-brass call and horn answers, hits on 3+3+2, a break into C, the horn's tune, home to E major, a timpani riser |
+| CRUISE2 | Wide Orbit | G minor, 12/8 at 116 | wonder: harp rolling two octaves over a turning spiccato, the horn singing, round the minor-third cycle G, B flat, D flat, E minor |
+| CRUISE3 | Sensor Sweep | B minor, 152 | curious: pairs of notes spreading a semitone apart and closing over a pizzicato pedal, piccolo questions and muted-trumpet answers, then G major opens for the horn |
+| CRUISE4 | Far Light | D, 12/8 at 124 | heroic wonder, the brightest: strings galloping under harp sixteenths, the synth-brass fanfare lifted D, F#, B flat |
+| CRUISE5 | Deep Lane | F minor, 144 | dark wonder: low strings in 3+3+2, the horn's tune falling through D flat and G flat, D flat major for the strings, diminished piccolo flourishes |
+| CRUISE6 | Long Burn | A minor, 12/8 at 112 | anticipation: eight bars of repeated A's burning under turning chords, then the release into C# minor, the strings' tune |
+| CRUISE7 | Waypoint | C major and minor, 168 | brisk travel: the strings at a gallop, synth-brass stabs and horn answers, a lift through A flat and B flat |
+| CRUISE8 | Starwake | G, 12/8 at 120 | the big open vista: the set's biggest tune through three lifts of a major third, home under a brass fanfare |
+| HOMEWARD | Homeward, won | B flat, 12/8 at 108 | harp eighths, the horn's tune, a lift into D for a brass chorale, home through B flat |
 | HOMELOSS | Homeward, lost | B flat minor, 12/8 at 92 | the same, slower and sadder: horns for the brass, no hits, sinking a major third to G flat |
-| BATTLE1 | Contact | C minor sus pedal, 140 | as the draft (132), looping past its intro |
-| BATTLE2 | Break and Attack | C minor, 140 | half-time fight, riff, brass calls, a Neapolitan horn tune, a lift into A flat |
-| BATTLE3 | Furball | C phrygian, 140 | the draft's (E, 152) with a surprise: the riff up a third, then a tutti stop |
-| ROCKS | Rock Field | G minor, 120 | asteroid fields: the draft's Crossfire, a new drift in B flat, a descant |
-| PANIC1 | Hull Breach | C, 140 | Contact's drive under a cluster, alarms, the call a tritone off |
-| PANIC2 | Systems Failing | C rising, 140 | each build pays off in two wild bars |
-| PANIC3 | Abandon Ship | 152 to 196 | panic, hope, dashed, hope, dashed harder, a speed-up |
+| BATTLE1 | Contact | C sus pedal into C minor, 140 | the call on the horn answered by synth brass over spiccato sixteenths, low strings and timpani |
+| BATTLE2 | Break and Attack | C minor, 140 | half-time hits over the motor at full speed, a riff of its own on strings, a Neapolitan horn tune, a lift into A flat |
+| BATTLE3 | Furball | C phrygian, 140 | the riff on synth brass and horn over driving fifths, up a minor third the second time, a tutti stop |
+| ROCKS | Rock Field | G minor, 120 | a march through the rocks (snare, timpani, low strings), the horn's theme, a drift through B flat with the harp and piccolo glinting, a brass descant |
+| PANIC1 | Hull Breach | C, 140 | the fight going on under the damage: a low cluster, alarms in seconds, the call a tritone off |
+| PANIC2 | Systems Failing | C rising, 140 | the bass climbing a half step a bar; every climb pays off in two wild bars |
+| PANIC3 | Abandon Ship | 152 to 196 | panic, hope (the call in major), dashed, hope higher, dashed harder, a speed-up |
 | VICTORY1..3 | Splash One..Three | C, D, B flat | bittersweet: bVI-bVII-I, the minor plagal, a deceptive turn |
 | TRAGEDY | Wingman Lost | B flat minor, 52 | a funeral march, 14 s |
 
-The pieces run 31 minutes once through, each going round from its loop.
-`Piece.loop_at(bar)` writes the marker. `Song.tempo(beat, bpm)` writes a
-tempo change. Abandon Ship's speed-up is timed so that its eight bars take
-seven, so the song stays whole bars at its first tempo.
+Some 21 minutes of music, every piece its own, each going round from
+its loop. `tools/flightsongs.py` has Outbound and the way home and gathers
+the rest from `cruise_a.py`, `cruise_b.py`, `battles.py` and `panics.py`,
+all written with `tools/orch.py`.
 
-- **How they are written:** each song is a harmony of bars and layers over
-  it (`Piece`: pad, arpeggio, bass, drums). The A sections' tunes are
-  written out note by note; the later ones are written by
-  `tools/compose.py` from the chords, seeded.
+- **The cruise cycle:** each cruise piece's riser lands on its own
+  dominant, and the next in the cycle starts in its key: E minor, G minor,
+  B minor, D, F minor, A minor, C, G, and round to E.
+- **Blocks:** `Piece.sect(bar)` (or `sections`) writes a "sect" marker at
+  each block. A fight's block stands alone, so it can follow any block of
+  any fight: it starts on its downbeat with the motor and a hit, in the C
+  minor family, and no note is held over its end.
 - **Loops:** a "loop" marker meta event (`FF 06 "loop"`) after a song's
   intro is where it goes round again from. The engine plays the intro once
   (`music.c`: the marker becomes a do-nothing event, `Song.loop` its index;
   the ring wraps there and that event's delta is zeroed, since the last
   bar's rest has brought it to the bar line). `oplrender` follows it too.
-  `music_cue_body` starts a song at its marker, chased, for the battles'
-  chain.
-- **Levels:** evened out by `level=` (dB, half on the volumes, half on the
-  velocities): the cruise songs sit at -25 to -27 dBFS RMS, battle and
-  panic at -23 to -25, the stings at -20.
+- **Levels:** evened out by `level=`: the way home at -25.6 to -24.6 LUFS,
+  the cruise at -24.5 to -23.4, the rock field -22.8, the fights -22.2 to
+  -21.8, the stings -20.8 to -19.1.
 - **Voices:** none steals a voice: at most 18 sound at once.
-- **New patches in the bank** (on programs no room song uses): saw pluck
-  (81) and short pluck (84) for the arpeggios, kept short so sixteenths
-  stay within the 18 voices; sub bass (39); glass bell (98); the soft lead
-  on 85; noise swell (119). The third draft's: spiccato (44), orchestra
-  hit (55), piccolo (72), synth brass (62, 63).
 - **Whole bars:** a loop's length is its last event's bar, so nothing may
-  sound past the last bar line: a swell's last expression step and a
-  sweep's last note end inside it.
+  sound past the last bar line: ramps, swells and sweeps end their last
+  step inside it.
 
 **Previews:** `build/oplrender --bank build/dos/RVOPL.BNK --mid
 build/dos/CRUISE1.MID --out CRUISE1.wav` (tools/oplrender.sh builds it)
@@ -178,12 +177,22 @@ On top of these:
 - **Stings:** an enemy that was within 12,000 km last frame and is gone
   now was splashed, and gets a victory sting, the three in turn. A friend
   gone the same way gets the tragedy.
-- **Rotation:** a calm song plays through once (`music_loops`), and then
-  the next in its list takes over on the bar.
-- **Battle chain:** the battles are all at 140 in C. When one has gone
-  round, the next goes on from its loop marker (`music_cue_body`) on the
-  bar, with a 150 ms fade, as one piece. A panic comes in on the bar too.
-  The place in each list is kept from flight to flight.
+- **Remixes** (`music_then`, the engine's follow-ons): as each calm song
+  comes in, the next of the cruise cycle is asked for after its pass,
+  from its loop, so the riser of one lands on the downbeat of the next,
+  spliced on the bar line with no fade. As each battle comes in, another
+  is asked for at one of its own blocks, a block or two past what the
+  ring holds: so 20-35 s (three to five blocks) of each before the next
+  cuts in. The place in each list is kept from flight to flight. A panic
+  comes in on the bar.
+- **The splice** (`music.c`): music_poll keeps a ring some 20 s ahead of
+  the interrupt. When its fill reaches a follow-on's point (the end of the
+  pass, or a block's marker, the bar line reached), it puts every
+  channel's notes off, a switch event, the new song's channels as they
+  stand at its first event (the chase), then its events. The interrupt
+  takes the switch on the bar line: the new song, its bar clock and its
+  event count from there. `music_then_cue` says a follow-on is still to
+  be heard until then.
 - **Cross-fades:** calm, home and the rocks fade over 1.5-2.5 s on the
   bar; a fight starts over 0.7 s on the beat.
 
@@ -217,16 +226,20 @@ the flight. The schedule, in seconds:
 | 98 | dead |
 
 `tests/score.txt` flies it (`tests/run.sh tests/score.txt /scoretest
-/flight 105 /midilog`). The music log's lines carry the music clock
+/flight 105 /midilog`). `/scoretest 2` is the remixes': calm for 96 s
+(Outbound's pass, then the next cruise piece spliced on), a fight for
+100 s (the battles cut together block by block), the way home
+(`tests/remix.txt`, `/flight 220`). The music log's lines carry the music clock
 (`@ticks`, 240 a second), so a log rendered with `oplrender --log` can be
 cut and labelled.
 
 **Memory:**
 
-- **Loading:** the 26 songs load at start-up into XMS, some 75,000 events.
-  The far heap grows to read each song's tracks, and `_fheapshrink` gives
-  that back to DOS afterwards: 268 KB is free after the music, where it
-  was 180 KB with the seven room songs.
+- **Loading:** the 28 songs load at start-up into XMS, some 95,000 events
+  (570 KB). The far heap grows to read each song's tracks, and
+  `_fheapshrink` gives that back to DOS afterwards: 283 KB is free after
+  the music (the walk test, 2026-10-24), where it was 180 KB with the seven
+  room songs.
 - **`/midilog`:** its buffers used to be taken from the far heap before
   anything else, and then the fonts found no room. That was already so
   before the flight's music. Upper memory is the ships' two dense

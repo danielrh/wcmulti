@@ -17,13 +17,15 @@
  * points (game.c sets them at launch, the roll until combat scores a
  * mission: the number the layer carries to the other players).
  *
- * Each mood has its songs (rvdata.h's RV_MUSIC_*). A calm song plays through
- * once (music_loops), then the next takes over on the bar, the place in the
- * list kept from flight to flight.  The battles are the user's lego pieces
- * (2026-10-24): all at 140 in C, so when one has gone round, the next goes
- * on from its loop's marker (past its intro) on the bar, as one piece; a
- * panic comes in on the bar too, at the same tempo.  Inside an asteroid or
- * mine field, with no fight, the rock field's song. */
+ * Each mood has its songs (rvdata.h's RV_MUSIC_*).  The third draft's
+ * remixes (2026-10-24, the user: "remixable and loopable"): the calm songs
+ * follow one another round a cycle of keys, each from its loop as the last
+ * one's riser ends (music_then, spliced on the bar line, no fade), the place
+ * in the cycle kept from flight to flight; the battles, the user's lego
+ * pieces, all at 140 in C, are cut together block by block: three to five
+ * blocks of one, then another at one of its blocks.  A panic comes in on the
+ * bar, at the same tempo.  Inside an asteroid or mine field, with no fight,
+ * the rock field's song. */
 #include <stdlib.h>
 #include "rv.h"
 #include "rvhooks.h"
@@ -46,6 +48,7 @@ typedef struct {
     unsigned char close[RV_MAX_SHIP_SLOT + 1];  /* and if it was within GONE_KM */
     unsigned char hostile_seen;         /* an enemy was out there this flight */
     unsigned char next[2];              /* the next of the cruise and battle songs (kept between flights) */
+    int queued;                         /* the follow-on asked for (music_then), -1 none */
     unsigned char victory;
     unsigned char step;                 /* the test's (/scoretest) */
     unsigned long t0;
@@ -90,7 +93,7 @@ static int song_for(int mood)
 {
     switch (mood) {
     case CALM:
-        return RV_MUSIC_CRUISE1 + g_sc.next[0]++ % 6;
+        return RV_MUSIC_CRUISE1 + g_sc.next[0]++ % (RV_MUSIC_HOMEWARD - RV_MUSIC_CRUISE1);
     case FIGHT:
         return RV_MUSIC_BATTLE1 + g_sc.next[1]++ % 3;
     case HOME:
@@ -109,6 +112,7 @@ static void play(int mood)
     int was = g_sc.mood;
     g_sc.mood = mood;
     g_sc.cue = song_for(mood);
+    g_sc.queued = -1;                   /* (a cue clears the follow-on) */
     if (mood == FIGHT && was == FIGHT)
         music_cue_body(g_sc.cue, 150, MUSIC_BAR);          /* the next lego piece, from its loop, as one piece */
     else if (mood == PANIC && (was == FIGHT || was == PANIC))
@@ -117,14 +121,47 @@ static void play(int mood)
         music_cue_at(g_sc.cue, fade[mood], mood == FIGHT || mood == PANIC || mood == DEAD ? MUSIC_BEAT : MUSIC_BAR);
 }
 
+/* the follow-ons: as each calm song comes in, the next of the cycle asked for after its pass, from its loop; as
+ * each battle comes in, another at one of its own blocks after a block or two past what the ring holds (it is
+ * filled some 20 s ahead: so 20-35 s of each, three to five blocks, before the next cuts in) */
+static void follow(int mood)
+{
+    int now = music_playing(), next;
+    unsigned long r = clock240();
+    if (now >= 0 && now != g_sc.cue && now == g_sc.queued) {
+        static const char __far came[] = "score: cue %d came in @%lu";
+        g_sc.cue = now;                 /* (the follow-on came in) */
+        g_sc.queued = -1;
+        rv_logf(came, now, r);
+    }
+    if (now != g_sc.cue || music_then_cue() >= 0)
+        return;
+    next = song_for(mood);
+    if (mood == CALM)
+        music_then(next, -1, 0);
+    else
+        music_then(next, music_sects(next) ? (int)(r % music_sects(next)) : -1, 1 + (int)(r / 7 % 2));
+    g_sc.queued = next;
+}
+
 #ifdef RV_TESTS
-/* the test: calm, a rock field, a fight, the next battle chained on, a victory and a tragedy over it, the three
- * panics, the way home won and lost, dead */
+/* the test (/scoretest): calm, a rock field, a fight, the next battle chained on, a victory and a tragedy over it,
+ * the three panics, the way home won and lost, dead.  /scoretest 2, the remixes: calm long enough for the next
+ * cruise song to follow on, a fight long enough for the battles' blocks to be cut together, the way home */
 static void test_tick(unsigned long now)
 {
-    static const unsigned char at[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 88, 98 };
-    if (g_sc.step >= sizeof at || now - g_sc.t0 < at[g_sc.step] * 240UL)
+    static const unsigned char __far at1[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 88, 98 };
+    static const unsigned char __far at2[] = { 96, 196 };
+    const unsigned char __far *at = g_score_test == 2 ? at2 : at1;
+    unsigned steps = g_score_test == 2 ? sizeof at2 : sizeof at1;
+    if (g_score_test == 2 && (g_sc.mood == CALM || g_sc.mood == FIGHT))
+        follow(g_sc.mood);
+    if (g_sc.step >= steps || now - g_sc.t0 < at[g_sc.step] * 240UL)
         return;
+    if (g_score_test == 2) {
+        play(g_sc.step++ ? HOME : FIGHT);
+        return;
+    }
     switch (g_sc.step++) {
     case 0: play(ROCKS); break;
     case 1: play(FIGHT); break;
@@ -212,8 +249,8 @@ void score_tick(int landing)
         mood = CALM;
     if (mood != g_sc.mood)
         play(mood);
-    else if ((mood == CALM || mood == FIGHT) && music_playing() == g_sc.cue && music_loops() > 0)
-        play(mood);                     /* (the song has gone round: the next of the list) */
+    else if (mood == CALM || mood == FIGHT)
+        follow(mood);
     /* the stings over it all */
     if (lost)
         music_sting(RV_MUSIC_TRAGEDY);
