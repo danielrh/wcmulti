@@ -1,0 +1,43 @@
+# an asteroid field (run with /field D /flight N): the rooms, the launch, then the flight in the field: straight
+# on at cruise, a turn left, straight, a climb, straight; shots along the way
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+shot K01START
+wait 30
+shot K02
+hold left 18
+wait 30
+shot K03TURN
+wait 40
+shot K04
+hold up 12
+wait 30
+shot K05CLIMB
+wait 60
+shot K06
+wait 60
+shot K07
+wait 400
+shot K08DEBR
+key esc
+wait 16
+log done

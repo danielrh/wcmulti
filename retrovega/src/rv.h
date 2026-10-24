@@ -23,7 +23,8 @@ void __far __cdecl rv_xms(RvRegs *r);
 
 /* XMS (xms.c): blocks of extended memory, moved with the driver's function 0Bh.
  * A block belongs to a level and every level's blocks can be freed at once. */
-enum { XMS_RESIDENT, XMS_BASE, XMS_ROOM, XMS_MISSION, XMS_LEVELS };
+enum { XMS_RESIDENT, XMS_BASE, XMS_ROOM, XMS_MISSION, XMS_HAZARD, XMS_LEVELS };   /* (XMS_HAZARD: an asteroid field's
+                                           art, while the player is near one: rocks.c) */
 #define XMS_MAX_BLOCKS 512               /* a mission's sprite sets take a block per (size, roll): 49 a type, plus the dense copies' cache */
 typedef unsigned short XmsBlock;       /* index into the block table, 0 = none */
 int xms_init(unsigned long min_kb, unsigned long max_kb);   /* one arena of all the free XMS up to max_kb; 0 when
@@ -35,6 +36,8 @@ void xms_free_level(int level);        /* frees that level and all above it */
 int xms_put(XmsBlock b, unsigned long off, const void __far *src, unsigned long n);
 int xms_get(XmsBlock b, unsigned long off, void __far *dst, unsigned long n);
 int xms_copy_conv(void __far *dst, const void __far *src, unsigned long n); /* host-speed copy */
+void xms_where(XmsBlock b, unsigned *handle, unsigned long *off);   /* a block's handle and offset, for moves of one's
+                                           own (rocks.asm moves a rock's rows straight into the band) */
 void xms_shutdown(void);
 
 /* the screen (video.c): VESA 100h, 640x400x256, drawn a run of dirty rows
@@ -67,6 +70,8 @@ const RvDatHeader __far *dat_header(void);
 void dat_read(unsigned long at, void __far *dst, unsigned long n);   /* an asset's bytes: read in on first want */
 void dat_enter(int level);              /* XMS level `level` given back, and the assets wanted from now go there
                                            (XMS_ROOM at each room, XMS_MISSION for a flight) */
+void dat_level(int level);              /* the assets wanted from now go to `level`, nothing given back (an asteroid
+                                           field's level above the mission's while its art is in) */
 void dat_log(void);                     /* the assets read in so far */
 
 /* drawing (gfx.c), every call clipped to the rows y0 .. y1-1 being drawn */

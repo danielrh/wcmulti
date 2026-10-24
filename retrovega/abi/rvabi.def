@@ -47,7 +47,7 @@ VAR   pendingCampaign              2    # 0xffff none
 VAR   savedGameLoaded              2
 VAR   skipRecRoom                  2    # nonzero: runHangarMission goes straight to the barracks
 VAR   fieldCount                   2
-VAR   fieldRockTally               2
+VAR   fieldRockTally               2    # RV: the rocks kept round the player
 VAR   currentField                 2    # offset of the field record the player is in, 0 none
 VAR   mouseShift                   1    # 1: mouse x 0..639 -> logical x 0..319 (as WC2 states it)
 VAR   rvVideoMode                  1    # 0 320x200 (mode 13h), 1 640x400 (VESA 100h)
@@ -68,7 +68,7 @@ VAR   systemDamage                10    # byte per system (9 used), 0..4
 VAR   cockpitDamage                8    # word per instrument (4): 1 broken
 VAR   vduStatus10WhenPlayerHitsSmth 2
 VAR   tempVector                  12
-VAR   entitiesToDespawn           20    # slots of the current field's rocks or mines, 0xff free
+VAR   entitiesToDespawn           20    # slots of the current field's rocks or mines, 0xff free (RV: always free, no rock is a slot)
 VAR   navPointState              152    # 8 x 19 bytes: mission tree progress
 VAR   campaignTable                2    # near pointer to the campaign table (spec 4.4)
 VAR   rvPlayerCount                1    # humans in the flight, written by the layer (1 in single player)
@@ -123,7 +123,7 @@ SLOT  rvLivery                     1    # row of data/liveries.csv: the ramps th
 SECTION mission 0x6400
 TABLE navPointTable             0x4d 16 # ten mission-ship words at +0x39
 TABLE missionShipTable          0x2a 64 # +0 ship type, +2 side, +4 leader, +6 behaviour (4 pilot in formation, 6 the player)
-TABLE fieldTable                0x14  7 # type, position, radius
+TABLE fieldTable                0x14  7 # +0 type (9 rocks, 10 mines), +2 position (3 x int32), +14 radius (int32 km), +18 density
 
 END 0x8000                               # C data (_DATA, CONST, _BSS) and the stack follow
 

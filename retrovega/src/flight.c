@@ -29,6 +29,7 @@
 #include "comms.h"
 #include "panel.h"
 #include "balls.h"
+#include "rocks.h"
 #include "missiles.h"
 #include "sky.h"
 #include "collide.h"
@@ -72,6 +73,8 @@ int g_near_balls = 12;                  /* RV.EXE /nearballs N: the balls kept n
 int g_ball_demo = 0;                    /* RV.EXE /balldemo: the four kinds of ball flying at the eye (a test aid) */
 int g_missile_demo = 0;                 /* RV.EXE /missiledemo: six missiles seen every way (a test aid) */
 int g_sky_demo = 0;                     /* RV.EXE /skydemo: the sky's far things as the camera rolls (a test aid) */
+int g_field = 0;                        /* RV.EXE /field D: the flight starts in an asteroid field of D rocks per
+                                           (10,000 km)^3 (a stand-in until the nav points have their hazards) */
 #define SKY_FRAMES 450                  /* its length: fifteen seconds at 30 fps */
 static int __far g_bl_cap;              /* the balls' pool (0: none): the far ones are drawn behind the ships */
 #ifdef RV_TESTS
@@ -315,6 +318,45 @@ static void ship_physics(int s)
     gPositionVector[s].x += gVelocityVector[s].x;
     gPositionVector[s].y += gVelocityVector[s].y;
     gPositionVector[s].z += gVelocityVector[s].z;
+}
+
+/* the damage model's first cut, the do_damage thunk's body (the layer hooks the thunk: spec 5.1): a hit spends
+ * the shield on the side it came from (front or rear), then that side's armour (front, rear, left or right), then
+ * the hull (damagePoints, to the type's hull at most); the player takes none while playerCanBeDamaged is 0.
+ * `where` is the hit's place (a near RvVec3).  Returns what it took, 0 when nothing was done.  Nothing dies of it
+ * yet: a ship at its hull's end stays there (the combat's work) */
+unsigned short __far __cdecl do_damage_impl(unsigned short src, unsigned short dst, unsigned short qty,
+                                            unsigned short where)
+{
+    const RvShipType __far *t;
+    const RvVec3 *w = (const RvVec3 *)where;
+    long dx, dy, dz, f, r;
+    unsigned left = qty, k;
+    unsigned short *p;
+    int sh, ar;
+    (void)src;
+    if (!RV_SLOT_OK(dst) || (maybeEntityType[dst] != 0xC && maybeEntityType[dst] != 0xD) || !qty
+        || (dst == 0 && !playerCanBeDamaged) || (t = type_of(dst)) == 0)
+        return 0;
+    dx = (w->x - gPositionVector[dst].x) / 256;   /* (km) */
+    dy = (w->y - gPositionVector[dst].y) / 256;
+    dz = (w->z - gPositionVector[dst].z) / 256;
+    f = dx * gOrientationFrontVector[dst].x + dy * gOrientationFrontVector[dst].y + dz * gOrientationFrontVector[dst].z;
+    r = dx * gOrientationRightVector[dst].x + dy * gOrientationRightVector[dst].y + dz * gOrientationRightVector[dst].z;
+    sh = f >= 0 ? 0 : 1;
+    ar = labs(f) >= labs(r) ? sh : r >= 0 ? 3 : 2;
+    for (k = 0; k < 2 && left; k++) {
+        p = k == 0 ? &SHIELD(dst, sh) : &ARMOR(dst, ar);
+        if (*p >= left) {
+            *p -= left;
+            left = 0;
+        } else {
+            left -= *p;
+            *p = 0;
+        }
+    }
+    damagePoints[dst] = (unsigned short)(damagePoints[dst] + left > t->hull ? t->hull : damagePoints[dst] + left);
+    return qty;
 }
 
 static void sim_step(void)
@@ -1289,6 +1331,8 @@ static void draw_world(int y0, int y1)
     if (g_lasers)
         lasers_draw_far(y0, y1, ext, ey0, rows);
 #endif
+    rocks_draw_small(y0, y1, ext, ey0, rows);   /* the far rocks: a few pixels each */
+    rocks_draw_begin();
     if (g_bl_cap)                       /* the far balls: a pixel or a few */
         balls_draw_far(y0, y1, ext, ey0, rows);
     if (g_sky && g_set_enemy >= 0) {
@@ -1304,6 +1348,7 @@ static void draw_world(int y0, int y1)
         int s = g_plan[i].slot, set = g_plan[i].set;
         rel_of(s, &rel);
         basis_of(s, &ship);
+        rocks_draw_to(g_plan[i].depth, y0, y1, ext, ey0, rows);   /* the big rocks behind it */
         t0 = clock240();
         if (!g_plan[i].fl.front)        /* flames pointing away: behind the hull */
             flames_draw(&g_plan[i].fl, y0, y1, ext, ey0, rows);
@@ -1330,6 +1375,7 @@ static void draw_world(int y0, int y1)
                    frameCounter, s, gInstanceShipTypes[s], rel.x, rel.y, rel.z, p.view, p.roll, g_plan[i].scale, p.sx, p.sy, path);
         }
     }
+    rocks_draw_rest(y0, y1, ext, ey0, rows);   /* the big rocks before every ship */
     if (g_lasers)                       /* the near bolts last: nearest of all */
         bolts_draw_near(y0, y1, ext, ey0, rows);
     if (g_bl_cap)
@@ -2504,8 +2550,9 @@ void __far __cdecl flight_startup(void)
 #endif
     {
         /* the sets' ladders and rolls, within what the mission level has left (1 MB kept back) */
-        unsigned long free_kb = xms_free_kb(), taken, t0 = clock240();
-        taken = ships_load_blocks(free_kb > 1024 ? (free_kb - 1024) * 1024UL : 0);
+        unsigned long free_kb = xms_free_kb(), taken, t0 = clock240(), keep = 1024 + rocks_room_kb();   /* (and an
+                                           asteroid field's art, read in when the player comes near one) */
+        taken = ships_load_blocks(free_kb > keep ? (free_kb - keep) * 1024UL : 0);
         rv_log("ships: %lu KB of blocks loaded in %lu ms, %lu KB of XMS left", taken / 1024, (clock240() - t0) * 1000 / 240,
                xms_free_kb());
     }
@@ -2591,6 +2638,10 @@ void __far __cdecl flight_startup(void)
     g_hailed = 0;
     missiles_init();
     sky_clear();
+    rocks_flight_start();
+    if (g_field > 0)                    /* (centred where the player starts: big enough to fly in for minutes) */
+        rocks_field_add(RV_FIELD_ASTEROID, gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, 200000L,
+                        g_field);
 #ifdef RV_TESTS
     if (g_sky_demo)
         sky_demo_setup();
@@ -2693,6 +2744,12 @@ void __far __cdecl flight_frame(void)
     if (g_hull_demo)
         hull_demo_step();
 #endif
+    {
+        LfBasis cam;                    /* the asteroid fields: theirs entered and left, the rocks placed, the hits */
+        const RvCockpit __far *c = cockpit_record();
+        basis_of(0, &cam);
+        rocks_frame(&cam, SCR_W / 2, g_cam_cy, 400, c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H);
+    }
     stars_place();
     {
         LfBasis cam;
@@ -2854,6 +2911,8 @@ int flight_fly(const RvMission __far *m)
     g_scene.hide_pointer = 0;
     in_steer(1);
     ships_draw_log();
+    rocks_report();
+    rocks_flight_end();
     comms_flight_end();
     ships_unload();
     collide_flight_end();

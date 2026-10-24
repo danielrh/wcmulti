@@ -68,7 +68,7 @@ typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientat
 #define skipRecRoom_SIZE               2
 #define fieldCount                     (*(unsigned short *)0x011E)
 #define fieldCount_SIZE                2
-#define fieldRockTally                 (*(unsigned short *)0x0120)
+#define fieldRockTally                 (*(unsigned short *)0x0120) /* RV: the rocks kept round the player */
 #define fieldRockTally_SIZE            2
 #define currentField                   (*(unsigned short *)0x0122) /* offset of the field record the player is in, 0 none */
 #define currentField_SIZE              2
@@ -110,7 +110,7 @@ typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientat
 #define vduStatus10WhenPlayerHitsSmth_SIZE 2
 #define tempVector                     ((unsigned char *)0x02A0)  /* 1 x 12 bytes */
 #define tempVector_SIZE                12
-#define entitiesToDespawn              ((unsigned char *)0x02AC)  /* 1 x 20 bytes */ /* slots of the current field's rocks or mines, 0xff free */
+#define entitiesToDespawn              ((unsigned char *)0x02AC)  /* 1 x 20 bytes */ /* slots of the current field's rocks or mines, 0xff free (RV: always free, no rock is a slot) */
 #define entitiesToDespawn_SIZE         20
 #define navPointState                  ((unsigned char *)0x02C0)  /* 1 x 152 bytes */ /* 8 x 19 bytes: mission tree progress */
 #define navPointState_SIZE             152
@@ -214,7 +214,7 @@ typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientat
 #define navPointTable_SIZE             77
 #define missionShipTable               ((unsigned char *)0x68D0)  /* 64 x 42 bytes */ /* +0 ship type, +2 side, +4 leader, +6 behaviour (4 pilot in formation, 6 the player) */
 #define missionShipTable_SIZE          42
-#define fieldTable                     ((unsigned char *)0x7350)  /* 7 x 20 bytes */ /* type, position, radius */
+#define fieldTable                     ((unsigned char *)0x7350)  /* 7 x 20 bytes */ /* +0 type (9 rocks, 10 mines), +2 position (3 x int32), +14 radius (int32 km), +18 density */
 #define fieldTable_SIZE                20
 
 /* --- thunks: RVHOOK offsets, and their far cdecl prototypes --- */

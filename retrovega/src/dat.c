@@ -159,6 +159,12 @@ void dat_enter(int level)
     g_level = level;
 }
 
+void dat_level(int level)
+{
+    RV_CHECK(level, XMS_LEVELS);
+    g_level = level;
+}
+
 void dat_log(void)
 {
     static const char __far s[] = "dat: %lu assets read in, %lu KB (the level now %d)";

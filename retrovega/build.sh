@@ -21,6 +21,7 @@ CFLAGS="-q -bt=dos -mm -3 -s -w4 -zq $OPT -i=src"
 nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 nasm -f obj -o "$OUT/lasers_a.obj" src/lasers.asm
+nasm -f obj -o "$OUT/rocks_a.obj" src/rocks.asm
 # the comm link's faces (one helmet render, every pilot's face behind its visor, each alien's helmet: ~40 s), when
 # their sources change.  RV_COMMS=face builds the pilots without their breathing gear, the bare face's mouth
 # speaking (the user's option, to weigh its cost); the default, mask, is the user's ruling
@@ -41,6 +42,9 @@ COMMS=build/comms-$RV_COMMS
 # the balls' sprites (the spherical projectiles: every kind, frame and diameter)
 [ "$OUT/BALLS.DAT" -nt tools/balls.py ] && [ "$OUT/BALLS.DAT" -nt data/palette.json ] \
     || ~/.venvs/retrovega-art/bin/python -P tools/balls.py --out "$OUT/BALLS.DAT" --preview docs/balls.png > /dev/null
+# the asteroid fields' rocks (every kind, tumble frame and size: ~30 s; tools/rocks.py), when it changes
+[ "$OUT/ROCKS.DAT" -nt tools/rocks.py ] && [ "$OUT/ROCKS.DAT" -nt data/palette.json ] \
+    || ~/.venvs/retrovega-art/bin/python -P tools/rocks.py --out "$OUT/ROCKS.DAT" --preview docs/rocks.png > /dev/null
 # the ships' silhouettes (tools/hitboxes.py made them from the meshes; the build has no Vega Strike assets)
 cp data/shapes.dat "$OUT/SHAPES.DAT"
 # the sky's far things (nebulae, galaxies, planets: every turn of each)
@@ -67,7 +71,7 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     h="$OUT/SHIP20.RVH"             # (the block mode: a capital at a quarter, drawn as 4 x 4 blocks)
     [ "$h" -nt build/rvdat/SHIP20.RV ] && [ "$h" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$h" 0 0 0 1 4 > /dev/null
 fi
-ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls missiles sky collide flames comms panel cockpit flight game main"
+ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls rocks missiles sky collide flames comms panel cockpit flight game main"
 for c in $ENGINE hello; do
     wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
 done
@@ -98,7 +102,7 @@ link() {
         file "$OUT/rvhook.obj" "$@" library "$OUT/rvstubs.lib"
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
-link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
-link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" $(for c in $ENGINE; do
+link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
+link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do
     case " $TESTED " in *" $c "*) printf ' file %s/t/%s.obj' "$OUT" "$c";; *) printf ' file %s/%s.obj' "$OUT" "$c";; esac; done)
 echo "built $OUT/RV.EXE, $OUT/RVT.EXE (the test build) and $OUT/HELLO.EXE"

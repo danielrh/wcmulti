@@ -17,7 +17,8 @@ checks every reference and rule (docs/engine.md), and writes:
 missions.txt is one block per mission, a keyword and its value per line,
 '#' comments.  Keywords: mission, node, title, type, music, briefing, win,
 lose, nav (id x y z, km), ship (TYPE|player|wingman side navN [count=N]
-[pilot=KEY]), field (asteroid|mine x z radius, km), bar and lounge
+[pilot=KEY]), field (asteroid|mine x z radius [density=N], km; N rocks per (10,000 km)^3, 1..255,
+0 or none: the engine's own), bar and lounge
 (seat=PILOT|- ...), talk (room speaker listener "text").  briefing, win and lose may repeat: the lines are joined.
 """
 import argparse
@@ -94,7 +95,7 @@ NAV = [('unsigned char', 'id', 'B'), ('unsigned char', 'pad', 'B'), ('short', 'x
        ('short', 'z', 'h')]
 SHIP = [('unsigned char', 'type', 'B'), ('unsigned char', 'side', 'B'), ('unsigned char', 'nav', 'B'),
         ('unsigned char', 'count', 'B'), ('unsigned char', 'pilot', 'B'), ('unsigned char', 'pad[3]', '3s')]
-FIELD = [('unsigned char', 'type', 'B'), ('unsigned char', 'pad', 'B'), ('short', 'x', 'h'), ('short', 'z', 'h'),
+FIELD = [('unsigned char', 'type', 'B'), ('unsigned char', 'density', 'B'), ('short', 'x', 'h'), ('short', 'z', 'h'),
          ('short', 'radius', 'h')]
 TALK = [('unsigned char', 'room', 'B'), ('unsigned char', 'speaker', 'B'), ('unsigned char', 'listener', 'B'),
         ('unsigned char', 'pad', 'B'), ('char', 'text[RV_TALK]', '%ds' % TEXT['TALK'])]
@@ -324,9 +325,13 @@ def compile_all():
             raise Fail('%s: %d talk lines, at most %d' % (w, len(talks), LIMITS['TALKS']))
         fields = []
         for where, f in m['field']:
-            if f[0] not in FIELDS or len(f) != 4:
-                raise Fail('%s: a field is asteroid|mine x z radius' % where)
-            fields.append(struct.pack(fmt(FIELD), FIELDS[f[0]], 0, int(f[1]), int(f[2]), int(f[3])))
+            density = 0
+            if len(f) == 5 and f[4].startswith('density='):
+                density = int(f[4][8:])
+                f = f[:4]
+            if f[0] not in FIELDS or len(f) != 4 or not 0 <= density <= 255:
+                raise Fail('%s: a field is asteroid|mine x z radius [density=0..255]' % where)
+            fields.append(struct.pack(fmt(FIELD), FIELDS[f[0]], density, int(f[1]), int(f[2]), int(f[3])))
         if len(fields) > LIMITS['FIELDS']:
             raise Fail('%s: %d fields, at most %d' % (w, len(fields), LIMITS['FIELDS']))
         rec = struct.pack('<%ds8B' % TEXT['ID'], text(m['id'], TEXT['ID'], w), node_index[m['node']],

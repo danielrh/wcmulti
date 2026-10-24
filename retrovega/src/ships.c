@@ -36,6 +36,7 @@
 #include <fcntl.h>
 #include <dos.h>
 #include "ships.h"
+#include "rocks.h"
 #include "lightfield.h"
 #include "music.h"
 
@@ -468,15 +469,19 @@ int ships_load(unsigned type)
  * briefing's, so the page has them fetched by the launch).  On DOS the files
  * are beside RV.EXE and nothing is written. */
 #define SHIPS_WANT_S 180
-static int set_present(unsigned type, char *name)
+static int file_present(const char *name)
 {
-    FILE *f;
-    sprintf(name, g_res == 2 ? "SHIP%02X.RVH" : "SHIP%02X.RVS", type);
-    f = fopen(name, "rb");
+    FILE *f = fopen(name, "rb");
     if (!f)
         return 0;
     fclose(f);
     return 1;
+}
+
+static int set_present(unsigned type, char *name)
+{
+    sprintf(name, g_res == 2 ? "SHIP%02X.RVH" : "SHIP%02X.RVS", type);
+    return file_present(name);
 }
 
 void ships_want(const unsigned char *types, int n, int wait)
@@ -484,10 +489,13 @@ void ships_want(const unsigned char *types, int n, int wait)
     char name[16];
     unsigned long t0 = clock240(), last = 0;
     int i, k, missing = 0, listed = 0;
+    const char *extra = rocks_file();   /* (an asteroid field's art: listed with the sets, fetched the same way) */
     FILE *f;
     for (i = 0; i < n; i++)
         if (!set_present(types[i], name))
             missing++;
+    if (extra && !file_present(extra))
+        missing++;
     if (!missing)
         return;
     f = fopen("RVWANT.TXT", "w");
@@ -506,6 +514,12 @@ void ships_want(const unsigned char *types, int n, int wait)
         if (f)
             fprintf(f, " %s", name);
     }
+    if (extra) {
+        missing += !file_present(extra);
+        listed++;
+        if (f)
+            fprintf(f, " %s", extra);
+    }
     if (f) {
         fprintf(f, "\n");
         fclose(f);
@@ -517,7 +531,7 @@ void ships_want(const unsigned char *types, int n, int wait)
         unsigned long now = clock240();
         if (now - last >= 60) {         /* a look every quarter second */
             last = now;
-            missing = 0;
+            missing = extra && !file_present(extra);
             for (i = 0; i < n; i++)
                 if (!set_present(types[i], name))
                     missing++;

@@ -210,6 +210,7 @@ later. It is a set of rooms with the same layout and its own pictures.
 | base | the archive's palettes, fonts and small tables (134 KB) | on a base change |
 | room | the room's pictures and sprites, read from the archive as drawn | on leaving the room, and at a launch |
 | mission | the mission's ships; the cockpit, faces and pictures a flight draws | when the mission ends |
+| hazard | an asteroid field's rocks (`ROCKS.DAT`), and the archive's assets read meanwhile (`dat_level`) | when the player is away from the field, and when the mission ends |
 
 Music is resident and keeps playing across every load.
 
@@ -1717,6 +1718,158 @@ three or four on screen at a time): drawn every row 3.70 ms a frame, as
 built (the nebula interlaced) 2.79, all interlaced 2.32; placing them
 nothing measurable. Interlacing saves less than half: the rows are still
 fetched and walked.
+
+### Asteroid fields
+
+The user's brief (2026-10-23): a nav point has up to eight ship types (two
+or three capital ships, two or three friendly fighters, three enemy
+fighters); some have a hazard instead, an asteroid field. Asteroids tumble
+endlessly and quickly, come in about four kinds and only ever scale (they
+stay upright through the player's roll); they are plentiful and gather
+round the player: a fixed set near the player, those flown past and left
+behind taken away and put back ahead; a density says how thick the field
+is. Each player's rocks are their own in multiplayer, as the hook layer
+has WC1's. A rock is a plain XMS copy into the frame, and the rocks' art is
+in memory only near a field. Then the questions: can the field make the
+player dodge, and can the CPU draw many rocks at 30 fps?
+
+**The art** (`tools/rocks.py` -> `ROCKS.DAT`, 8.6 MB, 3.8 MB gzipped;
+`docs/rocks.png`). Four procedural meshes (an icosphere of 82,000 triangles
+pushed in and out by fractal noise, craters with rims, and each kind's
+body): a grey stony potato, a dark carbon ball pocked all over, a rusty
+iron peanut (two lobes), a pale shard broken flat (cut by planes, its faces
+flat-shaded). Lit as the balls are (the key light up and to the left, a
+faint fill from the lower right), rendered on Mesa through moderngl as the
+ships are, 32 frames of a turn about a tilted axis, three times finer than
+the biggest size, then box-filtered to every size: each diameter 1 .. 8
+(eight of the frames: at that size the tumble hardly shows), then a ladder
+of 40 sizes to 128 px (every pixel to 16, then 7% steps). Colours are the
+flight palette's fixed ones or a checker of two (sky.py's table). **Each row
+of a big sprite is one run of opaque pixels** (whatever lies between a
+row's first and last pixel is drawn), of an even length (the XMS driver
+moves even lengths; an odd run takes the pixel on its fuller side), so a
+row is one XMS move. A record is its rows' pairs (left + 1, length) and
+then their runs, one after another.
+
+**The engine** (`rocks.c`, `rocks.h`; the per-rock work in `rocks.asm`).
+
+- *The bubble.* While the player is near a field, a fixed set of rocks is
+  kept in a sphere of 9,000 km about them: density x 3.05 rocks (density =
+  rocks per (10,000 km)^3; 120 when the mission says nothing: 366 rocks),
+  1,200 at most. A rock's radius is 80 .. 1,000 km (the small ones
+  commoner: a fighter's half box is about 450 km), its kind weighted
+  (stony 6, carbon 5, iron 3, shard 2 of 16), its tumble a turn in one to
+  four seconds either way from a random phase.
+- *Once a frame* every rock goes through the camera (`rv_rocks_place`, its
+  C reference `lz_rocks_place`, checked to the bit by RVT.EXE when its
+  first field is entered): one that has left the sphere (the player flew on
+  past it) goes to a reap list and is put back on the sphere's far side,
+  cosine-weighted about the way the player looks (as an endless field's
+  rocks would come in), inside the field or not at all; one within reach
+  on every axis goes to a hit list; one before the near plane is not
+  drawn; else its diameter (radius x focal / depth), past 60% of the
+  sphere's radius shrunk to nothing at its edge (by distance squared, no
+  root: a rock grows in from a point wherever it comes in, nothing blinks
+  into being), its middle on the screen, its frame (phase + frame counter
+  x spin / 4), its depth.
+- *Dodging.* Now and then (every 720 / density seconds on average: 6 s at
+  120) the first rock to be brought round goes on the player's course
+  instead: at the sphere's edge dead ahead, off the line by less than its
+  radius, 240 km across at least. Flying on straight is flying into it;
+  it grows in from a point over the 22 s it takes at cruise. On top of the
+  field's own spread (at 120, a rock in a straight path every ~13 s).
+- *Hits.* Each rock on the hit list against the player's hit box (a
+  sphere against collide.c's box, in the ship's frame): the player is put
+  back out of it along the way between them, stops, and is knocked back
+  (at the speed they came in at, dying away over a second: held
+  into a big rock, the course brings them back to it slowly), and takes speed x how head-on (a fifth at least) x the rock's
+  radius / 6,000 + 1 (a head-on rock of 400 km at 250 kps: 17; the
+  fighters' shields are 4-20 a side) through `do_damage`, the field's slot
+  its source, the place hit in `tempVector`. The same rock harms no more
+  for a second. `do_damage_impl` (flight.c) is the first damage model:
+  the shield on the side hit (front or rear), then that side's armour
+  (front, rear, left, right), then the hull; nothing dies of it yet.
+- *Drawing.* The small ones (8 px at most) are drawn as balls are
+  (`rv_balls_draw`, from every kind's small sprites copied to conventional
+  memory, 6.5 KB), before the ships. The big ones are sorted by depth (a
+  counting sort, 64 km a key) and drawn in among the ships by it
+  (`rocks_draw_to(depth)` before each ship, the rest after). A big one up
+  to 128 px is its ladder size's record: the row pairs fetched from XMS,
+  then `rv_rocks_xms` moves each row's run, clipped to the cockpit's
+  extents, by the XMS driver straight into the band buffer (a run cut to
+  an odd length loses its pixel at the cut); `/rockxms 0` moves the whole
+  record into the scratch buffer instead and `rv_rocks_copy` copies the
+  rows. Past 128 px a ladder sprite is drawn as 2 x 2, 3 x 3 or 4 x 4
+  blocks (up to 512 px), the run widened once in a line buffer and copied
+  to its rows: the block mode's look.
+- *Memory.* `ROCKS.DAT` goes into XMS at its own level, `XMS_HAZARD` (above
+  the mission's), when the player comes within the sphere's reach of an
+  asteroid field, and is given back 2,000 km farther out; the archive's
+  assets read meanwhile go to that level too (`dat_level`). So does the
+  conventional memory: the pool (16 bytes a rock), the screen lists and the
+  small sprites, about 30 KB at 1,200 rocks. Read in, it takes 170 ms.
+- *Multiplayer.* The rocks are no slots: nothing about them is sent, and
+  they come from a random stream of the module's own (never `randomSeed`,
+  the play's shared one). Only the player's own ship hits them. The
+  fields are where the layer looks (`rvabi.def`): `fieldTable` (type,
+  position, radius in km, density), `fieldCount`, `currentField` (the
+  record the player is in), `fieldRockTally` (the rocks kept); each field
+  has a slot of its own above the ships (`RV_CAMERA_SLOT - 1 - i`:
+  EntityType 9, `rvFlags` bit 2, a local-only hazard) that a rock's hit
+  names in `do_damage`, so the layer can soften rocks or report a hit as it
+  does WC1's; `clearFields` (the layer's "rocks off") takes every field and
+  rock away. `entitiesToDespawn` stays empty: no rock is a slot.
+- *Missions.* `data/missions.txt` has `field asteroid x z radius
+  [density=N]` (the record's spare byte); the nav points do not carry their
+  hazards into the flight yet, so `RV.EXE /field D` (the page's
+  `?field=D`) starts every flight in a field of density D, 200,000 km
+  across, centred where the player starts. The page fetches `ROCKS.DAT`
+  (rv/ROCKS.DAT.gz, listed in rv/ships.json's `files`) when the flight's
+  list in `RVWANT.TXT` names it, as it fetches the ships' views.
+
+**Costs** at 40,000 cycles (DOSBox charges an instruction a cycle; an XMS
+move is host code, a few instructions here whatever its length). Measured
+alone, in a loop (RVT.EXE logs them when its first field is entered):
+placing a rock 2.84 us (366 rocks: 1.0 ms; 1,200: 3.4 ms); a big rock's
+row moved by XMS 1.1 us whatever its width (32, 64 or 128 px), copied
+after one move of the whole rock 1.9-2.2 us; a near rock as 2 x 2 blocks
+2.5-3.6 us a screen row (its run widened, then copied). A rock of 8 px or
+less costs what a ball does (a few us). In flight
+(`tests/rocks-straight.txt`: the first mission's launch, then 40 s
+straight on at cruise; the whole frame is elapsed time less the 30 fps
+cap's wait, the part-by-part figures alias with the cap and are rough):
+
+| density | rocks kept | on screen: small, big (most) | hits in 40 s | the whole frame |
+|---|---|---|---|---|
+| none | | | | 13.2 ms |
+| 60 | 183 | 3, 13 (21) | 3 | 15.4 ms |
+| 120 (the default) | 366 | 4, 21 (33) | 5 | 17.8 ms |
+| 240 | 732 | 11, 44 (68) | 11 | 21.8 ms |
+| 400 (capped at 1,200) | 1,200 | 21, 68 (97) | 48 | 27.6 ms |
+
+So 30 fps (33 ms) holds natively at 40,000 cycles at every density up to
+the cap. The copying way (`/rockxms 0`) cost more at each density in a
+first sweep (120: 19.1 against 18.4 ms; 240: 24.4 against 22.5; 400: 30.7
+against 27.1). Most of a dense field's drawing is its few nearest rocks
+(past 128 px, drawn as blocks: at 120, about 2.2 of 4.4 ms of big rocks;
+at 400, 5.5 of 8.3). The hit list's reach was at first the biggest rock's:
+at 400 its 16 places filled with rocks that could not touch the ship, and
+the ones that could went untested (1 hit in that run, 48 since); it is
+now each rock's own radius and the player's half box.
+
+In the page (headless Chrome on this box's i7-6800K core, 50,000 cycles,
+`?field=D&env.WCNET_PERF=4`, the same 40 s flown by
+scripts/web-rv-flight.mjs): at 120, 30.0 fps, the emulator at 100% of
+real time, the worst frame 35-43 ms (13.4 emulated ms a frame); at 400
+(1,200 rocks, 69 big on screen, 98 at most), 30.0 fps, the emulator at
+97-100% (21.2 ms a frame). The XMS moves' host work (a callback a row) does
+not show. `ROCKS.DAT` came with the ships' sets the flight asked for (the
+three in 6.9 s, the rocks a 3.8 MB download).
+
+The look's weak point: past 128 px a rock is 2 x 2 .. 4 x 4 blocks of its
+128 px sprite, and its checker dithering becomes a coarse checkerboard on
+the nearest ones. A bigger ladder (sizes to 192 or 256, half the rows kept
+past 128) would cost 8-40 MB more of XMS and as much again of download.
 
 ### Where a ship is on a screen: boxes for targeting
 

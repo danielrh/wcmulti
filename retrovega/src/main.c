@@ -1,6 +1,7 @@
 /* main.c: RV.EXE's start, its shutdown, and the game (game.c).
  *
- *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/res 1|2] [/onfly N] [/skyrows N] [/mpu | /nomusic] [/noquit]
+ *   RV.EXE [/script FILE] [/winrate PERCENT] [/flight SECONDS] [/res 1|2] [/onfly N] [/skyrows N] [/field D]
+ *          [/rockxms 0|1] [/mpu | /nomusic] [/noquit]
  *
  * RVT.EXE, the test build (build.sh compiles the modules that have test code
  * again with -dRV_TESTS; tests/run.sh runs it when a test switch is given),
@@ -26,11 +27,12 @@
 #include "ships.h"
 #include "flames.h"
 #include "balls.h"
+#include "rocks.h"
 #include "sky.h"
 #include "collide.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
-extern int g_winrate, g_flight_seconds, g_flight_timed, g_can_quit, g_res;
+extern int g_winrate, g_flight_seconds, g_flight_timed, g_can_quit, g_res, g_field;
 extern long g_onfly_px;
 #ifdef RV_TESTS                         /* the test build's aids (flight.c, score.c) */
 extern int g_score_test, g_bench_wanted, g_record, g_capital, g_zoom, g_sky;
@@ -130,6 +132,12 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "/skyrows"))          /* the sky's far things: 0 each its own way, 1 all rows, 2
                                                            doubled, 3 interlaced */
             sky_rows(atoi(argv[++i]));
+        else if (!strcmp(argv[i], "/field"))            /* flights start in an asteroid field: D rocks per
+                                                           (10,000 km)^3 (a stand-in for a nav point's hazard) */
+            rocks_want((g_field = atoi(argv[++i])) > 0);
+        else if (!strcmp(argv[i], "/rockxms"))          /* 1 (the default): a big rock's rows moved by XMS one by one;
+                                                           0: the rock's pixels moved once, then copied */
+            g_rock_xms = atoi(argv[++i]);
 #ifdef RV_TESTS
         else if (!strcmp(argv[i], "/bench"))            /* tests: benchmark copies, fixed (0 none; else adapting) */
             g_bench_wanted = atoi(argv[++i]);

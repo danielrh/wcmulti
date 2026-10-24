@@ -451,8 +451,29 @@ function rvMakeSet(rv, args) {
   });
 }
 
+// a file of the game's a flight asks for as it is (an asteroid field's ROCKS.DAT: rv/NAME.gz, rv/ships.json's
+// files), written among the game's files: the cache's, by its hash, else the site's
+async function rvProvideFile(FS, name) {
+  const info = rvManifest.files[name];
+  const cache = await rvCache(RV_ART_CACHE), req = `/rv-art/${info.sha1}`;
+  let data = null;
+  if (cache) { const hit = await cache.match(req); if (hit) data = new Uint8Array(await hit.arrayBuffer()); }
+  if (!data) {
+    status(`Fetching ${name} (${mb(info.bytes)})…`);
+    const t0 = performance.now();
+    const res = await fetch(info.file);
+    if (!res.ok) throw new Error(`${info.file}: ${res.status} ${res.statusText}`);
+    data = new Uint8Array(await new Response(res.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+    if (data.length !== info.bytes) throw new Error(`${info.file}: ${data.length} bytes, the site's list says ${info.bytes}`);
+    log(`fetched ${name} (${mb(data.length)}) in ${Math.round(performance.now() - t0)} ms`);
+    if (cache) try { await cache.put(req, new Response(data)); } catch (e) { log(`could not keep ${name}: ${e.message}`); }
+  }
+  FS.writeFile(`${GAME_ROOT}/${name}`, data);
+}
+
 // one set, written among the game's files: the cache's, else made from the views
 async function rvProvideOne(FS, name) {
+  if (rvManifest.files && rvManifest.files[name]) return rvProvideFile(FS, name);
   const m = /^(SHIP[0-9A-F]{2})\.(RVH|RVS)$/.exec(name);
   if (!m) throw new Error(`${name}: not a set file`);
   const key = m[1], ext = m[2], info = rvManifest.ships[key];
@@ -1648,7 +1669,13 @@ async function start(fromGesture) {
     status(source.game.multiplayer ? `Room ${cfg.code}: starting…` : `Starting ${source.game.title}…`);
     canvas.focus();
     // ?cmd=... runs another DOS command instead of the game (debugging aid).
-    const cmd = query.get("cmd") || source.game.run + missionArgs + (query.get("res") === "1" && gameInfo() && gameInfo().id === "rv" ? " /res 1" : "");
+    // RetroVega: ?res=1 the sharp sets; ?field=D its flights start in an
+    // asteroid field of D rocks per (10,000 km)^3 (a stand-in until
+    // the nav points carry their hazards).
+    const isRv = gameInfo() && gameInfo().id === "rv";
+    const field = isRv ? Math.max(0, Math.min(999, parseInt(query.get("field") || "0", 10) || 0)) : 0;
+    const cmd = query.get("cmd") || source.game.run + missionArgs + (query.get("res") === "1" && isRv ? " /res 1" : "")
+      + (field ? ` /field ${field}` : "");
     // The emulated CPU speed: the game's own good value (the registry), or
     // ?cycles=N; Ctrl+F11 / Ctrl+F12 still adjust it while playing.
     const cycles = Number(query.get("cycles")) || (gameInfo() && gameInfo().cycles) || 0;

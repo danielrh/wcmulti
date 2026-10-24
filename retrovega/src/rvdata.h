@@ -139,7 +139,7 @@ typedef struct {
 } RvTalk;
 typedef struct {
     unsigned char type;
-    unsigned char pad;
+    unsigned char density;
     short x;
     short z;
     short radius;

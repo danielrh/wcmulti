@@ -195,11 +195,12 @@ if [ -z "${SKIP_RETROVEGA:-}" ]; then
     "$ROOT/retrovega/build.sh" > "$BUILD/retrovega.log" 2>&1 || { tail -20 "$BUILD/retrovega.log"; exit 1; }
     (cd "$ROOT/retrovega/build/dos" && tar --format=ustar -czf "$OUT/retrovega.tar.gz" \
         RV.EXE RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT RVOPL.BNK *.MID)
-    # the ships' views (SHIPnn.RV, 1-9 MB each at 6 degrees): not in the tarball but beside it, gzipped,
-    # fetched by the page for the types a flight needs when the game asks (RVWANT.TXT; web/wc.js rvWant),
+    # the ships' views (SHIPnn.RV, 1-9 MB each at 6 degrees) and the asteroid fields' rocks (ROCKS.DAT, 8.6 MB):
+    # not in the tarball but beside it, gzipped, fetched by the page for the types a flight needs (and the rocks
+    # when it has a field) when the game asks (RVWANT.TXT; web/wc.js rvWant),
     # with a manifest of what is there (the build, each file's size and hash: the page's cache keys)
     mkdir -p "$OUT/rv"
-    for f in "$ROOT"/retrovega/art/ships/SHIP*.RV; do
+    for f in "$ROOT"/retrovega/art/ships/SHIP*.RV "$ROOT"/retrovega/build/dos/ROCKS.DAT; do
         g="$OUT/rv/$(basename "$f").gz"
         [ "$g" -nt "$f" ] || gzip -9 -c "$f" > "$g"
     done
@@ -215,7 +216,12 @@ for f in sorted(os.listdir(os.path.join(root, 'retrovega/art/ships'))):
     key = f[:-3]
     ships[key] = {'file': 'rv/' + f + '.gz', 'bytes': len(data), 'sha1': hashlib.sha1(data).hexdigest(),
                   'name': names.get('0x' + key[4:6].lower(), key)}
-json.dump({'build': build, 'ships': ships}, open(os.path.join(out, 'ships.json'), 'w'), indent=1)
+# the game's files a flight asks for as they are: an asteroid field's rocks (ROCKS.DAT, tools/rocks.py)
+files = {}
+for f in ['ROCKS.DAT']:
+    data = open(os.path.join(root, 'retrovega/build/dos', f), 'rb').read()
+    files[f] = {'file': 'rv/' + f + '.gz', 'bytes': len(data), 'sha1': hashlib.sha1(data).hexdigest()}
+json.dump({'build': build, 'ships': ships, 'files': files}, open(os.path.join(out, 'ships.json'), 'w'), indent=1)
 print('rv/ships.json: %d ships, %.1f MB of views (%.1f MB gzipped)' % (len(ships), sum(s['bytes'] for s in ships.values()) / 1e6,
       sum(os.path.getsize(os.path.join(out, s['file'][3:])) for s in ships.values()) / 1e6))
 PYEOF2

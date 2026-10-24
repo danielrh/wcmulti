@@ -1,0 +1,32 @@
+# an asteroid field flown straight on at cruise (run with /field D /flight N): every rock set on the
+# player's course hits
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+shot S01
+wait 200
+shot S02
+wait 200
+shot S03
+wait 400
+shot S04
+wait 400
+log done

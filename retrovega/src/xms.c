@@ -161,6 +161,13 @@ int xms_get(XmsBlock b, unsigned long off, void __far *dst, unsigned long n)
     return move();
 }
 
+void xms_where(XmsBlock b, unsigned *handle, unsigned long *off)
+{
+    check(b, 0, 0);
+    *handle = g_handle;
+    *off = g_block[b].off;
+}
+
 int xms_copy_conv(void __far *dst, const void __far *src, unsigned long n)
 {
     g_move.length = n;
