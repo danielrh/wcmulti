@@ -48,6 +48,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import cockpits  # noqa: E402
+import legs  # noqa: E402
 import panels  # noqa: E402
 import places  # noqa: E402
 
@@ -453,6 +454,14 @@ def pack_cockpits(pack, ships_csv, panels_dir):
         # (no broken stick or throttle: the user's, 2026-10-23 - they are unlikely to break; their systems' damage
         # shows on the panel)
         layers = [(e, Image.open(os.path.join(d, e['file'])).convert('RGBA')) for e in cj['damage'] if not e['attach']]
+        lg = legs.load(key)
+        if lg:                                  # (a layer moved with its box, or kept off the legs: tools/legs.py)
+            kept = []
+            for e, im in layers:
+                f = legs.fix_layer(e['x'], e['y'], im, lg)
+                if f:
+                    kept.append((dict(e, x=f[0], y=f[1]), f[2]))
+            layers = kept
         # the pilot's hand on the stick: nine poses (tools/joysticks.py), forward / middle / back x left / middle /
         # right
         sj = os.path.join(d, 'stick', 'stick.json')

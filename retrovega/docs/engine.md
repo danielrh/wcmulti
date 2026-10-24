@@ -506,6 +506,28 @@ RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
   screen's edge). The kit's socket is painted out of the base (its hole
   and collar filled with the plate round them, speckled like it): the new
   stick has its own base.
+- **The pilot's legs** (the user's, 2026-10-24: the footpads either side
+  of the stick read as knees with nothing after them, as if the legs were
+  curled back; in the Goddard and the Redeemer, legs against the
+  panel). `tools/legs.py` paints them into the base before the panel's
+  controls are made (data/legs.json): each footwell goes dark, black
+  from just under the dash and lighter towards the bottom edge, and a leg
+  in the sleeve's olive and creases comes up from below the screen. Each
+  leg's knee rounds off into the dark and its shin carries on under the
+  dash, so no shoes are drawn and most of each footpad is covered. Where
+  only a slot between two boxes is free (the Gawain's vents), the leg is
+  glimpsed there in their shade. The Schroedinger is lopsided: its right
+  leg is in the hollow under the radar and its left takes the EJECT box's
+  place (the user's: the wing may block an ejection anyway, and a one-legged
+  pilot looked wrong; Ctrl+E still ejects). The Pacifier's lower-left
+  panel is cut away below its lamp row, which stays as the dash's lip, its
+  afterburner and target lamps with it. The Lancelot's COMM FREQ and E/M panels lose their
+  inner ends (the user's pick): its EJECT box and NAV readout move out
+  over them and its legs take their old place. The 1-knob goes, so its
+  radio shows the hundreds and tens only, and so do the EMCON lamps (K
+  still works). A control, a label or a damage overlay inside a moved box
+  moves with it; one left under the legs is dropped, an overlay's pixels
+  there cleared.
 - **Damage:** every overlay is a sprite with a fixed bit
   (`tools/cockpits.py` BITS: 0 weapons MFD, 1 targeting MFD, 2 radar, ...
   23 canopy, 26 survival VDU), drawn while its bit of `rvCockpitDamage`

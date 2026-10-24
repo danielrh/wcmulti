@@ -31,6 +31,8 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
+import legs
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 FONT = os.path.join(ROOT, 'art', 'fonts', 'RobotoCondensed-Bold.ttf')
@@ -472,6 +474,57 @@ def rect_of(c):
     return [int(c['at'][0] - r), int(c['at'][1] - r), int(2 * r + 1), int(2 * r + 1)]
 
 
+def with_legs(spec, lg, cov):
+    """the spec as the legs leave it: a control (a knob of a set, a label) inside a moved box moved with it, one left
+    over the legs' work dropped"""
+    def place(x, y, w=1, h=1):          # (dx, dy), or None: dropped
+        dx, dy = legs.moved([x, y, w, h], lg)
+        if dx or dy:
+            return dx, dy
+        cx, cy = int(x + w / 2), int(y + h / 2)
+        return None if 0 <= cy < cov.shape[0] and 0 <= cx < cov.shape[1] and cov[cy, cx] else (0, 0)
+
+    spec = json.loads(json.dumps(spec))
+    controls = []
+    for c in spec['controls']:
+        if c['kind'] == 'arcs':
+            knobs = []
+            for k in c['knobs']:
+                d = place(k[0] - k[3], k[1] - k[3], 2 * k[3], 2 * k[3])
+                if d:
+                    knobs.append([k[0] + d[0], k[1] + d[1]] + k[2:])
+            if not knobs:
+                continue
+            c['knobs'] = knobs
+        elif c['kind'] != 'cabin':
+            d = place(*rect_of(c))
+            if d is None:
+                print('panels: %s at %s: under the legs, dropped' % (c['fn'], rect_of(c)[:2]))
+                continue
+            if 'rect' in c:
+                c['rect'] = [c['rect'][0] + d[0], c['rect'][1] + d[1]] + c['rect'][2:]
+            if 'at' in c:
+                c['at'] = [c['at'][0] + d[0], c['at'][1] + d[1]]
+        controls.append(c)
+    spec['controls'] = controls
+    for rl in spec.get('relabel', []):
+        erase = []
+        for x0, y0, x1, y1 in rl.get('erase', []):
+            d = place(x0, y0, x1 - x0, y1 - y0)
+            if d:
+                erase.append([x0 + d[0], y0 + d[1], x1 + d[0], y1 + d[1]])
+        rl['erase'] = erase
+        labels = []
+        for lab in rl.get('labels', []):
+            d = place(lab[1], lab[2])
+            if d:
+                labels.append([lab[0], lab[1] + d[0], lab[2] + d[1]] + lab[3:])
+        rl['labels'] = labels
+    spec['displays'] = [[r[0] + d[0], r[1] + d[1], r[2], r[3]] for r in spec.get('displays', [])
+                        for d in [place(*r)] if d]
+    return spec
+
+
 def build(key, spec, out_root):
     out_dir = os.path.join(out_root, key)
     os.makedirs(os.path.join(out_dir, 'states'), exist_ok=True)
@@ -484,6 +537,10 @@ def build(key, spec, out_root):
         patch = np.asarray(Image.open(os.path.join(os.path.dirname(sock), 'socket.png')).convert('RGBA'))
         sub = a[sj['y']:sj['y'] + patch.shape[0], sj['x']:sj['x'] + patch.shape[1]]
         sub[patch[..., 3] > 0] = patch[patch[..., 3] > 0]
+    lg = legs.load(key)
+    if lg:                              # (the pilot's legs under the dash, boxes moved for them: tools/legs.py)
+        a = legs.paint(a, lg)
+        spec = with_legs(spec, lg, legs.covered(a.shape[:2], lg))
     controls = spec['controls']
     # the base: relabelled, scales recoloured, needles painted out
     for rl in spec.get('relabel', []):

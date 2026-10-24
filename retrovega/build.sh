@@ -34,8 +34,10 @@ COMMS=build/comms-$RV_COMMS
     && [ -z "$(find art/people/faces -newer $COMMS/comms.json -print -quit)" ] \
     || python3 -W ignore tools/comms.py --out $COMMS --cols 56 $FACE > /dev/null   # (56: 2 x 2 blocks, the coarse link)
 # the cockpits' panels (every control's states; the power knobs repainted as radio dials: ~15 s), when they change
+# (and the pilot's legs under the dash: tools/legs.py)
 [ build/panels/.made -nt tools/panels.py ] && [ build/panels/.made -nt data/panels.json ] \
-    && [ -z "$(find art/cockpits -name base.png -newer build/panels/.made -print -quit)" ] \
+    && [ build/panels/.made -nt tools/legs.py ] && [ build/panels/.made -nt data/legs.json ] \
+    && [ -z "$(find art/cockpits -newer build/panels/.made -print -quit)" ] \
     || { python3 -W ignore tools/panels.py --out build/panels > /dev/null && touch build/panels/.made; }
 ~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h --comms $COMMS \
     --panels build/panels
