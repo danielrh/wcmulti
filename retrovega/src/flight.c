@@ -135,7 +135,7 @@ static int g_damage_next;
 
 /* the benchmark's sprites: screen positions drifting about the opening */
 static struct { short x, y, dx, dy; } __far g_bench[BENCH_MAX];
-static int g_nbench, g_bench_view = 17, g_bench_w, g_bench_h;
+static int g_nbench, g_bench_view = 17, g_bench_w, g_bench_h, g_tv_w, g_tv_h;
 static long g_bench_sum;                /* the count summed over the settled half, for the result */
 static int g_bench_frames;
 static unsigned long g_vseed = 12345;   /* visual randomness: outside the ABI's stream */
@@ -2474,12 +2474,22 @@ void __far __cdecl flight_startup(void)
             long n = ships_selftest();
             rv_log("lightfield: asm kernels %s the C ones (%ld pixels compared)", n < 0 ? "DISAGREE WITH" : "agree with", n);
         }
-        for (i = 1; i < set->nviews; i++)
-            if ((long)set->view[i].w * set->view[i].h > (long)set->view[tv].w * set->view[tv].h)
-                tv = i;
+        {
+            int bw, bh, w, h;
+            if (!ships_full_size(g_set_enemy, tv, &bw, &bh))
+                bw = bh = 0;
+            for (i = 1; i < set->nviews; i++)
+                if (ships_full_size(g_set_enemy, i, &w, &h) && (long)w * h > (long)bw * bh) {
+                    tv = i;
+                    bw = w;
+                    bh = h;
+                }
+            g_tv_w = bw;
+            g_tv_h = bh;
+        }
         ships_time_paths(g_set_enemy, tv, paths);
         rv_log("lightfield: view %d (%dx%d): copy %ld px/ms, scaled to 3/4 %ld, turned 45 degrees at 3/4 %ld, copy upside down %ld, copy mirrored %ld",
-               tv, set->view[tv].w, set->view[tv].h, paths[0], paths[1], paths[2], paths[3], paths[4]);
+               tv, g_tv_w, g_tv_h, paths[0], paths[1], paths[2], paths[3], paths[4]);
     }
     if (g_lasers)
         lasers_pool();

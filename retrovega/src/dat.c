@@ -24,7 +24,19 @@
 
 static int g_fd = -1;
 static RvDatHeader g_hdr;
-static RvAsset __far *g_dir;
+static XmsBlock g_dir_blk;             /* the directory, RvAsset records, in resident XMS (49 KB of conventional memory
+                                           before 2026-10-23); dat_asset reads one into a buffer of two */
+static RvAsset __far g_rec[2];
+static int g_recn;
+#define DIR_AT_OFF 32                  /* RvAsset.at: name 22, kind, flags, w, h, x, y */
+
+/* asset i's file offset, from the directory in XMS */
+static unsigned long dir_at(unsigned i)
+{
+    unsigned long at;
+    xms_get(g_dir_blk, (unsigned long)i * sizeof(RvAsset) + DIR_AT_OFF, &at, 4);
+    return at;
+}
 static RvRoom __far *g_rooms;
 static RvPerson __far *g_people;
 static RvCockpit __far *g_cockpits;
@@ -81,9 +93,8 @@ static void freed(unsigned nblocks)
 }
 
 /* asset i in XMS at `level`: read now if it is not */
-static int bring_in(unsigned i, int level)
+static int bring_in(unsigned i, const RvAsset __far *a, int level)
 {
-    const RvAsset __far *a = &g_dir[i];
     unsigned long size = (a->size + 1) & ~1UL;
     XmsBlock blk;
     unsigned long off;
@@ -116,23 +127,28 @@ static int bring_in(unsigned i, int level)
 static int asset_at(unsigned long at)
 {
     int lo = 0, hi = (int)g_hdr.nassets - 1, mid;
-    if (!g_hdr.nassets || at < g_dir[0].at)
+    const RvAsset __far *a;
+    if (!g_hdr.nassets || at < dir_at(0))
         return -1;
     while (lo < hi) {
         mid = (lo + hi + 1) / 2;
-        if (g_dir[mid].at <= at)
+        if (dir_at(mid) <= at)
             lo = mid;
         else
             hi = mid - 1;
     }
-    return at < g_dir[lo].at + g_dir[lo].size ? lo : -1;
+    a = dat_asset(lo);
+    return at < a->at + a->size ? lo : -1;
 }
 
 void dat_read(unsigned long at, void __far *dst, unsigned long n)
 {
     int i = asset_at(at);
-    if (i >= 0 && at + n <= g_dir[i].at + g_dir[i].size && bring_in(i, g_level))
-        xms_get(g_in[i].blk, g_in[i].off + (at - g_dir[i].at), dst, n);
+    RvAsset a;
+    if (i >= 0)
+        a = *dat_asset(i);
+    if (i >= 0 && at + n <= a.at + a.size && bring_in(i, (const RvAsset __far *)&a, g_level))
+        xms_get(g_in[i].blk, g_in[i].off + (at - a.at), dst, n);
     else
         file_read(at, dst, n);          /* (outside an asset, or no room: straight from the file) */
 }
@@ -168,26 +184,35 @@ int dat_open(const char *path)
         g_hdr.nassets = 0;
         return 0;
     }
-    g_dir = (RvAsset __far *)_fmalloc(sizeof(RvAsset) * g_hdr.nassets);
+    g_dir_blk = xms_alloc(sizeof(RvAsset) * (unsigned long)g_hdr.nassets + 2, XMS_RESIDENT);
     g_rooms = (RvRoom __far *)_fmalloc(sizeof(RvRoom) * g_hdr.nrooms);
     g_people = (RvPerson __far *)_fmalloc(sizeof(RvPerson) * g_hdr.npeople);
     g_cockpits = (RvCockpit __far *)_fmalloc(sizeof(RvCockpit) * (g_hdr.ncockpits ? g_hdr.ncockpits : 1));
     g_in = _fmalloc(sizeof *g_in * (unsigned long)g_hdr.nassets);
-    if (!g_dir || !g_rooms || !g_people || !g_cockpits || !g_in)
+    if (!g_dir_blk || !g_rooms || !g_people || !g_cockpits || !g_in)
         return 0;
     _fmemset(g_in, 0, sizeof *g_in * g_hdr.nassets);
     _fmemset(g_slab, 0, sizeof g_slab);
-    file_read(g_hdr.dir_at, g_dir, sizeof(RvAsset) * (unsigned long)g_hdr.nassets);
+    {                                   /* the directory into XMS, a near buffer at a time */
+        unsigned long n = sizeof(RvAsset) * (unsigned long)g_hdr.nassets, k;
+        for (k = 0; k < n; k += sizeof rv_filebuf) {
+            unsigned part = n - k < sizeof rv_filebuf ? (unsigned)(n - k) : sizeof rv_filebuf;
+            file_read(g_hdr.dir_at + k, rv_filebuf, part);
+            xms_put(g_dir_blk, k, rv_filebuf, part);
+        }
+    }
     file_read(g_hdr.rooms_at, g_rooms, sizeof(RvRoom) * (unsigned long)g_hdr.nrooms);
     file_read(g_hdr.people_at, g_people, sizeof(RvPerson) * (unsigned long)g_hdr.npeople);
     if (g_hdr.ncockpits)
         file_read(g_hdr.cockpits_at, g_cockpits, sizeof(RvCockpit) * (unsigned long)g_hdr.ncockpits);
     for (i = 1; i < g_hdr.nassets; i++)
-        RV_ASSERT(g_dir[i].at >= g_dir[i - 1].at);   /* (in file order: asset_at searches them) */
+        RV_ASSERT(dir_at(i) >= dir_at(i - 1));   /* (in file order: asset_at searches them) */
     xms_freed = freed;
-    for (i = 0; i < g_hdr.nassets; i++)  /* the palettes, fonts and tables: in now, at the base level */
-        if (g_dir[i].kind != RV_KIND_IMG && g_dir[i].kind != RV_KIND_SPR && bring_in(i, XMS_BASE))
-            pinned += g_dir[i].size;
+    for (i = 0; i < g_hdr.nassets; i++) {  /* the palettes, fonts and tables: in now, at the base level */
+        const RvAsset __far *a = dat_asset(i);
+        if (a->kind != RV_KIND_IMG && a->kind != RV_KIND_SPR && bring_in(i, a, XMS_BASE))
+            pinned += a->size;
+    }
     rv_log("dat: %s, %u assets, %u rooms, %u people, %u cockpits; %lu KB of palettes, fonts and tables in XMS, the "
            "rest read as wanted", path, g_hdr.nassets, g_hdr.nrooms, g_hdr.npeople, g_hdr.ncockpits, pinned / 1024);
     return 1;
@@ -196,14 +221,13 @@ int dat_open(const char *path)
 void dat_close(void)
 {
     xms_free_level(XMS_BASE);           /* (first: freed() clears what was in) */
-    if (g_dir) _ffree(g_dir);
     if (g_rooms) _ffree(g_rooms);
     if (g_people) _ffree(g_people);
     if (g_cockpits) _ffree(g_cockpits);
     if (g_in) _ffree(g_in);
     if (g_fd >= 0) close(g_fd);
     g_fd = -1;
-    g_dir = 0;
+    g_dir_blk = 0;
     g_rooms = 0;
     g_people = 0;
     g_cockpits = 0;
@@ -224,8 +248,10 @@ const RvDatHeader __far *dat_header(void) { return &g_hdr; }
 
 const RvAsset __far *dat_asset(unsigned i)
 {
+    RvAsset __far *r = &g_rec[g_recn ^= 1];   /* (two: a caller may hold one across another's lookup) */
     RV_CHECK(i, g_hdr.nassets);
-    return &g_dir[i];
+    xms_get(g_dir_blk, (unsigned long)i * sizeof(RvAsset), r, sizeof *r);
+    return r;
 }
 
 const RvRoom __far *dat_room(unsigned i)

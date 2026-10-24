@@ -50,9 +50,8 @@ typedef struct {
     unsigned short rolls_in;            /* bit k: every roll block the set has at size k is loaded */
     int nblocks;
     SetBlock block[SET_BLOCKS];
-    ShipView view[SHIP_VIEWS];          /* the full-size, unturned views (a .RVS set's block 0, not resident:
-                                           blk 0, at and len in the file): a symmetric ship's mirrored
-                                           headings are empty and made from their pair */
+    /* (the full-size views' records are block 0's table in XMS, read by set_view: 330 records kept here before
+       2026-10-23 were 5.9 KB of conventional memory a set) */
 } ShipSet;
 
 extern int g_res;                       /* RV.EXE /res N: 2 (the default) SHIPnn.RVH; 1 the sets as they were (SHIPnn.RVS), the
@@ -147,6 +146,8 @@ int ships_draw_sky(int set, int v, const LfVec *dir, const LfVec *up, const LfBa
  * output pixels its full-size view would cover at scale256 (for the plan) */
 long ships_size_of(int set, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, LfPlace *p);
 
+/* a full-size view's size: 0 when the set has no such view in */
+int ships_full_size(int set, int v, int *w, int *h);
 /* the plain copy of view v (full size, unturned) with the ship's origin at (x, y), clipped as above:
  * 0 when the view is not in */
 int ships_blit(const ShipSet __far *s, int v, int x, int y, int y0, int y1, int xa, int xb,

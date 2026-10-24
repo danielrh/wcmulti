@@ -222,7 +222,14 @@ static int load_rv(ShipSet __far *s, const char *name)
     for (i = 0; i < n; i++)
         tab0[i] = b0 + (rd32(f) & 0xFFFFFFUL);
     if (s->nviews > n) s->nviews = (unsigned char)n;
-    s->blk = xms_alloc(size * 3 + 65536UL, XMS_MISSION);
+    s->blk = xms_alloc(12UL * s->nviews + 2, XMS_MISSION);   /* the index: a record a view, as a set's */
+    s->block[0].blk = xms_alloc(size * 3 + 65536UL, XMS_MISSION);
+    s->block[0].size = 0;
+    s->block[0].roll = 0;
+    s->block[0].loaded = 2;
+    s->block[0].index_at = 0;
+    s->block[0].nv = (unsigned short)s->nviews;
+    s->nblocks = 1;
     if (!s->blk) {
         rv_log("ships: no XMS for %s", name);
         fclose(f);
@@ -257,24 +264,24 @@ static int load_rv(ShipSet __far *s, const char *name)
         if (!s->asym && lf_pair_of(v, s->nb0, s->nh0) != v)
             copies = 2;
         for (c = 0; c < copies; c++) {
-            int idx = c ? lf_pair_of(v, s->nb0, s->nh0) : v;
-            ShipView __far *view;
-            view = &s->view[idx];
-            view->w = (unsigned short)w;
-            view->h = (unsigned short)h;
-            view->ox = (short)(c ? w - 1 - (hdr[1] + 1) : hdr[1] + 1);
-            view->oy = (short)(hdr[2] + 1);
-            view->blk = s->blk;
-            view->at = at;
+            int idx = c ? lf_pair_of(v, s->nb0, s->nh0) : v, ox = c ? w - 1 - (hdr[1] + 1) : hdr[1] + 1, oy = hdr[2] + 1;
+            unsigned char rec[12];
+            unsigned long vat = at;
+            XmsBlock data = s->block[0].blk;
+            rec[0] = (unsigned char)w; rec[1] = (unsigned char)(w >> 8);
+            rec[2] = (unsigned char)h; rec[3] = (unsigned char)(h >> 8);
+            rec[4] = (unsigned char)ox; rec[5] = (unsigned char)(ox >> 8);
+            rec[6] = (unsigned char)oy; rec[7] = (unsigned char)(oy >> 8);
+            rec[8] = (unsigned char)vat; rec[9] = (unsigned char)(vat >> 8); rec[10] = (unsigned char)(vat >> 16); rec[11] = (unsigned char)(vat >> 24);
+            xms_put(s->blk, 12UL * idx, rec, 12);
             at += 4UL * (h + 1);
-            at += encode_view(s->blk, at, raw, len, w, h, hdr[1], hdr[2], c, rowtab);
-            xms_put(s->blk, view->at, rowtab, 4UL * (h + 1));
+            at += encode_view(data, at, raw, len, w, h, hdr[1], hdr[2], c, rowtab);
+            xms_put(data, vat, rowtab, 4UL * (h + 1));
             at = (at + 1) & ~1UL;
         }
     }
     if (!s->asym)
         s->nviews = (unsigned short)LF_LATTICE_VIEWS(s->nb0, s->nh0);
-        RV_ASSERT(s->nviews <= SHIP_VIEWS);   /* (the .RV fallback makes the mirrored headings here: lattices to 15 degrees) */
     _ffree(rowtab);
     fclose(f);
     s->nsizes = 1;
@@ -343,7 +350,7 @@ static int load_rvs(ShipSet __far *s, const char *name)
     FILE *f = fopen(name, "rb");
     unsigned char hd[48];
     unsigned long nblocks, i, index_len;
-    int k, v;
+    int k;
     if (!f)
         return 0;
     fread(hd, 1, 48, f);
@@ -368,7 +375,7 @@ static int load_rvs(ShipSet __far *s, const char *name)
     if (hd[46] | hd[47])
         s->nviews = hd[46] | (hd[47] << 8);   /* the whole count (byte 5 is its low byte) */
     nblocks = rd32(f);
-    RV_ASSERT(nblocks <= SET_BLOCKS && s->nviews <= SHIP_VIEWS && s->nrolls <= 32);
+    RV_ASSERT(nblocks <= SET_BLOCKS && s->nrolls <= 32);
     s->nblocks = (int)nblocks;
     /* the index: every block's header and view table, walked by their own view counts */
     index_len = 0;
@@ -398,19 +405,7 @@ static int load_rvs(ShipSet __far *s, const char *name)
     {
         SetBlock __far *b0 = &s->block[0];
         RV_ASSERT(b0->size == 0 && b0->roll == 0);
-        b0->loaded = 2;
-        for (v = 0; v < s->nviews; v++) {
-            unsigned char e[12];
-            ShipView one;
-            xms_get(s->blk, b0->index_at + 12UL * v, e, 12);
-            one.w = e[0] | (e[1] << 8);
-            one.h = e[2] | (e[3] << 8);
-            one.ox = (short)(e[4] | (e[5] << 8));
-            one.oy = (short)(e[6] | (e[7] << 8));
-            one.blk = 0;
-            one.at = e[8] | ((unsigned long)e[9] << 8) | ((unsigned long)e[10] << 16) | ((unsigned long)e[11] << 24);
-            s->view[v] = one;           /* (in the block: blk set when it is loaded, load_full) */
-        }
+        b0->loaded = 2;                 /* (its records: the table in XMS, set_view's) */
     }
     rv_log("ships: %s, %d views (%d x %d; the copies %d x %d), %d sizes, %d roll steps on %d sizes, %lu blocks", name,
            s->nviews, s->nb0, s->nh0, s->nb1, s->nh1, s->nsizes, s->nrolls, s->roll_sizes, nblocks);
@@ -511,16 +506,13 @@ static unsigned long load_rolls(ShipSet __far *s, int k, unsigned long room)
 /* a set's full-size block in, its views pointed at it */
 static int load_full(ShipSet __far *s, SetBlock __far *b)
 {
-    int v, ok;
+    int ok;
     b->loaded = 0;
     ok = load_block(s, b);
     b->loaded = 2;                      /* (the exact draw's still: not the sets') */
     if (!ok)
         return 0;
-    for (v = 0; v < s->nviews; v++)
-        if (s->view[v].w)
-            s->view[v].blk = b->blk;
-    return 1;
+    return 1;                           /* (set_view takes the block's blk from the block) */
 }
 
 /* the dense copies' cache, then the sets' blocks: the ladder (every size, unturned) for every set, then the
@@ -595,10 +587,20 @@ void ships_unload(void)
 }
 
 /* a full-size view's record with its data: 0 when it is not in (its set's full-size block did not fit) */
+static int set_view(const ShipSet __far *s, const SetBlock __far *b, int v, ShipView *out);
 static const ShipView *full_view(const ShipSet __far *s, int v, ShipView *out)
 {
-    *out = s->view[v];
-    return out->w && out->blk ? out : 0;
+    return s->nblocks && set_view(s, &s->block[0], v, out) ? out : 0;
+}
+
+int ships_full_size(int set_i, int v, int *w, int *h)
+{
+    ShipView view;
+    if (!full_view(ships_set(set_i), v, &view))
+        return 0;
+    *w = view.w;
+    *h = view.h;
+    return 1;
 }
 
 /* a symmetric set's mirrored headings, the indices past its stored views, are drawn as the pair's mirror image */
@@ -615,7 +617,7 @@ static int stored_view(const ShipSet __far *s, int v, int *flags)
         *flags = BLIT_H;
         v = lf_pair_of(v, s->nb0, s->nh0);
     }
-    RV_CHECK(v, SHIP_VIEWS);
+    RV_CHECK(v, s->nviews);
     return v;
 }
 
@@ -840,7 +842,7 @@ int ships_blit_size(const ShipSet __far *s, int k, int v, int x, int y, int y0, 
 {
     ShipView view;
     int flags;
-    RV_CHECK(v, SHIP_VIEWS);
+    RV_CHECK(v, s->nviews);
     if (!s->rvs || (flags = find_sprite(s, k, v, 0, &view)) < 0)
         return 0;
     ships_blit_view(&view, flags, x, y, y0, y1, xa, xb, ext, ext_y0, ext_rows);
@@ -850,7 +852,7 @@ int ships_blit_size(const ShipSet __far *s, int k, int v, int x, int y, int y0, 
 int ships_view_size(const ShipSet __far *s, int k, int v, int *w, int *h)
 {
     ShipView view;
-    RV_CHECK(v, SHIP_VIEWS);
+    RV_CHECK(v, s->nviews);
     if (!s->rvs || find_sprite(s, k, v, 0, &view) < 0)
         return 0;
     *w = view.w;
@@ -1025,11 +1027,9 @@ static int dense_from(int set_i, int key, const ShipView *view, int mir)
 static int make_dense(const ShipSet __far *s, int set_i, int v)
 {
     ShipView view;
-    int mir, src, i, dc;
+    int mir, src;
     src = stored_view(s, v, &mir);      /* a mirrored heading not stored: its pair, backwards */
-    if (dense_in(set_i, v, &i, &dc))
-        view = s->view[src];            /* (its size only: the copy is made) */
-    else if (!full_view(s, src, &view))
+    if (!full_view(s, src, &view))
         return 0;
     return dense_from(set_i, v, &view, mir);
 }
@@ -1137,13 +1137,13 @@ static int draw_turned(const ShipSet __far *s, int set_i, int v, int x, int y, i
                        int y0, int y1, int xa, int xb, const short __far *ext, int ext_y0, int ext_rows)
 {
     ShipView view;
+    int mir;
     if (!make_dense(s, set_i, v))
         return 0;
-    if (mirrored_index(s, v)) {         /* the pair's picture, mirrored: so is its origin */
-        view = s->view[lf_pair_of(v, s->nb0, s->nh0)];
+    if (!full_view(s, stored_view(s, v, &mir), &view))
+        return 0;
+    if (mir)                            /* the pair's picture, mirrored: so is its origin */
         view.ox = view.w - 1 - view.ox;
-    } else
-        view = s->view[v];
     turn_rows(view.w, view.h, view.ox, view.oy, x, y, scale256, roll, detail, y0, y1, xa, xb, ext, ext_y0, ext_rows);
     return 1;
 }
@@ -1416,13 +1416,10 @@ int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *sh
         lf_place(rel, cam, ship, cx, cy, focal, s->nb0, s->nh0, &p);
         if (!p.on_screen || scale256 < 8)
             return 0;
-        if (mirrored_index(s, p.view)) {
-            view = s->view[lf_pair_of(p.view, s->nb0, s->nh0)];
-            view.ox = view.w - 1 - view.ox;
-        } else
-            view = s->view[p.view];
-        if (!view.w)
+        if (!full_view(s, mirrored_index(s, p.view) ? lf_pair_of(p.view, s->nb0, s->nh0) : p.view, &view))
             return 0;
+        if (mirrored_index(s, p.view))
+            view.ox = view.w - 1 - view.ox;
         roll = exact ? p.roll : (((p.roll + 32) & 1023) / 64) * 64;   /* (ships_draw's fallback: sixteen steps) */
         lf_rotate_setup(view.w, view.h, view.ox, view.oy, roll, scale256 > 256 && !exact ? 256 : scale256, &r);
         box[0] = p.sx - r.ocx;
@@ -1463,9 +1460,13 @@ long ships_size_of(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasi
     lf_place(rel, cam, ship, g_cx, g_cy, g_focal, s->nb0, s->nh0, p);
     if (!p->on_screen)
         return 0;
-    v = mirrored_index(s, p->view) ? lf_pair_of(p->view, s->nb0, s->nh0) : p->view;
-    RV_CHECK(v, SHIP_VIEWS);
-    return (long)s->view[v].w * s->view[v].h * scale256 / 256 * scale256 / 256 * s->factor * s->factor;
+    {
+        ShipView view;
+        v = mirrored_index(s, p->view) ? lf_pair_of(p->view, s->nb0, s->nh0) : p->view;
+        if (!full_view(s, v, &view))
+            return 0;
+        return (long)view.w * view.h * scale256 / 256 * scale256 / 256 * s->factor * s->factor;
+    }
 }
 
 /* --- the kernels checked, and the paths timed --- */

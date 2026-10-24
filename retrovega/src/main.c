@@ -8,6 +8,7 @@
  * MIDI synthesizer on the MPU-401 instead.
  * Needs RV.DAT and RVGAME.DAT beside it, 32 MB of XMS (it takes all there is) and VESA mode 100h. */
 #include <stdio.h>
+#include <malloc.h>
 #include <string.h>
 #include <stdlib.h>
 #include <dos.h>
@@ -33,13 +34,58 @@ extern long g_onfly_px;
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
 void __far __cdecl uiMode_impl(unsigned short on) { (void)on; }
 
-static void log_free(const char *when)
+/* DOS's free conventional memory, by walking its arena chain below the video segment (the DOS call
+ * gives only the largest block: a freed table under a later one would not show in it) */
+static void dos_free(unsigned long *total, unsigned long *largest)
 {
     union REGS r;
-    r.h.ah = 0x48;
-    r.x.bx = 0xFFFF;
-    int86(0x21, &r, &r);
-    rv_log("conventional memory %s: %lu KB free", when, (unsigned long)r.x.bx * 16 / 1024);
+    struct SREGS sr;
+    unsigned seg;
+    *total = *largest = 0;
+    segread(&sr);
+    r.h.ah = 0x52;
+    intdosx(&r, &r, &sr);
+    seg = *(unsigned __far *)MK_FP(sr.es, r.x.bx - 2);
+    while (seg < 0xA000) {
+        unsigned char __far *mcb = MK_FP(seg, 0);
+        unsigned owner = *(unsigned __far *)(mcb + 1);
+        unsigned size = *(unsigned __far *)(mcb + 3);
+        if (owner == 0) {
+            *total += size;
+            if (size > *largest)
+                *largest = size;
+        }
+        if (mcb[0] != 'M')
+            break;
+        seg += size + 1;
+    }
+    *total = *total * 16 / 1024;
+    *largest = *largest * 16 / 1024;
+}
+
+/* what the C far heap already holds free (freed memory stays in it: the DOS figure does not move when a table
+ * leaves): the free total and the largest free entry, by walking it */
+static void heap_free(unsigned long *total, unsigned long *largest)
+{
+    struct _heapinfo hi;
+    hi._pentry = 0;
+    *total = *largest = 0;
+    while (_fheapwalk(&hi) == _HEAPOK)
+        if (hi._useflag == _FREEENTRY) {
+            *total += hi._size;
+            if (hi._size > *largest)
+                *largest = hi._size;
+        }
+}
+
+static void log_free(const char *when)
+{
+    unsigned long dtotal, dlargest, total, largest;
+    _fheapshrink();     /* (what the heap holds free in whole segments goes back to DOS first) */
+    dos_free(&dtotal, &dlargest);
+    heap_free(&total, &largest);
+    rv_log("conventional memory %s: %lu KB free in DOS (the largest block %lu KB), %lu KB free in the heap (largest %lu KB)",
+           when, dtotal, dlargest, total, largest);
 }
 
 static void names(void)
