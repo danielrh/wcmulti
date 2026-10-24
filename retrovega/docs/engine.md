@@ -1736,33 +1736,60 @@ has WC1's. A rock is a plain XMS copy into the frame, and the rocks' art is
 in memory only near a field. Then the questions: can the field make the
 player dodge, and can the CPU draw many rocks at 30 fps?
 
-**The art** (`tools/rocks.py` -> `ROCKS.DAT`, 8.6 MB, 3.8 MB gzipped;
-`docs/rocks.png`). Four procedural meshes (an icosphere of 82,000 triangles
-pushed in and out by fractal noise, craters with rims, and each kind's
-body): a grey stony potato, a dark carbon ball pocked all over, a rusty
-iron peanut (two lobes), a pale shard broken flat (cut by planes, its faces
-flat-shaded). Lit as the balls are (the key light up and to the left, a
-faint fill from the lower right), rendered on Mesa through moderngl as the
-ships are, 32 frames of a turn about a tilted axis, three times finer than
-the biggest size, then box-filtered to every size: each diameter 1 .. 8
-(eight of the frames: at that size the tumble hardly shows), then a ladder
-of 40 sizes to 128 px (every pixel to 16, then 7% steps). Colours are the
-flight palette's fixed ones or a checker of two (sky.py's table). **Each row
-of a big sprite is one run of opaque pixels** (whatever lies between a
-row's first and last pixel is drawn), of an even length (the XMS driver
-moves even lengths; an odd run takes the pixel on its fuller side), so a
-row is one XMS move. A record is its rows' pairs (left + 1, length) and
-then their runs, one after another.
+The user's second round (2026-10-24), on the first field: a crash breaks
+the rock apart and tosses the player to the side, their speed kept; the
+rocks too round: jagged, bright grey, much smaller ("shattered planet crust
+rather than Ceres... a sharp rock found on a playground"), roughly round,
+spinning horizontally, a quarter to a half of a ship; 120 is probably a good
+density; spawned with a velocity toward the player, or a bit off it (ahead
+of where the player will be, left, right, up or down at random). Then, on
+the faceted stones: the facets are good, but big noise, rich noisy textures
+("flash frozen metal possibly"), shown with pictures of a black glinting
+slag and a heap of grey and rose lava rock. Then: "the texture is much
+better but the shape needs to be more jagged and less convex... some
+overhangs etc, very sharp", with a sheet of lumpy, holed rocks.
+
+**The art** (`tools/rocks.py` -> `ROCKS.DAT`, 6.2 MB; `docs/rocks.png`).
+Four rocks, each a solid the fragment shader marches (a signed distance,
+no mesh: overhangs and caves come for nothing and every crease is exact):
+the union of three to five faceted chunks (each a convex polytope of 10-14
+planes spread round its own middle, the chunks offset from one another, so
+where two meet there is a sharp re-entrant crease or an overhang), less
+seven to fourteen caves (spheres just under the surface: round holes with
+overhanging rims) and two or three bites (small polytopes: sharp notches),
+its faces a little rough; centred on its own middle and scaled to the unit
+sphere. Its surface: large light and dark blotches, two sizes of bubble
+pits (dark, their rims a little lighter) that also tip the faces' normals
+as bumps, fine grit, and on the "frozen metal" glints that catch the light.
+The kinds: a grey scoria, a dark slag full of glints, a lava rock (the
+palette has no rose: it reads peach), a light pumice. Lit as the balls are
+(the key light up and to the left, a fill from the lower right), 32 frames
+of a turn about the screen's vertical, three times finer than the biggest
+size, then box-filtered to every size: each diameter 1 .. 8 (eight of the
+frames: at that size the spin hardly shows), then a ladder of 40 sizes to
+128 px (every pixel to 16, then 7% steps). Colours are the flight palette's
+fixed ones or a checker of two (sky.py's table). **A row of a big sprite is
+a few runs of opaque pixels** (at most four; a gap under 3 px is drawn,
+the rest stay clear: the rocks have overhangs), each of an even length
+(the XMS driver moves even lengths; an odd run takes a pixel on its fuller
+side), so a run is one XMS move. A record (ROCKS.DAT version 2) is its rows,
+its run table's bytes, the run table (for each row a count, then each run's
+left + 1 and length) and then the runs' pixels, one after another.
 
 **The engine** (`rocks.c`, `rocks.h`; the per-rock work in `rocks.asm`).
 
 - *The bubble.* While the player is near a field, a fixed set of rocks is
   kept in a sphere of 9,000 km about them: density x 3.05 rocks (density =
   rocks per (10,000 km)^3; 120 when the mission says nothing: 366 rocks),
-  1,200 at most. A rock's radius is 80 .. 1,000 km (the small ones
-  commoner: a fighter's half box is about 450 km), its kind weighted
-  (stony 6, carbon 5, iron 3, shard 2 of 16), its tumble a turn in one to
-  four seconds either way from a random phase.
+  1,200 at most. A rock's radius is 110 .. 240 km (a fighter's half box
+  is about 450 km: a quarter to a half of the ship), its kind any of the
+  four, its spin a turn in one to four seconds either way from a random
+  phase.
+- *Velocities.* Every rock flies (`rv_rocks_place` moves it as it places
+  it): 3-8 km a frame toward where the player will be when it gets there
+  (their position plus their velocity times its time to them, head on),
+  off that point by up to 4,000 km across and up at random: most fly close
+  by, now and then one comes straight in.
 - *Once a frame* every rock goes through the camera (`rv_rocks_place`, its
   C reference `lz_rocks_place`, checked to the bit by RVT.EXE when its
   first field is entered): one that has left the sphere (the player flew on
@@ -1778,27 +1805,31 @@ then their runs, one after another.
 - *Dodging.* Now and then (every 720 / density seconds on average: 6 s at
   120) the first rock to be brought round goes on the player's course
   instead: at the sphere's edge dead ahead, off the line by less than its
-  radius, 240 km across at least. Flying on straight is flying into it;
-  it grows in from a point over the 22 s it takes at cruise. On top of the
-  field's own spread (at 120, a rock in a straight path every ~13 s).
+  radius, flying straight at where the player will be. Flying on straight
+  is flying into it; it grows in from a point as it comes.
 - *Hits.* Each rock on the hit list against the player's hit box (a
-  sphere against collide.c's box, in the ship's frame): the player is put
-  back out of it along the way between them, stops, and is knocked back
-  (at the speed they came in at, dying away over a second: held
-  into a big rock, the course brings them back to it slowly), and takes speed x how head-on (a fifth at least) x the rock's
-  radius / 6,000 + 1 (a head-on rock of 400 km at 250 kps: 17; the
-  fighters' shields are 4-20 a side) through `do_damage`, the field's slot
-  its source, the place hit in `tempVector`. The same rock harms no more
-  for a second. `do_damage_impl` (flight.c) is the first damage model:
-  the shield on the side hit (front or rear), then that side's armour
-  (front, rear, left, right), then the hull; nothing dies of it yet.
+  sphere against collide.c's box, in the ship's frame). The player takes
+  speed x how head-on (a fifth at least) x the rock's radius / 4,000 + 1
+  (a head-on 170 km rock at 180 kps: 8; the fighters' shields are 4-20 a
+  side) through `do_damage`, the field's slot its source, the place hit in
+  `tempVector`, and is tossed aside: across their way, away from the rock
+  (dead ahead: a side at random), at their speed / 20 + 30 km a frame
+  dying away by an eighth a frame (about 300 km at 180 kps), their own
+  speed kept. The rock breaks: seven pieces a quarter to a half its size
+  (`g_frag`, 32 at most) fly out every way from where it was, going on with
+  three quarters of the player's velocity so they are seen spreading ahead,
+  spinning fast, gone in one to two seconds, flown and placed by the same
+  asm, never hit; the rock itself is brought round ahead.
+  `do_damage_impl` (flight.c) is the first damage model: the shield on the
+  side hit (front or rear), then that side's armour (front, rear, left,
+  right), then the hull; nothing dies of it yet.
 - *Drawing.* The small ones (8 px at most) are drawn as balls are
   (`rv_balls_draw`, from every kind's small sprites copied to conventional
   memory, 6.5 KB), before the ships. The big ones are sorted by depth (a
   counting sort, 64 km a key) and drawn in among the ships by it
   (`rocks_draw_to(depth)` before each ship, the rest after). A big one up
-  to 128 px is its ladder size's record: the row pairs fetched from XMS,
-  then `rv_rocks_xms` moves each row's run, clipped to the cockpit's
+  to 128 px is its ladder size's record: its head and run table fetched from XMS,
+  then `rv_rocks_xms` moves each row's runs, clipped to the cockpit's
   extents, by the XMS driver straight into the band buffer (a run cut to
   an odd length loses its pixel at the cut); `/rockxms 0` moves the whole
   record into the scratch buffer instead and `rv_rocks_copy` copies the
@@ -1809,8 +1840,8 @@ then their runs, one after another.
   the mission's), when the player comes within the sphere's reach of an
   asteroid field, and is given back 2,000 km farther out; the archive's
   assets read meanwhile go to that level too (`dat_level`). So does the
-  conventional memory: the pool (16 bytes a rock), the screen lists and the
-  small sprites, about 30 KB at 1,200 rocks. Read in, it takes 170 ms.
+  conventional memory: the pool (24 bytes a rock), the screen lists and the
+  small sprites, about 40 KB at 1,200 rocks. Read in, it takes 170 ms.
 - *Multiplayer.* The rocks are no slots: nothing about them is sent, and
   they come from a random stream of the module's own (never `randomSeed`,
   the play's shared one). Only the player's own ship hits them. The
@@ -1829,6 +1860,11 @@ then their runs, one after another.
   across, centred where the player starts. The page fetches `ROCKS.DAT`
   (rv/ROCKS.DAT.gz, listed in rv/ships.json's `files`) when the flight's
   list in `RVWANT.TXT` names it, as it fetches the ships' views.
+
+(The costs below were measured with the first rocks, 80-1,000 km and
+convex. The second round's are far smaller on screen: at 120, about 12 on
+screen and 0.8 ms a frame of big rocks in the test build, against 21 and
+4.4 ms; the sweep is to be redone.)
 
 **Costs** at 40,000 cycles (DOSBox charges an instruction a cycle; an XMS
 move is host code, a few instructions here whatever its length). Measured

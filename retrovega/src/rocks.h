@@ -26,13 +26,15 @@
 
 #include "lasers.h"
 
-/* a rock in the world (16 bytes; the asm reads this layout) */
+/* a rock in the world (24 bytes; the asm reads this layout) */
 typedef struct {
     long x, y, z;                       /* 0: its middle, positions (256 a km) */
-    unsigned char kind;                 /* 12: ROCKS.DAT's kind */
-    unsigned char r8;                   /* 13: its radius, 8 km a step */
-    unsigned char phase;                /* 14: its tumble's frame when anim is 0 */
-    signed char spin;                   /* 15: quarter frames of tumble a step of anim, either way */
+    short vx, vy, vz;                   /* 12: its velocity, positions a frame (the asm flies it as it places it) */
+    unsigned char kind;                 /* 18: ROCKS.DAT's kind */
+    unsigned char r8;                   /* 19: its radius, 8 km a step */
+    unsigned char phase;                /* 20: its spin's frame when anim is 0 */
+    signed char spin;                   /* 21: quarter frames of spin a step of anim, either way */
+    unsigned short pad;                 /* 22 */
 } LzRock;
 
 /* the camera's rock terms (rocks.c fills them; 40 bytes, the asm reads this layout).  Camera units as LzCam's
@@ -59,12 +61,12 @@ typedef struct {
     long z;                             /* 8: its depth, camera units */
 } LzRockOut;
 
-/* every rock through the camera: the ones on screen to out (at most maxout; their number returned), the ones out
- * of the bubble (or 2^20 sixteenths of a km away on an axis) to reap and the ones within reach to close, as
- * indices (rc's counts) */
-int lz_rocks_place(const LzRock LZ_FAR *r, int n, const LzCam LZ_FAR *c, LzRockCam LZ_FAR *rc, LzRockOut LZ_FAR *out,
+/* every rock flown a frame (its velocity) and put through the camera: the ones on screen to out (at most maxout;
+ * their number returned), the ones out of the bubble (or 2^20 sixteenths of a km away on an axis) to reap and the
+ * ones within reach to hitl, as indices (rc's counts) */
+int lz_rocks_place(LzRock LZ_FAR *r, int n, const LzCam LZ_FAR *c, LzRockCam LZ_FAR *rc, LzRockOut LZ_FAR *out,
                    int maxout, short LZ_FAR *reap, short LZ_FAR *hitl);
-int __far __cdecl rv_rocks_place(const LzRock __far *r, int n, const LzCam __far *c, LzRockCam __far *rc,
+int __far __cdecl rv_rocks_place(LzRock __far *r, int n, const LzCam __far *c, LzRockCam __far *rc,
                                  LzRockOut __far *out, int maxout, short __far *reap, short __far *hitl);
 
 /* one big rock's rows that fall in rows y0 .. y1-1 of the band (cut by the caller to the extents'), each clipped

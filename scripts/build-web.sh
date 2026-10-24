@@ -195,7 +195,7 @@ if [ -z "${SKIP_RETROVEGA:-}" ]; then
     "$ROOT/retrovega/build.sh" > "$BUILD/retrovega.log" 2>&1 || { tail -20 "$BUILD/retrovega.log"; exit 1; }
     (cd "$ROOT/retrovega/build/dos" && tar --format=ustar -czf "$OUT/retrovega.tar.gz" \
         RV.EXE RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT RVOPL.BNK *.MID)
-    # the ships' views (SHIPnn.RV, 1-9 MB each at 6 degrees) and the asteroid fields' rocks (ROCKS.DAT, 8.6 MB):
+    # the ships' views (SHIPnn.RV, 1-9 MB each at 6 degrees) and the asteroid fields' rocks (ROCKS.DAT, 6 MB):
     # not in the tarball but beside it, gzipped, fetched by the page for the types a flight needs (and the rocks
     # when it has a field) when the game asks (RVWANT.TXT; web/wc.js rvWant),
     # with a manifest of what is there (the build, each file's size and hash: the page's cache keys)

@@ -9,9 +9,9 @@
 
 segment ROCKS_TEXT public align=16 class=CODE use16
 
-; int rv_rocks_place(const LzRock far *r, int n, const LzCam far *cam, LzRockCam far *rc,
+; int rv_rocks_place(LzRock far *r, int n, const LzCam far *cam, LzRockCam far *rc,
 ;                    LzRockOut far *out, int maxout, short far *reap, short far *hitl)
-; Every rock through the camera: out of the bubble (or 2^20 sixteenths of a
+; Every rock flown a frame (position += velocity), then through the camera: out of the bubble (or 2^20 sixteenths of a
 ; km away on an axis, or 32,767 km) to reap[]; within reach on every axis to
 ; hitl[]; before the near plane, gone; else its diameter (the fade past
 ; fade2), its middle on screen, off the box gone, out[].  The lists' counts
@@ -87,7 +87,13 @@ _rv_rocks_place:
         jle .done
         cmp word [bp+24],0
         jle .done
-.rock:  mov eax,[si]                ; the middle less the camera: an axis past 2^20 sixteenths, reaped
+.rock:  movsx eax,word [si+12]      ; it flies a frame
+        add [si],eax
+        movsx eax,word [si+14]
+        add [si+4],eax
+        movsx eax,word [si+16]
+        add [si+8],eax
+        mov eax,[si]                ; the middle less the camera: an axis past 2^20 sixteenths, reaped
         sub eax,CAM(0)
         cmp eax,0x2000000
         jae .reap
@@ -163,7 +169,7 @@ _rv_rocks_place:
         ja .reap
         mov D2,ecx
         ; within reach (the player's and the rock's radius) on every axis: to the hit list
-        movzx eax,byte [si+13]
+        movzx eax,byte [si+19]
         shl eax,15
         add eax,RC(12)
         mov edx,eax
@@ -191,7 +197,7 @@ _rv_rocks_place:
 .nohit: mov eax,ZZ                  ; before the near plane: not drawn
         cmp eax,CAM(60)
         jl .next
-        movzx eax,byte [si+13]      ; d x16 = r8 dk / Z
+        movzx eax,byte [si+19]      ; d x16 = r8 dk / Z
         mul dword RC(0)
         div dword ZZ
         mov ecx,D2                  ; past fade2: x (far2 - d2) / (far2 - fade2)
@@ -248,13 +254,13 @@ _rv_rocks_place:
         mov [es:di+2],cx
         mov ax,DD
         mov [es:di+4],ax
-        mov al,[si+12]
+        mov al,[si+18]
         mov [es:di+6],al
         movzx eax,word RC(16)       ; its frame: (phase + (anim spin >> 2)) & mask
-        movsx ecx,byte [si+15]
+        movsx ecx,byte [si+21]
         imul eax,ecx
         sar eax,2
-        add al,[si+14]
+        add al,[si+20]
         and al,RC(18)
         mov [es:di+7],al
         mov eax,ZZ
@@ -273,7 +279,7 @@ _rv_rocks_place:
         mov ax,INDEX
         mov [fs:bx],ax
         inc word NREAP
-.next:  add si,16
+.next:  add si,24
         inc word INDEX
         dec word LEFT
         jnz .rock
@@ -294,21 +300,22 @@ _rv_rocks_place:
 ;                   unsigned long off, unsigned char far *band, int band_y0, int y0, int y1,
 ;                   const short far *ext, int ext_y0)
 ; A big rock's rows in rows y0 .. y1-1 (cut by the caller to the extents'):
-; each row's run (hdr: left + 1, length; its pixels at off in the handle's
-; memory, the rows' runs one after another) clipped to its row's extent and
-; moved by the XMS driver straight into the band.  The driver moves even
-; lengths: a run cut to an odd one loses its pixel at the cut.
+; each row's runs (hdr, the run table: a count, then left + 1 and length
+; for each; their pixels at off in the handle's memory, the runs one after
+; another) clipped to the row's extent and moved by the XMS driver straight
+; into the band.  The driver moves even lengths: a run cut to an odd one
+; loses its pixel at the cut.
 %define XM_LEN   [bp-16]                ; the move's record (16 bytes): length,
 %define XM_SH    [bp-12]                ;   source handle, source offset,
 %define XM_SOFF  [bp-10]
 %define XM_DH    [bp-6]                 ;   destination handle (0), destination seg:off
 %define XM_DOFF  [bp-4]
 %define XM_DSEG  [bp-2]
-%define XOFF  [bp-20]                   ; the next row's pixels (in the handle's memory)
-%define XROW  [bp-22]                   ; the next row (of the sprite)
-%define XSY   [bp-24]                   ; its row on screen
+%define XOFF  [bp-20]                   ; the next run's pixels (in the handle's memory)
+%define XSY   [bp-24]                   ; the row on screen
 %define XEND  [bp-26]                   ; the last screen row + 1
-%define XFRAME 26
+%define XN    [bp-28]                   ; the row's runs left
+%define XFRAME 28
         global _rv_rocks_xms
 _rv_rocks_xms:
         push bp
@@ -325,26 +332,28 @@ _rv_rocks_xms:
         mov word XM_DH,0
         mov eax,[bp+18]
         mov XOFF,eax
-        les si,[bp+6]               ; es:si the rows' pairs
+        les si,[bp+6]               ; es:si the run table
         lfs bx,[bp+32]              ; fs the extents
-        mov ax,[bp+14]              ; rows past y0's above it: their runs skipped
-        mov cx,[bp+28]
-        sub cx,ax                   ; y0 - y: rows before the band's first
-        jle .start
+        mov ax,[bp+14]              ; the first screen row: y, or y0 with the rows above it skipped (their runs'
+        mov cx,[bp+28]              ;  pixels counted past)
+        sub cx,ax
+        jle .first
         cmp cx,[bp+10]
         jge .out
-        mov XROW,cx
         xor edx,edx
-.skip:  movzx eax,byte [es:si+1]
+.skip:  movzx di,byte [es:si]       ; a row: its runs' lengths
+        inc si
+.skipr: or di,di
+        jz .skipn
+        movzx eax,byte [es:si+1]
         add edx,eax
         add si,2
-        loop .skip
+        dec di
+        jmp .skipr
+.skipn: loop .skip
         add XOFF,edx
         mov ax,[bp+28]
-        jmp .first
-.start: mov word XROW,0
-        mov ax,[bp+14]
-.first: mov XSY,ax                  ; the first screen row; the end: min(y + rows, y1)
+.first: mov XSY,ax                  ; the end: min(y + rows, y1)
         mov ax,[bp+14]
         add ax,[bp+10]
         cmp ax,[bp+30]
@@ -354,8 +363,12 @@ _rv_rocks_xms:
         mov ax,XSY
         cmp ax,XEND
         jge .out
-.row:   movzx cx,byte [es:si+1]     ; the run: its length (0: none)
-        jcxz .nextrow
+.row:   movzx ax,byte [es:si]       ; its runs
+        inc si
+        mov XN,ax
+.run:   cmp word XN,0
+        je .nextrow
+        movzx cx,byte [es:si+1]     ; the run: its length
         movzx ax,byte [es:si]
         dec ax
         add ax,[bp+12]              ; xa = x + left
@@ -373,11 +386,11 @@ _rv_rocks_xms:
         jle .r
         mov dx,[fs:bx+2]
 .r:     sub dx,di                   ; n
-        jle .nextrow
+        jle .nextrun
         test dl,1                   ; odd: cut at the side that was cut
         jz .even
         dec dx
-        jz .nextrow
+        jz .nextrun
         cmp di,ax
         je .even                    ; (the left as it was: the right was cut, its last pixel goes)
         inc di                      ; (the left was cut: its first pixel goes)
@@ -403,10 +416,13 @@ _rv_rocks_xms:
         call far [_rv_xms_entry]
         pop es
         pop si
-.nextrow:
+.nextrun:
         movzx eax,byte [es:si+1]
         add XOFF,eax
         add si,2
+        dec word XN
+        jmp .run
+.nextrow:
         inc word XSY
         mov ax,XSY
         cmp ax,XEND
@@ -425,12 +441,13 @@ _rv_rocks_xms:
 ; each of its k screen rows in the band rows y0 .. y1-1, clipped to the row's
 ; extent.
 %define CLINE(k) [bp-532+(k)]           ; the widened run (512 bytes: 128 x 4)
-%define COFF  [bp-2]                    ; the next row's pixels in pix
+%define COFF  [bp-2]                    ; the next run's pixels in pix
 %define CSY   [bp-4]                    ; the source row's first screen row
 %define CROW  [bp-6]                    ; rows of the sprite left
 %define CXA   [bp-8]                    ; the widened run on screen: its first column, its width
 %define CW    [bp-10]
 %define CSRC  [bp-12]                   ; the widened run's start: pix's offset (k = 1) or the line's
+%define CN    [bp-14]                   ; the row's runs left
 %define CFRAME 532
         global _rv_rocks_copy
 _rv_rocks_copy:
@@ -447,19 +464,31 @@ _rv_rocks_copy:
         mov CSY,ax
         mov ax,[bp+10]
         mov CROW,ax
-        lgs bx,[bp+6]               ; gs:bx the rows' pairs
+        lgs bx,[bp+6]               ; gs:bx the run table
         lfs ax,[bp+32]              ; fs the extents
 .src:   cmp word CROW,0
         jle .out
-        mov ax,CSY                  ; at or past y1: done; its k rows all before y0: skipped
+        mov ax,CSY                  ; at or past y1: done
         cmp ax,[bp+30]
         jge .out
-        movzx cx,byte [gs:bx+1]     ; its run's length (0: none)
-        add ax,[bp+16]
+        movzx cx,byte [gs:bx]       ; its runs
+        inc bx
+        mov CN,cx
+        add ax,[bp+16]              ; its k rows all before y0: its runs skipped
         cmp ax,[bp+28]
-        jle .nextsrc
+        jg .run
+.skip:  cmp word CN,0
+        je .nextsrc
+        movzx ax,byte [gs:bx+1]
+        add COFF,ax
+        add bx,2
+        dec word CN
+        jmp .skip
+.run:   cmp word CN,0
+        je .nextsrc
+        movzx cx,byte [gs:bx+1]     ; the run's length (0: none)
         or cx,cx
-        jz .nextsrc
+        jz .nextrun
         movzx ax,byte [gs:bx]       ; the widened run: x + (left) k, its width len k
         dec ax
         imul ax,[bp+16]
@@ -506,7 +535,7 @@ _rv_rocks_copy:
 .krow:  cmp dx,[bp+28]
         jl .knext
         cmp dx,[bp+30]
-        jge .nextsrc
+        jge .nextrun
         push bx
         push cx
         push dx
@@ -553,10 +582,13 @@ _rv_rocks_copy:
         inc cx
         cmp cx,[bp+16]
         jl .krow
-.nextsrc:
+.nextrun:
         movzx ax,byte [gs:bx+1]
         add COFF,ax
         add bx,2
+        dec word CN
+        jmp .run
+.nextsrc:
         mov ax,CSY
         add ax,[bp+16]
         mov CSY,ax

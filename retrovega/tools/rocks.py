@@ -8,20 +8,25 @@ The user's brief (2026-10-23): about four kinds of asteroid, tumbling
 endlessly and quickly, that only ever scale (no turning with the camera's
 roll: they stay upright through it), drawn as plain XMS copies into the
 frame.  So a rock's sprite is one picture per tumble frame and size, and each
-row of it is ONE run of opaque pixels (whatever a row holds between its first
-and last opaque pixel is drawn), an even number of them (XMS moves even
-lengths): a row is a single XMS move straight into the band buffer.
+row of it a few runs of opaque pixels (at most RUNS: the rocks have overhangs
+and gaps; a gap under 3 px is drawn), each an even number of them (XMS moves
+even lengths): a run is a single XMS move straight into the band buffer.
 
-The rocks are procedural meshes (an icosphere pushed in and out: fractal
-noise, craters with rims, each kind's own body), lit by the balls' key light
-(up and to the left, the viewer's side), rendered on Mesa through moderngl as
-the ships are (docs/art.md), TUMBLE frames a turn about a tilted axis, three
-times finer than the biggest size, then box-filtered to each size.  A pixel
-mostly covered is the rock; the colours are the flight palette's fixed ones
-(1..207) or a checker of two (tools/sky.py's table).
+The rocks are procedural meshes, lit by the balls' key light (up and to the
+left, the viewer's side) with a fill from the lower right, rendered on Mesa
+through moderngl as the ships are (docs/art.md), TUMBLE frames of a turn
+about the screen's vertical, three times finer than the biggest size, then
+box-filtered to each size.  A pixel mostly covered is the rock; the colours
+are the flight palette's fixed ones (1..207) or a checker of two
+(tools/sky.py's table).
 
-Kinds: a grey stony potato with craters; a dark carbon ball pocked all over;
-a rusty iron peanut (two lobes); a pale angular shard, broken flat.
+Kinds (the user, 2026-10-24: "jagged bright gray rocks... shattered planet
+crust rather than Ceres... a sharp rock found on a playground... roughly
+round and spin horizontally"): four stones, each a roughly round body cut
+flat by planes from every side and chipped deeper here and there, its faces
+flat-shaded, a little grain on them: a speckled granite, a blue-grey slate
+of few broad faces, a warm flint of many small ones, a pale quartzite
+chipped all over.
 
 Sizes: every diameter 1 .. SMALL (the far ones, nearly all of them: kept
 d x d with 0 clear, as the balls are, SMALL_FRAMES of the tumble's frames,
@@ -37,9 +42,10 @@ ROCKS.DAT (little-endian):
     f x frames / small_frames) and d = 1 .. small, d x d bytes (0 clear),
     then the big sprites' index: for each kind, frame, big size, u32 its
     record's offset in the file, then the records (each at an even offset):
-    u16 rows (= its diameter d), then a pair a row: u8 left + 1 (the run's
-    first column, -1 .. d), u8 length (even, 0 an empty row), then every
-    row's run of pixels in turn.
+    u16 rows (= its diameter d), u16 the run table's bytes (even), the run
+    table: for each row a count of runs (0 .. RUNS), then for each run u8
+    left + 1 (its first column, -1 .. d) and u8 length (even), then every
+    run's pixels in turn.
 """
 import argparse
 import math
@@ -55,13 +61,12 @@ ROOT = os.path.join(HERE, '..')
 sys.path.insert(0, HERE)
 import sky  # noqa: E402  (the flight palette and its checker table)
 
-VERSION = 1
+VERSION = 2                 # 2: a row holds up to RUNS runs (the rocks have overhangs)
 TUMBLE = 32                 # frames a turn
 SMALL = 8                   # the small sizes: 1 .. SMALL
 SMALL_FRAMES = 8            # ... at every fourth frame of the tumble
 BIG_MAX = 128
 SS = 3                      # the render: SS times finer than BIG_MAX
-NAMES = ['stony', 'carbon', 'iron', 'shard']
 KEY = np.array([-0.55, 0.6, 0.58])   # the balls' key light: up, left, toward the viewer
 KEY = KEY / np.linalg.norm(KEY)
 
@@ -78,194 +83,223 @@ def big_sizes():
 
 # --- the meshes ---
 
-def icosphere(level):
-    t = (1 + 5 ** 0.5) / 2
-    v = [(-1, t, 0), (1, t, 0), (-1, -t, 0), (1, -t, 0), (0, -1, t), (0, 1, t), (0, -1, -t), (0, 1, -t),
-         (t, 0, -1), (t, 0, 1), (-t, 0, -1), (-t, 0, 1)]
-    f = [(0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11), (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6),
-         (7, 1, 8), (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9), (4, 9, 5), (2, 4, 11), (6, 2, 10),
-         (8, 6, 7), (9, 8, 1)]
-    verts = [np.array(p, float) / np.linalg.norm(p) for p in v]
-    faces = np.array(f)
-    for _ in range(level):
-        cache, nf = {}, []
-
-        def mid(a, b):
-            k = (a, b) if a < b else (b, a)
-            if k not in cache:
-                m = verts[a] + verts[b]
-                verts.append(m / np.linalg.norm(m))
-                cache[k] = len(verts) - 1
-            return cache[k]
-        for a, b, c in faces:
-            ab, bc, ca = mid(a, b), mid(b, c), mid(c, a)
-            nf += [(a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)]
-        faces = np.array(nf)
-    return np.array(verts), faces
+# each kind (the user, 2026-10-24: the faces kept, "big noise... flash frozen metal possibly... rich noisy
+# textures", their pictures a black glinting slag and a heap of grey and rose lava rock; then, on those: "more
+# jagged and less convex... some overhangs etc very sharp", with a sheet of lumpy holed rocks): how many faceted
+# chunks it is made of, how many faces each, how many bubble caves and bites are taken out of it, how rough its
+# faces, its colour (linear), and its surface's look: how many of the bubble cells are pits, how fine, how big the
+# light-dark blotches, how many metal glints, how shiny
+KINDS = [
+    # name     chunks faces caves bites rough   colour                 pits  scale blotch glint shine
+    ('scoria',   4,    12,   9,    2,   0.030, (0.25, 0.245, 0.24),  0.45, 4.0, 0.85, 0.03, 0.10),
+    ('slag',     3,    10,   7,    3,   0.024, (0.075, 0.075, 0.085), 0.35, 5.0, 0.70, 0.12, 0.55),
+    ('lava',     5,    14,  12,    2,   0.036, (0.25, 0.17, 0.15),   0.50, 4.5, 0.90, 0.02, 0.08),
+    ('pumice',   4,    11,  14,    3,   0.030, (0.33, 0.33, 0.32),   0.60, 6.0, 0.60, 0.02, 0.05),
+]
+CHUNKS, FACES, CAVES, BITES = 5, 16, 16, 4   # (the shader's array sizes: at most so many)
 
 
-def lattice_noise(p, seed):
-    """smooth value noise in -1 .. 1 at points p (N, 3), a unit lattice"""
-    rng = np.random.default_rng(seed)
-    table = rng.uniform(-1, 1, 4096)
-    perm = rng.permutation(4096)
-    i = np.floor(p).astype(np.int64)
-    f = p - i
-    f = f * f * (3 - 2 * f)
-    out = 0
-    for dx in (0, 1):
-        for dy in (0, 1):
-            for dz in (0, 1):
-                h = perm[(perm[(perm[(i[:, 0] + dx) & 4095] + i[:, 1] + dy) & 4095] + i[:, 2] + dz) & 4095]
-                w = (f[:, 0] if dx else 1 - f[:, 0]) * (f[:, 1] if dy else 1 - f[:, 1]) * (f[:, 2] if dz else 1 - f[:, 2])
-                out = out + w * table[h]
-    return out
+def spread(n, rng, jitter):
+    """n directions spread evenly round the sphere (a Fibonacci lattice), jittered"""
+    k = np.arange(n) + 0.5
+    phi = np.arccos(1 - 2 * k / n)
+    th = math.pi * (1 + 5 ** 0.5) * k + rng.uniform(0, 2 * math.pi)
+    v = np.stack([np.cos(th) * np.sin(phi), np.sin(th) * np.sin(phi), np.cos(phi)], 1) + rng.normal(scale=jitter, size=(n, 3))
+    return v / np.linalg.norm(v, axis=1)[:, None]
 
 
-def fbm(p, seed, base, octaves, gain=0.5):
-    out, amp, tot = 0, 1.0, 0.0
-    for o in range(octaves):
-        out = out + amp * lattice_noise(p * base * 2 ** o + 17.3 * o, seed + 31 * o)
-        tot += amp
-        amp *= gain
-    return out / tot
+def solid(kind):
+    """the kind's rock as a solid for the shader to march: chunks (each a convex polytope: its planes n . p <= d),
+    their union the body (where two meet, a sharp crease and overhang); caves (spheres) and bites (small polytopes)
+    taken out of it near its surface; scaled so it fits the unit sphere.  Returns (planes, chunk ends, caves, bite
+    planes, bite ends)"""
+    rng = np.random.default_rng(3000 + kind)
+    _name, chunks, faces, caves, bites = KINDS[kind][:5]
+    planes, ends = [], []
+    for c in range(chunks):
+        centre = rng.normal(size=3) * (0.0 if c == 0 else 0.30)
+        size = rng.uniform(0.62, 0.78) if c == 0 else rng.uniform(0.40, 0.62)
+        for nrm in spread(faces, rng, 0.25):
+            planes.append((nrm, float(nrm @ centre + size * rng.uniform(0.72, 1.0))))
+        ends.append(len(planes))
+    P = np.array([n for n, _ in planes])
+    D = np.array([d for _, d in planes])
 
-
-def craters(dirs, rng, n, rmin, rmax, depth):
-    """the push of n craters (bowls with raised rims) at points of the unit sphere"""
-    out = np.zeros(len(dirs))
-    floor = np.zeros(len(dirs))
-    for _ in range(n):
-        c = rng.normal(size=3)
-        c /= np.linalg.norm(c)
-        rho = rmin * (rmax / rmin) ** rng.uniform() ** 1.6            # (more small ones than big)
-        ang = np.arccos(np.clip(dirs @ c, -1, 1))
-        t = ang / rho
-        d = depth * rho
-        bowl = np.where(t < 1, d * (t * t - 1) * 0.9, 0)
-        rim = np.where((t >= 0.8) & (t < 1.6), d * 0.35 * np.cos((t - 1.0) / 0.6 * math.pi / 2) ** 2, 0)
-        out += bowl + rim
-        floor = np.maximum(floor, np.where(t < 0.85, 1 - t / 0.85, 0))
-    return out, floor
-
-
-def two_lobes(dirs, lobes, k=10.0):
-    """the radius along each direction of the union of spheres (centre, radius) holding the origin, smoothed"""
-    rs = []
-    for c, R in lobes:
-        c = np.asarray(c, float)
-        b = dirs @ c
-        rs.append(b + np.sqrt(np.maximum(b * b - c @ c + R * R, 0)))
-    rs = np.stack(rs)
-    return np.log(np.exp(k * rs).sum(0)) / k
-
-
-def facets(dirs, rng, n, dmin, dmax):
-    """the radius along each direction of a convex body cut by n planes"""
-    r = np.full(len(dirs), 9.0)
-    for _ in range(n):
-        nrm = rng.normal(size=3)
-        nrm /= np.linalg.norm(nrm)
-        d = rng.uniform(dmin, dmax)
-        c = dirs @ nrm
-        r = np.where(c > 1e-3, np.minimum(r, d / np.maximum(c, 1e-3)), r)
-    return r
-
-
-def rock_mesh(kind, level=6):
-    """positions, triangles, per-vertex albedo (linear RGB) and whether its shading is flat"""
-    dirs, faces = icosphere(level)
-    rng = np.random.default_rng(1000 + kind)
-    name = NAMES[kind]
-    if name == 'stony':
-        r = 1 / np.sqrt((dirs[:, 0] / 1.0) ** 2 + (dirs[:, 1] / 0.72) ** 2 + (dirs[:, 2] / 0.62) ** 2)
-        r = r * (1 + 0.26 * fbm(dirs, 11, 1.1, 3) + 0.05 * fbm(dirs, 12, 4.0, 4))
-        cr, floor = craters(dirs, rng, 16, 0.10, 0.45, 0.30)
-        base, spot = np.array([0.20, 0.175, 0.15]), np.array([0.27, 0.23, 0.18])
-    elif name == 'carbon':
-        r = 1 / np.sqrt((dirs[:, 0] / 1.0) ** 2 + (dirs[:, 1] / 0.93) ** 2 + (dirs[:, 2] / 0.88) ** 2)
-        r = r * (1 + 0.08 * fbm(dirs, 21, 1.3, 3) + 0.03 * fbm(dirs, 22, 6.0, 3))
-        cr, floor = craters(dirs, rng, 46, 0.06, 0.38, 0.32)
-        base, spot = np.array([0.075, 0.072, 0.072]), np.array([0.11, 0.105, 0.10])
-    elif name == 'iron':
-        r = two_lobes(dirs, [((0.42, 0.04, 0.0), 0.62), ((-0.46, -0.05, 0.03), 0.50)])
-        r = r * (1 + 0.07 * fbm(dirs, 31, 1.5, 3) + 0.03 * fbm(dirs, 32, 5.0, 4))
-        cr, floor = craters(dirs, rng, 12, 0.08, 0.30, 0.25)
-        base, spot = np.array([0.26, 0.12, 0.065]), np.array([0.34, 0.16, 0.07])
-    else:
-        # a broken piece: an elongated body cut flat by planes from every side
-        body = 1 / np.sqrt((dirs[:, 0] / 1.0) ** 2 + (dirs[:, 1] / 0.62) ** 2 + (dirs[:, 2] / 0.48) ** 2)
-        r = np.minimum(body, facets(dirs, rng, 18, 0.42, 0.85))
-        r = r * (1 + 0.025 * fbm(dirs, 41, 3.0, 4))
-        cr, floor = craters(dirs, rng, 5, 0.06, 0.18, 0.18)
-        base, spot = np.array([0.22, 0.23, 0.26]), np.array([0.29, 0.30, 0.33])
-    r = r + cr * 0.6
-    pos = dirs * r[:, None]
-    pos /= np.linalg.norm(pos, axis=1).max()
-    mott = 0.5 + 0.5 * fbm(dirs, 50 + kind, 2.5, 4)
-    alb = base[None] * (1 - mott[:, None]) + spot[None] * mott[:, None]
-    alb = alb * (1 - 0.30 * floor[:, None])                       # crater floors darker
-    nrm = np.zeros_like(pos)
-    fn = np.cross(pos[faces[:, 1]] - pos[faces[:, 0]], pos[faces[:, 2]] - pos[faces[:, 0]])   # (area-weighted)
-    for k in range(3):
-        np.add.at(nrm, faces[:, k], fn)
-    nrm /= np.maximum(np.linalg.norm(nrm, axis=1), 1e-12)[:, None]
-    return pos, nrm, faces, alb, name == 'shard'
+    def body(p):
+        out, a = np.full(len(p), 9.0), 0
+        for e in ends:
+            out = np.minimum(out, (p @ P[a:e].T - D[a:e]).max(1))
+            a = e
+        return out
+    # caves and bites near the surface: along random ways, where the body ends
+    def surface_point(u):
+        t = np.linspace(0, 1.6, 400)
+        d = body(t[:, None] * u[None])
+        inside = np.nonzero(d < 0)[0]
+        return t[inside[-1]] * u if len(inside) else 0.5 * u
+    cave = []
+    for _ in range(caves):
+        u = rng.normal(size=3)
+        u /= np.linalg.norm(u)
+        r = rng.uniform(0.07, 0.20)
+        cave.append((surface_point(u) * (1 + r * rng.uniform(-0.2, 0.6)), r))
+    bite_planes, bite_ends = [], []
+    for _ in range(bites):
+        u = rng.normal(size=3)
+        u /= np.linalg.norm(u)
+        centre = surface_point(u)
+        size = rng.uniform(0.14, 0.26)
+        for nrm in spread(6, rng, 0.35):
+            bite_planes.append((nrm, float(nrm @ centre + size * rng.uniform(0.6, 1.0))))
+        bite_ends.append(len(bite_planes))
+    # centred on its own middle (the mean of its inside, on a grid; it spins about it), then the scale that fits
+    # it in the unit sphere: its farthest point inside
+    g = np.linspace(-1.6, 1.6, 72)
+    pts = np.stack(np.meshgrid(g, g, g, indexing='ij'), -1).reshape(-1, 3)
+    inside = body(pts) < 0
+    for c, r in cave:
+        inside &= np.linalg.norm(pts - c, axis=1) > r
+    m = pts[inside].mean(0)
+    k = 0.96 / float(np.linalg.norm(pts[inside] - m, axis=1).max())
+    planes = [(n, (d - n @ m) * k) for n, d in planes]
+    cave = [((c - m) * k, r * k) for c, r in cave]
+    bite_planes = [(n, (d - n @ m) * k) for n, d in bite_planes]
+    return planes, ends, cave, bite_planes, bite_ends
 
 
 # --- the render ---
 
 VS = """
 #version 330
-uniform mat3 rot;
-in vec3 in_pos;
-in vec3 in_norm;
-in vec3 in_alb;
-out vec3 v_pos;
-out vec3 v_obj;
-out vec3 v_norm;
-out vec3 v_alb;
+in vec2 in_xy;
+out vec2 v_xy;
 void main() {
-    v_obj = in_pos;
-    v_pos = rot * in_pos;
-    v_norm = rot * in_norm;
-    v_alb = in_alb;
-    gl_Position = vec4(v_pos.x, v_pos.y, -v_pos.z * 0.5, 1.0);
+    v_xy = in_xy;
+    gl_Position = vec4(in_xy, 0.0, 1.0);
 }
 """
 
 FS = """
 #version 330
+#define CHUNKS @CHUNKS@
+#define FACES @FACES@
+#define CAVES @CAVES@
+#define BITES @BITES@
 uniform vec3 key;
-uniform float flat_shade;
-uniform float shine;
+uniform float holes, scale, blotch, glint, shine;
+uniform float seed, rough;
+uniform vec3 alb;
 uniform mat3 rot;
-in vec3 v_pos;
-in vec3 v_obj;
-in vec3 v_norm;
-in vec3 v_alb;
+uniform vec4 planes[CHUNKS * FACES];
+uniform int chunk_end[CHUNKS];
+uniform int nchunk;
+uniform vec4 caves[CAVES];
+uniform int ncave;
+uniform vec4 bite_planes[BITES * 6];
+uniform int bite_end[BITES];
+uniform int nbite;
+in vec2 v_xy;
 out vec4 frag;
-float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float hash(vec3 p) { return fract(sin(dot(p + seed, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+vec3 hash3(vec3 p) {
+    p += seed;
+    return fract(sin(vec3(dot(p, vec3(127.1, 311.7, 74.7)), dot(p, vec3(269.5, 183.3, 246.1)),
+                          dot(p, vec3(113.5, 271.9, 124.6)))) * 43758.5453);
+}
 float vnoise(vec3 p) {
     vec3 i = floor(p), f = fract(p);
     f = f * f * (3.0 - 2.0 * f);
     return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
                mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
 }
+float fbm(vec3 p) {
+    float s = 0.0, a = 0.5;
+    for (int k = 0; k < 5; k++) { s += a * vnoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
+    return s / 0.97;
+}
+// the bubbles: Worley cells, a share of them holes, each a bowl; rim: just outside a hole; id: the nearest cell's
+float bubbles(vec3 p, float frac, out float rim, out float id) {
+    vec3 i = floor(p), f = fract(p);
+    float pit = 0.0, near = 9.0;
+    rim = 0.0;
+    id = 0.0;
+    for (int z = -1; z <= 1; z++) for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
+        vec3 g = vec3(x, y, z), o = hash3(i + g);
+        float v = hash(i + g + 0.5), d = length(g + o - f), rad = 0.25 + 0.25 * fract(v * 7.31);
+        if (d < near) { near = d; id = v; }
+        if (v < frac) {
+            pit = max(pit, clamp(1.0 - (d / rad) * (d / rad), 0.0, 1.0));
+            rim = max(rim, clamp(1.0 - abs(d - rad * 1.1) / (rad * 0.25), 0.0, 1.0));
+        }
+    }
+    return pit;
+}
+// the surface's height: big lumps, the bubbles' pits (two sizes), fine grit
+float height(vec3 p) {
+    float rim, id, rim2, id2;
+    float h = 0.6 * fbm(p * 2.2) - 0.9 * bubbles(p * scale, holes, rim, id) - 0.5 * bubbles(p * scale * 2.3, holes, rim2, id2);
+    return h + 0.15 * vnoise(p * 55.0);
+}
+// the solid: its chunks' union, less its caves and bites, its faces a little rough; < 0 inside (a bound: safe
+// to march by)
+float sdf(vec3 p) {
+    float d = 1e9;
+    int a = 0;
+    for (int c = 0; c < nchunk; c++) {
+        float w = -1e9;
+        for (int i = a; i < chunk_end[c]; i++) w = max(w, dot(planes[i].xyz, p) - planes[i].w);
+        d = min(d, w);
+        a = chunk_end[c];
+    }
+    for (int h = 0; h < ncave; h++) d = max(d, caves[h].w - length(p - caves[h].xyz));
+    a = 0;
+    for (int b = 0; b < nbite; b++) {
+        float w = -1e9;
+        for (int i = a; i < bite_end[b]; i++) w = max(w, dot(bite_planes[i].xyz, p) - bite_planes[i].w);
+        d = max(d, -w);
+        a = bite_end[b];
+    }
+    return d + rough * (vnoise(p * 11.0) - 0.5);
+}
 void main() {
-    // a shard's faces flat (the triangle's own normal), the others smooth
-    vec3 n = flat_shade > 0.5 ? normalize(cross(dFdx(v_pos), dFdy(v_pos))) : normalize(v_norm);
-    if (flat_shade > 0.5 && n.z < 0.0) n = -n;
-    // fine grain on the surface: the normal tipped by a little noise, the albedo speckled
-    vec3 q = v_obj * 26.0;
-    vec3 g = vec3(vnoise(q + 1.7) - 0.5, vnoise(q + 9.1) - 0.5, vnoise(q + 4.3) - 0.5);
-    n = normalize(n + (1.0 - flat_shade * 0.6) * 0.45 * (rot * g));
-    float speck = 0.82 + 0.36 * vnoise(v_obj * 60.0);
+    // marched from the viewer (orthographic, +z toward them) into the turned solid
+    mat3 irot = transpose(rot);
+    float t = 0.0, d = 1.0;
+    vec3 v_obj = vec3(0.0);
+    for (int i = 0; i < 200; i++) {
+        v_obj = irot * vec3(v_xy, 1.2 - t);
+        d = sdf(v_obj);
+        if (d < 0.0006) break;
+        t += max(d * 0.7, 0.0012);
+        if (t > 2.4) break;
+    }
+    if (d >= 0.0006) discard;
+    // its faces' way (the solid's gradient: the creases stay sharp), tipped by the surface's bumps
+    float q = 0.0015;
+    vec3 gs = vec3(sdf(v_obj + vec3(q, 0, 0)) - sdf(v_obj - vec3(q, 0, 0)), sdf(v_obj + vec3(0, q, 0)) - sdf(v_obj - vec3(0, q, 0)),
+                   sdf(v_obj + vec3(0, 0, q)) - sdf(v_obj - vec3(0, 0, q)));
+    vec3 n = normalize(rot * gs);
+    vec3 v_alb = alb;
+    float e = 0.004, h0 = height(v_obj);
+    vec3 grad = vec3(height(v_obj + vec3(e, 0, 0)) - h0, height(v_obj + vec3(0, e, 0)) - h0, height(v_obj + vec3(0, 0, e)) - h0) / e;
+    vec3 gw = rot * grad;
+    n = normalize(n - 0.035 * (gw - dot(gw, n) * n));
+    // the colour: big light and dark blotches, the pits dark, their rims a little lighter, grit
+    float rim, id, rim2, id2;
+    float pit = bubbles(v_obj * scale, holes, rim, id), pit2 = bubbles(v_obj * scale * 2.3, holes, rim2, id2);
+    float b = smoothstep(0.25, 0.75, fbm(v_obj * 1.1 + 3.1));   // (big blotches, light against dark)
+    float tone = mix(1.0, 0.3 + 1.4 * b, blotch) * mix(1.0, 0.22, max(pit, pit2 * 0.8)) * (1.0 + 0.25 * max(rim, rim2))
+                 * (0.85 + 0.3 * vnoise(v_obj * 40.0));
     float diff = max(dot(n, key), 0.0);
-    float wrap = max(dot(n, normalize(vec3(0.6, -0.35, 0.5))), 0.0);   // a faint fill from the lower right
-    vec3 h = normalize(key + vec3(0.0, 0.0, 1.0));
-    float spec = pow(max(dot(n, h), 0.0), 24.0) * shine;
-    vec3 c = v_alb * speck * (0.04 + 1.9 * diff + 0.22 * wrap) + vec3(spec);
+    float wrap = max(dot(n, normalize(vec3(0.6, -0.35, 0.5))), 0.0);   // a fill from the lower right
+    vec3 hv = normalize(key + vec3(0.0, 0.0, 1.0));
+    float spec = pow(max(dot(n, hv), 0.0), 30.0) * shine;
+    vec3 c = v_alb * tone * (0.08 + 1.9 * diff + 0.35 * wrap) + vec3(spec);
+    // glints: frozen metal catching the light, a fleck where a fine cell says so
+    float gr, gid;
+    bubbles(v_obj * 22.0, 0.0, gr, gid);
+    if (gid > 1.0 - glint && diff > 0.25 && pit < 0.3)
+        c += vec3(0.9, 0.92, 1.0) * (0.6 + 0.6 * fract(gid * 53.7)) * diff;
     frag = vec4(c, 1.0);
 }
 """
@@ -278,34 +312,46 @@ def rotation(axis, angle):
     return np.eye(3) + math.sin(angle) * k + (1 - math.cos(angle)) * (k @ k)
 
 
-# each kind's tumble: the axis it turns about (screen: x right, y up, z to the viewer) and its first pose
-TUMBLES = [((0.35, 0.80, 0.48), (0.4, 1.0, 0.2), 0.7), ((0.70, 0.30, 0.65), (1.0, 0.2, 0.4), 1.9),
-           ((0.25, 0.55, 0.80), (0.2, 0.3, 1.0), 0.4), ((0.85, 0.45, 0.30), (0.5, 0.8, 0.3), 2.6)]
+# each kind's first pose (the stone as it sits before it spins: axis, angle); every one spins about the screen's
+# vertical (the user, 2026-10-24: they spin horizontally)
+POSES = [((0.4, 1.0, 0.2), 0.7), ((1.0, 0.2, 0.4), 1.9), ((0.2, 0.3, 1.0), 0.4), ((0.5, 0.8, 0.3), 2.6)]
+SPIN = (0.0, 1.0, 0.0)
 
 
 def render_kind(ctx, kind, n):
     """the kind's TUMBLE frames, n x n: linear RGB (premultiplied) and coverage"""
     import moderngl
-    pos, nrm, faces, alb, flat = rock_mesh(kind)
-    prog = ctx.program(vertex_shader=VS, fragment_shader=FS)
+    planes, ends, caves, bite_planes, bite_ends = solid(kind)
+    fs = FS.replace('@CHUNKS@', str(CHUNKS)).replace('@FACES@', str(FACES)).replace('@CAVES@', str(CAVES)) \
+        .replace('@BITES@', str(BITES))
+    prog = ctx.program(vertex_shader=VS, fragment_shader=fs)
     prog['key'].value = tuple(KEY)
-    prog['flat_shade'].value = 1.0 if flat else 0.0
-    prog['shine'].value = {'iron': 0.25, 'shard': 0.08}.get(NAMES[kind], 0.04)
-    corners = faces.reshape(-1)
-    data = np.hstack([pos[corners], nrm[corners], alb[corners]]).astype('f4')
-    vao = ctx.vertex_array(prog, [(ctx.buffer(data.tobytes()), '3f 3f 3f', 'in_pos', 'in_norm', 'in_alb')])
+    _n, _ch, _f, _cv, _b, rough, colour, holes, scale, blotch, glint, shine = KINDS[kind]
+    for name, v in (('holes', holes), ('scale', scale), ('blotch', blotch), ('glint', glint), ('shine', shine),
+                    ('seed', 17.0 * kind + 3.0), ('rough', rough)):
+        prog[name].value = v
+    prog['alb'].value = tuple(colour)
+    pad4 = lambda rows, k: [tuple(r) for r in rows] + [(0.0, 0.0, 0.0, 0.0)] * (k - len(rows))
+    prog['planes'].value = pad4([(*nrm, d) for nrm, d in planes], CHUNKS * FACES)
+    prog['chunk_end'].value = ends + [0] * (CHUNKS - len(ends))
+    prog['nchunk'].value = len(ends)
+    prog['caves'].value = pad4([(*c, r) for c, r in caves], CAVES)
+    prog['ncave'].value = len(caves)
+    prog['bite_planes'].value = pad4([(*nrm, d) for nrm, d in bite_planes], BITES * 6)
+    prog['bite_end'].value = bite_ends + [0] * (BITES - len(bite_ends))
+    prog['nbite'].value = len(bite_ends)
+    quad = np.array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1], dtype='f4')
+    vao = ctx.vertex_array(prog, [(ctx.buffer(quad.tobytes()), '2f', 'in_xy')])
     color = ctx.texture((n, n), 4, dtype='f4')
-    depth = ctx.depth_texture((n, n))
-    fbo = ctx.framebuffer(color_attachments=[color], depth_attachment=depth)
-    axis, pose_axis, pose_angle = TUMBLES[kind]
+    fbo = ctx.framebuffer(color_attachments=[color])
+    pose_axis, pose_angle = POSES[kind]
     pose = rotation(pose_axis, pose_angle)
     frames = []
     for f in range(TUMBLE):
-        rot = rotation(axis, 2 * math.pi * f / TUMBLE) @ pose
+        rot = rotation(SPIN, 2 * math.pi * f / TUMBLE) @ pose
         prog['rot'].write(rot.T.astype('f4').tobytes())
         fbo.use()
-        fbo.clear(0, 0, 0, 0, depth=1.0)
-        ctx.enable(moderngl.DEPTH_TEST)
+        fbo.clear(0, 0, 0, 0)
         vao.render(moderngl.TRIANGLES)
         img = np.frombuffer(color.read(), dtype=np.float32).reshape(n, n, 4)[::-1]
         frames.append(img.copy())
@@ -336,37 +382,73 @@ def small_sprite(col, a, table):
     return np.where(a >= cut, idx, 0).astype(np.uint8)
 
 
-def big_record(col, a, table):
-    """one big sprite's record: each row one even run (u8 left + 1, u8 length), then the runs' pixels"""
-    d = a.shape[0]
-    idx = sky.quantize(np.maximum(col, 6.0), table)
-    pad = np.zeros((d, d + 2), np.float64)
-    pad[:, 1:-1] = a
-    heads, pix, px = bytearray(), bytearray(), 0
-    for y in range(d):
-        on = np.nonzero(a[y] >= 0.5)[0]
-        if not len(on):
-            heads += bytes([0, 0])
-            continue
-        x0, x1 = int(on[0]), int(on[-1]) + 1
-        if (x1 - x0) & 1:              # (an even run: the side more covered takes the pixel)
-            left = pad[y, x0] if x0 > 0 else -1
-            right = pad[y, x1 + 1] if x1 < d else -1
-            if right >= left and x1 < d:
+RUNS = 4                    # a row's runs at most (the gaps between them clear)
+
+
+def row_runs(on):
+    """a row's runs of opaque pixels (on: bool per column, the box's width): gaps under 3 px filled, the smallest
+    filled while there are more than RUNS, each made even (a pixel more on its fuller side, or at the box's edge
+    past it); [(x0, x1)]"""
+    d = len(on)
+    xs = np.nonzero(on)[0]
+    if not len(xs):
+        return []
+    runs = []
+    start = prev = int(xs[0])
+    for x in xs[1:]:
+        x = int(x)
+        if x - prev > 3:                # (a gap of 3 px or more stays clear)
+            runs.append([start, prev + 1])
+            start = x
+        prev = x
+    runs.append([start, prev + 1])
+    while len(runs) > RUNS:
+        k = min(range(len(runs) - 1), key=lambda i: runs[i + 1][0] - runs[i][1])
+        runs[k][1] = runs[k + 1][1]
+        del runs[k + 1]
+    out = []
+    for i, (x0, x1) in enumerate(runs):
+        if (x1 - x0) & 1:
+            lo = out[-1][1] if out else -1                                  # (the room each side)
+            hi = runs[i + 1][0] if i + 1 < len(runs) else d + 1
+            if x1 + 1 < hi:
                 x1 += 1
-            elif x0 > 0:
+            elif x0 - 1 > lo:
                 x0 -= 1
             else:
-                x1 += 1                # (both at the box's edges: one past it, the box's own next column)
-        row = np.zeros(x1 - x0, np.uint8)
-        inside = idx[y, max(x0, 0):min(x1, d)]
-        row[max(x0, 0) - x0:max(x0, 0) - x0 + len(inside)] = inside
-        if x1 > d:
-            row[-1] = row[-2]
-        heads += bytes([x0 + 1, x1 - x0])
-        pix += bytes(row)
-        px += x1 - x0
-    return struct.pack('<H', d) + bytes(heads) + bytes(pix), px
+                x1 += 1                                                     # (touching the next: they join below)
+        if out and x0 <= out[-1][1]:
+            out[-1][1] = x1
+            if (out[-1][1] - out[-1][0]) & 1:
+                out[-1][1] += 1
+        else:
+            out.append([x0, x1])
+    return [(x0, x1) for x0, x1 in out]
+
+
+def big_record(col, a, table):
+    """one big sprite's record: u16 rows, u16 the run table's bytes, for each row a count and its runs (u8 left
+    + 1, u8 length: even), then the runs' pixels in turn; and how many pixels"""
+    d = a.shape[0]
+    idx = sky.quantize(np.maximum(col, 6.0), table)
+    heads, pix, px = bytearray(), bytearray(), 0
+    for y in range(d):
+        runs = row_runs(a[y] >= 0.5)
+        heads.append(len(runs))
+        for x0, x1 in runs:
+            row = np.zeros(x1 - x0, np.uint8)
+            lo, hi = max(x0, 0), min(x1, d)
+            row[lo - x0:hi - x0] = idx[y, lo:hi]
+            if x0 < 0:
+                row[0] = row[1]
+            if x1 > d:
+                row[-1] = row[-2]
+            heads += bytes([x0 + 1, x1 - x0])
+            pix += bytes(row)
+            px += x1 - x0
+    if len(heads) & 1:
+        heads.append(0)
+    return struct.pack('<HH', d, len(heads)) + bytes(heads) + bytes(pix), px
 
 
 def main():
@@ -384,7 +466,7 @@ def main():
     small_blob, index, records = bytearray(), [], bytearray()
     sheet_cells = []
     gif_frames = [[] for _ in range(TUMBLE)]
-    for kind in range(len(NAMES)):
+    for kind in range(len(KINDS)):
         frames = render_kind(ctx, kind, n)
         kpx = 0
         for f in range(SMALL_FRAMES):
@@ -406,8 +488,8 @@ def main():
                 gif_frames[f].append((kind, d, spr))
                 if f in (0, 8, 16, 24) and d == BIG_MAX:
                     sheet_cells.append(spr)
-        print('%-6s %2d frames x %d big sizes: %5.0f KB of runs' % (NAMES[kind], TUMBLE, len(sizes), kpx / 1024))
-    nk = len(NAMES)
+        print('%-6s %2d frames x %d big sizes: %5.0f KB of runs' % (KINDS[kind][0], TUMBLE, len(sizes), kpx / 1024))
+    nk = len(KINDS)
     head = b'RVROCKS\0' + struct.pack('<8H', VERSION, nk, TUMBLE, SMALL_FRAMES, SMALL, len(sizes), BIG_MAX, 0)
     head += bytes(sizes) + (b'\0' if len(sizes) & 1 else b'')
     at_index = len(head) + len(small_blob)

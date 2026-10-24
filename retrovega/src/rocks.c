@@ -58,6 +58,13 @@
 #define ZONE_PAD_KM 2000L               /* the art stays this much past the bubble's reach of a field */
 #define SHIFT_KEY 18                    /* depth keys: camera units >> 18 = 64 km a key */
 #define AIM_K 720                       /* a rock set on the player's course every AIM_K / density seconds */
+#define ROCK_KM_MIN 110L                /* a rock's radius: a quarter to a half of a fighter (the user, 2026-10-24) */
+#define ROCK_KM_SPAN 130L
+#define ROCK_SPEED_MIN 3                /* km a frame each rock flies at, toward where the player will be */
+#define ROCK_SPEED_SPAN 5
+#define AIM_KM 4000L                    /* ... off that point by up to this, across and up */
+#define FRAG_MAX 32                     /* pieces of broken rock in flight at once */
+#define FRAG_N 7                        /* a rock breaks into so many */
 
 int g_rock_xms = 1;
 static char s_file[] = "ROCKS.DAT";     /* (near: DOS wants it so) */
@@ -70,7 +77,9 @@ static int __far g_kinds, __far g_frames, __far g_sframes, __far g_small, __far 
 static unsigned char __far g_bigd[SIZES_MAX];
 static unsigned long __far g_index_at;  /* the big sprites' index: u32 offsets in the file (= in the block) */
 static unsigned char __far g_size_of[DMAX + 1], __far g_k_of[DMAX + 1];   /* a diameter's ladder size and blocks */
-static unsigned char __far g_hdr[2 + 2 * 128 + 2];   /* a record's rows, fetched */
+#define HDR_MAX (4 + 9 * 128 + 2)        /* a record's head and run table at most: 128 rows of 4 runs */
+static unsigned char __far g_hdr[HDR_MAX];   /* a record's head and run table, fetched */
+static unsigned long __far g_size;      /* ROCKS.DAT's bytes (the block's) */
 
 /* the rocks, round the player while near a field */
 static LzRock __far *__far g_r;
@@ -87,9 +96,11 @@ static short __far g_reap[ROCK_REAP], __far g_hit[ROCK_HITS];
 static LzCam __far g_cam;
 static LzRockCam __far g_rc;
 static unsigned long __far g_seed = 99991UL;
-static struct { short rock; unsigned short frame; } __far g_last_hit[4];
 static unsigned short __far g_aim_at;   /* the frame the next rock is set on the player's course */
-static long __far g_kb[3];              /* the player's knock-back off a rock: positions a frame, dying away */
+static long __far g_kb[3];              /* the player tossed aside by a rock: positions a frame, dying away */
+static LzRock __far g_frag[FRAG_MAX];   /* the pieces of the rocks the player broke */
+static unsigned char __far g_frag_life[FRAG_MAX];   /* frames each has left */
+static int __far g_nfrag;
 
 /* the fields */
 typedef struct {
@@ -143,7 +154,7 @@ static int art_in(void)
         return 0;
     }
     if (_dos_read(fd, b, 160, &got) != 0 || got < FILE_HEAD || _fmemcmp(b, s_magic, 8) != 0
-        || (b[8] | b[9] << 8) != 1) {
+        || (b[8] | b[9] << 8) != 2) {
         rv_logf(s_other);
         _dos_close(fd);
         return 0;
@@ -164,6 +175,7 @@ static int art_in(void)
     g_small_set = (unsigned)SUM_SQ(g_small);
     g_index_at = FILE_HEAD + ((g_nbig + 1) & ~1) + (unsigned long)g_kinds * g_sframes * g_small_set;
     size = lseek(fd, 0, SEEK_END);
+    g_size = size;
     g_blk = xms_alloc(size + 2, XMS_HAZARD);
     if (!g_blk) {
         rv_logf(s_mem, size / 1024);
@@ -311,18 +323,46 @@ static int in_field(const Field __far *f, long x, long y, long z)
     return (unsigned long)(dx * dx + dy * dy + dz * dz) <= (unsigned long)(r * r);
 }
 
-/* a new rock's looks: its kind (stony the most, shards the fewest), its radius (80 .. 1,000 km, the small ones
- * commoner), its tumble's phase and speed (a turn in one to four seconds, either way) */
+/* a new rock's looks: its kind, its radius (110 .. 240 km: a quarter to a half of a fighter), its spin's phase and
+ * speed (a turn in one to four seconds, either way) */
 static void rock_looks(LzRock __far *r)
 {
-    static const unsigned char __far kinds[16] = { 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3 };
-    unsigned u = rnd() % 1000, spin;
-    long km = 80L + (long)u * u / 1000 * 920L / 1000;   /* (u squared: more small than big) */
-    r->kind = (unsigned char)(kinds[rnd() & 15] % g_kinds);
-    r->r8 = (unsigned char)(km / 8);
+    unsigned spin;
+    r->kind = (unsigned char)(rnd() % g_kinds);
+    r->r8 = (unsigned char)((ROCK_KM_MIN + (long)(rnd() % (ROCK_KM_SPAN + 1))) / 8);
     r->phase = (unsigned char)(rnd() & (g_frames - 1));
     spin = 1 + rnd() % 4;
     r->spin = (signed char)((rnd() & 1) ? spin : -(int)spin);
+    r->pad = 0;
+}
+
+/* its velocity (the user, 2026-10-24): toward where the player will be when it gets there (their position and
+ * velocity, and its time to them at its speed and theirs), off that point by up to AIM_KM across and up at random
+ * when `off` (so most fly close by, now and then one straight in), at ROCK_SPEED_MIN .. +SPAN km a frame */
+static void aim(LzRock __far *r, const LfBasis *cam, int off)
+{
+    long s = ROCK_SPEED_MIN + (long)(rnd() % (ROCK_SPEED_SPAN + 1)), dx, dy, dz, d, t, a = 0, b = 0;
+    dx = (gPositionVector[0].x - r->x) / 256;   /* (km) */
+    dy = (gPositionVector[0].y - r->y) / 256;
+    dz = (gPositionVector[0].z - r->z) / 256;
+    d = (long)lf_sqrt((unsigned long)(dx * dx + dy * dy + dz * dz));
+    t = d / (s + (long)(speedLo[0] / 20) + 1);   /* frames to meet, head on */
+    dx += gVelocityVector[0].x * t / 256;
+    dy += gVelocityVector[0].y * t / 256;
+    dz += gVelocityVector[0].z * t / 256;
+    if (off) {
+        a = (long)(rnd() % (2 * AIM_KM + 1)) - AIM_KM;
+        b = (long)(rnd() % (2 * AIM_KM + 1)) - AIM_KM;
+    }
+    dx += (a * cam->right.x + b * cam->up.x) / 256;
+    dy += (a * cam->right.y + b * cam->up.y) / 256;
+    dz += (a * cam->right.z + b * cam->up.z) / 256;
+    d = (long)lf_sqrt((unsigned long)(dx * dx + dy * dy + dz * dz));
+    if (d < 1)
+        d = 1;
+    r->vx = (short)(dx * s * 256 / d);
+    r->vy = (short)(dy * s * 256 / d);
+    r->vz = (short)(dz * s * 256 / d);
 }
 
 /* a rock somewhere on the bubble's far side, about the way the player goes; 0 when that is outside the field */
@@ -345,6 +385,7 @@ static int rock_ahead(LzRock __far *r, const LfBasis *cam, const Field __far *f)
         r->z = gPositionVector[0].z + dz * R / 4096 * 256;
         if (in_field(f, r->x, r->y, r->z)) {
             rock_looks(r);
+            aim(r, cam, 1);
             return 1;
         }
     }
@@ -358,8 +399,6 @@ static int rock_on_course(LzRock __far *r, const LfBasis *cam, const Field __far
 {
     long a, b, R = ROCK_BUBBLE_KM * 15 / 16;
     rock_looks(r);
-    if (r->r8 < 30)                     /* (one worth dodging: 240 km across at least) */
-        r->r8 = (unsigned char)(30 + rnd() % 60);
     a = (long)(rnd() % 513) - 256;      /* (within half its radius of the line, either way: km) */
     b = (long)(rnd() % 513) - 256;
     a = a * r->r8 * 4 / 256;
@@ -367,11 +406,12 @@ static int rock_on_course(LzRock __far *r, const LfBasis *cam, const Field __far
     r->x = gPositionVector[0].x + cam->front.x * R + cam->right.x * a + cam->up.x * b;
     r->y = gPositionVector[0].y + cam->front.y * R + cam->right.y * a + cam->up.y * b;
     r->z = gPositionVector[0].z + cam->front.z * R + cam->right.z * a + cam->up.z * b;
+    aim(r, cam, 0);                     /* (at where the player will be, dead on) */
     return in_field(f, r->x, r->y, r->z);
 }
 
 /* the bubble filled, as the flight starts in a field: anywhere in it, in the field, not on the player */
-static void fill(const Field __far *f)
+static void fill(const Field __far *f, const LfBasis *cam)
 {
     int tries = 0;
     while (g_n < g_want_n && g_n < g_cap && tries++ < g_want_n * 4) {
@@ -388,6 +428,7 @@ static void fill(const Field __far *f)
         if (!in_field(f, r->x, r->y, r->z))
             continue;
         rock_looks(r);
+        aim(r, cam, 1);
         g_n++;
     }
 }
@@ -396,7 +437,7 @@ static void fill(const Field __far *f)
 static void rocks_time(void);
 #endif
 
-static void field_enter(int i, int filled)
+static void field_enter(int i, int filled, const LfBasis *cam)
 {
     static const char __far s_in[] = "rocks: near field %d: %d rocks kept round the player (%Fs)",
         __far s_full[] = "the bubble filled", __far s_edge[] = "they come in ahead";
@@ -418,7 +459,7 @@ static void field_enter(int i, int filled)
     g_seed = 99991UL + 7919UL * i + frameCounter;
     g_n = 0;
     if (filled)
-        fill(f);
+        fill(f, cam);
 #ifdef RV_TESTS
     {
         static int __far checked;
@@ -429,7 +470,7 @@ static void field_enter(int i, int filled)
     }
 #endif
     g_active = i;
-    g_last_hit[0].rock = g_last_hit[1].rock = g_last_hit[2].rock = g_last_hit[3].rock = -1;
+    g_nfrag = 0;
     g_aim_at = (unsigned short)(frameCounter + 30L * AIM_K / f->density);
     rv_logf(s_in, i, g_want_n, filled ? s_full : s_edge);
 }
@@ -446,6 +487,7 @@ static void field_leave(void)
     }
     g_blk = 0;
     g_active = -1;
+    g_nfrag = 0;
     fieldRockTally = 0;
 }
 
@@ -487,6 +529,30 @@ void __far __cdecl clearFields_impl(void)
 
 /* --- a frame --- */
 
+/* a rock the player hit breaks (the user, 2026-10-24): FRAG_N pieces a third its size, from about where it was,
+ * flung out every way and going on with three quarters of the player's velocity (so they are seen spreading
+ * ahead), each spinning fast, gone in one to two seconds; never hit */
+static void shatter(const LzRock __far *r)
+{
+    long R = 8L * r->r8;
+    int k;
+    for (k = 0; k < FRAG_N && g_nfrag < FRAG_MAX; k++) {
+        LzRock __far *f = &g_frag[g_nfrag];
+        long ox = (long)(rnd() % 2001) - 1000, oy = (long)(rnd() % 2001) - 1000, oz = (long)(rnd() % 2001) - 1000;
+        *f = *r;
+        f->r8 = (unsigned char)(r->r8 / 4 + 1 + rnd() % (r->r8 / 4 + 1));
+        f->x = r->x + ox * R / 1000 * 128;  /* (within half its radius) */
+        f->y = r->y + oy * R / 1000 * 128;
+        f->z = r->z + oz * R / 1000 * 128;
+        f->vx = (short)(gVelocityVector[0].x * 3 / 4 + ox * 6 * 256 / 1000);   /* (6 km a frame outward at most) */
+        f->vy = (short)(gVelocityVector[0].y * 3 / 4 + oy * 6 * 256 / 1000);
+        f->vz = (short)(gVelocityVector[0].z * 3 / 4 + oz * 6 * 256 / 1000);
+        f->phase = (unsigned char)(rnd() & (g_frames - 1));
+        f->spin = (signed char)((rnd() & 1) ? 4 : -4);
+        g_frag_life[g_nfrag++] = (unsigned char)(30 + rnd() % 30);
+    }
+}
+
 /* the player's hits: each rock within reach against their ship's hit box (a sphere against a box, in the ship's
  * frame, km) */
 static void hits(int n, const LfBasis *cam)
@@ -504,9 +570,9 @@ static void hits(int n, const LfBasis *cam)
     for (i = 0; i < n; i++) {
         LzRock __far *r = &g_r[g_hit[i]];
         long rx = (r->x - gPositionVector[0].x) / 16, ry = (r->y - gPositionVector[0].y) / 16,
-            rz = (r->z - gPositionVector[0].z) / 16, p[3], c[3], d[3], R = 8L * r->r8, d2, dl, push, px, py, pz;
+            rz = (r->z - gPositionVector[0].z) / 16, p[3], c[3], d[3], R = 8L * r->r8, d2, dl;
         unsigned long speed = speedLo[0];
-        int head, again = 0, j;
+        int head;
         unsigned short qty;
         /* into the ship's frame, km (sixteenths x 256-scaled axes / 4096) */
         p[0] = (rx * cam->right.x + ry * cam->right.y + rz * cam->right.z) / 4096;
@@ -520,52 +586,38 @@ static void hits(int n, const LfBasis *cam)
         if (d2 >= R * R)
             continue;
         dl = (long)lf_sqrt((unsigned long)d2);
-        if (dl == 0) {                  /* (its middle in the box: out along the axis it is least deep in) */
-            int a = 0;
-            for (k = 1; k < 3; k++)
-                if (h[k] - labs(p[k]) < h[a] - labs(p[a]))
-                    a = k;
-            d[0] = d[1] = d[2] = 0;
-            d[a] = p[a] < 0 ? -1 : 1;
+        if (dl < 1)
             dl = 1;
-            push = R + h[a] - labs(p[a]);
-        } else
-            push = R - dl;
-        push += 20;
-        /* the player out of it: against the way to it (d / dl), push km */
-        px = (d[0] * cam->right.x + d[1] * cam->up.x + d[2] * cam->front.x) / dl;
-        py = (d[0] * cam->right.y + d[1] * cam->up.y + d[2] * cam->front.y) / dl;
-        pz = (d[0] * cam->right.z + d[1] * cam->up.z + d[2] * cam->front.z) / dl;
-        gPositionVector[0].x -= px * push;
-        gPositionVector[0].y -= py * push;
-        gPositionVector[0].z -= pz * push;
-        /* knocked back off it (at the speed it came in at, dying away over a second), stopped: holding
-         * the course into a big rock is coming back to it slowly, not a hit a second */
-        {
-            long kb = (long)speed / 20 + 12;   /* (km a frame) */
-            g_kb[0] = -px * kb;
-            g_kb[1] = -py * kb;
-            g_kb[2] = -pz * kb;
-        }
-        for (j = 0; j < 4; j++)         /* (still against one it hit a moment ago: put out, no more harm) */
-            if (g_last_hit[j].rock == g_hit[i] && (unsigned short)(frameCounter - g_last_hit[j].frame) < 30)
-                again = 1;
-        if (again)
-            continue;
-        g_last_hit[g_hits_n & 3].rock = g_hit[i];
-        g_last_hit[g_hits_n & 3].frame = frameCounter;
         g_hits_n++;
         /* the harm: the speed it was hit at, the more head on the more, and the rock's size */
         head = (int)(d[2] * 100 / dl);
         if (head < 20)
             head = 20;
-        qty = (unsigned short)(speed * head / 100 * R / 6000 + 1);
-        speedLo[0] = 0;
+        qty = (unsigned short)(speed * head / 100 * R / 4000 + 1);
         ((RvVec3 *)tempVector)->x = gPositionVector[0].x + (c[0] * cam->right.x + c[1] * cam->up.x + c[2] * cam->front.x);
         ((RvVec3 *)tempVector)->y = gPositionVector[0].y + (c[0] * cam->right.y + c[1] * cam->up.y + c[2] * cam->front.y);
         ((RvVec3 *)tempVector)->z = gPositionVector[0].z + (c[0] * cam->right.z + c[1] * cam->up.z + c[2] * cam->front.z);
         rv_logf(s_hit, frameCounter, (int)(2 * R), r->kind, speed, head, qty);
         do_damage((unsigned short)g_f[g_active].slot, 0, qty, (unsigned short)(unsigned)tempVector);
+        /* tossed aside (the user, 2026-10-24): across the player's way, away from the rock (dead ahead: a side
+         * at random), at a speed of its own dying away over a second; theirs is kept */
+        {
+            long tx = -d[0], ty = -d[1], tl, kb = (long)speed / 20 + 30;   /* (km a frame) */
+            if (labs(tx) + labs(ty) < R / 4) {
+                tx = (rnd() & 1) ? R : -R;
+                ty = (long)(rnd() % (2 * R + 1)) - R;
+            }
+            tl = (long)lf_sqrt((unsigned long)(tx * tx + ty * ty));
+            if (tl < 1)
+                tl = 1;
+            g_kb[0] = (tx * cam->right.x + ty * cam->up.x) * kb / tl;
+            g_kb[1] = (tx * cam->right.y + ty * cam->up.y) * kb / tl;
+            g_kb[2] = (tx * cam->right.z + ty * cam->up.z) * kb / tl;
+        }
+        /* the rock breaks: its pieces fly, and it is brought round ahead (or sent out of the bubble, keep's then) */
+        shatter(r);
+        if (!rock_ahead(r, cam, &g_f[g_active]))
+            r->x = gPositionVector[0].x + 0x3000000L;
     }
 }
 
@@ -652,10 +704,10 @@ void rocks_frame(const LfBasis *cam, int cx, int cy, int focal, int y0, int y1)
         if (g_active <= -2 && near_one != -2 - g_active)
             g_active = -1;              /* (left the one whose art would not come in) */
         if (g_active == -1 && near_one >= 0)
-            field_enter(near_one, frameCounter < 2 && beyond(&g_f[near_one]) < 0);
+            field_enter(near_one, frameCounter < 2 && beyond(&g_f[near_one]) < 0, cam);
     }
     g_ns = g_nb = g_no = 0;
-    if (g_kb[0] || g_kb[1] || g_kb[2]) {    /* (a knock-back off a rock, dying away) */
+    if (g_kb[0] || g_kb[1] || g_kb[2]) {    /* (tossed aside by a rock, dying away) */
         gPositionVector[0].x += g_kb[0];
         gPositionVector[0].y += g_kb[1];
         gPositionVector[0].z += g_kb[2];
@@ -681,6 +733,17 @@ void rocks_frame(const LfBasis *cam, int cx, int cy, int focal, int y0, int y1)
     g_no = rv_rocks_place(g_r, g_n, &g_cam, &g_rc, g_o, ROCK_OUT, g_reap, g_hit);
     nreap = g_rc.nreap;
     nhit = g_rc.nclose;
+    if (g_nfrag) {                      /* the broken rocks' pieces: flown and placed the same way, never hit or reaped */
+        LzRockCam rc = g_rc;
+        rc.maxreap = rc.maxclose = 0;
+        g_no += rv_rocks_place(g_frag, g_nfrag, &g_cam, (LzRockCam __far *)&rc, g_o + g_no, ROCK_OUT - g_no, g_reap,
+                               g_hit);
+        for (i = g_nfrag - 1; i >= 0; i--)
+            if (--g_frag_life[i] == 0) {
+                g_frag[i] = g_frag[--g_nfrag];
+                g_frag_life[i] = g_frag_life[g_nfrag];
+            }
+    }
     g_t_place += clock240() - t0;
     /* small ones as balls, big ones in depth order */
     for (i = 0; i < g_no; i++) {
@@ -733,32 +796,49 @@ void rocks_draw_small(int y0, int y1, const short __far *ext, int ext_y0, int ex
 
 void rocks_draw_begin(void) { g_next = 0; }
 
+/* a big sprite's record: its head and run table into g_hdr (one move: as much as there is room for, the pixels'
+ * first bytes with it); its pixels' offset and (copy) their bytes returned */
+static unsigned long record(int kind, int frame, int s, unsigned long *len)
+{
+    unsigned char e[4];
+    unsigned long rec, n;
+    unsigned i, rows, at;
+    xms_get(g_blk, g_index_at + 4UL * (((unsigned long)kind * g_frames + frame) * g_nbig + s), e, 4);
+    rec = e[0] | ((unsigned long)e[1] << 8) | ((unsigned long)e[2] << 16) | ((unsigned long)e[3] << 24);
+    n = g_size - rec < HDR_MAX ? g_size - rec : HDR_MAX;
+    xms_get(g_blk, rec, g_hdr, n);
+    rows = g_hdr[0] | g_hdr[1] << 8;
+    if (len) {
+        for (i = 0, at = 4, *len = 0; i < rows; i++) {
+            unsigned runs = g_hdr[at++];
+            for (; runs; runs--, at += 2)
+                *len += g_hdr[at + 1];
+        }
+    }
+    return rec + 4 + (g_hdr[2] | g_hdr[3] << 8);
+}
+
 static void draw_big(const LzRockOut __far *o, int y0, int y1, const short __far *ext, int ext_y0, int run0)
 {
-    int d = o->d > DMAX ? DMAX : o->d, s = g_size_of[d], k = g_k_of[d], ds = g_bigd[s], D = ds * k, top, left, r;
-    unsigned long rec, pix, len;
-    unsigned char e[4];
+    int d = o->d > DMAX ? DMAX : o->d, s = g_size_of[d], k = g_k_of[d], ds = g_bigd[s], D = ds * k, top, left;
+    unsigned long pix, len;
     top = o->y - (D - 1) / 2;
     if (top >= y1 || top + D <= y0)
         return;
     left = o->x - (D - 1) / 2;
     if (left >= SCR_W || left + D <= 0)
         return;
-    xms_get(g_blk, g_index_at + 4UL * (((unsigned long)o->kind * g_frames + o->frame) * g_nbig + s), e, 4);
-    rec = e[0] | ((unsigned long)e[1] << 8) | ((unsigned long)e[2] << 16) | ((unsigned long)e[3] << 24);
-    xms_get(g_blk, rec, g_hdr, 2 + 2 * ds);
-    pix = rec + 2 + 2 * ds;
     if (k == 1 && g_rock_xms) {
-        rv_rocks_xms(g_hdr + 2, ds, left, top, g_handle, g_base + pix, vid_row(run0), run0, y0, y1, ext, ext_y0);
+        pix = record(o->kind, o->frame, s, 0);
+        rv_rocks_xms(g_hdr + 4, ds, left, top, g_handle, g_base + pix, vid_row(run0), run0, y0, y1, ext, ext_y0);
         g_rows += ds;
         return;
     }
     {
         unsigned long t0 = clock240();
-        for (r = 0, len = 0; r < ds; r++)
-            len += g_hdr[3 + 2 * r];
+        pix = record(o->kind, o->frame, s, &len);
         xms_get(g_blk, pix, gfx_scratch(), len);
-        rv_rocks_copy(g_hdr + 2, ds, left, top, k, gfx_scratch(), vid_row(run0), run0, y0, y1, ext, ext_y0);
+        rv_rocks_copy(g_hdr + 4, ds, left, top, k, gfx_scratch(), vid_row(run0), run0, y0, y1, ext, ext_y0);
         g_rows += ds;
         if (k > 1) {
             g_t_blocks += clock240() - t0;
@@ -812,14 +892,20 @@ typedef long long rk_wide;
 typedef long long rk_wide;
 #endif
 
-int lz_rocks_place(const LzRock LZ_FAR *r, int n, const LzCam LZ_FAR *c, LzRockCam LZ_FAR *rc, LzRockOut LZ_FAR *out,
+int lz_rocks_place(LzRock LZ_FAR *r, int n, const LzCam LZ_FAR *c, LzRockCam LZ_FAR *rc, LzRockOut LZ_FAR *out,
                    int maxout, short LZ_FAR *reap, short LZ_FAR *hitl)
 {
     int i, no = 0;
     rc->nreap = rc->nclose = 0;
     for (i = 0; i < n && no < maxout; i++, r++) {
-        long rx = r->x - c->bx, ry = r->y - c->by, rz = r->z - c->bz, X, Y, Z, xk, yk, zk, sx, sy, d;
+        long rx, ry, rz, X, Y, Z, xk, yk, zk, sx, sy, d;
         unsigned long d2, d16;
+        r->x += r->vx;                  /* (it flies a frame) */
+        r->y += r->vy;
+        r->z += r->vz;
+        rx = r->x - c->bx;
+        ry = r->y - c->by;
+        rz = r->z - c->bz;
         if ((unsigned long)rx >= 0x2000000UL || (unsigned long)ry >= 0x2000000UL || (unsigned long)rz >= 0x2000000UL) {
             if (rc->nreap < rc->maxreap)
                 reap[rc->nreap++] = (short)i;
@@ -921,25 +1007,19 @@ static void rocks_time(void)
     }
     for (w = 0; w < 3; w++) {
         int s = g_size_of[want[w]], ds = g_bigd[s], n;
-        unsigned long rec, pix, len, t0, it, dt[4];
-        unsigned char e[4];
-        xms_get(g_blk, g_index_at + 4UL * s, e, 4);
-        rec = e[0] | ((unsigned long)e[1] << 8) | ((unsigned long)e[2] << 16) | ((unsigned long)e[3] << 24);
-        xms_get(g_blk, rec, g_hdr, 2 + 2 * ds);
-        pix = rec + 2 + 2 * ds;
-        for (i = 0, len = 0; i < ds; i++)
-            len += g_hdr[3 + 2 * i];
+        unsigned long pix, len, t0, it, dt[4];
+        pix = record(0, 0, s, &len);
         n = ds < rows ? ds : rows;      /* (the rows that fall in the band) */
         for (k = 0; k < 4; k++) {
             t0 = clock240();
             it = 0;
             do {
                 if (k == 0)
-                    rv_rocks_xms(g_hdr + 2, ds, 100, 0, g_handle, g_base + pix, band, 0, 0, rows, ext, 0);
+                    rv_rocks_xms(g_hdr + 4, ds, 100, 0, g_handle, g_base + pix, band, 0, 0, rows, ext, 0);
                 else {
                     if (k == 2 || it == 0)
                         xms_get(g_blk, pix, gfx_scratch(), len);
-                    rv_rocks_copy(g_hdr + 2, ds, 100, 0, k == 3 ? 2 : 1, gfx_scratch(), band, 0, 0, rows, ext, 0);
+                    rv_rocks_copy(g_hdr + 4, ds, 100, 0, k == 3 ? 2 : 1, gfx_scratch(), band, 0, 0, rows, ext, 0);
                 }
                 it++;
             } while (clock240() - t0 < 60);
@@ -961,7 +1041,8 @@ long rocks_selftest(void)
         __far s_one[] = "rocks: rock %d: C %d,%d d %u k %d f %d z %ld; asm %d,%d d %u k %d f %d z %ld",
         __far s_ok[] = "rocks: the asm agrees with the C (%d of %d rocks on screen, %d reaped, %d close)";
 #define TN 600
-    LzRock __far *r = (LzRock __far *)_fmalloc(TN * sizeof(LzRock));
+    LzRock __far *r = (LzRock __far *)_fmalloc(2 * TN * sizeof(LzRock)), __far *r2 = r + TN;   /* (placing flies them:
+                                           the C and the asm each its own copy) */
     LzRockOut __far *oc = (LzRockOut __far *)_fmalloc(2 * ROCK_OUT * sizeof(LzRockOut)), __far *oa = oc + ROCK_OUT;
     short __far *lists = (short __far *)_fmalloc(4 * 64 * sizeof(short));
     LzRockCam rcc, rca;
@@ -987,6 +1068,10 @@ long rocks_selftest(void)
         r[i].r8 = (unsigned char)(10 + rnd() % 116);
         r[i].phase = (unsigned char)(rnd() & 31);
         r[i].spin = (signed char)((int)(rnd() % 9) - 4);
+        r[i].vx = (short)((int)(rnd() % 4001) - 2000);
+        r[i].vy = (short)((int)(rnd() % 4001) - 2000);
+        r[i].vz = (short)((int)(rnd() % 4001) - 2000);
+        r[i].pad = 0;
     }
     rcc.dk = 400UL * 65536UL * 16;
     rcc.far2 = (unsigned long)ROCK_BUBBLE_KM * ROCK_BUBBLE_KM;
@@ -998,9 +1083,10 @@ long rocks_selftest(void)
     rcc.maxreap = 64;
     rcc.maxclose = 64;
     rca = rcc;
+    _fmemcpy(r2, r, TN * sizeof(LzRock));
     nc = lz_rocks_place(r, TN, &g_cam, (LzRockCam __far *)&rcc, oc, ROCK_OUT, lists, lists + 64);
-    na = rv_rocks_place(r, TN, &g_cam, (LzRockCam __far *)&rca, oa, ROCK_OUT, lists + 128, lists + 192);
-    if (nc != na || rcc.nreap != rca.nreap || rcc.nclose != rca.nclose
+    na = rv_rocks_place(r2, TN, &g_cam, (LzRockCam __far *)&rca, oa, ROCK_OUT, lists + 128, lists + 192);
+    if (nc != na || _fmemcmp(r, r2, TN * sizeof(LzRock)) || rcc.nreap != rca.nreap || rcc.nclose != rca.nclose
         || _fmemcmp(lists, lists + 128, rcc.nreap * sizeof(short))
         || _fmemcmp(lists + 64, lists + 192, rcc.nclose * sizeof(short))) {
         rv_logf(s_n, na, rca.nreap, rca.nclose, nc, rcc.nreap, rcc.nclose);
