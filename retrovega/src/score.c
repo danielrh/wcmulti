@@ -14,9 +14,13 @@
  * the enemies have all gone, and then (or while the player calls the
  * carrier to land) the way home plays.
  *
- * Each mood has its songs (rvdata.h's RV_MUSIC_*); one plays through once
- * (music_loops), then the next takes over on the bar, round and round, the
- * place in each list kept from flight to flight. */
+ * Each mood has its songs (rvdata.h's RV_MUSIC_*). A calm song plays through
+ * once (music_loops), then the next takes over on the bar, the place in the
+ * list kept from flight to flight.  The battles are the user's lego pieces
+ * (2026-10-24): all at 140 in C, so when one has gone round, the next goes
+ * on from its loop's marker (past its intro) on the bar, as one piece; a
+ * panic comes in on the bar too, at the same tempo.  Inside an asteroid or
+ * mine field, with no fight, the rock field's song. */
 #include <stdlib.h>
 #include "rv.h"
 #include "rvhooks.h"
@@ -25,7 +29,7 @@
 #include "panel.h"
 #include "score.h"
 
-enum { CALM, FIGHT, HOME, PANIC, DEAD };
+enum { CALM, FIGHT, HOME, ROCKS, PANIC, DEAD };
 #define NEAR_KM 4000L                   /* an enemy this near starts a fight (a little beyond its hail) */
 #define STAY_KM 6000L                   /* and one this near keeps it going */
 #define GONE_KM 12000L                  /* a ship gone this near was splashed (farther: it left) */
@@ -38,14 +42,17 @@ typedef struct {
     unsigned char side[RV_MAX_SHIP_SLOT + 1];   /* a ship's side + 1 last frame, 0 no ship */
     unsigned char close[RV_MAX_SHIP_SLOT + 1];  /* and if it was within GONE_KM */
     unsigned char hostile_seen;         /* an enemy was out there this flight */
-    unsigned char next[3];              /* the next of the cruise, battle and return songs (kept between flights) */
+    unsigned char next[2];              /* the next of the cruise and battle songs (kept between flights) */
     unsigned char victory;
     unsigned char step;                 /* the test's (/scoretest) */
     unsigned long t0;
+    const RvMission __far *m;           /* its fields */
 } Score;
 static Score __far g_sc;
 
-int g_score_test;                       /* RV.EXE /scoretest: the moods by the clock, not by the flight (a test) */
+#ifdef RV_TESTS
+int g_score_test;                       /* RVT.EXE /scoretest: the moods by the clock, not by the flight (a test) */
+#endif
 
 static long km_to(int s)                /* km from the player, roughly (the largest axis and half the rest) */
 {
@@ -59,20 +66,34 @@ static int is_ship(int s)
     return maybeEntityType[s] == 0xC || maybeEntityType[s] == 0xD;
 }
 
+/* the player inside a field (asteroids or mines): its centre within its radius, roughly */
+static int in_field(void)
+{
+    long px = gPositionVector[0].x / 256, pz = gPositionVector[0].z / 256;
+    int i;
+    if (!g_sc.m)
+        return 0;
+    for (i = 0; i < (int)g_sc.m->nfield; i++) {
+        const RvField __far *f = &g_sc.m->field[i];
+        long dx = labs(f->x - px), dz = labs(f->z - pz);
+        if ((dx > dz ? dx + dz / 2 : dz + dx / 2) < f->radius)
+            return 1;
+    }
+    return 0;
+}
+
 /* the mood's song: the next of its list (the panic's is its level's) */
 static int song_for(int mood)
 {
-    int k;
     switch (mood) {
     case CALM:
-        k = g_sc.next[0]++ % 6;
-        return RV_MUSIC_CRUISE1 + k;
+        return RV_MUSIC_CRUISE1 + g_sc.next[0]++ % 6;
     case FIGHT:
-        k = g_sc.next[1]++ % 4;
-        return RV_MUSIC_BATTLE1 + k;
+        return RV_MUSIC_BATTLE1 + g_sc.next[1]++ % 3;
     case HOME:
-        k = g_sc.next[2]++ % 2;
-        return RV_MUSIC_RETURN1 + k;
+        return RV_MUSIC_HOMEWARD;
+    case ROCKS:
+        return RV_MUSIC_ROCKS;
     case PANIC:
         return RV_MUSIC_PANIC1 + g_sc.panic;
     }
@@ -81,31 +102,43 @@ static int song_for(int mood)
 
 static void play(int mood)
 {
-    static const int fade[] = { 2500, 700, 3000, 500, 200 };
+    static const int fade[] = { 2500, 700, 2000, 1500, 300, 200 };
+    int was = g_sc.mood;
     g_sc.mood = mood;
     g_sc.cue = song_for(mood);
-    music_cue_at(g_sc.cue, fade[mood], mood == FIGHT || mood == PANIC || mood == DEAD ? MUSIC_BEAT : MUSIC_BAR);
+    if (mood == FIGHT && was == FIGHT)
+        music_cue_body(g_sc.cue, 150, MUSIC_BAR);          /* the next lego piece, from its loop, as one piece */
+    else if (mood == PANIC && (was == FIGHT || was == PANIC))
+        music_cue_at(g_sc.cue, fade[mood], MUSIC_BAR);
+    else
+        music_cue_at(g_sc.cue, fade[mood], mood == FIGHT || mood == PANIC || mood == DEAD ? MUSIC_BEAT : MUSIC_BAR);
 }
 
-/* the test: calm, a fight, a victory and a tragedy over it, the three panics, the way home, dead */
+#ifdef RV_TESTS
+/* the test: calm, a rock field, a fight, the next battle chained on, a victory and a tragedy over it, the three
+ * panics, the way home, dead */
 static void test_tick(unsigned long now)
 {
-    static const unsigned char at[] = { 8, 16, 24, 34, 42, 50, 58, 70 };
+    static const unsigned char at[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 92 };
     if (g_sc.step >= sizeof at || now - g_sc.t0 < at[g_sc.step] * 240UL)
         return;
     switch (g_sc.step++) {
-    case 0: play(FIGHT); break;
-    case 1: music_sting(RV_MUSIC_VICTORY1); break;
-    case 2: music_sting(RV_MUSIC_TRAGEDY); break;
-    case 3: case 4: case 5: g_sc.panic = g_sc.step - 4; play(PANIC); break;
-    case 6: play(HOME); break;
-    case 7: play(DEAD); break;
+    case 0: play(ROCKS); break;
+    case 1: play(FIGHT); break;
+    case 2: play(FIGHT); break;
+    case 3: music_sting(RV_MUSIC_VICTORY1); break;
+    case 4: music_sting(RV_MUSIC_TRAGEDY); break;
+    case 5: case 6: case 7: g_sc.panic = g_sc.step - 6; play(PANIC); break;
+    case 8: play(HOME); break;
+    case 9: play(DEAD); break;
     }
 }
+#endif
 
-void score_start(void)
+void score_start(const RvMission __far *m)
 {
     int s;
+    g_sc.m = m;
     g_sc.step = 0;
     g_sc.t0 = clock240();
     g_sc.panic = 0;
@@ -120,10 +153,12 @@ void score_tick(int landing)
 {
     unsigned long now = clock240();
     int s, nearby = 0, staying = 0, hostiles = 0, mood = g_sc.mood, splashed = 0, lost = 0, target = g_sys.target;
+#ifdef RV_TESTS
     if (g_score_test) {
         test_tick(now);
         return;
     }
+#endif
     if (mood == DEAD)
         return;
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
@@ -167,12 +202,14 @@ void score_tick(int landing)
     else if (landing || (g_sc.hostile_seen && !hostiles)
              || (target > 0 && is_ship(target) && commAnimInfo[target] == 0 && maybeEntityType[target] == 0xD))
         mood = HOME;                    /* the mission done, or the carrier targeted, or calling it */
+    else if (in_field())
+        mood = ROCKS;
     else
         mood = CALM;
     if (mood != g_sc.mood)
         play(mood);
-    else if (mood != PANIC && music_playing() == g_sc.cue && music_loops() > 0)
-        play(mood);                     /* (the song has played through: the next of the list) */
+    else if ((mood == CALM || mood == FIGHT) && music_playing() == g_sc.cue && music_loops() > 0)
+        play(mood);                     /* (the song has gone round: the next of the list) */
     /* the stings over it all */
     if (lost)
         music_sting(RV_MUSIC_TRAGEDY);

@@ -2587,7 +2587,7 @@ void __far __cdecl flight_startup(void)
     flames_init();                      /* (its colours from that palette) */
     comms_flight_start();
     systems_start();
-    score_start();                      /* (the first calm song: the deck's launch music gives way) */
+    score_start(g_m);                   /* (the first calm song: the deck's launch music gives way) */
     g_hailed = 0;
     missiles_init();
     sky_clear();

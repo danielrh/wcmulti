@@ -32,38 +32,70 @@ them all is `src/music.c` on the OPL3 (`src/opl.c`, our bank
 
 The songs are our own, in that language. They are not copies.
 
+## The user's notes on the first draft (2026-10-24)
+
+They listened through a preview page and wrote notes at times. In short:
+
+- **Cruise:** too casual in places ("Pokemon", "bar music", "cheap"), and
+  they wanted an "orchestral feeling of wonder". Builds had no payoff.
+  Intros were too quiet for loops.
+- **The way home:** one song, looping, starting at once, never sleepy,
+  "dopamine and relief".
+- **Battle:** Contact perfect, Furball nearly. All the combat songs should
+  be "lego pieces" that loop perfectly or combine. Break and Attack was
+  repetitive, "racing music". Crossfire was lethargic, but would suit
+  asteroids.
+- **Panic:** Hull Breach must keep the fight's pace, with the damage as
+  dissonance over a fight. Systems Failing's builds need payoffs. Abandon
+  Ship should run panic, hope, dashed, hope, dashed; its speed-up was
+  "brilliant".
+- **Stings:** too happy, they want longing. The loss was not tragic
+  enough: it should be a recognisable dirge.
+- **Their question:** intro tracks and loop tracks? One file each, with a
+  loop marker the engine follows (below), does it at the tick.
+
 ## The songs (tools/flightsongs.py, CC0)
+
+The second draft:
 
 | cue | title | key, tempo | what |
 |---|---|---|---|
-| CRUISE1 | Far Shore | B minor, 96 | glass bell eighths, wide pad, sub bass, the soft lead; the vibraphone's bridge |
-| CRUISE2 | Cartographer | D dorian, 84 | harp in 3+3+2, strings, the clarinet, celesta answers |
-| CRUISE3 | Long Watch | E minor (lydian IV), 100 | electric piano eighths, ride, vibraphone, flute |
-| CRUISE4 | Quiet Instruments | C minor drone, 92 | bell ostinato, ticking hats, slow lead, celesta flurries |
-| CRUISE5 | Beacon | F# minor into A, 76 | choir, harp, horn, celesta pings, far timpani |
-| CRUISE6 | Nav Point | G dorian, 108 | saw pluck sixteenths, pizzicato, a light groove, the oboe |
-| RETURN1 | Homeward | E flat, 66 | pad, harp rolled up, the horn, strings; no drums |
-| RETURN2 | Running Lights | B flat, 72 | electric piano, flute, a shaker |
-| BATTLE1 | Contact | C minor sus pedal, 132 | synth bass eighths, pluck sixteenths, brass hits, the horn's call, timpani |
-| BATTLE2 | Break and Attack | D minor, 144 | four on the floor, saw arpeggios, synth lead, brass |
-| BATTLE3 | Furball | E phrygian, 152 | overdriven fifths, toms, the lead's riff |
-| BATTLE4 | Crossfire | G minor, 120 | orchestral: pizzicato ostinato, horn, trumpet, snare, timpani |
-| PANIC1 | Hull Breach | 96 | a low cluster, a heartbeat, ticks |
-| PANIC2 | Systems Failing | 116 | a bass climbing by half steps, brass alarms in seconds |
-| PANIC3 | Abandon Ship | 152 | sixteenths, tritones, a crash every bar |
-| VICTORY1..3 | | C, D mixolydian, B flat | brass fanfares, 3.6-4 s |
-| TRAGEDY | | A minor, 60 | the horn falling E D C, B A over Am F Dm E7b9 Am, 12 s |
+| CRUISE1 | Far Shore | B minor, 96 | bell eighths, choir, violins' tune, horn strain, bridge into the theme with the orchestra, break, a lydian payoff |
+| CRUISE2 | Deep Field | E lydian, 72 | new: strings, horn's long tune, flute, the minor turn, build, violins high with choir |
+| CRUISE3 | Long Watch | E minor, 100 | the draft's 0:58 flute passage, piano eighths, oboe, a lift into G, the passage again full |
+| CRUISE4 | Quiet Instruments | C minor drone, 92 | ticking that quickens into a payoff (horns, violins, choir), flurries, an oboe passage |
+| CRUISE5 | Beacon | F# minor into A, 76 | a string pulse, horn's tune, violins' passage, climax, lift into A |
+| CRUISE6 | Nav Point | G dorian, 108 | as the draft, looping past its intro |
+| HOMEWARD | Homeward | E flat, climax in F, 84 | the draft's two home songs in one: piano eighths, horn, strings, flute, a step up |
+| BATTLE1 | Contact | C minor sus pedal, 140 | as the draft (132), looping past its intro |
+| BATTLE2 | Break and Attack | C minor, 140 | half-time fight, riff, brass calls, a Neapolitan horn tune, a lift into A flat |
+| BATTLE3 | Furball | C phrygian, 140 | the draft's (E, 152) with a surprise: the riff up a third, then a tutti stop |
+| ROCKS | Rock Field | G minor, 120 | asteroid fields: the draft's Crossfire, a new drift in B flat, a descant |
+| PANIC1 | Hull Breach | C, 140 | Contact's drive under a cluster, alarms, the call a tritone off |
+| PANIC2 | Systems Failing | C rising, 140 | each build pays off in two wild bars |
+| PANIC3 | Abandon Ship | 152 to 196 | panic, hope, dashed, hope, dashed harder, a speed-up |
+| VICTORY1..3 | Splash One..Three | C, D, B flat | bittersweet: bVI-bVII-I, the minor plagal, a deceptive turn |
+| TRAGEDY | Wingman Lost | B flat minor, 52 | a funeral march, 14 s |
 
-There are 31 minutes in all: cruise 15.8, home 4.6, battle 7.0, panic 3.8.
+The pieces run 31 minutes once through, each going round from its loop.
+`Piece.loop_at(bar)` writes the marker. `Song.tempo(beat, bpm)` writes a
+tempo change. Abandon Ship's speed-up is timed so that its eight bars take
+seven, so the song stays whole bars at its first tempo.
 
 - **How they are written:** each song is a harmony of bars and layers over
   it (`Piece`: pad, arpeggio, bass, drums). The A sections' tunes are
   written out note by note; the later ones are written by
   `tools/compose.py` from the chords, seeded.
-- **Loops:** each is a loop, its last bar leading back into its first.
-  Everyone else's level is evened out by `level=` (dB, half on the
-  volumes, half on the velocities): the cruise songs sit at about -27 dBFS
-  RMS, the battles at -24.
+- **Loops:** a "loop" marker meta event (`FF 06 "loop"`) after a song's
+  intro is where it goes round again from. The engine plays the intro once
+  (`music.c`: the marker becomes a do-nothing event, `Song.loop` its index;
+  the ring wraps there and that event's delta is zeroed, since the last
+  bar's rest has brought it to the bar line). `oplrender` follows it too.
+  `music_cue_body` starts a song at its marker, chased, for the battles'
+  chain.
+- **Levels:** evened out by `level=` (dB, half on the volumes, half on the
+  velocities): the cruise songs sit at -25 to -27 dBFS RMS, battle and
+  panic at -23 to -25, the stings at -20.
 - **Voices:** none steals a voice: at most 18 sound at once.
 - **New patches in the bank** (on programs no room song uses): saw pluck
   (81) and short pluck (84) for the arpeggios, kept short so sixteenths
@@ -90,23 +122,28 @@ anything. The rules come in this order:
 4. **Home:** the mission is done (every enemy gone, after there were
    some), or a friendly capital ship is the target, or the player is
    calling the carrier to land (C).
-5. **Calm:** otherwise, the cruise songs.
+5. **Rocks:** inside an asteroid or mine field of the mission (its centre
+   within its radius), the rock field's song.
+6. **Calm:** otherwise, the cruise songs.
 
 On top of these:
 
 - **Stings:** an enemy that was within 12,000 km last frame and is gone
   now was splashed, and gets a victory sting, the three in turn. A friend
   gone the same way gets the tragedy.
-- **Rotation:** each mood's song plays through once (`music_loops`), and
-  then the next in its list takes over on the bar. The place in each list
-  is kept from flight to flight.
-- **Cross-fades:** calm and home fade over 2.5-3 s on the bar, a fight
-  and a panic over 0.5-0.7 s on the beat.
+- **Rotation:** a calm song plays through once (`music_loops`), and then
+  the next in its list takes over on the bar.
+- **Battle chain:** the battles are all at 140 in C. When one has gone
+  round, the next goes on from its loop marker (`music_cue_body`) on the
+  bar, with a 150 ms fade, as one piece. A panic comes in on the bar too.
+  The place in each list is kept from flight to flight.
+- **Cross-fades:** calm, home and the rocks fade over 1.5-2.5 s on the
+  bar; a fight starts over 0.7 s on the beat.
 
 **A sting** (`music_sting`, cues from `RV_MUSIC_STINGS` on, played once):
 
-1. The engine notes where the song it cuts short was: its next event, from
-   the ring's place.
+1. The engine notes where the song it cuts short was: the interrupt keeps
+   the song's event index as it takes events, chase events aside.
 2. It plays the sting.
 3. When the sting ends, it goes on with the song from there. First it plays
    the channels' programs, volumes, pans and expressions as they stood
@@ -116,15 +153,29 @@ On top of these:
 A sting over a sting goes back to the first one's song. A cue that comes
 during a sting waits for it to end.
 
-**Test:** `RV.EXE /scoretest` drives the moods by the clock instead of
-the flight: calm, a fight at 8 s, a victory sting at 16, the tragedy at
-24, the three panics at 34, 42 and 50, home at 58, dead at 70.
+**Test:** `RVT.EXE /scoretest` (the test build) drives the moods by the clock instead of
+the flight. The schedule, in seconds:
+
+| time | what |
+|---|---|
+| 0 | calm |
+| 8 | a rock field |
+| 14 | a fight |
+| 22 | the next battle chained on |
+| 30 | a victory sting |
+| 38 | the tragedy |
+| 52, 60, 68 | the three panics |
+| 78 | home |
+| 92 | dead |
+
 `tests/score.txt` flies it (`tests/run.sh tests/score.txt /scoretest
-/flight 85 /midilog`).
+/flight 105 /midilog`). The music log's lines carry the music clock
+(`@ticks`, 240 a second), so a log rendered with `oplrender --log` can be
+cut and labelled.
 
 **Memory:**
 
-- **Loading:** the 26 songs load at start-up into XMS, 70,000 events.
+- **Loading:** the 25 songs load at start-up into XMS, some 75,000 events.
   The far heap grows to read each song's tracks, and `_fheapshrink` gives
   that back to DOS afterwards: 268 KB is free after the music, where it
   was 180 KB with the seven room songs.

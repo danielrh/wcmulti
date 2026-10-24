@@ -1,4 +1,4 @@
-# the flight's music by the clock (run with /scoretest /flight 85 /midilog)
+# the flight's music by the clock (run with /scoretest /flight 105 /midilog)
 wait 10
 click
 wait 3
@@ -19,7 +19,7 @@ key esc
 wait 8
 move 478 176
 click
-wait 1500
+wait 1800
 key esc
 wait 16
 log done

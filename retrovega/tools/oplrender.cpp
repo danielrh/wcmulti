@@ -2,7 +2,8 @@
 //
 //   oplrender --bank RVOPL.BNK --mid SONG.MID --out SONG.WAV [--seconds S] [--loops N]
 //       the song through src/opl.c, the driver RV.EXE runs, on the same 240 Hz
-//       clock as the game's music engine (src/music.c), looped N times (default 1)
+//       clock as the game's music engine (src/music.c), looped N times (default 1): from the song's loop
+//       marker (a "loop" marker meta event) when it has one, as the engine does, the intro played once
 //   oplrender --log OPLLOG.BIN --out RUN.WAV
 //       the register writes the game made (RV.EXE /midilog), as they came
 //
@@ -82,14 +83,14 @@ static std::vector<unsigned char> slurp(const char *path)
 struct Ev { double us; unsigned char st, d1, d2; };
 
 // a Standard MIDI File's channel events, merged, in microseconds
-static std::vector<Ev> read_mid(const char *path, double *beat_us, int *beats_bar)
+static std::vector<Ev> read_mid(const char *path, double *beat_us, int *beats_bar, double *loop_us)
 {
     auto d = slurp(path);
     auto be32 = [&](size_t p) { return (unsigned)d[p] << 24 | d[p + 1] << 16 | d[p + 2] << 8 | d[p + 3]; };
     auto be16 = [&](size_t p) { return (unsigned)d[p] << 8 | d[p + 1]; };
     if (d.size() < 14 || memcmp(d.data(), "MThd", 4)) { fprintf(stderr, "%s: not a MIDI file\n", path); exit(1); }
     unsigned ntrk = be16(10), division = be16(12);
-    struct Raw { unsigned long tick; int order; bool tempo; unsigned long us; unsigned char st, d1, d2; };
+    struct Raw { unsigned long tick; int order; int meta; unsigned long us; unsigned char st, d1, d2; };   // meta 1 tempo, 2 loop
     std::vector<Raw> raw;
     *beats_bar = 4;
     size_t p = 8 + be32(4);
@@ -110,7 +111,8 @@ static std::vector<Ev> read_mid(const char *path, double *beat_us, int *beats_ba
                 unsigned char type = d[p++];
                 unsigned long len = 0;
                 do { c = d[p++]; len = len << 7 | (c & 0x7F); } while (c & 0x80);
-                if (type == 0x51 && len == 3) raw.push_back({tick, order++, true, (unsigned long)d[p] << 16 | d[p + 1] << 8 | d[p + 2], 0, 0, 0});
+                if (type == 0x51 && len == 3) raw.push_back({tick, order++, 1, (unsigned long)d[p] << 16 | d[p + 1] << 8 | d[p + 2], 0, 0, 0});
+                if (type == 0x06 && len == 4 && !memcmp(&d[p], "loop", 4)) raw.push_back({tick, order++, 2, 0, 0, 0, 0});
                 if (type == 0x58) *beats_bar = d[p];
                 p += len;
                 continue;
@@ -124,7 +126,7 @@ static std::vector<Ev> read_mid(const char *path, double *beat_us, int *beats_ba
             running = st;
             unsigned char d1 = d[p++], d2 = 0;
             if ((st & 0xF0) != 0xC0 && (st & 0xF0) != 0xD0) d2 = d[p++];
-            raw.push_back({tick, order++, false, 0, st, d1, d2});
+            raw.push_back({tick, order++, 0, 0, st, d1, d2});
         }
         p = end;
     }
@@ -133,10 +135,12 @@ static std::vector<Ev> read_mid(const char *path, double *beat_us, int *beats_ba
     double tempo = 500000, us = 0;
     unsigned long last = 0;
     *beat_us = 0;
+    *loop_us = 0;
     for (auto &r : raw) {
         us += (double)(r.tick - last) * tempo / division;
         last = r.tick;
-        if (r.tempo) { tempo = r.us; if (!*beat_us) *beat_us = tempo; continue; }
+        if (r.meta == 1) { tempo = r.us; if (!*beat_us) *beat_us = tempo; continue; }
+        if (r.meta == 2) { *loop_us = us; continue; }
         out.push_back({us, r.st, r.d1, r.d2});
     }
     if (!*beat_us) *beat_us = tempo;
@@ -178,19 +182,22 @@ int main(int argc, char **argv)
         static std::vector<unsigned char> keep = b;
         if (!opl_bank(keep.data(), keep.size())) { fprintf(stderr, "%s: not a bank\n", bank); return 1; }
         opl_init();
-        double beat_us;
+        double beat_us, mark_us;
         int beats_bar;
-        auto ev = read_mid(mid, &beat_us, &beats_bar);
+        auto ev = read_mid(mid, &beat_us, &beats_bar, &mark_us);
         // the engine's ticks: each event at its own tick, the loop padded to a whole bar
         double end_us = ev.empty() ? 0 : ev.back().us;
         double bar_us = beat_us * beats_bar;
         double loop_us = std::ceil(end_us / bar_us - 1e-6) * bar_us;
         long loop_ticks = (long)std::llround(loop_us * TICK_HZ / 1e6);
-        long total = seconds > 0 ? (long)(seconds * TICK_HZ) : loop_ticks * loops;
+        long mark_ticks = (long)std::llround(mark_us * TICK_HZ / 1e6);
+        size_t mark_at = 0;
+        while (mark_at < ev.size() && ev[mark_at].us < mark_us - 1e-3) mark_at++;
+        long total = seconds > 0 ? (long)(seconds * TICK_HZ) : loop_ticks + (loop_ticks - mark_ticks) * (loops - 1);
         size_t at = 0;
         long base = 0;
         for (long tick = 0; tick < total; tick++) {
-            if (tick - base >= loop_ticks) { base += loop_ticks; at = 0; }
+            if (tick - base >= loop_ticks) { base = tick - mark_ticks; at = mark_at; }   // (round again from the marker)
             opl_tick();
             while (at < ev.size() && (long)std::llround(ev[at].us * TICK_HZ / 1e6) <= tick - base) {
                 opl_event(ev[at].st, ev[at].d1, ev[at].d2);
@@ -205,6 +212,7 @@ int main(int argc, char **argv)
         render(RATE / 2);
         printf("%s: %.1f s a loop, %zu events, %lu steals, at most %d voices\n", mid, loop_us / 1e6, ev.size(),
                opl_steals, opl_peak);
+        printf("%s: loops from %.3f s\n", mid, mark_us / 1e6);
     }
     write_wav(out);
     double rms = std::sqrt(g_sum2 / std::max<size_t>(1, g_out.size()));

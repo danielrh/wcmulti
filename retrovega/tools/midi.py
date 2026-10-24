@@ -2,8 +2,8 @@
 """The music, one General MIDI loop per cue (CC0, ours).
 
     midi.py [--out build/dos]     BRIEF.MID BAR.MID LAUNCH.MID WIN.MID LOSE.MID QUARTERS.MID LOUNGE.MID,
-                                  and the flight's (tools/flightsongs.py): CRUISE1..6 RETURN1..2 BATTLE1..4
-                                  PANIC1..3 VICTORY1..3 TRAGEDY
+                                  and the flight's (tools/flightsongs.py): CRUISE1..6 HOMEWARD BATTLE1..3
+                                  ROCKS PANIC1..3 VICTORY1..3 TRAGEDY
 
 Each is a loop in a type 1 Standard MIDI File: a tempo track, then a track
 per instrument.  The four room songs are written out in tools/songs.py for
@@ -54,6 +54,16 @@ class Song:
     def __init__(self, bpm, beats=4):
         self.bpm, self.beats = bpm, beats
         self.tracks = {}
+        self.meta = []                  # (tick, bytes): tempo changes and markers, in the tempo track
+
+    def tempo(self, beat, bpm):
+        """the tempo from this beat on (src/music.c and oplrender follow it; a cue's bar is the first tempo's)"""
+        self.meta.append((int(beat * PPQ), b'\xFF\x51\x03' + int(60_000_000 / bpm).to_bytes(3, 'big')))
+
+    def marker(self, beat, text):
+        """a marker meta event: 'loop' is where the song goes round again from (its intro played once)"""
+        t = text.encode()
+        self.meta.append((int(beat * PPQ), b'\xFF\x06' + varlen(len(t)) + t))
 
     def program(self, ch, prog, vol=100):
         self.tracks.setdefault(ch, []).extend([(0, bytes((0xC0 | ch, prog))), (0, bytes((0xB0 | ch, 7, vol)))])
@@ -67,7 +77,7 @@ class Song:
     def write(self, path):
         tempo = int(60_000_000 / self.bpm)
         meta = [(0, b'\xFF\x51\x03' + tempo.to_bytes(3, 'big')),
-                (0, bytes((0xFF, 0x58, 4, self.beats, 2, 24, 8)))]
+                (0, bytes((0xFF, 0x58, 4, self.beats, 2, 24, 8)))] + self.meta
         chunks = [track(meta)] + [track(ev) for _ch, ev in sorted(self.tracks.items())]
         with open(path, 'wb') as f:
             f.write(b'MThd' + struct.pack('>LHHH', 6, 1, len(chunks), PPQ) + b''.join(chunks))
@@ -146,6 +156,9 @@ def main():
     SONGS.update(songs.SONGS)
     SONGS.update(flightsongs.SONGS)
     os.makedirs(args.out, exist_ok=True)
+    for name in os.listdir(args.out):           # (a song gone from the lists: not packed by mistake)
+        if name.upper().endswith('.MID') and name not in SONGS:
+            os.remove(os.path.join(args.out, name))
     for name, make in SONGS.items():
         make().write(os.path.join(args.out, name))
     print('%d songs in %s' % (len(SONGS), args.out))
