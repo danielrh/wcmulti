@@ -1749,7 +1749,7 @@ slag and a heap of grey and rose lava rock. Then: "the texture is much
 better but the shape needs to be more jagged and less convex... some
 overhangs etc, very sharp", with a sheet of lumpy, holed rocks.
 
-**The art** (`tools/rocks.py` -> `ROCKS.DAT`, 6.2 MB; `docs/rocks.png`).
+**The art** (`tools/rocks.py` -> `ROCKS.DAT`, 7.1 MB, 3.9 MB gzipped; `docs/rocks.png`).
 Four rocks, each a solid the fragment shader marches (a signed distance,
 no mesh: overhangs and caves come for nothing and every crease is exact):
 the union of three to five faceted chunks (each a convex polytope of 10-14
@@ -1861,10 +1861,19 @@ left + 1 and length) and then the runs' pixels, one after another.
   (rv/ROCKS.DAT.gz, listed in rv/ships.json's `files`) when the flight's
   list in `RVWANT.TXT` names it, as it fetches the ships' views.
 
-(The costs below were measured with the first rocks, 80-1,000 km and
-convex. The second round's are far smaller on screen: at 120, about 12 on
-screen and 0.8 ms a frame of big rocks in the test build, against 21 and
-4.4 ms; the sweep is to be redone.)
+The second round's rocks (110-240 km, flying at the player; the same
+40 s straight on at cruise, natively at 40,000 cycles):
+
+| density | rocks kept | on screen: small, big (most) | hits in 40 s | the whole frame |
+|---|---|---|---|---|
+| none | | | | 13.2 ms |
+| 120 (the default) | 366 | 3, 10 (22) | 3 | 14.9 ms |
+| 240 | 732 | 6, 18 (46) | 3 | 17.1 ms |
+| 400 (capped at 1,200) | 1,200 | 10, 34 (81) | 10 | 19.1 ms |
+
+Small rocks cost little to draw: more of them is cheap (1,200 kept and 81
+on screen at 19 ms of the 33). What follows was measured with the first
+rocks (80-1,000 km, convex, standing still).
 
 **Costs** at 40,000 cycles (DOSBox charges an instruction a cycle; an XMS
 move is host code, a few instructions here whatever its length). Measured
