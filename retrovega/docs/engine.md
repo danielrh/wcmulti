@@ -892,17 +892,36 @@ is 17 bands x 19 headings, 325 views (614 with an asymmetric ship's
 mirrored headings); the 30-degree sub-lattice nests in it every third
 (`sub_view`'s step is 3), so the sets' copies are unchanged and only block
 0 — now disk, not XMS — grows: the Gawain's .RV 0.69 → 1.56 MB, its .RVS
-2.5 → 3.4 MB, 38 s to render. The engine keeps `SHIP_VIEWS` (330) records
+2.5 → 3.4 MB, 38 s to render. The engine kept `SHIP_VIEWS` (330) records
 and resolves a symmetric ship's mirrored headings by index
 (`mirrored_index`: past `2 + nb * nh`) rather than by reading a record, so
-their indices may run past the table; an asymmetric set at 10 degrees
-would need 614 records and stays at 15. In the zoom scene the target
+their indices may run past the table (since 2026-10-23 the records are
+read from the set's index block in XMS, `full_view`, and there is no cap:
+an asymmetric set's 614 would fit). In the zoom scene the target
 switched view 137 times against 92 at 15 degrees (each a smaller step);
 whether the pop still reads was put to the user as a blind pair of
 videos. Recipe: `render_all.py --only GAWAIN --step 10 --out DIR`,
 `pack.py --sprites DIR --out OUT` (it skips ships not rendered there),
 `build/host/rvsprites OUT/SHIP02.RV OUT/SHIP02.RVS 0 4 3`, the two files
 copied over build/dos's after `build.sh`.
+
+**A 6-degree lattice** (tried 2026-10-23 on the Gawain, after the memory
+work; the user: "maybe the magic is 6 degrees ... it also divides 360"):
+`lattice(6)` is 29 bands x 31 headings, 901 views (1,742 with the mirrored
+headings), 2.77 x the 10-degree lattice; the 30-degree sub-lattice nests
+in it every fifth. The tools take it (pack.py knows 901 / 1742, rvsprites.c
+MAXV 1750, `render_all.py --step 6`) and the engine needed nothing: the
+view records live in XMS and the mirrored headings resolve by index (the
+zoom scene drew views 441, 623, 1417). The Gawain: 104 s to render (1,805
+files), its .RV 4.42 MB (1.58 at 10 degrees), its block set .RVH 5.82 MB
+(2.09), 5.7 MB of XMS when loaded — so six fighters at 6 degrees and three
+capitals at 10 (4 x 4 blocks) fit the ~58 MB a mission has. The cost is
+the page's: the art tarball would grow from 29 MB (19 ships) to some 85 MB,
+and makeSet takes 1.6 s a fighter in node (0.95 s for the 10-degree sharp
+set), so the switch waits on fetching a mission's ship files when it is
+flown, with a cache, rather than everything at the start; and the renders
+are committed art (the build box has no meshes), 2.8 x the repository
+growth a re-render. Capitals stay at 10 degrees either way.
 
 **The sky** (2026-10-20, the user's ask: "a generic function to blit a
 sprite at infinity at a vector ... so it will rotate with the player; that

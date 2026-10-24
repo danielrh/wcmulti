@@ -52,7 +52,7 @@
 #define NSCALES 21
 #define NROLLS 32
 #define ROLL_SIZES 4
-#define MAXV 620                       /* 17 x 19 at 10 degrees with the mirrored headings */
+#define MAXV 1750                      /* 29 x 31 at 6 degrees with the mirrored headings (1,742) */
 static const int SCALES[NSCALES] = { 256, 215, 181, 152, 128, 108, 91, 76, 64, 54, 45, 38, 32, 27, 22, 19, 16, 13, 11, 9, 8 };
 
 typedef struct { int w, h, ox, oy; unsigned char *px; } Dense;

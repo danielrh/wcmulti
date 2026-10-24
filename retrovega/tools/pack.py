@@ -140,7 +140,7 @@ def main():
         livery = (art.get(r['key']) or {}).get('livery') or 'none'
         d = os.path.join(args.sprites, r['key'])
         views = []
-        for v in range(400):
+        for v in range(1800):
             p = os.path.join(d, '%s-%s_%02d.png' % (r['key'], livery, v))
             if not os.path.exists(p):
                 break
@@ -151,9 +151,9 @@ def main():
             continue                    # not rendered into this sprites directory
         tab = wc2data.compose_container(views, flags=[0] * len(views))
         # the lattice: 37 / 62 views are 5 bands x 7 headings (30 degrees), 145 / 266 are 11 x 13 (15),
-        # 325 / 614 are 17 x 19 (10)
+        # 325 / 614 are 17 x 19 (10), 901 / 1742 are 29 x 31 (6)
         nb, nh, asym = {37: (5, 7, 0), 62: (5, 7, 1), 145: (11, 13, 0), 266: (11, 13, 1),
-                        325: (17, 19, 0), 614: (17, 19, 1)}[len(views)]
+                        325: (17, 19, 0), 614: (17, 19, 1), 901: (29, 31, 0), 1742: (29, 31, 1)}[len(views)]
         record = struct.pack('<4sBHBBHBB', b'RVSH', int(r['type'], 16), len(views), asym,
                              names.index(livery), int(r['lod0_px']), nb, nh)
         data = wc2data.compose_container([tab, record], flags=[0, 0])

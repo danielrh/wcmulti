@@ -9,9 +9,6 @@
 #include "rv.h"
 #include "lightfield.h"
 
-#define SHIP_VIEWS 330                  /* view records kept: 17 x 19 (10 degrees) with its poles; a symmetric set's
-                                           mirrored headings are not stored (their indices run past this and are drawn
-                                           as the pair's mirror image); an asymmetric set stores them: 11 x 13 at most */
 #define SHIP_SETS 8
 
 typedef struct {
