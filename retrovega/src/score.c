@@ -147,13 +147,18 @@ static void follow(int mood)
 #ifdef RV_TESTS
 /* the test (/scoretest): calm, a rock field, a fight, the next battle chained on, a victory and a tragedy over it,
  * the three panics, the way home won and lost, dead.  /scoretest 2, the remixes: calm long enough for the next
- * cruise song to follow on, a fight long enough for the battles' blocks to be cut together, the way home */
+ * cruise song to follow on, a fight long enough for the battles' blocks to be cut together, the way home.
+ * /scoretest 3, the cycle's end: calm only, from Waypoint, Starwake (in 3/4) after it, then Outbound */
 static void test_tick(unsigned long now)
 {
     static const unsigned char __far at1[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 88, 98 };
     static const unsigned char __far at2[] = { 96, 196 };
     const unsigned char __far *at = g_score_test == 2 ? at2 : at1;
     unsigned steps = g_score_test == 2 ? sizeof at2 : sizeof at1;
+    if (g_score_test == 3) {
+        follow(CALM);
+        return;
+    }
     if (g_score_test == 2 && (g_sc.mood == CALM || g_sc.mood == FIGHT))
         follow(g_sc.mood);
     if (g_sc.step >= steps || now - g_sc.t0 < at[g_sc.step] * 240UL)
@@ -187,6 +192,10 @@ void score_start(const RvMission __far *m)
     g_sc.hostile_seen = 0;
     for (s = 0; s <= RV_MAX_SHIP_SLOT; s++)
         g_sc.side[s] = g_sc.close[s] = 0;
+#ifdef RV_TESTS
+    if (g_score_test == 3)
+        g_sc.next[0] = RV_MUSIC_CRUISE7 - RV_MUSIC_CRUISE1;     /* (the test of the cycle's end) */
+#endif
     play(CALM);
 }
 

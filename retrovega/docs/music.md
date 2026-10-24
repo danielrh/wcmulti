@@ -93,6 +93,18 @@ every flight piece rewritten for the orchestra, and the score's remixes.
   rock field in bands of their own, and checks the markers: a loop marker,
   blocks on bar lines, at least four blocks in a fight, nothing just past
   a bar line. Every piece passes.
+- **The user's notes on the first full set** (2026-10-24, timestamps on
+  the listening page): Sensor Sweep's scan of note pairs with the piccolo
+  asking and the muted trumpet answering was "too childish like random
+  buttons", "too kings questy"; Deep Lane's D flat block (second pass)
+  "loses the thread... should tighten up a lot and be moodier"; Waypoint's
+  horn answers "too repetitive and happy", its stabs and its way home "too
+  happy and jumpy", "too much like a video game", while its lift "gets good
+  again"; Starwake "feels somehow repetitive with the rest... we need
+  something special here". Each of those passages is rewritten; what they
+  liked (Sensor Sweep's G major, Waypoint's lift) is kept. Starwake is in
+  3/4 now (`Piece(..., beats=3)`: the figures take the bar's length from
+  the piece).
 
 ## The songs (CC0, ours)
 
@@ -100,12 +112,12 @@ every flight piece rewritten for the orchestra, and the score's remixes.
 |---|---|---|---|
 | CRUISE1 | Outbound | E minor, G# minor, C, E; 160 | launch: the motor in octaves, a synth-brass call and horn answers, hits on 3+3+2, a break into C, the horn's tune, home to E major, a timpani riser |
 | CRUISE2 | Wide Orbit | G minor, 12/8 at 116 | wonder: harp rolling two octaves over a turning spiccato, the horn singing, round the minor-third cycle G, B flat, D flat, E minor |
-| CRUISE3 | Sensor Sweep | B minor, 152 | curious: pairs of notes spreading a semitone apart and closing over a pizzicato pedal, piccolo questions and muted-trumpet answers, then G major opens for the horn |
+| CRUISE3 | Sensor Sweep | B minor, 152 | searching: the spiccato's beam (the bass, and a line up the chord and back every two bars) under the horn's rising fourths, then G major opens for the horn's tune with the hits |
 | CRUISE4 | Far Light | D, 12/8 at 124 | heroic wonder, the brightest: strings galloping under harp sixteenths, the synth-brass fanfare lifted D, F#, B flat |
-| CRUISE5 | Deep Lane | F minor, 144 | dark wonder: low strings in 3+3+2, the horn's tune falling through D flat and G flat, D flat major for the strings, diminished piccolo flourishes |
+| CRUISE5 | Deep Lane | F minor, 144 | dark wonder: low strings in 3+3+2, the horn's tune falling through D flat and G flat, a darkest block (B flat minor to C7) of one falling figure on the 3+3+2 with the timpani, diminished piccolo flourishes |
 | CRUISE6 | Long Burn | A minor, 12/8 at 112 | anticipation: eight bars of repeated A's burning under turning chords, then the release into C# minor, the strings' tune |
-| CRUISE7 | Waypoint | C major and minor, 168 | brisk travel: the strings at a gallop, synth-brass stabs and horn answers, a lift through A flat and B flat |
-| CRUISE8 | Starwake | G, 12/8 at 120 | the big open vista: the set's biggest tune through three lifts of a major third, home under a brass fanfare |
+| CRUISE7 | Waypoint | C minor, 168 | brisk travel: the strings at a gallop over a pedal C, the brass's call in long notes over the horns' falling line, a lift through A flat and B flat, home through A flat and B flat to C |
+| CRUISE8 | Starwake | G lydian, 3/4 at 156 | the cycle's crown, the one piece in three and in a single pass: the harp's five-note figure turning over the bar, a tune that leaps a sixth, hemiolas, a hush, the last climb |
 | HOMEWARD | Homeward, won | B flat, 12/8 at 108 | harp eighths, the horn's tune, a lift into D for a brass chorale, home through B flat |
 | HOMELOSS | Homeward, lost | B flat minor, 12/8 at 92 | the same, slower and sadder: horns for the brass, no hits, sinking a major third to G flat |
 | BATTLE1 | Contact | C sus pedal into C minor, 140 | the call on the horn answered by synth brass over spiccato sixteenths, low strings and timpani |
@@ -193,6 +205,15 @@ On top of these:
   takes the switch on the bar line: the new song, its bar clock and its
   event count from there. `music_then_cue` says a follow-on is still to
   be heard until then.
+- **Whole bars** (`load_song`): a rest after a song's last event runs to
+  the end of its last bar, found in the file's ticks and timed by its
+  tempo. It used to be counted on the music clock, a beat rounded to whole
+  ticks: where the beat rounds down (116, 124, 108, 156: 156 is 92.3 ticks
+  a beat, counted 92) the bars came short and the rest grew nearly a bar
+  too long, some 2 s of silence at the loop and before a follow-on; where
+  it rounds up, a hitch of 0.2 s. The bar grid that cues wait for is kept
+  in 1/256 ticks now, so a cue on the bar lands on it however long the
+  song has played.
 - **Cross-fades:** calm, home and the rocks fade over 1.5-2.5 s on the
   bar; a fight starts over 0.7 s on the beat.
 
@@ -229,7 +250,9 @@ the flight. The schedule, in seconds:
 /flight 105 /midilog`). `/scoretest 2` is the remixes': calm for 96 s
 (Outbound's pass, then the next cruise piece spliced on), a fight for
 100 s (the battles cut together block by block), the way home
-(`tests/remix.txt`, `/flight 220`). The music log's lines carry the music clock
+(`tests/remix.txt`, `/flight 220`). `/scoretest 3` is the cycle's end:
+calm only, from Waypoint, Starwake (in 3/4) spliced on after it, then
+Outbound (`tests/cycle.txt`, `/flight 160`). The music log's lines carry the music clock
 (`@ticks`, 240 a second), so a log rendered with `oplrender --log` can be
 cut and labelled.
 

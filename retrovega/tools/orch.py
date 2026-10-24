@@ -23,8 +23,9 @@ DRUM = {'kick': 36, 'stick': 37, 'snare': 38, 'hat': 42, 'open': 46, 'ride': 51,
 class Piece(Comp):
     """a piece over a harmony of bars, each one chord symbol or two (halves)"""
 
-    def __init__(self, bpm, seed, harmony, swing=0.5, level=0.0):
+    def __init__(self, bpm, seed, harmony, swing=0.5, level=0.0, beats=4):
         super().__init__(bpm, seed, swing)
+        self.beats = beats              # a bar's beats (quarters): 4, or 3 for a piece in 3/4
         self.harm = [b.split() for b in harmony]
         self.level = level              # dB, to even the pieces out: half on the volumes, half on the velocities
 
@@ -52,13 +53,13 @@ class Piece(Comp):
         """(bar, beat, beats, symbol) for each chord of these bars"""
         for b in bars:
             syms = self.harm[b]
-            each = 4 / len(syms)
+            each = self.beats / len(syms)
             for i, sym in enumerate(syms):
                 yield b, i * each, each, sym
 
     def sym_at(self, bar, beat):
         syms = self.harm[bar]
-        return syms[min(len(syms) - 1, int(beat // (4 / len(syms))))]
+        return syms[min(len(syms) - 1, int(beat // (self.beats / len(syms))))]
 
     def pad(self, ch, bars, lo, hi, n, vel, spread=2):
         """held chords, a voicing kept on over the bar line while it does not change"""
@@ -66,13 +67,13 @@ class Piece(Comp):
         held = []
         for b, beat, dur, sym in self.segs(bars):
             vo = v.next(chord(sym))
-            start = b * 4 + beat
+            start = b * self.beats + beat
             if held and held[-1][2] == vo and abs(held[-1][0] + held[-1][1] - start) < 1e-6:
                 held[-1][1] += dur
             else:
                 held.append([start, dur, vo])
         for start, dur, vo in held:
-            self.play(ch, int(start // 4), start % 4, dur - 0.06, vo, vel, spread)
+            self.play(ch, int(start // self.beats), start % self.beats, dur - 0.06, vo, vel, spread)
 
     def arp(self, ch, bars, pattern, step, lo, hi, n, vel, accent=8, gate=0.95, reset=False):
         """the chord broken: pattern indexes its voicing (n and up: an octave higher; None: a rest)"""
@@ -135,14 +136,14 @@ class Piece(Comp):
         """a timpani roll (or any drum's): strokes every step, from v0 to v1"""
         n = max(1, int(round(beats / step)))
         for k in range(n):
-            pos = bar * 4 + beat + k * step
-            self.play(ch, int(pos // 4), pos % 4, step * 0.9, pitch, round(v0 + (v1 - v0) * k / max(1, n - 1)), 2)
+            pos = bar * self.beats + beat + k * step
+            self.play(ch, int(pos // self.beats), pos % self.beats, step * 0.9, pitch, round(v0 + (v1 - v0) * k / max(1, n - 1)), 2)
 
     def run(self, ch, bar, beat, pitches, step, vel, rise=0):
         """a run (a harp's glissando, a flurry): the pitches one after another"""
         for k, q in enumerate(pitches):
-            pos = bar * 4 + beat + k * step
-            self.play(ch, int(pos // 4), pos % 4, step * 1.5, q, vel + rise * k, 2)
+            pos = bar * self.beats + beat + k * step
+            self.play(ch, int(pos // self.beats), pos % self.beats, step * 1.5, q, vel + rise * k, 2)
 
     def crash(self, bar, beat=0, vel=84):
         self.play(9, bar, beat, .2, DRUM['crash'], vel)
@@ -156,13 +157,13 @@ class Piece(Comp):
 
     def swell(self, ch, bar, bars, note, vel=60, v0=20, v1=120):
         """the noise swell (program 119) held over these bars, rising by expression"""
-        self.play(ch, bar, 0, bars * 4 - 0.1, note, vel)
+        self.play(ch, bar, 0, bars * self.beats - 0.1, note, vel)
         self.ramp(ch, bar, bars, v0, v1)
         self.cc(ch, bar + bars - 1, self.beats - 0.04, 11, v0)
 
     def end(self, bars):
         """a silent controller at the end of the last bar: the loop is whole bars"""
-        self.cc(0, bars - 1, 3.95, 11, 127)
+        self.cc(0, bars - 1, self.beats - 0.05, 11, 127)
 
 
 def hits(*beats, v=60):
@@ -274,10 +275,11 @@ def sung(s, ch, bar0, bars, vel, longest=1.5, **swell):
                 s.play(ch, bar0 + i, float(beat), float(dur), name, vel)
 
 
-def sweep(s, ch, bar, pcs, lo, hi, vel, beats=4):
-    """a harp's sweep up through these pitch classes, lo to hi, over the bar"""
+def sweep(s, ch, bar, pcs, lo, hi, vel, beats=None):
+    """a harp's sweep up through these pitch classes, lo to hi, over the bar (or its last so many beats)"""
+    beats = beats or s.beats
     notes = [q for q in range(lo, hi + 1) if q % 12 in pcs]
     step = beats / len(notes)
     for k, q in enumerate(notes):                   # (each let go by the bar's end: a loop stays whole bars)
-        at = 4 - beats + k * step
-        s.play(ch, bar, at, min(step * 1.5, 3.98 - at), q, vel + k, 2)
+        at = s.beats - beats + k * step
+        s.play(ch, bar, at, min(step * 1.5, s.beats - 0.02 - at), q, vel + k, 2)

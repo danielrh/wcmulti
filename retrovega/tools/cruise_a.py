@@ -117,80 +117,86 @@ def wide_orbit():
     return s
 
 
-# --- CRUISE3: "Sensor Sweep" (B minor, 160 -> 152) -----------------------------------
-# Curious, searching.  Over a pizzicato pedal on B the spiccato plays pairs of notes that spread apart a
-# semitone a beat, one up and one down, and close again: a scan going out and coming back.  The piccolo asks
-# short questions and the muted trumpet answers them.  Then the search finds something: the key opens into G
-# major for the horn's tune with the hits, climbs through A minor and C to F sharp, and the scan closes again
-# over B before a snare roll and the timpani on F sharp take it round.  The second pass has the trumpet asking
-# and the piccolo answering, the harp on the scan's upper notes, the tune on the strings in octaves.
+# --- CRUISE3: "Sensor Sweep" (B minor, 152) ---------------------------------------
+# Searching.  The spiccato is the sensor's beam: the bass on every other eighth and between them a line that
+# climbs the chord and comes back every two bars, sweeping out and in; the low strings strike in 3+3+2 under it.
+# Over the beam the horn searches in long notes, a fourth up and back, the same a step higher (G minor's flat
+# six on the way), until the search
+# finds something: the key opens into G major for the horn's tune with the hits (the harp sweeping up into it),
+# climbs through A minor and C to F sharp, settles on B minor and G, and the horns swell on F sharp over a
+# timpani roll into the top.  The second pass has the search on the strings in octaves with the horn under them
+# and the hits on the accents, then on the horns in octaves over a brass chord; the tune on the strings.
+# (The user, 2026-10-24, on the first version: its scan of note pairs and the piccolo's and muted trumpet's
+# questions were "too childish like random buttons", "too kings questy"; the G major "gets good".)
 
-SS_PASS = (['Bm', 'Bm', 'Bm', 'Bm'] + ['D', 'D', 'D', 'D'] + ['G', 'D/F#', 'Em7', 'Cmaj7']
-           + ['G/B', 'Am7', 'Cmaj7#11', 'F#7'] + ['Bm', 'Bmmaj7', 'F#', 'F#'])
-SS_ASK = (['B5:1:.5 C#6:1.5:.5 D6:2:1.5', None, 'F#6:0:.5 E6:.5:.5 D6:1:.5 C#6:1.5:.5 B5:2:1.5', None],
-          ['D6:1:.5 E6:1.5:.5 F#6:2:1.5', None, 'A6:0:.5 G6:.5:.5 F#6:1:.5 E6:1.5:.5 D6:2:1.5', None])
-SS_ANSWER = ([None, 'D4:0:1 E4:1:1 F#4:2:1.5', None, 'E4:0:.5 F#4:.5:.5 G4:1:1 F#4:2:1.5'],
-             [None, 'F#4:0:1 G4:1:1 A4:2:1.5', None, 'G4:0:.5 A4:.5:.5 B4:1:1 A4:2:1.5'])
+SS_SCAN = ['Bm', 'Gmaj7/B', 'Em9/B', 'F#sus4/B F#/A#'] + ['Bm', 'D/A', 'Gm', 'Asus4 A']
+SS_FOUND = ['G', 'D/F#', 'Em7', 'Cmaj7'] + ['G/B', 'Am7', 'Cmaj7#11', 'F#7']
+SS_PASS = SS_SCAN + SS_FOUND + ['Bm', 'Gmaj7'] + ['F#', 'F#']
+SS_SEARCH = (['F#4:0:3 B4:3:1', 'B4:0:3 F#4:3:1', 'G4:0:2 E4:2:1 F#4:3:1', 'B4:0:2 A#4:2:2'],
+             ['A4:0:3 D5:3:1', 'D5:0:3 A4:3:1', 'Bb4:0:2 D5:2:1 G5:3:1', 'E5:0:2 C#5:2:2'])
+SS_SEARCH_UNDER = (['D4:0:4', 'D4:0:4', 'B3:0:4', 'F#3:0:4'], ['F#4:0:4', 'F#4:0:4', 'D4:0:4', 'C#4:0:4'])
 SS_TUNE = ['B4:0:3 D5:3:1', 'A4:0:2 F#4:2:1 A4:3:1', 'G4:0:3 B4:3:1', 'E5:0:4', 'D5:0:2 B4:2:1 D5:3:1',
            'C5:0:3 E5:3:1', 'F#5:0:2 E5:2:1 B4:3:1', 'A#4:0:4']
 SS_UNDER = ['D4:0:4', 'D4:0:4', 'E4:0:4', 'G4:0:4', 'B3:0:4', 'A3:0:4', 'G4:0:4', 'E4:0:2 C#4:2:2']
+SS_SETTLE = ['F#4:0:3 B4:3:1', 'D5:0:2 C#5:2:2']                # (C sharp over G: the lydian four)
+BEAM = [1, 2, 3, 4, 5, 4, 3, 2]                                 # the line's steps up the chord, two bars
 
 
-def wedge(s, ch, bar0, centre, vel, beats=16, closing=False):
-    """pairs of notes spreading apart from centre a semitone a beat, one up, one down, and closing again over
-    the last half (or only closing): each pair twice, in eighths"""
-    for k in range(beats):
-        w = (beats - 1 - k) if closing else (k if k < beats // 2 else beats - 1 - k)
-        b, beat = bar0 + k // 4, k % 4
-        pair = [centre] if w == 0 else [centre - w, centre + w]
-        for half in (0, 0.5):
-            s.play(ch, b, beat + half, 0.42, pair, vel + (8 if half == 0 and beat in (0, 2) else 0), 3)
-
-
-def pizz_pedal(s, ch, bars, note, vel):
-    """the pizzicato's pedal: the note low on the 3+3+2 accents, its octave between"""
-    q = p(note)
+def beam(s, ch, bars, vel, lo=47):
+    """the sensor's beam: eighths, the chord's bass on every other one, and between them a line up the chord's
+    tones and back down every two bars (BEAM), the 3+3+2 accents louder"""
     for b in bars:
-        for beat in ACC332:
-            s.play(ch, b, beat, 0.4, q, vel + (8 if beat == 0 else 0), 3)
-        for beat in (1, 2.5, 3.5):
-            s.play(ch, b, beat, 0.4, q + 12, vel - 10, 3)
+        for k in range(8):
+            beat = k * 0.5
+            c = chord(s.sym_at(b, beat))
+            q0 = in_range(c.bass, lo, lo + 11)
+            q = q0
+            if k % 2:
+                pcs = {(c.root + t) % 12 for t in c.tones}
+                ladder = [x for x in range(q0 + 1, q0 + 40) if x % 12 in pcs]
+                q = ladder[BEAM[(b % 2) * 4 + k // 2] - 1]
+            s.play(ch, b, beat, 0.42, q, vel + (10 if beat in ACC332 else 0) - (6 if k % 2 else 0), 3)
 
 
 def sensor_sweep():
     form = ['Bm', 'Bm'] + SS_PASS + SS_PASS
     s = Piece(152, 3152, form, level=0.5)
     hn, hn2, mo, lo, hi_, br, pc, tp, hp, st, bs = chans(s)
-    pz, mt = 12, 13
-    s.setup(pz, 45, 100)                            # pizzicato
-    s.setup(mt, 59, 96)                             # muted trumpet
     n = len(form)                                   # 2 + 20 + 20 = 42 bars, 66 s
     s.loop_at(2)
-    pizz_pedal(s, pz, range(0, 2), 'B2', 70)        # the intro: the pedal, then the scan starting
-    s.play(tp, 0, 0, 1, 'B1', 70)
-    wedge(s, mo, 1, 66, 54, beats=4)
+    pedal332(s, lo, range(0, 2), 80)                # the intro: the low strings, the beam coming up
+    beam(s, mo, range(0, 2), 56)
+    s.ramp(mo, 0, 2, 40, 127)
+    s.play(tp, 0, 0, 1, 'B1', 72)
+    s.roll(tp, 1, 2, 2, 'F#1', 20, 76)
     for P, second in ((2, False), (22, True)):
         S1, S2, S3, S4, S5 = P, P + 4, P + 8, P + 12, P + 16
         for b in (S1, S2, S3, S4, S5):
             s.sect(b)
-        # the scan over B, then over D: the piccolo asking, the muted trumpet answering (the other way round
-        # the second time, with the harp on the scan's upper notes)
-        pizz_pedal(s, pz, range(S1, S2), 'B2', 74)
-        pizz_pedal(s, pz, range(S2, S3), 'D3', 74)
-        wedge(s, mo, S1, 66, 58)
-        wedge(s, mo, S2, 69, 60)
-        for blk, k in ((S1, 0), (S2, 1)):
-            s.play(tp, blk, 0, 1, in_range(chord(s.sym_at(blk, 0)).root, 33, 44), 80)
-            if not second:
-                s.tune(pc, blk, SS_ASK[k], 64)
-                s.tune(mt, blk, SS_ANSWER[k], 78)
-            else:
-                s.tune(mt, blk, [up(t, -12) if t else None for t in SS_ASK[k]], 78)
-                s.tune(pc, blk, [up(t, 24) if t else None for t in SS_ANSWER[k]], 58)
-                hit(s, hi_, blk, 0, 96)
-                for j in range(16):                 # the harp on the scan's upper notes, an octave up
-                    w = j if j < 8 else 15 - j
-                    s.play(hp, blk + j // 4, j % 4, 0.9, (66 if k == 0 else 69) + w + 12, 46, 3)
+        # the search: the beam, the low strings, the horn's fourths (the strings' in octaves the second time)
+        beam(s, mo, range(S1, S3), 62)
+        pedal332(s, lo, range(S1, S3), 86)
+        s.play(tp, S1, 0, 1, 'B1', 84)
+        s.play(tp, S2, 0, 1, 'B1', 80)
+        if not second:
+            sung(s, hn, S1, SS_SEARCH[0], 80, e0=60, e1=124, e2=96)
+            sung(s, hn, S2, SS_SEARCH[1], 82, e0=60, e1=124, e2=96)
+            s.arp(hp, range(S2, S3), [0, 1, 2, 3], 0.5, 62, 86, 4, 44, gate=0.6)
+        else:
+            s.crash(S1, 0, 100)
+            for b in (S1, S1 + 2):
+                for beat in (0, 1.5):
+                    hit(s, hi_, b, beat, 104, timpani=tp if beat == 0 else None)
+            sung(s, st, S1, [up(t, 12) for t in SS_SEARCH[0]], 78, e0=60, e1=124, e2=96)
+            s.tune(st, S1, SS_SEARCH[0], 70)
+            sung(s, hn, S1, SS_SEARCH_UNDER[0], 66)
+            s.tune(hn, S2, SS_SEARCH[1], 84)
+            s.tune(hn2, S2, [up(t, -12) for t in SS_SEARCH[1]], 70)
+            s.pad(br, range(S2, S3), 54, 68, 3, 58)
+            s.arp(hp, range(S2, S3), [0, 1, 2, 3, 4, 3, 2, 1], 0.5, 62, 86, 4, 48, gate=0.6)
+            s.run(pc, S1 + 3, 2, scale_up(78, 6, (0, 2, 3, 5, 7, 8, 10), 8), 0.25, 56, 2)   # F sharp up, B minor
+        sweep(s, hp, S2 + 3, {7, 11, 2}, 43, 86, 56, beats=2)     # found: the harp up G's chord into it
+        s.roll(tp, S2 + 3, 2, 2, 'D2', 20, 90, step=0.125)
         # found: G major, the horn's tune (the strings' in octaves the second time) over broken chords
         s.arp(mo, range(S3, S5), [0, 1, 2, 3, 2, 1, 2, 3], 0.5, 50, 74, 4, 62)
         pedal332(s, lo, range(S3, S5), 90)
@@ -210,13 +216,18 @@ def sensor_sweep():
             sung(s, hn, S3, SS_UNDER, 68)
             s.run(pc, S4 + 2, 2, scale_up(83, 0, LYDIAN, 8), 0.25, 60, 2)     # C lydian, B up to B
         s.run(pc, S3 + 3, 2, scale_up(76, 0, MAJOR, 8), 0.25, 58, 2)          # E up to E over C
-        # the scan closing over B, then F sharp: the spiccato pulsing, a timpani roll and a snare roll
-        pizz_pedal(s, pz, range(S5, S5 + 2), 'B2', 74)
-        wedge(s, mo, S5, 66, 60, beats=8, closing=True)
-        s.tune(pc, S5, ['D6:0:1 C#6:1:1 B5:2:2', 'A#5:0:4'], 58)
+        # settling on B minor and G: the beam again under the strings; then the riser on F sharp
+        beam(s, mo, range(S5, S5 + 2), 62)
+        pedal332(s, lo, range(S5, S5 + 2), 88)
+        hit(s, hi_, S5, 0, 100, timpani=tp)
+        sung(s, st, S5, [up(t, 12) for t in SS_SETTLE] if second else SS_SETTLE, 80, e0=70, e1=120, e2=90)
+        if second:
+            s.tune(st, S5, SS_SETTLE, 68)
+        sung(s, hn, S5, ['D4:0:4', 'B3:0:4'], 64)
         R = S5 + 2
         pulses(s, mo, range(R, R + 2), 56)
         s.ramp(mo, R, 1, 80, 127)
+        pedal332(s, lo, range(R, R + 2), 88)
         held(s, hn, R, 0, 8, 'A#3', 72, e0=40, e1=127, e2=127)
         held(s, hn2, R, 0, 8, 'F#3', 68, e0=40, e1=127, e2=127)
         s.roll(tp, R, 0, 8, 'F#2', 6, 110)
@@ -320,21 +331,25 @@ def far_light():
 # --- CRUISE5: "Deep Lane" (F minor, 144) -----------------------------------------
 # Dark wonder: the far side.  The low strings strike in 3+3+2 while the spiccato turns round each chord's root
 # (root, third, second, root, the fifth below, root, second, third) and the harp glimmers above.  The horn's
-# tune falls through F minor's flat six (D flat) and the Neapolitan G flat, the key opens into D flat major
-# itself for the strings, and the way back is diminished: the piccolo's flourishes up and down E diminished
-# and C's flat nine, then the timpani rolls on C into the top.  The second pass has the strings in octaves with
-# the horn under them, the horns in octaves over a dark brass chord, the brass with the strings for D flat, the
-# harp in sixteenths, hits on every accent.
+# tune falls through F minor's flat six (D flat) and the Neapolitan G flat; then the darkest block, B flat
+# minor, G flat, E flat minor and C7: one falling figure on the 3+3+2 itself, the same three notes over each
+# chord, with the timpani striking under the low strings; and the way back is diminished: the piccolo's
+# flourishes up and down E diminished and C's flat nine, then the timpani rolls on C into the top.  The second
+# pass has the strings in octaves with the horn under them, the horns in octaves over a dark brass chord, the
+# falling figure on the strings with the horns an octave under, hits on every accent.
+# (The user, 2026-10-24, on that block's first version, a D flat major tune with the brass and the harp in
+# sixteenths: "it seems to lose the thread a bit.... this section should tighten up a lot and be moodier".)
 
 DL_PASS = (['Fm', 'Dbmaj7', 'Bbm9', 'Csus4 C'] + ['Fm', 'Ab/Eb', 'Db', 'Gb']
-           + ['Db', 'Bbm7', 'Gbmaj7', 'Ab7'] + ['Fm/Ab', 'Bbm', 'Edim7', 'C7b9'] + ['Db', 'Bbm6', 'Csus4', 'C'])
+           + ['Bbm', 'Gbmaj7', 'Ebm9', 'C7sus4 C7'] + ['Fm/Ab', 'Bbm', 'Edim7', 'C7b9'] + ['Db', 'Bbm6', 'Csus4', 'C'])
 DL_TUNE = [['C4:0:3 F4:3:1', 'Ab4:0:2 F4:2:1 C5:3:1', 'Db5:0:3 C5:3:1', 'F4:0:2 E4:2:2'],
            ['Ab4:0:3 G4:3:1', 'C5:0:2 Eb5:2:1 Ab4:3:1', 'F5:0:3 Db5:3:1', 'Bb4:0:4'],
-           ['F5:0:3 Ab5:3:1', 'F5:0:2 Db5:2:1 Bb4:3:1', 'Db5:0:2 F5:2:2', 'Eb5:0:2 C5:2:2'],
+           ['F5:0:1.5 Db5:1.5:1.5 Bb4:3:1', 'F5:0:1.5 Db5:1.5:1.5 Bb4:3:1', 'Gb5:0:1.5 Eb5:1.5:1.5 Bb4:3:1',
+            'F5:0:2 E5:2:2'],
            ['C5:0:4', 'Db5:0:2 Bb4:2:2', 'G4:0:2 Bb4:2:2', 'Db5:0:2 Bb4:2:1 G4:3:1'],
            ['Ab4:0:3 F4:3:1', 'G4:0:2 F4:2:1 Db4:3:1', 'F4:0:4', 'E4:0:4']]
 DL_UNDER = [['Ab3:0:4', 'F3:0:4', 'F3:0:4', 'G3:0:4'], ['C4:0:4', 'C4:0:4', 'Ab3:0:4', 'Db4:0:4'],
-            ['Ab3:0:4', 'Db4:0:4', 'Bb3:0:4', 'C4:0:4'], ['F3:0:4', 'F3:0:4', 'E3:0:4', 'E3:0:4'],
+            ['Db4:0:4', 'Bb3:0:4', 'Bb3:0:4', 'Bb3:0:4'], ['F3:0:4', 'F3:0:4', 'E3:0:4', 'E3:0:4'],
             ['F3:0:4', 'Db3:0:4', 'C3:0:4', 'C3:0:4']]
 DIM_UP = [76, 79, 82, 85, 88, 91, 94, 97]           # E diminished (C's flat nine's upper notes) up from E5
 
@@ -365,29 +380,28 @@ def deep_lane():
         B1, B2, B3, B4, B5 = P, P + 4, P + 8, P + 12, P + 16
         for b in (B1, B2, B3, B4, B5):
             s.sect(b)
-        turns(s, mo, range(B1, B3), 64)
-        turns(s, mo, range(B4, B5 + 2), 64)
-        s.arp(mo, range(B3, B4), [0, 1, 2, 3, 2, 1, 2, 3], 0.5, 53, 77, 4, 62)   # D flat: the chords broken
+        turns(s, mo, range(B1, B5 + 2), 64)
         pedal332(s, lo, range(B1, B5 + 2), 90)
-        if not second:
-            s.arp(hp, range(B1, B3), [0, 2, 1, 3], 0.5, 65, 84, 4, 42)
-            s.arp(hp, range(B3, B4), [0, 1, 2, 3, 4, 3, 2, 1], 0.5, 65, 86, 4, 50)
-            s.arp(hp, range(B4, B5 + 2), [0, 2, 1, 3], 0.5, 65, 84, 4, 42)
-        else:
-            s.arp(hp, range(B1, B3), [0, 2, 1, 3], 0.5, 65, 84, 4, 46)
-            s.arp(hp, range(B3, B4), [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 2, 3], SIXTH, 65, 86, 4, 48, accent=4)
-            s.arp(hp, range(B4, B5 + 2), [0, 2, 1, 3], 0.5, 65, 84, 4, 46)
+        s.arp(hp, range(B1, B3), [0, 2, 1, 3], 0.5, 65, 84, 4, 46 if second else 42)
+        s.arp(hp, range(B3, B4), [0, 2, 1, 3], 0.5, 58, 77, 4, 40)          # (lower and softer: the dark block)
+        s.arp(hp, range(B4, B5 + 2), [0, 2, 1, 3], 0.5, 65, 84, 4, 46 if second else 42)
         for blk in ((B1, B2, B4) if second else (B1, B2)):
             for b in (blk, blk + 2):
                 for beat in (ACC332 if second else (0, 1.5)):
                     hit(s, hi_, b, beat, 106, timpani=tp if beat == 0 else None)
-        for blk in ((B1, B3, B4) if second else (B1, B3)):
+        for blk in ((B1, B4) if second else (B1,)):
             s.crash(blk, 0, 106)
+        # the dark block: the timpani with the low strings on every 3+3+2, a hit only on its first beat
+        hit(s, hi_, B3, 0, 100)
+        for b in range(B3, B4):
+            for beat in ACC332:
+                q = in_range(chord(s.sym_at(b, beat)).root, 33, 44)
+                s.play(tp, b, beat, 0.6, q, (78 if second else 70) + (8 if beat == 0 else 0), 3)
         if not second:
             sung(s, hn, B1, DL_TUNE[0], 80)
             sung(s, hn, B2, DL_TUNE[1], 82)
             sung(s, hn2, B2, DL_UNDER[1], 62)
-            sung(s, st, B3, DL_TUNE[2], 82)
+            sung(s, st, B3, DL_TUNE[2], 82, e0=70, e1=120, e2=90)
             sung(s, hn, B3, DL_UNDER[2], 64)
             sung(s, hn, B4, DL_TUNE[3], 80)
             sung(s, st, B5, DL_TUNE[4][:2], 78)
@@ -398,8 +412,8 @@ def deep_lane():
             s.tune(hn, B2, DL_TUNE[1], 82)
             s.tune(hn2, B2, [up(t, -12) for t in DL_TUNE[1]], 70)
             s.pad(br, range(B2, B3), 53, 67, 3, 56)
-            s.tune(br, B3, DL_TUNE[2], 86)
-            sung(s, st, B3, [up(t, 12) for t in DL_TUNE[2]], 76)
+            sung(s, st, B3, DL_TUNE[2], 84, e0=70, e1=124, e2=96)
+            s.tune(hn, B3, [up(t, -12) for t in DL_TUNE[2]], 78)
             sung(s, hn, B4, DL_TUNE[3], 82)
             sung(s, hn2, B4, DL_UNDER[3], 64)
             sung(s, st, B5, [up(t, 12) for t in DL_TUNE[4][:2]], 78)

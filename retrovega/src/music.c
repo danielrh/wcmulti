@@ -61,7 +61,7 @@ typedef struct {
     XmsBlock x;                         /* the events, in XMS (resident) */
     unsigned n;
     unsigned loop;                      /* where it goes round again from: the event of its "loop" marker (0: the start) */
-    unsigned beat;                      /* music ticks a beat, from the first tempo */
+    unsigned long beat256;              /* a beat in 1/256 music ticks, from the first tempo (the bars' grid) */
     unsigned char beats_bar;
     unsigned char nsect;
     unsigned sect[MAX_SECT];            /* its "sect" markers' events: the blocks the score may cut between */
@@ -450,8 +450,8 @@ static void __interrupt __far isr(void)
             int beat_due = 0;
             g_song_ticks++;
             if (g_wait && g_next != -1) {
-                unsigned long unit = (unsigned long)s->beat * (g_wait == 2 ? s->beats_bar : 1);
-                beat_due = unit && g_song_ticks % unit == 0;
+                unsigned long unit = s->beat256 * (g_wait == 2 ? s->beats_bar : 1);
+                beat_due = unit && (g_song_ticks << 8) % unit < 256;       /* (a beat or bar line in this tick) */
                 if (beat_due) {
                     g_wait = 0;
                     g_target = 0;
@@ -629,7 +629,7 @@ static int load_song(const char *path, Song *song)
         unsigned long tempo = 500000UL, last_tick = 0, n = 0;
         double us = 0, last_us_out = 0;
         song->nsect = 0;
-        song->beat = (unsigned)((double)tempo * TICK_HZ / 1e6 + 0.5);
+        song->beat256 = (unsigned long)((double)tempo * TICK_HZ * 256 / 1e6 + 0.5);
         for (t = 0; t < ntrk; t++) {
             cur[t].p = trk[t];
             cur[t].end = trk[t] + len[t];
@@ -651,7 +651,7 @@ static int load_song(const char *path, Song *song)
             if (c->st == 0xFF) {
                 tempo = ((unsigned long)c->d1 << 16) | ((unsigned)c->d2 << 8) | c->d3;
                 if (c->tick == 0)
-                    song->beat = (unsigned)((double)tempo * TICK_HZ / 1e6 + 0.5);
+                    song->beat256 = (unsigned long)((double)tempo * TICK_HZ * 256 / 1e6 + 0.5);
             } else {
                 if (c->st == 0xFE)
                     song->loop = (unsigned)n;   /* (a do-nothing event marks it) */
@@ -678,11 +678,14 @@ static int load_song(const char *path, Song *song)
             if (!song->x)
                 break;
         } else {
-            /* a rest to the end of the last bar, so the loop keeps time */
-            unsigned long bar = (unsigned long)song->beat * song->beats_bar;
-            unsigned long total = (unsigned long)(last_us_out * TICK_HZ / 1e6 + 0.5);
+            /* a rest to the end of the last bar, so the loop keeps time: the bar line found in the file's ticks
+             * (quarters) and timed by its tempo, not on the music's clock, where a beat is seldom whole ticks (at
+             * 156 a beat is 92.3: counted as 92, the bars came short and the rest grew nearly a bar too long) */
+            unsigned long bar = (unsigned long)division * song->beats_bar;
+            unsigned long end_tick = bar ? (last_tick + bar - 1) / bar * bar : last_tick;
+            double end_us = us + (double)(end_tick - last_tick) * tempo / division;
             Ev __far *e = &g_chunk[(unsigned)(n % CHUNK_EV)];
-            e->delta = (unsigned short)(bar ? (bar - total % bar) % bar : 0);
+            e->delta = (unsigned short)(end_us > last_us_out ? (end_us - last_us_out) * TICK_HZ / 1e6 + 0.5 : 0);
             e->status = e->d1 = e->d2 = 0;
             e->flags = EV_LAST;
             n++;
@@ -739,7 +742,7 @@ int music_init(void)
             _fmemcpy(&g_song[i], &song, sizeof song);
             loaded++;
             rv_log("music: %s, %u events (round again from %u), beat %u ticks, %u to the bar", name, song.n, song.loop,
-                   song.beat, song.beats_bar);
+                   (unsigned)((song.beat256 + 128) >> 8), song.beats_bar);
         }
     }
     if (g_chunk)
@@ -799,7 +802,7 @@ static unsigned long chase(Ring *r, int song, unsigned upto)
 {
     static const unsigned char cc[3] = { 7, 10, 11 };
     const Song __far *s = &g_song[song];
-    unsigned long ticks = 0, bar = (unsigned long)s->beat * s->beats_bar;
+    unsigned long ticks = 0, bar = s->beat256 * s->beats_bar;
     unsigned char st[16][4];            /* the program, then controllers 7, 10, 11; 0xFF: never set */
     Ev buf[32];
     unsigned i, n, k, ch;
@@ -828,7 +831,7 @@ static unsigned long chase(Ring *r, int song, unsigned upto)
                 e->d2 = k ? st[ch][k] : 0;
                 r->wr++;
             }
-    return bar ? ticks % bar : 0;
+    return bar ? ((ticks << 8) % bar) >> 8 : 0;
 }
 
 /* the song (or none) into the waiting ring, from event `from` (its channels chased there), and the switch to it
