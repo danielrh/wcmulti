@@ -54,19 +54,57 @@ They listened through a preview page and wrote notes at times. In short:
 - **Their question:** intro tracks and loop tracks? One file each, with a
   loop marker the engine follows (below), does it at the tick.
 
+## The third draft (2026-10-24)
+
+The user's verdict on the second: the cruise songs "sound like elevator
+music--not memorable". They sent two cues from another score for the
+feeling of excitement and wonder, and ruled that ours stay our own: the
+cues set the feel, nothing is taken from them note for note. Their program
+numbers are MT-32 tones, not General MIDI (the user spotted it): synth
+brass, French horns, strings, timpani, piccolo, harp and an orchestra hit.
+
+Measured against ours, the cues were fast (165 in 4/4, 123 a dotted beat
+in 12/8, against our 72 to 108), lean (three parts sounding against six
+to eight), restless (a note in every fifth of a second), chromatic (15%
+of their note time outside one key: lifts of a major third, minor-third
+cycles), sparkling (one to three fast notes a second: runs, sweeps), hit
+where we had a beat or nothing, and short (30 to 40 s loops ending in a
+riser). The plan: a new set of cruise pieces in that style and the way
+home in two versions, step 1 first for the user's verdict.
+
+**Step 1 (this commit):**
+
+- **The orchestra** on programs no song used: spiccato strings (44) for
+  the eighth-note motor, an orchestra hit (55), a piccolo (72), a synth
+  brass that bites (62, 63). The crash is 6 dB down, the user's note: it
+  stood 4 dB over the mix (A-weighted).
+- **The balance** of the parts is the reference render's (the user liked
+  it), measured K-weighted against the motor: the brass 8 dB over it, the
+  horns 5, the piccolo 4, the hits 7, the crash 5. `ORCH` in
+  flightsongs.py sets each part's channel, program and level.
+- **Outbound** (CRUISE1) is the proof piece. **HOMEWARD** is rewritten in
+  the style. **HOMELOSS** is new: the user asked for a way home for a
+  mission lost, "mostly just a bit slower and sadder but otherwise same".
+- **The guardrail:** `tools/songcheck.py` measures the cruise and home
+  songs against bands from the two cues (notes a second, motor, voices,
+  off-key share, fast notes, drum hits, bars without a change) and names
+  every band a song falls outside. Outbound and the way home pass; the
+  second draft's five other cruise songs do not, and are next.
+
 ## The songs (tools/flightsongs.py, CC0)
 
-The second draft:
+The second draft, with the third's first step:
 
 | cue | title | key, tempo | what |
 |---|---|---|---|
-| CRUISE1 | Far Shore | B minor, 96 | bell eighths, choir, violins' tune, horn strain, bridge into the theme with the orchestra, break, a lydian payoff |
+| CRUISE1 | Outbound | E minor, G# minor, C, E; 160 | third draft: the motor in octaves, a synth-brass call and horn answers, hits on 3+3+2, a break into C, the horn's tune, home to E major, a timpani riser; the second pass rescored |
 | CRUISE2 | Deep Field | E lydian, 72 | new: strings, horn's long tune, flute, the minor turn, build, violins high with choir |
 | CRUISE3 | Long Watch | E minor, 100 | the draft's 0:58 flute passage, piano eighths, oboe, a lift into G, the passage again full |
 | CRUISE4 | Quiet Instruments | C minor drone, 92 | ticking that quickens into a payoff (horns, violins, choir), flurries, an oboe passage |
 | CRUISE5 | Beacon | F# minor into A, 76 | a string pulse, horn's tune, violins' passage, climax, lift into A |
 | CRUISE6 | Nav Point | G dorian, 108 | as the draft, looping past its intro |
-| HOMEWARD | Homeward | E flat, climax in F, 84 | the draft's two home songs in one: piano eighths, horn, strings, flute, a step up |
+| HOMEWARD | Homeward, won | B flat, 12/8 at 108 | third draft: harp eighths, the horn's tune, a lift into D for a brass chorale, home through B flat |
+| HOMELOSS | Homeward, lost | B flat minor, 12/8 at 92 | the same, slower and sadder: horns for the brass, no hits, sinking a major third to G flat |
 | BATTLE1 | Contact | C minor sus pedal, 140 | as the draft (132), looping past its intro |
 | BATTLE2 | Break and Attack | C minor, 140 | half-time fight, riff, brass calls, a Neapolitan horn tune, a lift into A flat |
 | BATTLE3 | Furball | C phrygian, 140 | the draft's (E, 152) with a surprise: the riff up a third, then a tutti stop |
@@ -100,7 +138,11 @@ seven, so the song stays whole bars at its first tempo.
 - **New patches in the bank** (on programs no room song uses): saw pluck
   (81) and short pluck (84) for the arpeggios, kept short so sixteenths
   stay within the 18 voices; sub bass (39); glass bell (98); the soft lead
-  on 85; noise swell (119).
+  on 85; noise swell (119). The third draft's: spiccato (44), orchestra
+  hit (55), piccolo (72), synth brass (62, 63).
+- **Whole bars:** a loop's length is its last event's bar, so nothing may
+  sound past the last bar line: a swell's last expression step and a
+  sweep's last note end inside it.
 
 **Previews:** `build/oplrender --bank build/dos/RVOPL.BNK --mid
 build/dos/CRUISE1.MID --out CRUISE1.wav` (tools/oplrender.sh builds it)
@@ -121,7 +163,12 @@ anything. The rules come in this order:
    They spawn some 5,000 km out, so a flight begins calm.
 4. **Home:** the mission is done (every enemy gone, after there were
    some), or a friendly capital ship is the target, or the player is
-   calling the carrier to land (C).
+   calling the carrier to land (C). Won, Homeward; lost, Homeward's sadder
+   twin. Which is the mission's `victoryPoints`, the fixed block's word
+   the layer carries to the other players at the mission's end, as in WC1.
+   Until combat scores a mission, game.c rolls it at launch (80% won), so
+   the way home already knows; at the end `missionVictoryCalc` is the
+   layer's moment to put the host's score in, and the debrief follows it.
 5. **Rocks:** inside an asteroid or mine field of the mission (its centre
    within its radius), the rock field's song.
 6. **Calm:** otherwise, the cruise songs.
@@ -165,8 +212,9 @@ the flight. The schedule, in seconds:
 | 30 | a victory sting |
 | 38 | the tragedy |
 | 52, 60, 68 | the three panics |
-| 78 | home |
-| 92 | dead |
+| 78 | home, won |
+| 88 | home, lost |
+| 98 | dead |
 
 `tests/score.txt` flies it (`tests/run.sh tests/score.txt /scoretest
 /flight 105 /midilog`). The music log's lines carry the music clock
@@ -175,7 +223,7 @@ cut and labelled.
 
 **Memory:**
 
-- **Loading:** the 25 songs load at start-up into XMS, some 75,000 events.
+- **Loading:** the 26 songs load at start-up into XMS, some 75,000 events.
   The far heap grows to read each song's tracks, and `_fheapshrink` gives
   that back to DOS afterwards: 268 KB is free after the music, where it
   was 180 KB with the seven room songs.

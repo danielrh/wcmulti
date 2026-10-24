@@ -183,6 +183,19 @@ PROGRAMS[85] = 'soft lead'
 patch('noise swell', [layer(op(15, 0, 15, 0, 0, 6), op(5, 8, 2, 0, 0, 5), fb=7)], programs=[119])
 patch('timpani', [layer(op(1, 34, 15, 6, 15, 6, egt=0), op(1, 0, 15, 3, 15, 4, egt=0), fb=2, vsense=12)],
       programs=[47, 115, 116, 117, 118, 119])
+# The orchestra of the cruise music's third draft (2026-10-24): the user's two reference cues were scored for
+# the MT-32's synth brass, horns, strings, timpani, piccolo, harp and orchestra hit, played lean and quick.  On
+# programs no song had used: spiccato strings for the eighth-note motor (bowed, but gone in a quarter second, so
+# octaves in eighths keep to four voices or so), an orchestra hit (a brass blat and a burst of noise, both short),
+# a piccolo (a quick chiff for runs of sixteenths) and a synth brass that bites (its brightness peaks with the
+# attack and falls back a little, the blat).
+patch('spiccato', [layer(op(1, 25, 13, 5, 15, 8, egt=0), op(1, 4, 12, 5, 15, 8, egt=0), fb=5, vsense=10)],
+      programs=[44])
+patch('orchestra hit', [layer(op(1, 16, 15, 4, 15, 7, egt=0), op(1, 6, 15, 6, 15, 7, egt=0), fb=6, vsense=8),
+                        layer(op(15, 0, 15, 0, 0, 8), op(4, 22, 15, 8, 15, 8, egt=0), fb=7)],
+      programs=[55])
+patch('piccolo', [layer(op(1, 38, 13, 2, 4, 8), op(1, 3, 13, 0, 0, 8, vib=1), fb=6, vsense=8)], programs=[72])
+patch('synth brass', [layer(op(1, 17, 11, 3, 3, 7), op(1, 2, 13, 2, 1, 7, vib=1), fb=6, vsense=10)], programs=[62, 63])
 for fam in (range(109, 112),):
     for p in fam:
         PROGRAMS.setdefault(p, 'oboe')
@@ -199,7 +212,9 @@ patch('closed hat', [layer(op(15, 0, 15, 0, 0, 11), op(8, 4, 15, 10, 15, 10, egt
 patch('open hat', [layer(op(15, 0, 15, 0, 0, 8), op(8, 10, 15, 8, 15, 8, egt=0), fb=7)], drums=[46], note=84)
 patch('ride', [layer(op(15, 12, 15, 4, 15, 6, egt=0), op(4, 10, 15, 5, 15, 6, egt=0), fb=6)], drums=[51, 59], note=77)
 patch('ride bell', [layer(op(7, 26, 15, 5, 15, 6, egt=0), op(4, 8, 15, 5, 15, 6, egt=0), fb=2)], drums=[53], note=81)
-patch('crash', [layer(op(15, 0, 15, 0, 0, 5), op(6, 6, 15, 4, 15, 5, egt=0), fb=7)], drums=[49, 57, 52, 55], note=84)
+# (the crash 6 dB under its first cut, 2026-10-24: the user found it too loud beside the rest; A-weighted it
+# stood 4 dB over the mix)
+patch('crash', [layer(op(15, 0, 15, 0, 0, 5), op(6, 14, 15, 4, 15, 5, egt=0), fb=7)], drums=[49, 57, 52, 55], note=84)
 patch('shaker', [layer(op(15, 0, 15, 0, 0, 10), op(12, 8, 12, 10, 15, 10, egt=0), fb=7)], drums=[69, 70, 82, 54], note=84)
 patch('tom', [layer(op(1, 22, 15, 9, 15, 9, egt=0), op(1, 0, 15, 6, 15, 6, egt=0), fb=2)], drums=[41, 43, 45, 47, 48, 50])
 patch('claves', [layer(op(3, 30, 15, 10, 15, 10, egt=0), op(1, 2, 15, 9, 15, 9, egt=0))], drums=[75, 76, 77], note=0)

@@ -732,8 +732,13 @@ static void launch(void)
     mission_load_assets();
     missionStarting();
     g_scene.label[0] = 0;
+    /* the mission's score, in the fixed block where the layer reads it and carries it to the other players
+     * (MissionEnd, as in WC1): nonzero won.  Until combat scores a mission it is the roll, made before the flight
+     * so the way home's music knows it (score.c) */
+    victoryPoints = (int)(rnd() % 100) < g_winrate;
     flight_fly(&g_m);
-    g_won = (int)(rnd() % 100) < g_winrate;        /* until there is combat: the roll */
+    missionVictoryCalc();                           /* the layer's moment: a wingman's score becomes the host's */
+    g_won = victoryPoints != 0;
     missionEnded();
     mission_free_assets();
     rv_log("mission %.16Fs %s", (char __far *)g_m.id, g_won ? "won" : "lost");

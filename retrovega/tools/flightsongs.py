@@ -230,89 +230,210 @@ def scale_run(lo, hi, steps):
     return [q for q in range(lo, hi + 1) if (q - lo) % 12 in steps]
 
 
-# --- CRUISE1: "Far Shore" (B minor, 96) ---------------------------------------
-# The user: the excitement at the theme's lydian peak (C#6 over G) was missing from
-# the rest; the bridge into the theme was really good, but wanted orchestral
-# undertones; they liked the break's fade out and back; the last theme built
-# anticipation with no payoff; the intro was too quiet for a loop.
-
-FS_A = ['Bmadd9', 'Gmaj7', 'Dsus2', 'Asus4 A', 'Bmadd9', 'Em9', 'Gmaj7#11', 'F#sus4 F#m']
-FS_B = ['Gmaj7', 'A6', 'Bm7', 'F#m7', 'Gmaj9', 'Em9', 'Asus4', 'Asus4 A']
-FS_C = ['Dmaj7', 'Asus2', 'Bm9', 'Gmaj9', 'D/F#', 'Em9', 'Gmaj7#11', 'F#sus4 F#']
-FS_BREAK = ['Gmaj7#11', 'Em9', 'Gmaj7', 'F#sus4 F#']
-FS_PAY = ['Gmaj7', 'A6', 'F#m7', 'Bm9', 'Gmaj7#11', 'Em9', 'F#sus4', 'F#']
-FS_OUT = ['Gmaj7', 'Em9', 'Asus4', 'F#sus4 F#']
-FS_THEME = ['F#5:0:1.5 E5:1.5:.5 D5:2:1 C#5:3:1', 'B4:0:3 D5:3:1', 'E5:0:1.5 F#5:1.5:.5 A5:2:2',
-            'G5:0:1 F#5:1:1 E5:2:2', 'F#5:0:1.5 E5:1.5:.5 D5:2:1 B4:3:1', 'D5:0:1 E5:1:1 G5:2:1 F#5:3:1',
-            'C#6:0:2 B5:2:1 A5:3:1', 'B5:0:2 A5:2:1 F#5:3:1']
-FS_THEME_B = ['D4:0:2 F#4:2:2', 'E4:0:3 C#4:3:1', 'D4:0:1.5 C#4:1.5:.5 B3:2:2', 'A3:0:3 C#4:3:1',
-              'D4:0:1 F#4:1:1 A4:2:2', 'G4:0:1.5 F#4:1.5:.5 E4:2:1 D4:3:1', 'E4:0:4', 'D4:0:2 C#4:2:2']
-FS_PAY_TUNE = ['B5:0:1.5 A5:1.5:.5 B5:2:1 D6:3:1', 'E6:0:3 C#6:3:1', 'C#6:0:1.5 B5:1.5:.5 A5:2:1 F#5:3:1',
-               'D6:0:2 C#6:2:1 B5:3:1', 'C#6:0:1 D6:1:1 E6:2:2', 'F#6:0:3 E6:3:1', 'B5:0:2 C#6:2:2', 'A#5:0:4']
-FS_PAY_HORN = ['G4:0:2 B4:2:2', 'C#5:0:4', 'A4:0:4', 'F#4:0:2 B4:2:2', 'G4:0:4', 'G4:0:2 B4:2:2',
-               'B4:0:2 C#5:2:2', 'A#4:0:4']
+# --- the third draft's orchestra (2026-10-24) ----------------------------------------
+# The user: the cruise songs "sound like elevator music--not memorable".  The two cues they sent for the feeling
+# (excitement and wonder) are fast, lean and restless: a motor of eighths under a tune in long notes, three to
+# five parts each with one job, keys that lift by thirds, hits on 3+3+2 where a groove would be, piccolo runs and
+# harp sweeps, a riser into the loop; scored for the MT-32's small orchestra.  Ours are original: the techniques
+# only (docs/music.md).  The parts' levels match the balance of those cues on our bank, measured K-weighted: the
+# brass 8 dB over the motor, the horns 5, the piccolo 4, the hits 7, the crash 5.
+ORCH = {'horn': (0, 60, 100), 'motor': (1, 44, 104), 'hit': (2, 55, 120), 'low': (3, 44, 112),
+        'brass': (4, 62, 92), 'horn2': (5, 60, 96), 'piccolo': (6, 72, 88), 'timpani': (7, 47, 100),
+        'harp': (8, 46, 92), 'strings': (10, 48, 100), 'bass': (11, 48, 100)}
+ACC332 = (0, 1.5, 3)                    # 3+3+2 in eighths: where a bar's accents fall
 
 
-def far_shore():
-    form = FS_A[:2] + FS_A + FS_A + FS_B + FS_C + FS_A + FS_BREAK + FS_PAY + FS_OUT
-    s = Piece(96, 101, form)
-    s.setup(0, 52, 72)          # choir (the soft pad)
-    s.setup(1, 98, 84)          # glass bell, the pulse
-    s.setup(2, 39, 100)         # sub bass
-    s.setup(3, 48, 92)          # violins
-    s.setup(4, 73, 84)          # flute
-    s.setup(5, 60, 92)          # horn
-    s.setup(6, 47, 90)          # timpani
-    s.setup(7, 48, 62)          # strings, the chords
-    s.setup(8, 119, 60)         # noise swell
-    s.setup(10, 46, 80)         # harp
-    n = len(form)                                   # 2 + 8 x 5 + 4 + 8 + 4 = 58
+def orchestra(s):
+    """the parts on their channels at their levels, the drums' channel full: {part: channel}"""
+    for ch, prog, vol in ORCH.values():
+        s.setup(ch, prog, vol)
+    s.setup(9, 0, 127)
+    return {name: ch for name, (ch, _prog, _vol) in ORCH.items()}
+
+
+def in_range(pc, lo, hi):
+    q = lo + (pc - lo) % 12
+    return q if q <= hi else q - 12
+
+
+def octaves(s, ch, bars, vel, lo=40, turn=None):
+    """the motor: eighths leaping between the chord's bass and the octaves over it, the off-beats turning
+    (octave, octave, tenth, ninth), the 3+3+2 accents louder"""
+    for b in bars:
+        for k in range(8):
+            beat = k * 0.5
+            c = chord(s.sym_at(b, beat))
+            low = in_range(c.bass, lo, lo + 11)
+            if k % 2 == 0:
+                q = low
+            else:
+                third = 3 if 3 in c.tones else 4
+                q = low + (turn or (12, 12, 12 + third, 14))[k // 2]
+            s.play(ch, b, beat, 0.4, q, vel + (12 if beat in ACC332 else 0), 3)
+
+
+def pulses(s, ch, bars, vel, lo=48):
+    """eighths on the chord's bass in octaves, all alike: a call to action"""
+    for b in bars:
+        for k in range(8):
+            q = in_range(chord(s.sym_at(b, k * 0.5)).bass, lo, lo + 11)
+            s.play(ch, b, k * 0.5, 0.35, [q, q + 12], vel + (8 if k % 2 == 0 else 0), 3)
+
+
+def pedal332(s, ch, bars, vel, lo=28):
+    """the low strings' strokes on the 3+3+2 accents, on the chord's bass"""
+    for b in bars:
+        for beat in ACC332:
+            q = in_range(chord(s.sym_at(b, beat)).bass, lo, lo + 11)
+            s.play(ch, b, beat, 1.2 if beat < 3 else 0.8, q, vel + (8 if beat == 0 else 0), 3)
+
+
+def hit(s, ch, bar, beat, vel, kick=118, timpani=None):
+    """the kick and the orchestra hit together, on the chord's root (and the timpani's channel too, given)"""
+    root = chord(s.sym_at(bar, beat)).root
+    s.play(9, bar, beat, 0.2, DRUM['kick'], kick, 3)
+    s.play(ch, bar, beat, 0.4, in_range(root, 60, 71), vel, 3)
+    if timpani is not None:
+        s.play(timpani, bar, beat, 0.5, in_range(root, 33, 44), vel - 16, 3)
+
+
+def held(s, ch, bar, beat, dur, pitch, vel, e0=60, e1=127, e2=96):
+    """a long note that swells: expression from e0 up to e1 over its first half, down to e2 by its end"""
+    s.play(ch, bar, beat, dur, pitch, vel)
+    steps = max(2, int(dur * 4))
+    for k in range(steps + 1):
+        x = k / steps
+        e = e0 + (e1 - e0) * x * 2 if x <= .5 else e1 + (e2 - e1) * (x - .5) * 2
+        pos = bar * s.beats + beat + dur * x - (0.05 if k == steps else 0)   # (the last inside the note: a loop
+        s.cc(ch, int(pos // s.beats), pos % s.beats, 11, round(e))           # stays whole bars)
+
+
+def sung(s, ch, bar0, bars, vel, longest=1.5, **swell):
+    """a tune ('PITCH:BEAT:LENGTH' a bar), each note this long or longer swelling"""
+    for i, text in enumerate(bars):
+        for tok in text.split():
+            name, beat, dur = tok.split(':')
+            if float(dur) >= longest:
+                held(s, ch, bar0 + i, float(beat), float(dur), name, vel, **swell)
+            else:
+                s.play(ch, bar0 + i, float(beat), float(dur), name, vel)
+
+
+def sweep(s, ch, bar, pcs, lo, hi, vel, beats=4):
+    """a harp's sweep up through these pitch classes, lo to hi, over the bar"""
+    notes = [q for q in range(lo, hi + 1) if q % 12 in pcs]
+    step = beats / len(notes)
+    for k, q in enumerate(notes):                   # (each let go by the bar's end: a loop stays whole bars)
+        at = 4 - beats + k * step
+        s.play(ch, bar, at, min(step * 1.5, 3.98 - at), q, vel + k, 2)
+
+
+# --- CRUISE1: "Outbound" (E minor, 160): the third draft's proof piece ----------------
+# Launch, open space ahead.  Three lifts of a major third (E minor, G sharp minor, C) and home to E, major this
+# time; then a riser into the loop.  The second pass rescored: the call on the horns with brass stabs, a harp's
+# sweep out of the break, the tune on the strings in octaves with a horn line under it, the hits on every
+# accent, and the harp into the loop.
+
+OB_PASS = (['Em', 'Cmaj7/E', 'Em', 'D/E'] + ['G#m', 'Emaj7/G#', 'G#m', 'F#/G#'] + ['Cadd9', 'D/C']
+           + ['C', 'Ab', 'F', 'G', 'Em', 'C', 'Am7', 'B7'] + ['E', 'C#m', 'A', 'B'] + ['Bsus4', 'B'])
+OB_CALL = ['B3:1:.5 E4:1.5:1.5 F#4:3:.5 G4:3.5:.5', 'B4:0:3 A4:3:.5 G4:3.5:.5', 'F#4:0:1.5 G4:1.5:.5 A4:2:1 B4:3:1',
+           'E5:0:2 D5:2:1 B4:3:1']
+OB_ANSWER = ['G3:0:4', 'G3:0:2 B3:2:2', 'B3:0:4', 'A3:0:2 F#3:2:2']
+OB_TUNE = ['E4:0:3 G4:3:1', 'C5:0:3 Eb5:3:1', 'C5:0:1.5 A4:1.5:.5 F4:2:2', 'D5:0:3 B4:3:1', 'G4:0:2 B4:2:2',
+           'E5:0:3 D5:3:1', 'C5:0:1.5 B4:1.5:.5 A4:2:2', 'D#5:0:4']
+OB_UNDER = ['C4:0:4', 'Eb4:0:4', 'A3:0:4', 'B3:0:4', 'E4:0:4', 'G4:0:4', 'E4:0:4', 'F#4:0:4']
+OB_HOME = ['B3:1:.5 E4:1.5:1.5 F#4:3:.5 G#4:3.5:.5', 'C#5:0:3 B4:3:.5 G#4:3.5:.5', 'A4:0:1.5 B4:1.5:.5 C#5:2:1 E5:3:1',
+           'F#5:0:2 D#5:2:1 B4:3:1']
+OB_HORNS = (['E4:0:4', 'E4:0:4', 'C#4:0:4', 'D#4:0:4'], ['B3:0:4', 'G#3:0:4', 'A3:0:4', 'B3:0:4'])
+MAJOR, LYDIAN = (0, 2, 4, 5, 7, 9, 11), (0, 2, 4, 6, 7, 9, 11)
+
+
+def outbound():
+    form = ['Em', 'Em'] + OB_PASS + OB_PASS
+    s = Piece(160, 160, form)
+    ch = orchestra(s)
+    mo, hi_, lo, br, hn, hn2, pc, tp, hp, st, bs = (ch[k] for k in ('motor', 'hit', 'low', 'brass', 'horn', 'horn2',
+                                                                 'piccolo', 'timpani', 'harp', 'strings', 'bass'))
+    n = len(form)                                   # 2 + 24 + 24 = 50 bars, 75 s
     s.loop_at(2)
-    s.pad(0, range(0, 42), 54, 71, 3, 50)
-    s.pad(0, range(42, 46), 54, 71, 3, 44)
-    s.pad(0, range(54, n), 54, 71, 3, 48)
-    s.ramp(0, 0, 2, 80, 112)
-    turn = [0, 2, 1, 3, 2, 4, 3, 1]
-    s.arp(1, range(0, 42), turn, 0.5, 62, 79, 4, 46)
-    s.arp(1, range(42, 46), turn, 0.5, 62, 79, 4, 36)
-    s.arp(1, range(46, 54), [0, 2, 1, 3, 2, 4, 3, 5, 4, 2, 3, 1, 2, 0, 1, 3], 0.25, 62, 81, 4, 40)
-    s.arp(1, range(54, n), turn, 0.5, 62, 79, 4, 44)
-    s.ramp(1, 0, 2, 90, 112)
-    s.ramp(1, 42, 2, 112, 70)                        # the break: out ...
-    s.ramp(1, 44, 2, 70, 112)                        # ... and back
-    s.bass(2, range(2, n), [(0, 3.9, 'r')], 66)
-    s.tune(3, 2, FS_THEME, 66)                        # the violins have the tune at once
-    s.tune(3, 10, FS_THEME, 72)
-    s.tune(4, 14, [up(t, 12) for t in FS_THEME[4:]], 56)  # the flute an octave up for its second half
-    s.tune(5, 18, FS_THEME_B, 70)                     # the horn has the second strain
-    s.made(3, 18, 8, 'B', 'minor', 62, 74, 54, seed=13, rhythms=SLOW, ends=SLOW_END)
-    s.pad(7, range(10, 42), 50, 67, 3, 46)
-    s.made(4, 26, 8, 'D', 'major', 74, 88, 58, seed=11)  # the bridge's tune (the draft's), on the flute
-    s.run(10, 33, 2, scale_run(59, 83, (0, 2, 4, 6, 7, 9, 11)), 0.125, 50, 1)   # a harp up into the theme
-    s.roll(6, 32, 0, 8, 'F#2', 30, 82)                # timpani into the theme
-    s.swell(8, 30, 4, 'C4', 54)
-    s.ramp(7, 26, 8, 60, 120)                         # the strings swell through the bridge
-    s.crash(34, 0, 76)
-    s.tune(3, 34, FS_THEME, 86)                       # the theme with the orchestra
-    s.tune(4, 34, [up(t, 12) for t in FS_THEME], 60)
-    s.tune(5, 34, ['D4:0:4', 'B3:0:4', 'A3:0:4', 'C#4:0:2 A3:2:2', 'D4:0:4', 'B3:0:4', 'D4:0:4', 'C#4:0:4'], 66)
-    for b in (34, 36, 38, 40):
-        s.play(6, b, 0, .5, 'B1', 70)
-    s.tune(10, 42, ['B4:0:2', '', 'D5:0:2', ''], 44)      # the break: the harp alone with the bell
-    s.ramp(0, 42, 2, 112, 70)
-    s.ramp(0, 44, 2, 70, 112)
-    s.swell(8, 44, 2, 'C4', 50)
-    s.roll(6, 45, 0, 4, 'F#2', 30, 88)
-    s.crash(46, 0, 88)                                # the payoff
-    s.tune(3, 46, FS_PAY_TUNE, 92)
-    s.tune(4, 46, [up(t, 12) if i < 4 else t for i, t in enumerate(FS_PAY_TUNE)], 66)
-    s.tune(5, 46, FS_PAY_HORN, 80)
-    s.pad(7, range(46, 54), 50, 67, 3, 58)
-    for b in range(46, 54):
-        s.play(6, b, 0, .5, [43, 43, 42, 47, 43, 40, 42, 42][b - 46], 74 if b % 2 == 0 else 60)
-    s.roll(6, 53, 0, 4, 'F#2', 50, 90)
-    s.crash(54, 0, 60)
-    s.made(4, 54, 4, 'B', 'minor', 71, 83, 50, seed=14, rhythms=SLOW, ends=SLOW_END)
+    octaves(s, mo, range(0, 2), 64)                 # the intro: the motor alone, coming up, a roll into the hit
+    s.ramp(mo, 0, 2, 50, 127)
+    s.roll(tp, 1, 0, 4, 'B1', 8, 96)
+    for P, second in ((2, False), (26, True)):
+        A, A2, B, C, D, R = P, P + 4, P + 8, P + 10, P + 18, P + 22
+        # the calls in E minor and G sharp minor: the motor in octaves, the low strings' strokes, the hits
+        octaves(s, mo, range(A, B), 66)
+        pedal332(s, lo, range(A, B), 92)
+        for blk in (A, A2):
+            s.crash(blk, 0, 112)
+            for b in (blk, blk + 2):
+                for beat in (0, 1.5):
+                    hit(s, hi_, b, beat, 112, timpani=tp if beat == 0 else None)
+        if not second:
+            s.tune(br, A, OB_CALL, 84)
+            sung(s, hn, A, OB_ANSWER, 74)
+            s.tune(br, A2, [up(t, 4) for t in OB_CALL], 88)
+            sung(s, hn, A2, [up(t, 4) for t in OB_ANSWER], 76)
+        else:
+            s.tune(hn, A, OB_CALL, 86)               # the call on the horns, an octave apart
+            s.tune(hn2, A, [up(t, -12) for t in OB_CALL], 72)
+            for b in range(A, A2):                   # the brass's stabs on the accents
+                for beat in ACC332:
+                    c = chord(s.sym_at(b, beat))
+                    tones = [in_range((c.root + t) % 12, 64, 75) for t in c.tones[1:3]]
+                    s.play(br, b, beat, 0.35, tones, 70 if beat else 76, 3)
+            s.tune(br, A2, [up(t, 4) for t in OB_CALL], 90)
+            s.tune(hn2, A2, [up(t, -8) for t in OB_CALL], 66)    # a third under (a sixth an octave down)
+            s.tune(pc, A2 + 3, [up(OB_CALL[3], 16)], 54)          # the piccolo over its last bar
+        # the break into C: the motor breaks the chords (or pulses), the horn holds the lydian sharp four
+        bs_hold = 'C2'
+        s.play(bs, B, 0, 7.8, bs_hold, 84)
+        held(s, hn, B, 0, 4, 'E4', 74)
+        held(s, hn, B + 1, 0, 4, 'F#4', 80)
+        if not second:
+            s.arp(mo, range(B, C), [0, 1, 2, 3, 2, 1, 2, 3], 0.5, 52, 76, 4, 62)
+            s.run(pc, B + 1, 2, scale_run(79, 91, MAJOR), 0.25, 62, 2)      # G up to G: C lydian
+        else:
+            pulses(s, mo, range(B, C), 58)
+            s.ramp(mo, B, 2, 70, 127)
+            sweep(s, hp, B + 1, {0, 2, 4, 6, 7, 9, 11}, 48, 84, 56)
+            s.roll(9, B + 1, 2, 2, DRUM['snare'], 20, 84, step=0.125)
+        # the tune in C, A flat, F, G, E minor, C, A minor, B: the horn (then the strings in octaves) in long notes
+        s.arp(mo, range(C, D), [0, 2, 1, 3, 2, 1, 3, 2], 0.5, 52, 76, 4, 60)
+        s.bass(bs, range(C, D), [(0, 3.9, 'r')], 80, lo=28, hi=40)
+        if not second:
+            sung(s, hn, C, OB_TUNE, 82, e0=70, e1=124, e2=100)
+        else:
+            sung(s, st, C, [up(t, 12) for t in OB_TUNE], 80, e0=70, e1=124, e2=100)
+            s.tune(st, C, OB_TUNE, 72)
+            sung(s, hn, C, OB_UNDER, 68)
+            s.arp(hp, range(C, D), [0, 1, 2, 3], 0.5, 64, 88, 4, 52)
+        dim7 = [63, 66, 69, 72, 75, 78, 81, 84]                  # B7's flat nine: D sharp, F sharp, A, C up
+        s.run(pc, D - 1, 2, dim7, 0.25, 60, 2)
+        s.roll(9, D - 1, 2, 2, DRUM['snare'], 16, 86, step=0.125)
+        s.roll(tp, D - 1, 0, 4, 'B1', 10, 92)
+        # home to E, major now: the call in E, the horns in thirds under it, everything on the accents
+        octaves(s, mo, range(D, R), 68)
+        pedal332(s, lo, range(D, R), 96)
+        s.crash(D, 0, 116)
+        for b in (D, D + 2):
+            for beat in (ACC332 if second else (0, 1.5)):
+                hit(s, hi_, b, beat, 114, timpani=tp if beat == 0 else None)
+        s.tune(br, D, OB_HOME, 90)
+        sung(s, hn, D, OB_HORNS[0], 74)
+        sung(s, hn2, D, OB_HORNS[1], 70)
+        if not second:
+            s.run(pc, D + 3, 2, scale_run(83, 95, MAJOR), 0.25, 62, 2)    # B up to B
+        else:
+            s.tune(pc, D + 2, [up(t, 12) for t in OB_HOME[2:]], 56)
+        # the riser: the motor on B, the horns swelling, the timpani rolling up from nothing into the loop
+        octaves(s, mo, range(R, R + 2), 66)
+        held(s, hn, R, 0, 8, 'F#4', 76, e0=40, e1=127, e2=127)
+        held(s, hn2, R, 0, 8, 'B3', 70, e0=40, e1=127, e2=127)
+        s.roll(tp, R, 0, 8, 'B1', 6, 112)
+        if second:
+            sweep(s, hp, R + 1, {11, 3, 6}, 35, 83, 60)
+            s.roll(9, R + 1, 2, 2, DRUM['snare'], 20, 90, step=0.125)
     s.end(n)
     return s
 
@@ -598,63 +719,93 @@ def nav_point():
     return s
 
 
-# --- HOMEWARD: "Homeward" (E flat, 84) -------------------------------------------
-# The user: one song for the way home, looping (the carrier may be far), with no
-# long intro (the player may be home already) and never sleepy: "douse the player
-# with dopamine and relief". From the draft: Running Lights' opening (the piano's
-# eighths) and its flute tune, Homeward's horn tune (0:14) and its strings' tune
-# (0:43), together; the climax a step up, in F.
+# --- HOMEWARD and HOMELOSS: the way home, won (B flat, 108 in 12/8) and lost (B flat minor, 92) -----
+# The user: one song for the way home that loops and "douses the player with dopamine and relief"; then
+# (2026-10-24) a second for a mission lost, "mostly just a bit slower and sadder but otherwise same".  Both are
+# one piece: harp eighths flowing in 12/8 (a bar is four dotted beats), the low strings' roots and fifths, the
+# horn's tune in long swelling notes.  Won, it lifts a major third into D for a brass chorale, then turns home
+# through D's flat six, B flat; lost, it is in the minor, a sixth slower, and where the won one rises it sinks a
+# major third, to G flat, with horns where the brass was, no hits and no piccolo.  The second pass has the tune
+# on the strings in octaves with the horn under it.  Which one plays is the mission's victory points
+# (src/score.c), the number the layer carries to the other players.
 
-HW_A = ['Ebmaj9', 'Abmaj7#11', 'Cm9', 'Bbsus4 Bb', 'Ebmaj9', 'Gm7', 'Abmaj7', 'Bbsus4']
-HW_B = ['Abmaj7', 'Bb/Ab', 'Gm7', 'Cm9', 'Fm9', 'Bb', 'Ebmaj7/G', 'Absus2 Bbsus4']
-HW_R = ['Ebmaj9', 'Cm9', 'Abmaj7', 'Bb6', 'Ebmaj9', 'Gm7', 'Abmaj7#11', 'Bbsus4 Bb']
-HW_F = ['Fmaj9', 'Bbmaj7#11', 'Dm9', 'Csus4 C', 'Fmaj9', 'Am7', 'Bbmaj7', 'Csus4 C']
-HW_PIVOT = ['Bbmaj7', 'C', 'Abmaj7', 'Bbsus4 Bb']
-HW_THEME = ['Bb4:0:2 G4:2:1 Bb4:3:1', 'C5:0:3 Bb4:3:1', 'G4:0:2 F4:2:1 Eb4:3:1', 'F4:0:4',
-            'G4:0:1.5 Bb4:1.5:.5 Eb5:2:2', 'D5:0:2 Bb4:2:2', 'C5:0:1 Bb4:1:1 Ab4:2:1 G4:3:1', 'F4:0:4']
-RL_THEME_EB = ['G5:0:1.5 A#5:1.5:.5 D#6:2:2', 'D6:0:3 A#5:3:1', 'C6:0:2 D#6:2:1 C6:3:1', 'A#5:0:4',
-               'G5:0:1 G#5:1:1 A#5:2:1 D6:3:1', 'F6:0:2 D6:2:2', 'D#6:0:1.5 D6:1.5:.5 C6:2:2', 'A#5:0:2 F5:2:2']
+HW_A = ['Bb', 'D/A', 'Gm', 'Eb', 'Bb/F', 'Gb', 'Eb', 'Fsus4 F']
+HW_LIFT = ['D', 'Bm', 'G', 'A']
+HW_HOME = ['D', 'Bb', 'Gm', 'Fsus4 F']
+HW_TUNE = ['D4:0:2 F4:2:1 Bb4:3:1', 'A4:0:3 F#4:3:1', 'G4:0:2 Bb4:2:1 D5:3:1', 'Bb4:0:2 G4:2:1 Eb4:3:1',
+           'F4:0:1 G4:1:1 Bb4:2:2', 'Db5:0:3 Bb4:3:1', 'Bb4:0:2 C5:2:1 Eb5:3:1', 'Bb4:0:2 A4:2:2']
+HW_UNDER = ['F3:0:4', 'F#3:0:4', 'G3:0:2 Bb3:2:2', 'G3:0:4', 'F3:0:4', 'Gb3:0:4', 'G3:0:4', 'Bb3:0:2 A3:2:2']
+HW_LIFT_TUNE = ['F#5:0:3 A5:3:1', 'B5:0:2 A5:2:1 F#5:3:1', 'G5:0:1 A5:1:1 B5:2:2', 'C#6:0:3 A5:3:1']
+HW_HOME_TUNE = ['D6:0:3 A5:3:1', 'D6:0:2 C6:2:1 Bb5:3:1', 'Bb5:0:2 A5:2:1 G5:3:1', 'C6:0:2 A5:2:2']
+# lost: the same rhythms; the minor's third, sixth and seventh (the leading tone kept over F), and the sinking
+HL_A = ['Bbm', 'F/A', 'Gb', 'Ebm', 'Bbm/F', 'Db', 'Ebm6', 'Fsus4 F']
+HL_SINK = ['Gb', 'Ebm', 'Cb', 'Db']
+HL_HOME = ['Gb', 'Ebm', 'Cm7b5', 'Fsus4 F']
+HL_TUNE = ['Db4:0:2 F4:2:1 Bb4:3:1', 'A4:0:3 F4:3:1', 'Gb4:0:2 Bb4:2:1 Db5:3:1', 'Bb4:0:2 Gb4:2:1 Eb4:3:1',
+           'F4:0:1 Gb4:1:1 Bb4:2:2', 'Db5:0:3 Ab4:3:1', 'Bb4:0:2 C5:2:1 Eb5:3:1', 'Bb4:0:2 A4:2:2']
+HL_UNDER = ['F3:0:4', 'F3:0:4', 'Gb3:0:2 Bb3:2:2', 'Gb3:0:4', 'F3:0:4', 'F3:0:4', 'Gb3:0:4', 'Bb3:0:2 A3:2:2']
+HL_SINK_TUNE = [up(t, -8) for t in HW_LIFT_TUNE]                   # the lift's tune, in G flat
+HL_HOME_TUNE = ['Db5:0:3 Bb4:3:1', 'Db5:0:2 C5:2:1 Bb4:3:1', 'Bb4:0:2 Ab4:2:1 Gb4:3:1', 'C5:0:2 A4:2:2']
 
 
-def homeward():
-    form = HW_A[:1] + HW_A + HW_B + HW_R + HW_F + HW_PIVOT
-    s = Piece(84, 707, form)
-    s.setup(0, 48, 66)          # strings, the chords
-    s.setup(1, 4, 74)           # electric piano, the eighths (Running Lights')
-    s.setup(2, 39, 96)          # sub bass
-    s.setup(3, 60, 100)         # horn
-    s.setup(4, 73, 92)          # flute
-    s.setup(5, 48, 92)          # violins
-    s.setup(6, 47, 90)          # timpani
-    s.setup(7, 46, 80)          # harp
-    s.setup(8, 52, 66)          # choir
-    n = len(form)                                   # 1 + 8 + 8 + 8 + 8 + 4 = 37
+def homeward(lost=False):
+    A, LIFT, HOME = (HL_A, HL_SINK, HL_HOME) if lost else (HW_A, HW_LIFT, HW_HOME)
+    tune, under = (HL_TUNE, HL_UNDER) if lost else (HW_TUNE, HW_UNDER)
+    lift_tune, home_tune = (HL_SINK_TUNE, HL_HOME_TUNE) if lost else (HW_LIFT_TUNE, HW_HOME_TUNE)
+    soft = -8 if lost else 0
+    form = A[:1] + A + LIFT + HOME + A + LIFT + HOME
+    s = Piece(92 if lost else 108, 808 if lost else 707, form, level=-2.0 if lost else 0.0)
+    ch = orchestra(s)
+    hn, hn2, br, pc, tp, hp, st, bs, mo = (ch[k] for k in ('horn', 'horn2', 'brass', 'piccolo', 'timpani', 'harp',
+                                                         'strings', 'bass', 'motor'))
+    third = 1 / 3
+    n = len(form)                                   # 1 + 16 + 16 = 33 bars: 73 s won, 86 s lost
     s.loop_at(1)
-    s.pad(0, range(0, 25), 51, 68, 3, 48)
-    s.pad(0, range(33, n), 51, 68, 3, 48)            # (the choir has the chords in the climax: the voices)
-    s.arp(1, range(0, n), [0, 2, 1, 3, 2, 1, 3, 2], 0.5, 53, 72, 4, 44, accent=8)
-    s.bass(2, range(0, n), [(0, 2.5, 'r'), (2.5, 1.5, '5')], 64)
-    s.tune(3, 1, HW_THEME, 76)                      # the horn's tune at once
-    s.made(5, 9, 8, 'Eb', 'major', 67, 82, 74, seed=71, rhythms=SLOW, ends=SLOW_END)   # the strings' (0:43)
-    s.tune(3, 9, ['Eb4:0:4', 'D4:0:4', 'D4:0:4', 'Eb4:0:4', 'C4:0:2 Eb4:2:2', 'D4:0:4', 'Eb4:0:4', 'C4:0:2 D4:2:2'], 62)
-    s.run(7, 16, 2, scale_run(51, 75, (0, 4, 7, 11)), 0.25, 50, 1)
-    s.tune(4, 17, RL_THEME_EB, 76)                  # Running Lights' tune, in E flat
-    s.made(5, 17, 8, 'Eb', 'major', 58, 70, 58, seed=72, rhythms=SLOW, ends=SLOW_END)
-    s.roll(6, 24, 0, 4, 'Bb1', 30, 88)
-    s.crash(25, 0, 86)                              # the climax, a step up
-    s.tune(5, 25, [up(t, 14) for t in HW_THEME], 92)
-    s.tune(4, 25, [up(t, 14) for t in HW_THEME], 64)
-    s.tune(3, 25, [up(t, 2) for t in HW_THEME], 84)
-    s.pad(8, range(25, 33), 57, 72, 3, 54)
-    for b in range(25, 33):
-        s.play(6, b, 0, .5, [41, 46, 38, 36, 41, 45, 46, 36][b - 25], 74 if b % 2 == 1 else 60)
-    s.run(7, 32, 2, scale_run(53, 77, (0, 4, 7, 11)), 0.25, 54, 1)
-    drive = {'kick': [(0, 50), (2, 44)], 'shaker': [(k * .5, 26 if k % 2 else 34) for k in range(8)]}
-    s.drums(range(1, 25), drive)
-    s.drums(range(25, 33), {'kick': [(0, 62), (1.5, 46), (2, 56)], 'shaker': [(k * .5, 30 if k % 2 else 40) for k in range(8)]})
-    s.drums(range(33, n), drive)
+    flow = [0, 1, 2, 3, 2, 1]                       # the harp's eighths: up the chord and back, half a bar
+    s.arp(hp, range(0, n), flow, third, 53, 77, 4, 56 + soft, accent=6)
+    s.bass(bs, range(1, n), [(0, 1.9, 'r'), (2, 1.9, '5')], 76 + soft, lo=29, hi=41)
+    s.play(tp, 0, 0, 1, 'Bb1', 70 + soft)
+    for P, second in ((1, False), (17, True)):
+        L, H = P + 8, P + 12
+        # the tune: the horn's, then the strings' in octaves with the horn under them
+        if not second:
+            sung(s, hn, P, tune, 80 + soft, e0=66, e1=124, e2=100)
+        else:
+            sung(s, st, P, [up(t, 12) for t in tune], 74 + soft, e0=66, e1=122, e2=100)
+            s.tune(st, P, tune, 66 + soft)
+            sung(s, hn, P, under, 68 + soft)
+            for b in range(P, L):                    # the spiccato on the beats, under it all
+                for beat in range(4):
+                    q = in_range(chord(s.sym_at(b, beat)).bass, 41, 52)
+                    s.play(mo, b, beat, 0.4, q, 54 + soft + (8 if beat == 0 else 0), 3)
+        s.roll(tp, L - 1, 2, 2, 'F1', 10, 84 + soft)
+        # the lift into D (or the sink into G flat): a brass chorale (horns, lost), the tune high on strings
+        if lost:
+            s.pad(hn2, range(L, H), 53, 67, 3, 66)
+        else:
+            s.crash(L, 0, 104)
+            hit(s, ch['hit'], L, 0, 104, timpani=tp)
+            s.pad(br, range(L, H), 57, 72, 3, 74)
+        sung(s, st, L, lift_tune, 84 + soft, e0=80, e1=127, e2=110)
+        s.tune(hn, L, [up(t, -12) for t in lift_tune], 74 + soft)
+        if second and not lost:
+            s.run(pc, H - 1, 2, scale_run(81, 93, MAJOR), 0.25, 58, 2)   # A up to A
+        # and home: D to B flat (G flat to E flat minor), round to F, a roll and (the second time) the harp
+        sung(s, st, H, home_tune, 82 + soft, e0=80, e1=124, e2=104)
+        s.tune(hn, H, [up(t, -12) for t in home_tune], 70 + soft)
+        if lost:
+            s.pad(hn2, range(H, H + 4), 53, 67, 3, 60)
+        else:
+            s.pad(br, range(H, H + 3), 57, 72, 3, 64)
+        s.roll(tp, H + 3, 0, 4, 'F1', 6, 100 + soft, step=third / 2)
+        if second:
+            sweep(s, hp, H + 3, {5, 9, 0}, 41, 89, 56 + soft)
     s.end(n)
     return s
+
+
+def homeloss():
+    return homeward(lost=True)
 
 
 # --- BATTLE1: "Contact" (C minor, 140) ------------------------------------------
@@ -1231,9 +1382,9 @@ def tragedy():
     return s
 
 
-SONGS = {'CRUISE1.MID': far_shore, 'CRUISE2.MID': deep_field, 'CRUISE3.MID': long_watch,
+SONGS = {'CRUISE1.MID': outbound, 'CRUISE2.MID': deep_field, 'CRUISE3.MID': long_watch,
          'CRUISE4.MID': quiet_instruments, 'CRUISE5.MID': beacon, 'CRUISE6.MID': nav_point,
-         'HOMEWARD.MID': homeward,
+         'HOMEWARD.MID': homeward, 'HOMELOSS.MID': homeloss,
          'BATTLE1.MID': contact, 'BATTLE2.MID': break_and_attack, 'BATTLE3.MID': furball, 'ROCKS.MID': rock_field,
          'PANIC1.MID': hull_breach, 'PANIC2.MID': systems_failing, 'PANIC3.MID': abandon_ship,
          'VICTORY1.MID': victory1, 'VICTORY2.MID': victory2, 'VICTORY3.MID': victory3, 'TRAGEDY.MID': tragedy}

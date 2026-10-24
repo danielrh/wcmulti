@@ -4,7 +4,8 @@
  * quiet; battle songs when enemies are near; a short victory song when one is
  * splashed and a short tragic one when a friend is lost; three panic songs,
  * worse and worse as the ship falls apart; a very calm one for the way home,
- * once the mission is done and the carrier is targeted.
+ * once the mission is done and the carrier is targeted; and (2026-10-24) a
+ * second way home for a mission lost, slower and sadder.
  *
  * It only watches: once a frame (flight_music) it reads the ships' slots and
  * the ship's systems (panel.h), so combat needs to tell it nothing.  A ship
@@ -12,7 +13,9 @@
  * lost the same for one of ours; the panic is the hull (100% whole):
  * under 60, 35, 15 the first, second and third.  The mission is done when
  * the enemies have all gone, and then (or while the player calls the
- * carrier to land) the way home plays.
+ * carrier to land) the way home plays: won or lost by the mission's victory
+ * points (game.c sets them at launch, the roll until combat scores a
+ * mission: the number the layer carries to the other players).
  *
  * Each mood has its songs (rvdata.h's RV_MUSIC_*). A calm song plays through
  * once (music_loops), then the next takes over on the bar, the place in the
@@ -91,7 +94,7 @@ static int song_for(int mood)
     case FIGHT:
         return RV_MUSIC_BATTLE1 + g_sc.next[1]++ % 3;
     case HOME:
-        return RV_MUSIC_HOMEWARD;
+        return victoryPoints ? RV_MUSIC_HOMEWARD : RV_MUSIC_HOMELOSS;
     case ROCKS:
         return RV_MUSIC_ROCKS;
     case PANIC:
@@ -116,10 +119,10 @@ static void play(int mood)
 
 #ifdef RV_TESTS
 /* the test: calm, a rock field, a fight, the next battle chained on, a victory and a tragedy over it, the three
- * panics, the way home, dead */
+ * panics, the way home won and lost, dead */
 static void test_tick(unsigned long now)
 {
-    static const unsigned char at[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 92 };
+    static const unsigned char at[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 88, 98 };
     if (g_sc.step >= sizeof at || now - g_sc.t0 < at[g_sc.step] * 240UL)
         return;
     switch (g_sc.step++) {
@@ -129,8 +132,9 @@ static void test_tick(unsigned long now)
     case 3: music_sting(RV_MUSIC_VICTORY1); break;
     case 4: music_sting(RV_MUSIC_TRAGEDY); break;
     case 5: case 6: case 7: g_sc.panic = g_sc.step - 6; play(PANIC); break;
-    case 8: play(HOME); break;
-    case 9: play(DEAD); break;
+    case 8: victoryPoints = 1; play(HOME); break;
+    case 9: victoryPoints = 0; play(HOME); break;
+    case 10: play(DEAD); break;
     }
 }
 #endif

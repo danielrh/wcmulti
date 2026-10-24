@@ -42,7 +42,7 @@ VAR   currentSeries                1
 VAR   playerMissionShip            2    # which mission ship the player flies
 VAR   playerTarget                 2    # slot, 0xffff none
 VAR   landedOn                     2    # slot landed on, 0xffff none
-VAR   victoryPoints                2
+VAR   victoryPoints                2    # the mission's score, nonzero won: for now the roll at launch (game.c); the layer carries it
 VAR   pendingCampaign              2    # 0xffff none
 VAR   savedGameLoaded              2
 VAR   skipRecRoom                  2    # nonzero: runHangarMission goes straight to the barracks

@@ -58,7 +58,7 @@ typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientat
 #define playerTarget_SIZE              2
 #define landedOn                       (*(unsigned short *)0x0114) /* slot landed on, 0xffff none */
 #define landedOn_SIZE                  2
-#define victoryPoints                  (*(unsigned short *)0x0116)
+#define victoryPoints                  (*(unsigned short *)0x0116) /* the mission's score, nonzero won: for now the roll at launch (game.c); the layer carries it */
 #define victoryPoints_SIZE             2
 #define pendingCampaign                (*(unsigned short *)0x0118) /* 0xffff none */
 #define pendingCampaign_SIZE           2

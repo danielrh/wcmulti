@@ -428,7 +428,10 @@ Built (src/flight.c, cockpit.c, ships.c, rvflight.inc): the flight loop at
 its fixed sites, the eight cockpits, one view of a ship drawn as many
 times as the frame rate allows, and the mission's end. There is no combat
 yet: after 20 seconds the flight lands and the outcome is still the 80%
-roll.
+roll. It is made at launch into `victoryPoints` (nonzero won), the word
+the layer reads and carries to the other players as WC1's mission score,
+so the way home's music knows it (music.md); `missionVictoryCalc` at the
+end is the layer's moment to put the host's in, and the debrief follows it.
 
 ### The loop and its sites
 
