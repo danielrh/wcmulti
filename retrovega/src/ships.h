@@ -79,7 +79,7 @@ void ships_set_camera(int cx, int cy, int focal);
 int ships_box(int set_i, const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int scale256, int how,
               int cx, int cy, int focal, int box[4]);
 
-#define SHIPS_DENSE_BUFS 2              /* the turned draw's dense copies (64 KB each, in upper memory; the last eight
+#define SHIPS_DENSE_BUFS 1              /* (kept for callers: the dense copies are one 64 KB slab since 2026-10-23; the last eight
                                            made kept in XMS, moved back when wanted) */
 void ships_draw_log(void);              /* the flight's tally: dense copies expanded, moved back from XMS */
 

@@ -54,15 +54,17 @@ static int g_cx = SCR_W / 2, g_cy = SCR_H / 2, g_focal = 400;
 /* two views expanded dense (w x h, pitch w) for the exact draw: the nearest
  * ships keep theirs from frame to frame */
 #define DENSE_MAX 65024U
-#define DENSE_BUFS SHIPS_DENSE_BUFS
-static unsigned char __far *g_dense_buf[DENSE_BUFS];
-static int g_dense_set[DENSE_BUFS] = { -1, -1 }, g_dense_view[DENSE_BUFS] = { -1, -1 };
-static unsigned g_dense_used[DENSE_BUFS], g_dense_tick;
+/* The dense copies: one 64 KB slab (upper memory when DOS has it: DOSBox's 128 KB of UMBs hold it and the band
+ * buffer) with as many views as fit, placed round it as a ring; the block mode's paint views are a few KB each,
+ * so a mission's ships stay expanded and nothing moves to or from XMS (the eight XMS copies and the two 64 KB
+ * buffers before 2026-10-23); a sharp-mode full-size view takes the slab alone. */
+#define SLAB_BYTES 65024U
+#define SLAB_MAX 32
+static unsigned char __far *g_slab;
+static struct { short set, key; unsigned off, len; } __far g_slab_ent[SLAB_MAX];
+static unsigned g_slab_cursor;
 static unsigned char __far *g_dense;    /* the one a draw is using */
-#define DCACHE 8                        /* the dense copies kept in XMS (dense_from) */
-static struct { short set, key; unsigned used; XmsBlock blk; } __far g_dc[DCACHE];
-static int g_ndc;
-static unsigned long g_dc_hits, g_dc_expands;   /* (the flight's tally) */
+static unsigned long g_dc_hits, g_dc_expands;   /* (the flight's tally: found in the slab, expanded into it) */
 static unsigned short __far *g_cmap;    /* the scaled draw's column map, LINE entries */
 static unsigned char __far *g_line;     /* one source row expanded, LINE pixels */
 
@@ -527,15 +529,6 @@ unsigned long ships_load_blocks(unsigned long budget)
 {
     unsigned long taken = 0;
     int pass, i, k;
-    for (i = 0, g_ndc = 0; i < DCACHE; i++) {
-        g_dc[i].set = g_dc[i].key = -1;
-        g_dc[i].used = 0;
-        g_dc[i].blk = taken + DENSE_MAX <= budget ? xms_alloc(DENSE_MAX, XMS_MISSION) : 0;
-        if (g_dc[i].blk) {
-            taken += DENSE_MAX;
-            g_ndc = i + 1;
-        }
-    }
     g_dc_hits = g_dc_expands = 0;
     for (pass = 0; pass < 3; pass++)
         for (k = 0; k < 16; k++)
@@ -596,13 +589,9 @@ void ships_unload(void)
     for (i = 0; i < g_nsets; i++)
         _ffree(g_set[i]);
     g_nsets = 0;
-    for (i = 0; i < DENSE_BUFS; i++)
-        g_dense_set[i] = g_dense_view[i] = -1;
-    for (i = 0; i < DCACHE; i++) {
-        g_dc[i].set = g_dc[i].key = -1;
-        g_dc[i].blk = 0;                /* (the mission level frees it) */
-    }
-    g_ndc = 0;
+    for (i = 0; i < SLAB_MAX; i++)
+        g_slab_ent[i].set = -1;
+    g_slab_cursor = 0;
 }
 
 /* a full-size view's record with its data: 0 when it is not in (its set's full-size block did not fit) */
@@ -632,9 +621,8 @@ static int stored_view(const ShipSet __far *s, int v, int *flags)
 
 void ships_draw_log(void)
 {
-    static const char __far s_dc[] = "ships: the turned draw's dense copies: %lu expanded, %lu moved back from XMS "
-        "(%d kept)";
-    rv_logf(s_dc, g_dc_expands, g_dc_hits, g_ndc);
+    static const char __far s_dc[] = "ships: the turned draw's dense copies: %lu expanded into the slab, %lu found there";
+    rv_logf(s_dc, g_dc_expands, g_dc_hits);
 }
 
 /* --- drawing --- */
@@ -945,44 +933,29 @@ static void draw_scaled(const ShipSet __far *s, int v, int x, int y, int scale25
     }
 }
 
-/* a dense buffer: upper memory first (both fit DOSBox's 128 KB of UMBs; each
- * there is 64 KB more of the 640 for the rest), else conventional */
-static unsigned char __far *dense_alloc(void)
-{
-    unsigned char __far *p = (unsigned char __far *)rv_alloc_high(DENSE_MAX);
-    rv_log("ships: a dense buffer in %s memory", p ? "upper" : "conventional");
-    return p ? p : (unsigned char __far *)_fmalloc(DENSE_MAX);
-}
-
+/* the slab: upper memory first (DOSBox's 128 KB of UMBs hold it and the band buffer), else conventional */
 int ships_dense_reserve(void)
 {
     int i;
-    for (i = 0; i < DENSE_BUFS; i++)
-        if (!g_dense_buf[i])
-            g_dense_buf[i] = dense_alloc();
-    return g_dense_buf[DENSE_BUFS - 1] != 0;
+    if (!g_slab) {
+        g_slab = (unsigned char __far *)rv_alloc_high(SLAB_BYTES);
+        rv_log("ships: the dense slab in %s memory", g_slab ? "upper" : "conventional");
+        if (!g_slab)
+            g_slab = (unsigned char __far *)_fmalloc(SLAB_BYTES);
+        for (i = 0; i < SLAB_MAX; i++)
+            g_slab_ent[i].set = -1;
+    }
+    return g_slab != 0;
 }
 
-/* The dense copies' cache in XMS (the mission level): a view once expanded
- * is kept there too, so a ship whose copy another ship's took from the two
- * buffers gets it back with one XMS move (DOSBox makes it at host speed)
- * rather than expanding it again (with three ships turned at draw time, each
- * had re-expanded its view every frame: 25.6 ms).  A copy's key: its
- * full-size view's number. */
-
-/* the copy of key in a dense buffer, or in the XMS cache: where, 0 when in neither */
+/* a view's dense copy is in the slab: *buf its entry (the callers' "in a buffer"); *dc is always -1 now */
 static int dense_in(int set_i, int key, int *buf, int *dc)
 {
     int i;
     *buf = *dc = -1;
-    for (i = 0; i < DENSE_BUFS; i++)
-        if (g_dense_set[i] == set_i && g_dense_view[i] == key) {
+    for (i = 0; i < SLAB_MAX; i++)
+        if (g_slab_ent[i].set == set_i && g_slab_ent[i].key == key) {
             *buf = i;
-            return 1;
-        }
-    for (i = 0; i < g_ndc; i++)
-        if (g_dc[i].blk && g_dc[i].set == set_i && g_dc[i].key == key) {
-            *dc = i;
             return 1;
         }
     return 0;
@@ -993,60 +966,58 @@ static int dense_in(int set_i, int key, int *buf, int *dc)
  * fit */
 static int dense_from(int set_i, int key, const ShipView *view, int mir)
 {
-    int w = view->w, h = view->h, r0 = 0, i, pick = 0, dc;
-    g_dense_tick++;
-    if (dense_in(set_i, key, &i, &dc) && i >= 0) {
-        g_dense = g_dense_buf[i];
-        g_dense_used[i] = g_dense_tick;
+    int w = view->w, h = view->h, r0 = 0, i, ent = -1, dc;
+    unsigned len = (unsigned)((unsigned long)w * h), off;
+    if (dense_in(set_i, key, &i, &dc)) {
+        g_dense = g_slab + g_slab_ent[i].off;
+        g_dc_hits++;
         return 1;
     }
-    if (!w || (unsigned long)w * h > DENSE_MAX)
+    if (!w || (unsigned long)w * h > SLAB_BYTES || !ships_dense_reserve())
         return 0;
-    for (i = 1; i < DENSE_BUFS; i++)
-        if (g_dense_used[i] < g_dense_used[pick])
-            pick = i;
-    if (!g_dense_buf[pick]) g_dense_buf[pick] = dense_alloc();
-    RV_ASSERT(g_dense_buf[pick] != 0);
-    g_dense = g_dense_buf[pick];
-    g_dense_set[pick] = g_dense_view[pick] = -1;
-    if (dc >= 0) {                      /* (kept: one move) */
-        xms_get(g_dc[dc].blk, 0, g_dense, ((unsigned long)w * h + 1) & ~1UL);
-        g_dc[dc].used = g_dense_tick;
-        g_dc_hits++;
-    } else {
-        while (r0 < h) {
-            unsigned long __far *tab;
-            unsigned char __far *data;
-            int r1 = h, r;
-            tab = fetch_rows(view, r0, &r1, &data);
-            for (r = r0; r < r1; r++) {
-                unsigned char __far *line = g_dense + (unsigned)r * w;
-                expand_row(data + (unsigned)(tab[r - r0] - tab[0]), line, w);
-                if (mir) {
-                    int a = 0, b = w - 1;
-                    for (; a < b; a++, b--) {
-                        unsigned char t = line[a];
-                        line[a] = line[b];
-                        line[b] = t;
-                    }
-                }
-            }
-            r0 = r1;
-        }
-        g_dc_expands++;
-        for (i = 0, dc = -1; i < g_ndc; i++)   /* (kept for next time, over the least recently used) */
-            if (g_dc[i].blk && (dc < 0 || g_dc[i].used < g_dc[dc].used))
-                dc = i;
-        if (dc >= 0) {
-            xms_put(g_dc[dc].blk, 0, g_dense, ((unsigned long)w * h + 1) & ~1UL);
-            g_dc[dc].set = (short)set_i;
-            g_dc[dc].key = (short)key;
-            g_dc[dc].used = g_dense_tick;
+    /* a place in the ring: from the cursor, back at the start when it does not fit; whatever lay there is out */
+    if (g_slab_cursor + (unsigned long)len > SLAB_BYTES)
+        g_slab_cursor = 0;
+    off = g_slab_cursor;
+    g_slab_cursor += (len + 15) & ~15U;
+    for (i = 0; i < SLAB_MAX; i++) {
+        if (g_slab_ent[i].set >= 0 && g_slab_ent[i].off < off + len && off < g_slab_ent[i].off + g_slab_ent[i].len)
+            g_slab_ent[i].set = -1;
+        if (g_slab_ent[i].set < 0 && ent < 0)
+            ent = i;
+    }
+    if (ent < 0) {                      /* every entry taken: the one placed longest ago (the ring's order) */
+        unsigned far_back = 0;
+        for (i = 0; i < SLAB_MAX; i++) {
+            unsigned back = (g_slab_cursor - g_slab_ent[i].off) % SLAB_BYTES;
+            if (back >= far_back) { far_back = back; ent = i; }
         }
     }
-    g_dense_set[pick] = set_i;
-    g_dense_view[pick] = key;
-    g_dense_used[pick] = g_dense_tick;
+    g_dense = g_slab + off;
+    while (r0 < h) {
+        unsigned long __far *tab;
+        unsigned char __far *data;
+        int r1 = h, r;
+        tab = fetch_rows(view, r0, &r1, &data);
+        for (r = r0; r < r1; r++) {
+            unsigned char __far *line = g_dense + (unsigned)r * w;
+            expand_row(data + (unsigned)(tab[r - r0] - tab[0]), line, w);
+            if (mir) {
+                int a = 0, b = w - 1;
+                for (; a < b; a++, b--) {
+                    unsigned char t = line[a];
+                    line[a] = line[b];
+                    line[b] = t;
+                }
+            }
+        }
+        r0 = r1;
+    }
+    g_dc_expands++;
+    g_slab_ent[ent].set = (short)set_i;
+    g_slab_ent[ent].key = (short)key;
+    g_slab_ent[ent].off = off;
+    g_slab_ent[ent].len = len;
     return 1;
 }
 

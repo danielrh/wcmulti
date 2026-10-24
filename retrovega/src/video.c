@@ -49,7 +49,11 @@ int vid_init(void)
 {
     union REGS r;
     struct SREGS s;
-    g_buf = (unsigned char __far *)_fmalloc((size_t)BAND_ROWS * SCR_W);
+    g_buf = (unsigned char __far *)rv_alloc_high((unsigned long)BAND_ROWS * SCR_W);   /* upper memory first (64 KB
+                                           of DOSBox's 128 KB of UMBs; the dense slab takes the other half) */
+    rv_log("video: the band buffer in %s memory", g_buf ? "upper" : "conventional");
+    if (!g_buf)
+        g_buf = (unsigned char __far *)_fmalloc((size_t)BAND_ROWS * SCR_W);
     if (!g_buf) {
         rv_log("video: no memory for the band buffer");
         return 0;
