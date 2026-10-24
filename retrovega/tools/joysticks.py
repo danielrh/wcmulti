@@ -1,28 +1,31 @@
 #!/usr/bin/env python3
-"""The pilot's hand on the joystick: nine poses a cockpit, from the user's sprite sheets (art/cockpits/KEY/stick/).
+"""The pilot's hand on the joystick: nine poses a cockpit, from the user's renders (art/cockpits/KEY/stick/).
 
-    joysticks.py --zip AllJoysticks.zip [--out art/cockpits] [--sheet docs/joysticks.png] [KEY ...]
+    joysticks.py --zip arm2.zip [--out art/cockpits] [--sheet docs/joysticks.png] [KEY ...]
 
-The user's ask (2026-10-23): renderings of the stick pushed each way with the pilot's hand on it, in place of the
-old stick that slid about; the arm running out of the frame.  Their zip holds 3 x 3 sheets (rows: pushed forward,
-the middle, pulled back; columns: left, the middle, right) and, where a sheet's column came out wrong (the arm from
-the other side), a strip of three poses to replace it.  Each cockpit gets the sheet that matches its stick (CHOICE):
+The user's set (2026-10-23, arm2.zip): for each ship nine handed poses (NW .. SE: the stick pushed forward, upright,
+pulled back, each leaning left, upright or right), each a right arm on the stick, its sleeve cut off by a
+horizontal line where it comes from; and the same nine bare (the stick alone) as 640 x 400 overlays, at the
+cockpit's own scale and place (exactly the kit's old stick: its size and its mount).  The user's rulings: the hand
+on the stick, the stick at its intended place and its cockpit's scale, the arm never synthesised - the cut edge off
+the bottom of the screen; where that means it, the stick goes lower (its base cropped by the screen's edge, the old
+socket painted out of the cockpit).
 
-  * the poses cut out by their outlines (the sheets are not on an exact grid), sorted into rows and columns;
-  * each lined up on the middle pose by its base (the part that does not move: the pixels that are neither skin
-    nor sleeve, in the bottom of the stick), matched by overlap over a range of scales and offsets, so the base
-    stays put from pose to pose and only the stick and the hand move;
-  * scaled so the middle pose's stick is the old stick's height, its base where the old one stood;
-  * the sleeve extended along the forearm, a plain shaded tube with the sleeve's own colours across it, until it
-    runs off the screen's edge (the sheets cut it short).
+For each cockpit:
+  * the scale: the handed upright pose's stick (its own pixels, neither skin nor sleeve: the base) matched by
+    overlap against the bare upright one's, over a range of scales and offsets;
+  * each handed pose at that scale, put on its own bare pose (matched the same way, the offset only), so the stick
+    stands where and as big as the cockpit's was;
+  * the drop: the least that puts every pose's cut edge (its sleeve's lowest row) at or past the screen's bottom
+    row, the whole set lowered by it.
 
-Out: art/cockpits/KEY/stick/p0.png .. p8.png (pose row * 3 + column, cropped) and stick.json (each pose's place on
-the screen); rvpack packs them, cockpit.c draws the one the steering picks.
+Out: art/cockpits/KEY/stick/p0.png .. p8.png (pose: row * 3 + column; rows forward / upright / back, columns left /
+upright / right; cropped), stick.json (each pose's place), socket.png / .json (the old socket painted out, when the
+kit's socket painted out); rvpack packs them, cockpit.c draws the one the steering picks.
 """
 import argparse
 import json
 import os
-import re
 import zipfile
 
 import numpy as np
@@ -33,46 +36,10 @@ from scipy.signal import fftconvolve
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 SCREEN = (640, 400)
-# the sheet for each cockpit's stick, and the strips that replace a column of it ({column: strip}); MIRROR: drawn
-# the other way round (the user's, 2026-10-23: the sidestick sheets have the arm from the left, the left hand
-# reaching across the cockpit; mirrored, it is the pilot's right arm)
-CHOICE = {'SCHROED': (12, {2: 15}), 'FRANKLN': (6, {}), 'GAWAIN': (4, {2: 14}), 'REDEEMR': (11, {2: 19}),
-          'PACIFER': (13, {2: 17}), 'LANCELT': (1, {}), 'PROGENY': (8, {0: 20}), 'GODDARD': (5, {})}
-MIRROR = {'FRANKLN', 'PROGENY'}
-DROP_MAX = {'FRANKLN': 0}               # (pixels a stick may be lowered, where not by the rule)
-DROP_MORE = {'GODDARD': 10}             # (and lowered further: the Goddard's sheet has a slight forearm)
-
-
-def sheets_of(zip_path):
-    """{number: RGBA image} from the zip (the number at the end of each name)"""
-    out = {}
-    with zipfile.ZipFile(zip_path) as z:
-        for name in z.namelist():
-            m = re.search(r'-(\d+)\.png$', name)
-            if m and '__MACOSX' not in name:
-                with z.open(name) as f:
-                    out[int(m.group(1))] = Image.open(f).convert('RGBA')
-    return out
-
-
-def poses_of(im, n):
-    """the n biggest figures of a sheet (by outline), as (crop RGBA array, x, y), in reading order"""
-    a = np.asarray(im)
-    solid = ndimage.binary_dilation(a[..., 3] > 16, iterations=6)
-    lab, k = ndimage.label(solid)
-    sizes = ndimage.sum(np.ones(lab.shape), lab, range(1, k + 1))
-    keep = np.argsort(sizes)[::-1][:n] + 1
-    out = []
-    for i in keep:
-        sl = ndimage.find_objects((lab == i).astype(int))[0]
-        crop = a[sl].copy()
-        crop[..., 3] = np.where(lab[sl] == i, crop[..., 3], 0)
-        out.append((crop, sl[1].start, sl[0].start))
-    # rows by y (three a row for a sheet, one for a strip), then columns by x
-    out.sort(key=lambda p: p[2] + p[0].shape[0] / 2)
-    per = 3 if n == 9 else 1
-    rows = [sorted(out[i:i + per], key=lambda p: p[1] + p[0].shape[1] / 2) for i in range(0, n, per)]
-    return [p for r in rows for p in r]
+SHIPS = {'SCHROED': 'schroedinger', 'FRANKLN': 'franklin', 'GAWAIN': 'gawain', 'REDEEMR': 'redeemer',
+         'PACIFER': 'pacifier', 'LANCELT': 'lancelot', 'PROGENY': 'progeny', 'GODDARD': 'goddard'}
+POSES = ['NW', 'N', 'NE', 'W', 'CENTER', 'E', 'SW', 'S', 'SE']   # p0 .. p8
+UP = 4                                  # (the matching done at 4 x the screen's scale)
 
 
 def parts(a):
@@ -104,38 +71,6 @@ def base_mask(a):
     return m, top, bottom
 
 
-def register(ref, pose):
-    """the scale and offset that put pose's base on ref's: (s, dx, dy), pose pixel (x, y) -> ref (x * s + dx, ...)"""
-    mr, _t, br = base_mask(ref)
-    mp, _t2, bp = base_mask(pose)
-    s0 = np.sqrt(mr.sum() / max(1, mp.sum()))
-    best = (-1, 1.0, 0, 0)
-    D = 2                               # (at half size, then refined)
-    rs = np.asarray(Image.fromarray(mr.astype(np.uint8) * 255).resize((mr.shape[1] // D, mr.shape[0] // D),
-                                                                      Image.BILINEAR), dtype=np.float64) / 255
-    for s in s0 * np.linspace(0.86, 1.14, 15):
-        h, w = max(1, int(mp.shape[0] * s / D)), max(1, int(mp.shape[1] * s / D))
-        ps = np.asarray(Image.fromarray(mp.astype(np.uint8) * 255).resize((w, h), Image.BILINEAR),
-                        dtype=np.float64) / 255
-        cor = fftconvolve(rs, ps[::-1, ::-1], mode='full')
-        score = cor / np.sqrt(rs.sum() * ps.sum() + 1e-9)
-        j = np.unravel_index(np.argmax(score), score.shape)
-        if score[j] > best[0]:
-            # (full mode: index j means the pose's (0, 0) at ref (j - (h - 1)))
-            best = (score[j], s, (j[1] - (w - 1)) * D, (j[0] - (h - 1)) * D)
-    return best[1], best[2], best[3], best[0]
-
-
-def warp(a, s, dx, dy, shape):
-    """a pose's RGBA into ref's frame (shape h, w), scaled by s and offset (premultiplied, so edges stay clean)"""
-    h, w = a.shape[:2]
-    im = Image.fromarray(premul(a))
-    im = im.resize((max(1, int(round(w * s))), max(1, int(round(h * s)))), Image.LANCZOS)
-    out = Image.new('RGBA', (shape[1], shape[0]), (0, 0, 0, 0))
-    out.paste(im, (int(round(dx)), int(round(dy))))
-    return np.asarray(out)
-
-
 def premul(a):
     out = a.astype(np.float64)
     out[..., :3] *= out[..., 3:4] / 255.0
@@ -165,98 +100,41 @@ def sleeve_end(a):
     return np.stack([xs[end], ys[end]], -1).astype(np.float64)
 
 
-def extend_sleeve(a, to_edge):
-    """the sleeve run on along the forearm (a plain tube: the sleeve's colours across it, averaged along it) until
-    to_edge(points) says each point is off the screen; a: RGBA (straight) in the frame where to_edge applies"""
-    skin, sleeve, _own = parts(a)
-    if sleeve.sum() < 50 or skin.sum() < 50:
-        return a
-    ys, xs = np.nonzero(sleeve)
-    # the forearm's axis: from the hand (the skin's middle) to the sleeve's (the cuffs are often wider than long,
-    # so the sleeve's own long axis can lie across the arm)
-    hy, hx = np.nonzero(skin)
-    W = np.array([xs.mean(), ys.mean()])
-    d = W - np.array([hx.mean(), hy.mean()])
-    d = d / max(1e-6, np.hypot(*d))
-    n = np.array([-d[1], d[0]])
-    P = np.stack([xs - W[0], ys - W[1]], -1)
-    p, q = P @ d, P @ n
-    pmax = np.percentile(p, 99.5)
-    far = p > np.median(p)
-    width = np.percentile(q[far], 98) - np.percentile(q[far], 2)
-    p_cut = pmax - 0.30 * width         # (before the cuff's ragged end)
-    band = (p > p_cut - 0.45 * width) & (p <= p_cut)
-    if band.sum() < 20:
-        return a
-    qb = q[band]
-    # (the tube as wide as the sleeve itself: the cut end, sliced on a slant by the sheet, is narrower)
-    q0, q1 = np.percentile(q[far], 2), np.percentile(q[far], 98)
-    bins = np.linspace(q0, q1, 24)
-    cols = a[ys[band], xs[band], :3].astype(np.float64)
-    prof = np.zeros((len(bins) - 1, 3))
-    for i in range(len(bins) - 1):
-        sel = (qb >= bins[i]) & (qb < bins[i + 1])
-        prof[i] = cols[sel].mean(0) if sel.any() else cols.mean(0)
-    # how far to run: until both edges of the tube are off the screen
-    t = p_cut
-    step = 2.0
-    for _ in range(4000):
-        e0 = W + d * t + n * q0
-        e1 = W + d * t + n * q1
-        if to_edge(e0) and to_edge(e1):
-            break
-        t += step
-    t_end = t + 4
-    # grow the canvas if the tube leaves it
-    corners = [W + d * pp + n * qq for pp in (p_cut, t_end) for qq in (q0, q1)]
-    xs_c = [c[0] for c in corners]
-    ys_c = [c[1] for c in corners]
-    pad_l = int(max(0, -min(xs_c))) + 2
-    pad_t = int(max(0, -min(ys_c))) + 2
-    pad_r = int(max(0, max(xs_c) - a.shape[1])) + 2
-    pad_b = int(max(0, max(ys_c) - a.shape[0])) + 2
-    out = np.zeros((a.shape[0] + pad_t + pad_b, a.shape[1] + pad_l + pad_r, 4), np.uint8)
-    out[pad_t:pad_t + a.shape[0], pad_l:pad_l + a.shape[1]] = a
-    W2 = W + np.array([pad_l, pad_t])
-    gy, gx = np.mgrid[0:out.shape[0], 0:out.shape[1]]
-    G = np.stack([gx - W2[0], gy - W2[1]], -1)
-    gp, gq = G @ d, G @ n
-    # the old end past the cut goes; the tube from the cut on
-    sl_full = np.zeros(out.shape[:2], bool)
-    sl_full[pad_t:pad_t + a.shape[0], pad_l:pad_l + a.shape[1]] = sleeve
-    out[sl_full & (gp > p_cut)] = 0
-    tube = (gp > p_cut - 1) & (gp <= t_end) & (gq >= q0) & (gq <= q1)
-    idx = np.clip(((gq - q0) / (q1 - q0) * (len(bins) - 1)).astype(int), 0, len(bins) - 2)
-    rng = np.random.default_rng(3)
-    keep = tube & (out[..., 3] < 128)   # (what the sheet already has stays: the wrist end of the band)
-    out[keep, :3] = np.clip(prof[idx[keep]] * (1 + rng.normal(0, 0.03, (int(keep.sum()), 1))), 0, 255)
-    out[keep, 3] = 255
-    return out, (pad_l, pad_t)
-
-
 def fill_socket(d, cj, old):
-    """the old stick's socket painted out of the base (its hole and collar: the new stick stands lower, its own
-    base in the picture): stick/socket.png, the changed pixels, for tools/panels.py to lay on the base.  The hole is
-    the biggest dark blob under the old stick; it and a collar round it are filled with the plate round them (the
-    edge's colours spread in), the plate's grain on top (the fine detail of a plain patch of it nearby)"""
+    """the kit's socket painted out of the base (its hole and collar): stick/socket.png, the changed pixels, for
+    tools/panels.py to lay on the base.  The hole: of the dark blobs round the old stick's foot, the roundest
+    biggest nearest the foot; it and a collar round it are filled with the plate round them (its colours spread
+    in, smoothed) and speckled like the plate (random, as strong as the plate's own fine texture)"""
     base = np.asarray(Image.open(os.path.join(d, 'base.png')).convert('RGBA')).copy()
     jx, jy = cj['controls']['joystick']['x'], cj['controls']['joystick']['y']
     h, w = old.shape
-    foot = np.zeros(base.shape[:2], bool)              # (the old stick but its top quarter, and a margin round it)
-    foot[jy + h // 4:jy + h, jx:jx + w] = old[h // 4:]
-    foot = ndimage.binary_dilation(foot, iterations=10) & (base[..., 3] >= 128)
+    oy, ox = np.nonzero(old)
+    foot_at = np.array([jx + ox[oy > oy.max() - 6].mean(), jy + oy.max()])
+    near = np.zeros(base.shape[:2], bool)
+    near[jy + h // 4:jy + h, jx:jx + w] = old[h // 4:]
+    near = ndimage.binary_dilation(near, iterations=10) & (base[..., 3] >= 128)
     rgb = base[..., :3].astype(np.float64)
     L = rgb @ [0.299, 0.587, 0.114]
-    dark = foot & (L < min(50, np.percentile(L[foot], 25)))
+    dark = near & (L < min(50, np.percentile(L[near], 25)))
     dark = ndimage.binary_opening(dark, iterations=1)
     lab, k = ndimage.label(dark)
-    if not k:
+    best, hole = -1, None
+    for i in range(1, k + 1):
+        m = lab == i
+        ys, xs = np.nonzero(m)
+        if len(ys) < 12:
+            continue
+        ext = max(np.ptp(xs), np.ptp(ys)) + 1
+        round_ = len(ys) / (np.pi * (ext / 2.0) ** 2)
+        dist = np.hypot(xs.mean() - foot_at[0], ys.mean() - foot_at[1])
+        score = len(ys) * min(1.0, round_) ** 2 / (1 + dist / 12.0)
+        if score > best:
+            best, hole = score, m
+    if hole is None:
         return
-    hole = lab == (np.argmax(ndimage.sum(np.ones(lab.shape), lab, range(1, k + 1))) + 1)
     hole = ndimage.binary_fill_holes(hole)
     r = np.sqrt(hole.sum() / np.pi)
-    region = ndimage.binary_dilation(hole, iterations=max(3, int(round(r * 0.8)))) & (base[..., 3] >= 128)
-    # the colours spread in from the edge (a diffusion)
+    region = ndimage.binary_dilation(hole, iterations=max(4, int(round(r * 1.15)))) & (base[..., 3] >= 128)
     low = rgb.copy()
     known = ~region
     for _ in range(400):
@@ -274,96 +152,96 @@ def fill_socket(d, cj, old):
     for _ in range(30):                 # (smoothed inside, the edge held)
         sm = ndimage.uniform_filter(low, size=(3, 3, 1))
         low[region] = sm[region]
-    # the grain: the fine detail of the plainest patch of plate beside it
+    # the speckle: the plate's fine texture just round the region (its strong edges left out)
+    ring = ndimage.binary_dilation(region, iterations=6) & ~region & (base[..., 3] >= 128)
+    hp = rgb - ndimage.gaussian_filter(rgb, (1.5, 1.5, 0))
+    v = hp[ring]
+    sd = np.clip(np.std(np.clip(v, -2.5 * v.std(0), 2.5 * v.std(0)), axis=0), 0, 18)
+    rng = np.random.default_rng(11)
+    noise = ndimage.gaussian_filter(rng.normal(0, 1, rgb.shape[:2]), 0.6)
+    noise /= max(1e-6, noise.std())
     ys, xs = np.nonzero(region)
-    hp = rgb - ndimage.gaussian_filter(rgb, (2, 2, 0))
-    best = None
-    for dx, dy in [(int(round(m * (np.ptp(xs) + 4))) * sx, 0) for m in (1, 1.5) for sx in (-1, 1)] + \
-                  [(0, int(round(m * (np.ptp(ys) + 4))) * sy) for m in (1, 1.5) for sy in (-1, 1)]:
-        sy_, sx_ = ys + dy, xs + dx
-        if sy_.min() < 0 or sx_.min() < 0 or sy_.max() >= 400 or sx_.max() >= 640:
-            continue
-        if region[sy_, sx_].any() or (base[sy_, sx_, 3] < 128).any():
-            continue
-        e = np.abs(hp[sy_, sx_]).mean(-1)
-        cost = np.percentile(e, 97)     # (no lines or edges in it)
-        if best is None or cost < best[0]:
-            best = (cost, dx, dy)
     out = base.copy()
-    grain = hp[ys + best[2], xs + best[1]] if best else 0
-    out[ys, xs, :3] = np.clip(low[ys, xs] + grain * 0.9, 0, 255).astype(np.uint8)
+    out[ys, xs, :3] = np.clip(low[ys, xs] + noise[ys, xs, None] * sd.mean() * 0.55, 0, 255).astype(np.uint8)
     y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
     patch = out[y0:y1, x0:x1].copy()
     patch[..., 3] = np.where(region[y0:y1, x0:x1], 255, 0)
     Image.fromarray(patch, 'RGBA').save(os.path.join(d, 'stick', 'socket.png'))
-    json.dump({'x': int(x0), 'y': int(y0), 'grain_from': [int(best[1]), int(best[2])] if best else None},
+    json.dump({'x': int(x0), 'y': int(y0), 'hole_px': int(hole.sum())},
               open(os.path.join(d, 'stick', 'socket.json'), 'w'))
 
 
-def build(key, sheets, out_root):
-    num, fixes = CHOICE[key]
-    poses = poses_of(sheets[num], 9)
-    for col, strip in fixes.items():
-        for row, p in enumerate(poses_of(sheets[strip], 3)):
-            poses[row * 3 + col] = p
-    arrays = [p[0] for p in poses]
-    if key in MIRROR:                   # (mirrored: a left lean becomes a right one, so the columns swap too)
-        arrays = [np.ascontiguousarray(arrays[r * 3 + (2 - c)][:, ::-1]) for r in range(3) for c in range(3)]
-    ref = arrays[4]
-    # every pose into the middle one's frame, its base on the middle one's (a margin round it for the leans)
-    M = int(max(ref.shape) * 0.6)
-    frame = (ref.shape[0] + 2 * M, ref.shape[1] + 2 * M)
-    framed = []
-    scores = []
-    for i, a in enumerate(arrays):
-        if i == 4:
-            s, dx, dy, sc = 1.0, 0, 0, 1.0
-        else:
-            s, dx, dy, sc = register(ref, a)
-        scores.append(sc)
-        framed.append(unpremul(warp(a, s, dx + M, dy + M, frame)))
-    # the old stick: its height and its base's bottom middle, on the screen
+def match(ref, pose, scales):
+    """the scale (of those given) and offset that put pose's base on ref's: ref at UP x the screen, pose at its
+    own; -> (s, dx, dy, score): pose pixel (x, y) at ref (x * s + dx, y * s + dy)"""
+    mr = base_mask(ref)[0].astype(np.float64)
+    mp = base_mask(pose)[0]
+    best = (-1, 1.0, 0, 0)
+    for s in scales:
+        h, w = max(1, int(round(mp.shape[0] * s))), max(1, int(round(mp.shape[1] * s)))
+        ps = np.asarray(Image.fromarray(mp.astype(np.uint8) * 255).resize((w, h), Image.BILINEAR),
+                        dtype=np.float64) / 255
+        cor = fftconvolve(mr, ps[::-1, ::-1], mode='full')
+        score = cor / np.sqrt(mr.sum() * ps.sum() + 1e-9)
+        j = np.unravel_index(np.argmax(score), score.shape)
+        if score[j] > best[0]:
+            best = (score[j], s, j[1] - (w - 1), j[0] - (h - 1))
+    return best[1], best[2], best[3], best[0]
+
+
+def up(a):
+    return np.asarray(Image.fromarray(a).resize((a.shape[1] * UP, a.shape[0] * UP), Image.NEAREST))
+
+
+def build(key, src, out_root):
+    ship = SHIPS[key]
+    bare = json.load(open(os.path.join(src, ship, 'bare.json')))
+    handed = json.load(open(os.path.join(src, ship, 'poses.json')))
+    bframes = {f['id']: f for f in bare['frames']}
+    hframes = {f['id']: f for f in handed['frames']}
+    # the bare poses, cropped round the stick (screen scale), and the handed poses (their own scale)
+    refs, ref_at = {}, {}
+    for pid in POSES:
+        ov = np.asarray(Image.open(os.path.join(src, bframes[pid]['overlay'])).convert('RGBA'))
+        ys, xs = np.nonzero(ov[..., 3] > 0)
+        x0, y0 = max(0, xs.min() - 4), max(0, ys.min() - 4)
+        refs[pid] = up(np.ascontiguousarray(ov[y0:ys.max() + 5, x0:xs.max() + 5]))
+        ref_at[pid] = (x0, y0)
+    hands = {pid: np.asarray(Image.open(os.path.join(src, hframes[pid]['file'])).convert('RGBA')) for pid in POSES}
+    # the scale: the upright poses' bases (a coarse pass, then a fine one)
+    mr, mh = base_mask(refs['CENTER'])[0], base_mask(hands['CENTER'])[0]
+    s0 = np.sqrt(mr.sum() / max(1, mh.sum()))
+    s, _dx, _dy, _sc = match(refs['CENTER'], hands['CENTER'], s0 * np.linspace(0.8, 1.2, 21))
+    s, _dx, _dy, _sc = match(refs['CENTER'], hands['CENTER'], s * np.linspace(0.97, 1.03, 13))
+    k = s / UP                          # (handed pixels to screen pixels)
+    placed, scores = [], []
+    for pid in POSES:
+        _s, dx, dy, sc = match(refs[pid], hands[pid], [s])
+        scores.append(float(sc))
+        placed.append((pid, ref_at[pid][0] + dx / UP, ref_at[pid][1] + dy / UP))
+    # the drop: every pose's cut edge (its sleeve's lowest row) at or past the screen's last row
+    drop = 0.0
+    for pid, x, y in placed:
+        _skin, sleeve, _own = parts(hands[pid])
+        cut = np.nonzero(sleeve.any(axis=1))[0][-1]
+        drop = max(drop, (SCREEN[1] - 1) - (y + (cut + 1) * k - 1))
+    drop = float(np.ceil(drop))
     d = os.path.join(out_root, key)
     cj = json.load(open(os.path.join(d, 'cockpit.json')))
-    old = np.asarray(Image.open(os.path.join(d, 'joystick.png')).convert('RGBA'))[..., 3] > 128
-    oy = np.nonzero(old.any(axis=1))[0]
-    old_h = oy[-1] - oy[0] + 1
-    ox = np.nonzero(old[oy[-1] - 3:oy[-1] + 1].any(axis=0))[0]
-    anchor = (cj['controls']['joystick']['x'] + (ox[0] + ox[-1]) / 2.0, cj['controls']['joystick']['y'] + oy[-1] + 1)
-    mb, top, bottom = base_mask(framed[4])
-    bx = np.nonzero(mb[bottom - 3:bottom + 1].any(axis=0))[0]
-    art_anchor = ((bx[0] + bx[-1]) / 2.0, bottom + 1)
-    k = old_h / float(bottom - top + 1)
-    # (the user's, 2026-10-23: no stretched sleeves) the stick set low enough that every pose's sleeve end, as the
-    # sheet cut it, is just off the bottom of the screen: the screen crops the arm
-    # (the user's balance, 2026-10-23: lowered only until the base is flush with the bottom, a sliver of it cropped -
-    # pushed further the hand sank too far; a pose whose sleeve still shows has it run on the pixels left; the
-    # Franklin's stick, by the right edge, stays where it stood)
-    drop = 0.0
-    for a in framed:
-        e = sleeve_end(a)
-        if len(e):
-            drop = max(drop, SCREEN[1] + 1 - ((e[:, 1].min() - art_anchor[1]) * k + anchor[1]))
-    drop = min(drop, max(0.0, SCREEN[1] + 0.06 * old_h - anchor[1]) + DROP_MORE.get(key, 0), DROP_MAX.get(key, 1e9))
-    anchor = (anchor[0], anchor[1] + drop)
-    to_screen = lambda P: (np.asarray(P) - art_anchor) * k + anchor
-    off = lambda P: (lambda S: S[0] < -2 or S[0] > SCREEN[0] + 2 or S[1] > SCREEN[1] + 2)(to_screen(P))
     os.makedirs(os.path.join(d, 'stick'), exist_ok=True)
+    for f in ('socket.png', 'socket.json'):
+        if os.path.exists(os.path.join(d, 'stick', f)):
+            os.remove(os.path.join(d, 'stick', f))
+    # (the kit's socket painted out: the new stick has its own base, and a leaning one showed the empty hole beside
+    # it)
+    old = np.asarray(Image.open(os.path.join(d, 'joystick.png')).convert('RGBA'))[..., 3] > 128
     fill_socket(d, cj, old)
-    placed = []
-    for i, a in enumerate(framed):
-        e = sleeve_end(a)
-        if len(e) and ((e[:, 1].min() - art_anchor[1]) * k + anchor[1]) <= SCREEN[1]:
-            res = extend_sleeve(a, off)
-            a2, (pl, pt) = res if isinstance(res, tuple) else (res, (0, 0))
-        else:
-            a2, pl, pt = a, 0, 0
-        # onto the screen: scaled by k, its art anchor at the screen anchor
-        im = Image.fromarray(premul(a2))
-        w, h = max(1, int(round(a2.shape[1] * k))), max(1, int(round(a2.shape[0] * k)))
-        im = np.asarray(im.resize((w, h), Image.LANCZOS))
-        x0 = int(round(anchor[0] - (art_anchor[0] + pl) * k))
-        y0 = int(round(anchor[1] - (art_anchor[1] + pt) * k))
+    out = []
+    for i, (pid, x, y) in enumerate(placed):
+        a = hands[pid]
+        w, h = max(1, int(round(a.shape[1] * k))), max(1, int(round(a.shape[0] * k)))
+        im = np.asarray(Image.fromarray(premul(a)).resize((w, h), Image.LANCZOS))
+        x0, y0 = int(round(x)), int(round(y + drop))
         screen = np.zeros((SCREEN[1], SCREEN[0], 4), np.uint8)
         sx0, sy0 = max(0, x0), max(0, y0)
         sx1, sy1 = min(SCREEN[0], x0 + w), min(SCREEN[1], y0 + h)
@@ -372,48 +250,44 @@ def build(key, sheets, out_root):
         ys, xs = np.nonzero(screen[..., 3] >= 128)
         cx0, cx1, cy0, cy1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
         Image.fromarray(screen[cy0:cy1, cx0:cx1], 'RGBA').save(os.path.join(d, 'stick', 'p%d.png' % i))
-        placed.append({'file': 'p%d.png' % i, 'x': int(cx0), 'y': int(cy0)})
-    json.dump({'sheet': num, 'fixes': {str(c): v for c, v in fixes.items()}, 'scale': round(float(k), 4),
-               'dropped': round(float(drop), 1), 'anchor': [round(float(v), 1) for v in anchor],
-               'match': [round(float(s), 3) for s in scores], 'poses': placed},
+        out.append({'file': 'p%d.png' % i, 'pose': pid, 'x': int(cx0), 'y': int(cy0)})
+    json.dump({'set': 'arm2', 'scale': round(float(k), 4), 'dropped': drop,
+               'mount': bare['world_mount_anchor'], 'match': [round(v, 3) for v in scores], 'poses': out},
               open(os.path.join(d, 'stick', 'stick.json'), 'w'), indent=1)
-    return placed, scores
+    return k, drop, scores
 
 
 def preview(keys, out_root, path):
-    """each cockpit's base with its nine poses, magnified round the stick"""
-    tiles = []
+    """each cockpit with its nine poses, round the stick, magnified"""
+    rows = []
     for key in keys:
         d = os.path.join(out_root, key)
         base = Image.open(os.path.join(d, 'base.png')).convert('RGBA')
         sj = json.load(open(os.path.join(d, 'stick', 'stick.json')))
-        xs = [p['x'] for p in sj['poses']]
-        ys = [p['y'] for p in sj['poses']]
-        x0, y0 = max(0, min(xs) - 10), max(0, min(ys) - 10)
-        x1 = min(640, max(p['x'] + Image.open(os.path.join(d, 'stick', p['file'])).width for p in sj['poses']) + 10)
+        sock = os.path.join(d, 'stick', 'socket.json')
+        if os.path.exists(sock):
+            q = json.load(open(sock))
+            base.alpha_composite(Image.open(os.path.join(d, 'stick', 'socket.png')).convert('RGBA'), (q['x'], q['y']))
+        cx = int(sj['mount'][0])
+        x0 = max(0, min(SCREEN[0] - 150, cx - 75))
         row = []
         for p in sj['poses']:
-            im = Image.new('RGBA', (640, 400), (20, 20, 30, 255))
+            im = Image.new('RGBA', SCREEN, (20, 20, 30, 255))
             im.alpha_composite(base)
-            st = Image.open(os.path.join(d, 'stick', p['file'])).convert('RGBA')
-            a = np.asarray(st).copy()
+            a = np.asarray(Image.open(os.path.join(d, 'stick', p['file'])).convert('RGBA')).copy()
             a[..., 3] = np.where(a[..., 3] >= 128, 255, 0)
             im.alpha_composite(Image.fromarray(a), (p['x'], p['y']))
-            row.append(im.crop((x0, y0, x1, 400)).convert('RGB'))
-        tiles.append((key, row))
+            row.append(im.crop((x0, 270, x0 + 150, 400)).convert('RGB'))
+        rows.append((key, row))
     Z = 2
-    W = max(sum(t.width * Z + 4 for t in r) for _k, r in tiles)
-    H = sum(r[0].height * Z + 16 for _k, r in tiles)
-    sheet = Image.new('RGB', (W, H), (0, 0, 0))
+    W = 9 * (150 * Z + 4)
+    sheet = Image.new('RGB', (W, len(rows) * (130 * Z + 16)), (0, 0, 0))
     dr = ImageDraw.Draw(sheet)
-    y = 0
-    for key, row in tiles:
+    for j, (key, row) in enumerate(rows):
+        y = j * (130 * Z + 16)
         dr.text((4, y + 2), key, fill=(255, 255, 0))
-        x = 0
-        for t in row:
-            sheet.paste(t.resize((t.width * Z, t.height * Z), Image.NEAREST), (x, y + 14))
-            x += t.width * Z + 4
-        y += row[0].height * Z + 16
+        for i, t in enumerate(row):
+            sheet.paste(t.resize((150 * Z, 130 * Z), Image.NEAREST), (i * (150 * Z + 4), y + 14))
     sheet.save(path)
 
 
@@ -424,12 +298,14 @@ def main():
     ap.add_argument('--out', default=os.path.join(ROOT, 'art', 'cockpits'))
     ap.add_argument('--sheet')
     args = ap.parse_args()
-    sheets = sheets_of(args.zip)
-    keys = args.keys or list(CHOICE)
+    src = os.path.join(ROOT, 'build', 'arm2')
+    with zipfile.ZipFile(args.zip) as z:
+        z.extractall(src, [n for n in z.namelist() if '__MACOSX' not in n])
+    keys = args.keys or list(SHIPS)
     for key in keys:
-        placed, scores = build(key, sheets, args.out)
-        print('joysticks: %-8s sheet %2d, poses matched on their bases %s' % (key, CHOICE[key][0],
-                                                                            ' '.join('%.2f' % s for s in scores)))
+        k, drop, scores = build(key, src, args.out)
+        print('joysticks: %-8s scale %.3f, lowered %2d px, poses on their bare ones %s'
+              % (key, k, drop, ' '.join('%.2f' % v for v in scores)))
     if args.sheet:
         preview(keys, args.out, args.sheet)
 

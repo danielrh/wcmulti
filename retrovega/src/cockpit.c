@@ -100,11 +100,11 @@ static void dirty_sprite(unsigned a, int dy0, int dy1)
     vid_dirty(as->y + (dy0 < dy1 ? dy0 : dy1), as->y + as->h + (dy0 > dy1 ? dy0 : dy1));
 }
 
-/* the hand's pose on the stick (RvCockpit.stick): row forward (nose down: the steering's y > 0), middle, back;
- * column left, middle, right */
+/* the hand's pose on the stick (RvCockpit.stick): row forward (nose down: the steering's y < 0), upright, pulled
+ * back (nose up: y > 0, the pointer below the middle); column left, upright, right */
 static int stick_pose(const CockpitState *st)
 {
-    return (st->stick_y > 0 ? 0 : st->stick_y < 0 ? 2 : 1) * 3 + st->stick_x + 1;
+    return (st->stick_y < 0 ? 0 : st->stick_y > 0 ? 2 : 1) * 3 + st->stick_x + 1;
 }
 
 static int throttle_dy(const CockpitState *st)

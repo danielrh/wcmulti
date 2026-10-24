@@ -485,23 +485,23 @@ RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
   found inside its damage regions by the glass colour.
 - **Controls:** the throttle and the joystick as sprites at their place.
   The throttle slides up to 14 pixels with `setSpeed`. The joystick is
-  the pilot's hand on it (the user's sprite sheets, 2026-10-23,
+  the pilot's hand on it (the user's renders, arm2.zip, 2026-10-23;
   `tools/joysticks.py` into `art/cockpits/KEY/stick/`): nine poses,
-  pushed forward (nose down), the middle, pulled back, each leaning left,
-  upright or right, picked by the steering (the arrows at full rate, else
-  the pointer's distance from the middle of the opening); the base stays
-  put and only the stick and the hand move. Each cockpit takes the sheet
-  that matches its stick, with the user's three-pose strips where a
-  sheet's column had the arm from the wrong side; the two sidesticks
-  (Franklin, Progeny) are mirrored so it is the pilot's right arm, not the
-  left reaching across. The poses are lined up on the middle one's base
-  (matched by overlap over scales and offsets), scaled to the old stick's
-  height, and set so the base is flush with the bottom of the screen, a
-  sliver cropped (the user's balance: lower and the hand sinks too far;
-  the Franklin's, by the right edge, where it stood); a pose whose sleeve
-  end would still show has its sleeve run on the few pixels to the edge,
-  along the forearm. The old socket under each stick is painted out of
-  the base (its hole and collar filled with the plate round them).
+  pushed forward (nose down), upright, pulled back (nose up: the pointer
+  below the middle), each leaning left, upright or right, picked by the
+  steering (the arrows at full rate, else the pointer's distance from the
+  middle of the opening). Each set has a right arm whose sleeve the user
+  cut off with a horizontal line, and the same poses bare, at the
+  cockpit's scale and place (exactly the kit's old stick: its size, its
+  mount). Each handed pose is scaled and set by its bare one (their bases
+  matched by overlap), so the stick stands where and as big as the
+  cockpit's was; the whole set is lowered only as far as puts every
+  pose's cut edge off the bottom of the screen, the arm never drawn in
+  (the Redeemer 25 pixels, the Progeny 21, the Franklin 18, the Pacifier
+  9, the Goddard 3, the rest not at all; the base then cropped by the
+  screen's edge). The kit's socket is painted out of the base (its hole
+  and collar filled with the plate round them, speckled like it): the new
+  stick has its own base.
 - **Damage:** every overlay is a sprite with a fixed bit
   (`tools/cockpits.py` BITS: 0 weapons MFD, 1 targeting MFD, 2 radar, ...
   23 canopy, 26 survival VDU), drawn while its bit of `rvCockpitDamage`

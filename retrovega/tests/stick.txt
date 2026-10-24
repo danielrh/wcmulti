@@ -1,0 +1,64 @@
+# the stick's nine poses (run with /ship T /flight 60): the deck, the launch, then the arrows held for each pose (up
+# pushes forward, down pulls back), a shot J0 .. J8 in the order NW N NE W CENTER E SW S SE
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 60
+hold up 30
+hold left 30
+wait 16
+shot J0
+wait 20
+hold up 30
+wait 16
+shot J1
+wait 20
+hold up 30
+hold right 30
+wait 16
+shot J2
+wait 20
+hold left 30
+wait 16
+shot J3
+wait 20
+wait 16
+shot J4
+wait 20
+hold right 30
+wait 16
+shot J5
+wait 20
+hold down 30
+hold left 30
+wait 16
+shot J6
+wait 20
+hold down 30
+wait 16
+shot J7
+wait 20
+hold down 30
+hold right 30
+wait 16
+shot J8
+wait 20
+log done
+quit
