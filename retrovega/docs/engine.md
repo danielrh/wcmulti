@@ -954,12 +954,25 @@ zoom scene drew views 441, 623, 1417). The Gawain: 104 s to render (1,805
 files), its .RV 4.42 MB (1.58 at 10 degrees), its block set .RVH 5.82 MB
 (2.09), 5.7 MB of XMS when loaded — so six fighters at 6 degrees and three
 capitals at 10 (4 x 4 blocks) fit the ~58 MB a mission has. The cost is
-the page's: the art tarball would grow from 29 MB (19 ships) to some 85 MB,
-and makeSet takes 1.6 s a fighter in node (0.95 s for the 10-degree sharp
-set), so the switch waits on fetching a mission's ship files when it is
-flown, with a cache, rather than everything at the start; and the renders
-are committed art (the build box has no meshes), 2.8 x the repository
-growth a re-render. Capitals stay at 10 degrees either way.
+the page's: the views would be some 80 MB where the 19 ships' were 29, and
+makeSet takes 1.6 s a fighter in node (0.95 s for the 10-degree sharp
+set), so the switch waited on fetching a flight's ship files when it is
+flown, with a cache (the next section), rather than everything at the
+start; and the renders are committed art (the build box has no meshes),
+2.8 x the repository growth a re-render.
+
+**The eighteen at 6 degrees** (the user, later that day: "The 6 degrees is
+where it is at!"): every symmetric fighter re-rendered with `--step 6`
+(39 s for the Gaozong to 327 s for the Pacifier, 46 minutes in all at low
+priority beside other work), the Convolution left at 15 (asymmetric, 266
+views). art/ships is 80.6 MB (1.2-8.4 MB a ship; 50.8 MB gzipped
+for the page), build.sh makes the 38 sets in 42 s (the block sets 110 MB,
+the sharp ones 163 MB), the page's twin makes the same bytes (the check),
+and the first mission's flight loads its two types in 9.3 MB of XMS (3.3 at
+10 degrees) with 48 MB left. The exact draw costs the same per frame (4.6 ms
+either way for the test flight's two ships) though a turning ship changes
+view more often: 305 dense copies expanded into the slab against 190.
+Capitals, when there are any, stay at 10 degrees.
 
 **The sky** (2026-10-20, the user's ask: "a generic function to blit a
 sprite at infinity at a vector ... so it will rotate with the player; that
