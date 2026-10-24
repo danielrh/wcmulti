@@ -459,6 +459,81 @@ int ships_load(unsigned type)
     return g_nsets++;
 }
 
+/* The page's part (web/wc.js): when a set a flight needs is not beside
+ * RV.EXE, the flight's whole list goes into RVWANT.TXT ("want GEN
+ * SHIP02.RVH ..."), which the page polls; it fetches each missing type's
+ * views, makes the set and writes it among the game's files.  With wait, the flight stands at the deck until the files
+ * are there, SHIPS_WANT_S seconds at most, then goes on without what is
+ * missing (ships_load logs it); without, the list is only written (the
+ * briefing's, so the page has them fetched by the launch).  On DOS the files
+ * are beside RV.EXE and nothing is written. */
+#define SHIPS_WANT_S 180
+static int set_present(unsigned type, char *name)
+{
+    FILE *f;
+    sprintf(name, g_res == 2 ? "SHIP%02X.RVH" : "SHIP%02X.RVS", type);
+    f = fopen(name, "rb");
+    if (!f)
+        return 0;
+    fclose(f);
+    return 1;
+}
+
+void ships_want(const unsigned char *types, int n, int wait)
+{
+    char name[16];
+    unsigned long t0 = clock240(), last = 0;
+    int i, k, missing = 0, listed = 0;
+    FILE *f;
+    for (i = 0; i < n; i++)
+        if (!set_present(types[i], name))
+            missing++;
+    if (!missing)
+        return;
+    f = fopen("RVWANT.TXT", "w");
+    if (f)
+        fprintf(f, "want %lu", t0);     /* (the generation: the page acts on a new one) */
+    /* every set the flight needs, present or not, each once: the page keeps those and drops the rest */
+    missing = 0;
+    for (i = 0; i < n; i++) {
+        for (k = 0; k < i && types[k] != types[i]; k++)
+            ;
+        if (k < i)
+            continue;
+        if (!set_present(types[i], name))
+            missing++;
+        listed++;
+        if (f)
+            fprintf(f, " %s", name);
+    }
+    if (f) {
+        fprintf(f, "\n");
+        fclose(f);
+    }
+    rv_log("ships: %d of the flight's %d sets asked of the page (RVWANT.TXT)%s", missing, listed, wait ? ", waiting" : "");
+    if (!wait)
+        return;
+    for (;;) {
+        unsigned long now = clock240();
+        if (now - last >= 60) {         /* a look every quarter second */
+            last = now;
+            missing = 0;
+            for (i = 0; i < n; i++)
+                if (!set_present(types[i], name))
+                    missing++;
+            if (!missing) {
+                rv_log("ships: the sets came in %lu ms", (now - t0) * 1000 / 240);
+                return;
+            }
+            if (now - t0 >= SHIPS_WANT_S * 240UL) {
+                rv_log("ships: %d set files did not come in %d s", missing, SHIPS_WANT_S);
+                return;
+            }
+        }
+        rv_halt();
+    }
+}
+
 /* how many of a set's roll blocks at size k are not loaded */
 static int rolls_out(const ShipSet __far *s, int k)
 {

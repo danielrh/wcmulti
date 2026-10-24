@@ -182,7 +182,10 @@ def preview(packdir, out, meta, pal, ships, names):
     img = Image.new('RGB', (cols * cell, rows_n * (cell + 12)), (0, 0, 0))
     dr = ImageDraw.Draw(img)
     for i, r in enumerate(ships):
-        views, rec = read_ship(os.path.join(packdir, 'SHIP%02X.RV' % int(r['type'], 16)))
+        path = os.path.join(packdir, 'SHIP%02X.RV' % int(r['type'], 16))
+        if not os.path.exists(path):
+            continue                    # (a partial pack: --sprites with some of the ships)
+        views, rec = read_ship(path)
         im = draw(views[10], pal, livery_remap(meta, names[rec['livery']]))
         im.thumbnail((cell, cell), Image.NEAREST)
         x, y = (i % cols) * cell, (i // cols) * (cell + 12)

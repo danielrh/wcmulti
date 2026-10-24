@@ -102,7 +102,7 @@ for (let i = 0; i < 3; i++) { await page.keyboard.press("Escape"); await sleep(1
 await waitLog(new RegExp(`(stub: roomEntered[^]*){${n + 3}}`), 8000); await sleep(2500);
 await shot("deck");
 if (!await hotspot(478, 176, "the deck's fighter")) process.exit(1);
-t = await waitLog(/flight: L1c0|runHangar|flight: slot/, 20000);
+t = await waitLog(/flight: L1c0|runHangar|flight: slot/, 150000);   // (the page fetches and makes the flight's sets first)
 const flying = logs.some((l) => /runHangarMission/.test(l)) || /flight: slot/.test(t);
 console.log(flying ? "ok   the flight started" : "FAIL no flight started (" + (t.split("\n").slice(-3).join(" | ")) + ")");
 await sleep(4000); await shot("flight-4s");
@@ -113,11 +113,17 @@ if (!/\/flight /.test(process.env.CMD || "")) {    // (a flight lands when the p
 }
 t = await waitLog(/flight: over/, (flightS + 20) * 1000);
 console.log(/flight: over/.test(t) ? "ok   the flight ended" : "FAIL the flight did not end");
+// the sets the page made for the flight, kept in the browser's cache for the next visit (wc.js rvProvideOne)
+const cached = await page.evaluate(async () => {
+  try { const n = {}; for (const k of await caches.keys()) if (k.startsWith("rv-")) n[k] = (await (await caches.open(k)).keys()).length; return n; }
+  catch (e) { return { error: e.message }; }
+});
+console.log(Object.keys(cached).some((k) => k.startsWith("rv-sets-") && cached[k] > 0) ? `ok   the browser keeps the sets ${JSON.stringify(cached)}` : `note no cached sets ${JSON.stringify(cached)}`);
 await sleep(3000); await shot("after");
 const lines = t.split("\n").filter((l) => /^(flight:|ships:|lightfield:|FAIL|cockpit:|stars|lasers:|bolts:)/.test(l));
 console.log(lines.join("\n"));
 console.log(/FAIL /.test(t) ? "FAIL a stop in the engine's log" : "ok   no stop in the engine's log");
-console.log(logs.filter((l) => /perf: /.test(l)).join("\n"));
+console.log(logs.filter((l) => /perf: |'s views \(|^made SHIP|^ship sets|rv\/ships\.json|sprite worker|could not keep/.test(l)).join("\n"));
 console.log(logs.filter((l) => /ended|PAGE ERROR|stack/.test(l)).slice(0, 6).join("\n"));
 fs.writeFileSync(path.join(shotDir, "rv-flight-RVLOG.TXT"), t);
 fs.writeFileSync(path.join(shotDir, "rv-flight.log"), logs.join("\n") + "\n");

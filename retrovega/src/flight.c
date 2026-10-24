@@ -2484,6 +2484,16 @@ void __far __cdecl flight_startup(void)
     }
     if (g_lasers)
         rv_log("lasers: DOS memory free before the ship sets: %lu KB", bolts_dos_free() / 1024);
+    {
+        /* the sets this flight needs, asked of the page when they are not beside RV.EXE (ships_want) */
+        unsigned char want[RV_MAX_SHIP_SLOT + 2];
+        int nw = 0;
+        want[nw++] = (unsigned char)enemy_type;
+        want[nw++] = g_camp.player_ship;
+        for (i = 1; i < n && nw < (int)sizeof want; i++)
+            want[nw++] = (unsigned char)gInstanceShipTypes[i];
+        ships_want(want, nw, 1);
+    }
     g_set_enemy = ships_load(enemy_type);
     g_set_wing = ships_load(g_camp.player_ship);
     for (i = 1; i < n; i++)

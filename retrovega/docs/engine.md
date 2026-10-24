@@ -647,6 +647,44 @@ hotspot sits at 478,176) and reading RVLOG.TXT; a desktop browser on a
 faster machine will sit between the two. The number is live in
 `rvBenchCount` while the flight runs.
 
+### The ships' views fetched when a flight asks
+
+The page (2026-10-23, the user: "lets do all these things. The 6 degrees is
+where it is at!"). At 6 degrees a fighter's views are 4.4 MB and the
+eighteen some 80 MB, too much to fetch before the game starts as the 29 MB
+at 10 degrees were, so a flight fetches its own. The engine's side is
+`ships_want` (ships.c): given the flight's types it looks for each one's
+set file beside RV.EXE (SHIPnn.RVH, or .RVS under /res 1) and, when any is
+missing, writes the whole list to RVWANT.TXT as `want GEN SHIP02.RVH
+SHIP08.RVH ...` (GEN the clock, so the page acts on a new line once) and
+either returns (`start_briefing` in game.c: the mission's types, the
+player's for the player and wingman entries, 08 when no enemy is listed,
+so the fetching runs while the briefing is read) or waits (`flight_startup`,
+before the loads: every quarter second a look for the files, `rv_halt`
+between, three minutes at most, then on without what is missing, which
+`ships_load` logs as "no set for type"). On DOS the files are beside RV.EXE
+and nothing is written; the native tests pass with every set in place and
+with one held back until the file appears (a shell loop playing the page:
+"the sets came in 500 ms").
+
+The page's side (web/wc.js, "RetroVega's ship sets"): build-web.sh leaves
+SHIPnn.RV out of retrovega.tar.gz (6.5 MB now, from 25.5) and puts each
+beside it gzipped (rv/SHIPnn.RV.gz, a third smaller) with rv/ships.json
+(the build, and each ship's name, size and SHA-1). While RetroVega runs the
+page reads RVWANT.TXT every 300 ms; a new generation is served: sets no
+longer listed are removed from the game's files, and each listed one that
+is missing is taken from the browser's Cache API (`rv-sets-BUILD`, keyed by
+the views' hash and the recipe), else made from the views (the `rv-art`
+cache by hash, else fetched and gunzipped through DecompressionStream) in a
+worker (web/rvsprites-worker.js, so the emulator and the music run on;
+1.3-1.9 s a 10-degree fighter in headless Chrome) and kept in both caches,
+then written with `FS.writeFile`; DOSBox opens a file created after the
+mount by its name (the directory cache expands an unknown name unchanged).
+The status line says what is being fetched or made. Without the Cache API
+(an http page other than localhost, a private window) it all still works,
+fetched each time. scripts/web-rv-flight.mjs flies it: the briefing asked
+for two sets, both were made in 3.8 s, and the launch found them in place.
+
 ### The test build: RVT.EXE
 
 The demos, the benchmarks and the self-tests (`/bench`, `/record`, `/zoom`,

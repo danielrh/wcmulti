@@ -14,6 +14,7 @@
 #include "rvhooks.h"
 #include "room.h"
 #include "campaign.h"
+#include "ships.h"
 #include "lipsync.h"
 #include "music.h"
 #include "flight.h"
@@ -606,6 +607,21 @@ static void start_briefing(int debrief)
     g_mode = debrief ? MODE_DEBRIEF : MODE_BRIEF;
     g_stage = 0;
     g_xo_close = 0;
+    if (!debrief) {
+        /* the flight's sets asked of the page now (ships_want), fetched while the briefing is read */
+        unsigned char want[RV_MAX_SHIP_SLOT + 2];
+        int i, nw = 0, enemy = 0;
+        want[nw++] = g_camp.player_ship;
+        for (i = 0; i < g_m.nship && nw < (int)sizeof want - 1; i++) {
+            int type = g_m.ship[i].type;
+            if (g_m.ship[i].side == 1)
+                enemy = 1;
+            want[nw++] = (unsigned char)(type == RV_SHIP_PLAYER || type == RV_SHIP_WINGMAN ? g_camp.player_ship : type);
+        }
+        if (!enemy)
+            want[nw++] = 0x08;          /* (the flight's stand-in enemy type) */
+        ships_want(want, nw, 0);
+    }
     say(person_of(RV_ROLE_XO), debrief ? (g_won ? g_m.win : g_m.lose) : g_m.briefing);
     if (!debrief)
         briefingStarted();
