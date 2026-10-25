@@ -188,6 +188,31 @@ extra health" and "wingman explodes" behaviour.
   came first.  The missions with such a wave, from the MODULE files: WC2
   series 1 mission D, 3 D, 5 B, 5 D, 7 B, 8 D, 10 A, 10 C, 11 C and 12 D;
   SO2 1-3; none in SO1, nor in Culloden.
+* **A wingman who reached the nav point after the wave lost it again
+  (2026-10-25, the edge left open by the two above, tested on the user's
+  asking).**  A client's game sets a nav point up when its own player
+  comes within the record's reach (`+0x2B`) of an armed one (byte `+0x1E`
+  = 1; WC.EXE `seg001:2029`, WC2 `seg001:1BCB`), and the setup loads the
+  nav point's own types, whatever the server's ships there are by then.
+  On the rig (`scripts/wcnet-wave-types.sh`: the host jumps alone to the
+  nav point by the key script's `!pos` and destroys the first wave, the
+  wingman jumps there after the second came) Venice 2's wingman reloaded
+  the Salthi over the Krants, and the Krants' shapes went null with their
+  type (`ovr145:05EB` frees it): unseen again.  WC2's
+  slots name an entry of its table of loaded ships (`dseg:4B3C` into
+  `dseg:14D0`, 0xF3 bytes each, the type at `+2`), which then holds
+  whatever the next load put there: at series 5 mission D's Enemy Base
+  (Jalkehi, then Drakhri) the host's five Drakhri were Concordias on a
+  wingman still at the carrier -- once `NavSetupJob` has moved a client to
+  the server's nav point, its own check finds the carrier's in reach, not
+  the current one, and sets it up again -- and Jalkehi once the wingman got
+  there.  Now a load the
+  client's own game makes (not `ShipTypesJob`'s) is left out when it would
+  drop a type that a ship in a slot is (`on_load_nav_types_entry`): the
+  types the server's ships need are the ones `ShipTypesJob` loaded, as the
+  server's game did.  Both rigs then kept the host's types and shapes; the
+  flights where both pilots arrive together (Venice 2, Olympus, SO2 1-3)
+  never hit the skip.
 * The per-instruction hook read ~15 words of guest memory for every emulated
   instruction (`isExecutingOverlay` per hook).
 
@@ -907,6 +932,13 @@ as always.  The log says so once per mission.
 mission start state, spawn mapping, autopilot, enemy fire/damage replay and
 the client's local damage model.  It does not exercise chat, landing, or a
 client death (nothing shoots back headless for long enough).
+
+`scripts/wcnet-wave-types.sh [wc1|wc2|all]` flies two native pairs to the
+case above (a wingman reaching a nav point after the host's second wave of
+a new type, Venice 2 and WC2 series 5 mission D) and checks from the
+wingman's dumps that every ship in a slot is of a loaded type and drawn as
+it; it prints `WAVE TYPES OK` or `FAILED` (a few minutes; `CHECK_ONLY=1`
+checks an earlier run's dumps again).
 
 The default build needs no special flags (`include/setup.h` no longer uses
 dynamic exception specifications); `make -j8` after `./configure`.

@@ -112,7 +112,12 @@ Stage 1 to 4 of the plan in section 10, for a mission the story flies with a win
     (`ovr116:17F6`) had the same hole until 2026-10-25: before a spawn of a
     type it has not loaded a client loads the types of the record naming
     the ship (`ShipTypesJob`, `ovr116:1298`; docs/wcnet-multiplayer.md,
-    the Krants).
+    the Krants).  And a client's own setup of a nav point (its player in
+    reach, or the carrier's again after `NavSetupJob` moved it on) no
+    longer loads over a type the server's ships are: WC2's slots name an
+    entry of the loaded ships' table (`dseg:4B3C`), and a Drakhri became
+    whatever the entry held next (`on_load_nav_types_entry`,
+    `scripts/wcnet-wave-types.sh`).
   * WC2 places a wingman by formation AI, not by a start offset.  The AI is
     off for a human's ship, so the client takes the position the server
     holds for its slot from the start state (this also fixed WC1, where a

@@ -786,6 +786,40 @@ private:
 // fighter is left), and there a spawn of a type that is not loaded makes no
 // ship at all: Olympus's Jalkehi after the Drakhri (series 3, mission D)
 // never came on a wingman's machine.
+
+// The loaded ship types (ds::loadedShipTypes): four entries of 13 bytes, a
+// type byte first (WC2: five of 0x16 bytes, a type word), -1 when free.  The
+// loader keeps entry 0 (and WC2's last) for the whole mission and gives
+// entries 1-2 (WC2 1-3) to the types a nav point record names, two words at
+// +0x35 (WC2 three at +0x3F), freeing whichever held another (ovr145:08EC;
+// ovr116:1298).
+static int loaded_type(int entry) {
+    Bit16u at = (Bit16u)(ds::loadedShipTypes + (is_wc2() ? 0x16 : 13) * entry);
+    return is_wc2() ? (Bit16s)rd16(at) : (Bit8s)rd8(at);
+}
+static bool type_loaded(int type) {  // ovr145:0892 (WC2: ovr116:123E)
+    for (int i = 0; i < (is_wc2() ? 5 : 4); i++) {
+        if (loaded_type(i) == type) {
+            return true;
+        }
+    }
+    return false;
+}
+static bool record_names_type(Bit16u rec, int type) {  // ovr145:08BD (WC2: ovr116:1268)
+    for (int i = 0; i < (is_wc2() ? 3 : 2); i++) {
+        if ((Bit16s)rd16((Bit16u)(rec + (is_wc2() ? 0x3F : 0x35) + 2 * i)) == type) {
+            return true;
+        }
+    }
+    return false;
+}
+static int mission_ship_type(int ms) {
+    Bit16u shipRec = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms);
+    return is_wc2() ? rd8((Bit16u)(shipRec + 0x14)) : (Bit16s)rd16(shipRec);  // (WC2: a type byte after the name)
+}
+
+static bool g_loadingShipTypes = false;  // ShipTypesJob's own call of the loader
+
 class ShipTypesJob : public VmJob {
 public:
     explicit ShipTypesJob(const Spawn &spawn) : spawn_(spawn), type_(-1), loading_(false) {}
@@ -797,8 +831,7 @@ public:
             ms < 0 || ms >= 0xffff || nav < 0 || nav >= navRecords || is_field_mission_ship(ms)) {
             return false;
         }
-        Bit16u shipRec = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms);
-        type_ = is_wc2() ? rd8((Bit16u)(shipRec + 0x14)) : (Bit16s)rd16(shipRec);  // (WC2: a type byte after the name)
+        type_ = mission_ship_type(ms);
         if (type_ < 0 || type_loaded(type_)) {
             return false;
         }
@@ -813,7 +846,7 @@ public:
                     wclog(1, "mission ship %d is a ship type (%d) not loaded here: loading the types of nav point %d%s",
                           ms, type_, nav, k ? "'s next wave" : "");
                     call_of(code::loadNavTypes).arg(rec).invoke();
-                    loading_ = true;
+                    loading_ = g_loadingShipTypes = true;
                     return true;
                 }
             }
@@ -822,6 +855,7 @@ public:
         return false;
     }
     virtual void finish() {
+        g_loadingShipTypes = false;
         if (loading_ && !type_loaded(type_)) {
             wclog(0, "ship type %d is still not loaded here: mission ship %d will not be seen", type_, (int)spawn_.mission_ship_id());
         }
@@ -829,16 +863,6 @@ public:
     virtual const char *describe() const { return "ship types"; }
 
 private:
-    static bool type_loaded(int type) {  // ovr145:0892 (WC2: ovr116:123E)
-        const int loadedTypes = is_wc2() ? 5 : 4, loadedTypeSize = is_wc2() ? 0x16 : 13;
-        for (int i = 0; i < loadedTypes; i++) {
-            Bit16u entry = (Bit16u)(ds::loadedShipTypes + loadedTypeSize * i);
-            if ((is_wc2() ? (Bit16s)rd16(entry) : (Bit8s)rd8(entry)) == type) {
-                return true;
-            }
-        }
-        return false;
-    }
     Spawn spawn_;
     int type_;
     bool loading_;
@@ -1435,6 +1459,44 @@ void on_spawn_entry() {
     spawn.set_seed(rd32(ds::randomSeed));
     g_trampoline.enqueue(new SpawnJob(SpawnJob::BROADCAST, spawn));
     g_trampoline.run_instead_of_current_call(code::outerSpawnShipEntity);
+}
+
+// A client's game loads a nav point's ship types when its own player comes
+// within reach of the nav point (ovr145:0A66; WC2 ovr116:1661 -- and WC2
+// sets up again the nav point its player is at once NavSetupJob has moved
+// it to the server's), whatever the server's ships there are by then.  A
+// wingman who came to Venice 2's Nav 2 after the leader had brought on the
+// Krants reloaded the Salthi and dropped the Krants' type: WC.EXE takes the
+// shapes of the ships of a dropped type (nothing drawn, as before
+// ShipTypesJob).  WC2's slots name an entry of its table of loaded ships
+// (dseg:4B3C into dseg:14D0), which then holds another type: the host's
+// Drakhri at Ch 5 mission 4's Enemy Base were the Concordia's type on a
+// wingman still at the carrier, and Jalkehi once the wingman got there.  On a
+// client the server's ships decide which types are loaded (ShipTypesJob),
+// so a load that would drop one of their types is left out.
+void on_load_nav_types_entry() {
+    if (!g_session || !g_session->is_client() || g_loadingShipTypes || !ds::known(ds::loadedShipTypes) ||
+        !ds::known(ds::slotMissionShip)) {
+        return;
+    }
+    Bit16u rec = call_arg16(code::loadNavTypes, 0);
+    for (int i = 1; i < (is_wc2() ? 4 : 3); i++) {
+        int type = loaded_type(i);
+        if (type == -1 || record_names_type(rec, type)) {
+            continue;
+        }
+        for (int s = kPlayerSlot; s <= kMaxShipSlot; s++) {
+            int ms = (Bit16s)rd16((Bit16u)(ds::slotMissionShip + 2 * s));
+            if ((entity_type(s) != ET_SHIP && entity_type(s) != ET_CAPSHIP) || ms < 0 || is_field_mission_ship(ms) ||
+                mission_ship_type(ms) != type) {
+                continue;
+            }
+            wclog(1, "our own setup of nav point record %d would drop ship type %d, which slot %d (mission ship %d) is: "
+                  "the types stay as they are", ((int)rec - (int)ds::navPointTable) / g_params.navPointSize, type, s, ms);
+            return_from_call(code::loadNavTypes, 0);
+            return;
+        }
+    }
 }
 
 static void intercept_despawn(bool explode) {

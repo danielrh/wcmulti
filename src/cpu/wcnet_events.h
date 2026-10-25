@@ -21,6 +21,7 @@ namespace wc {
 void on_do_damage_entry();        // do_damage(src, dst, quantity, vec*)
 void on_fire_entry();             // fireGunFromShip(ship, gun)
 void on_spawn_entry();            // outerSpawnShipEntity(missionShip, situation)
+void on_load_nav_types_entry();   // loadNavTypes(nav point record*)
 void on_despawn_entry();          // despawn(ship)
 void on_delayed_despawn_entry();  // delayedDespawn(src, ship)
 void on_ai_think_entry(const Loc &fn);  // per-frame ship AI (WC.EXE: ovr163:160E the capital ships', 13CF the fighters')

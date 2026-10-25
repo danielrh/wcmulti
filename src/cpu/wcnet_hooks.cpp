@@ -1419,6 +1419,8 @@ static void check_hooks_slow() {
         on_delayed_despawn_entry();
     } else if (at_function(code::outerSpawnShipEntity)) {
         on_spawn_entry();
+    } else if (code::loadNavTypes.known() && at_function(code::loadNavTypes)) {
+        on_load_nav_types_entry();
     } else if (at_function(code::despawn)) {
         on_despawn_entry();
     } else if (at_function(code::aiShipThink)) {
