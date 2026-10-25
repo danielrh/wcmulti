@@ -119,7 +119,7 @@ patch('organ', [layer(op(2, 12, 14, 0, 0, 8), op(1, 4, 14, 0, 0, 8), additive=Tr
 
 # Mallets: vibraphone (its motor's tremolo), celesta and music box (an octave up, bell-like)
 patch('vibraphone', [layer(op(4, 42, 15, 5, 15, 6, egt=0), op(1, 0, 15, 3, 15, 5, egt=0, ksr=1, am=1), vsense=20)],
-      programs=[11, 12, 13, 14, 15, 112, 113, 114])
+      programs=[11, 12, 13, 15, 112, 113, 114])
 patch('celesta', [layer(op(7, 40, 15, 6, 15, 6, egt=0), op(2, 4, 15, 4, 15, 5, egt=0, ksr=1), vsense=22)],
       programs=[8, 9, 10])
 
@@ -179,6 +179,12 @@ patch('short pluck', [layer(op(1, 20, 15, 7, 10, 8, egt=0), op(1, 0, 15, 7, 15, 
 patch('sub bass', [layer(op(1, 44, 15, 3, 6, 8), op(1, 0, 15, 1, 1, 8), fb=1, vsense=8)], programs=[39])
 patch('glass bell', [layer(op(3, 36, 15, 5, 15, 5, egt=0), op(1, 2, 15, 5, 15, 5, egt=0, ksr=1), fb=1, vsense=20)],
       programs=[98])
+# Chimes (tubular bells, program 14) for Starwake (the user, 2026-10-24: "some very fast minor pieces with
+# chimes"): the carrier at twice the note and the modulator at seven times it (3.5 to 1: a bell's partials, not a
+# harmonic series), an octave down so it sounds where written; the clang bright at the strike and mellowing (the
+# modulator decays first), the ring long while held and short once let go, so a fast figure keeps to few voices.
+patch('chimes', [layer(op(7, 24, 15, 5, 15, 6, egt=0), op(2, 0, 15, 3, 15, 6, egt=0, ksr=1), fb=3, transpose=-12,
+                       vsense=14)], programs=[14])
 PROGRAMS[85] = 'soft lead'
 patch('noise swell', [layer(op(15, 0, 15, 0, 0, 6), op(5, 8, 2, 0, 0, 5), fb=7)], programs=[119])
 patch('timpani', [layer(op(1, 34, 15, 6, 15, 6, egt=0), op(1, 0, 15, 3, 15, 4, egt=0), fb=2, vsense=12)],

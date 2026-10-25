@@ -3,23 +3,24 @@
     PANIC1   "Hull Breach"      C, 140: the fight's drive (a sixteenth motor on a C pedal, the low strings,
                                 timpani) with the damage over it: a low horn cluster, alarms in seconds high up
                                 on the brass and the piccolo, the fight's call a tritone off
-    PANIC2   "Systems Failing"  climbing by half steps, 140: blocks of six bars, four climbing a half step a bar
-                                and two wild ones (tritones on every eighth, a crash, a brass run, toms)
-    PANIC3   "Abandon Ship"     152 into 196: panic, hope (the fight's call in major), hope dashed, hope again a
-                                step higher, dashed harder, then the panic speeding up, and round again
+    PANIC2   "Systems Failing"  140: the three battles' blocks quoted in turn, two-bar bursts between them (the
+                                half-step climb, wild tritone bars, the power failing, the alarm)
+    PANIC3   "Abandon Ship"     140 into 200: shorter quotes and wilder bursts (panic in tritones, hope dashed,
+                                dashed harder, a cluster, the call a tritone off), speeding up into the loop
     VICTORY1..3                 the splashes, bittersweet: A flat and B flat into C; D's minor plagal; B flat's
                                 deceptive turn, ending open
     TRAGEDY  "Wingman Lost"     a funeral march in B flat minor at 52
 
 The user (2026-10-24, the third draft): "fix all the flight music to have that same style [Outbound's] but
 their own unique character and be remixable and loopable".  The panics come in on the bar over the battles
-(PANIC1 and PANIC2 at the battles' 140 in C); each block starts on its downbeat with the motor and leaves
-nothing hanging over the next ("sect" markers at every block, src/music.c's follow-ons).  Their drums are hits,
+(all three at the battles' 140 in C; PANIC2 and PANIC3 quote them); each block starts on its downbeat with the
+motor and leaves nothing hanging over the next ("sect" markers at every block).  Their drums are hits,
 rolls and toms, no kit's beat.  The stings play once, over the battle, which then goes on where it was.
 """
 from compose import chord
 from orch import (NAMES, DRUM, Piece, hits, up, scale_run, ORCH, ACC332, orchestra, in_range, octaves, pulses,
-                  pedal332, hit, held, sung, sweep, MAJOR, LYDIAN)
+                  pedal332, hit, held, sung, sweep, MAJOR, LYDIAN, excerpt, restore)
+import battles
 from songs import p
 
 BATTLE_BPM = 140
@@ -173,169 +174,273 @@ def hull_breach():
     return s
 
 
-# --- PANIC2: "Systems Failing" (climbing by half steps, 140): the hull under 35% ----
-# Blocks of six bars, each a half step up from the last and back down again (C, D flat, D, E flat, D, D flat):
-# four bars climbing a half step a bar, the horns' alarm rising, the strings' cluster swelling, the timpani
-# rolling into two wild bars, tritones on every eighth, a crash, the orchestra hitting the 3+3+2, a brass run
-# up and the toms down.  Then the theme, the climb, comes back.
-
-SF_STARTS = [0, 1, 2, 3, 2, 1]
-
-
-def systems_failing():
-    form = []
-    for r0 in SF_STARTS:
-        form += [NAMES[(r0 + k) % 12] + 'm' for k in range(4)] + [NAMES[(r0 + 4) % 12] + 'dim'] * 2
-    s = Piece(BATTLE_BPM, 2414, form, level=0.0)
-    ch = orchestra(s)
-    hn, mo, hi_, lo, br, pc, tp, st = (ch[k] for k in ('horn', 'motor', 'hit', 'low', 'brass', 'piccolo',
-                                                     'timpani', 'strings'))
-    n = len(form)                                   # 36 bars, 61.7 s
-    s.loop_at(0)
-    s.sections(0, n, every=6)
-    for b in range(n):
-        k = b % 6
-        r = chord(form[b]).root
-        if k < 4:                                   # the climb
-            motor16(s, mo, b, 56 + 5 * k)
-            low8(s, lo, b, 68 + 4 * k, figure=(0, 0, 12, 0, 0, 12, 0, 12))
-            swelled(s, st, b, 0, 3.8, [in_range(r, 60, 71), in_range(r, 60, 71) + 1], 52 + 4 * k,
-                    e0=50 + 18 * k, e1=90 + 10 * k, e2=70 + 14 * k)
-            if k % 2 == 1:
-                s.play(br, b, 1.5, .4, [in_range(r, 72, 83), in_range(r, 72, 83) + 1], 76)
-                s.play(br, b, 3, .4, [in_range(r, 72, 83), in_range(r, 72, 83) + 1], 70)
-                x = in_range(r + 7, 55, 66)         # the horns' alarm: the fifth, a half step up, a tritone on
-                s.line(hn, b, '%s:0:1.5 %s:1.5:.5 %s:2:1.9' % (nm(x), nm(x + 1), nm(x + 6)), 82)
-            s.play(tp, b, 0, .5, in_range(r, 33, 44), 84)
-            s.play(tp, b, 2, .5, in_range(r, 33, 44), 72)
-            s.play(9, b, 0, .2, DRUM['kick'], 110)
-            if k == 3:
-                s.roll(tp, b, 2, 2, in_range(r, 33, 44), 30, 104, step=0.125)
-                snare_roll(s, b, 3, 1, 34, 100)
-        else:                                       # wild: tritones on every eighth
-            motor16(s, mo, b, 70, figure=(1, 2, 1, 0))
-            for e in range(8):
-                q = in_range(r, 36, 47)
-                s.play(lo, b, e * .5, .45, q + (6 if e % 2 else 0), 84)
-                s.play(tp, b, e * .5, .3, in_range(r + (6 if e % 2 else 0), 33, 44), 74 + (e % 2) * 10)
-                if k == 4 or e < 4:
-                    s.play(br, b, e * .5, .3, [in_range(r, 60, 71), in_range(r, 60, 71) + 6], 82 + (e % 2) * 10)
-            for beat in ACC332:
-                hit(s, hi_, b, beat, 112)
-            if k == 4:
-                s.crash(b, 0, 112)
-                trill(s, pc, b, 0, 2, in_range(r, 84, 95), in_range(r, 84, 95) + 6, 60)
-            else:                                   # the brass's run up, the toms down
-                run = [q for q in range(in_range(r, 64, 75), in_range(r, 64, 75) + 25) if (q - r) % 12 in DIM]
-                flurry(s, br, b, 2, run, 0.125, 74, rise=1)
-                for i, t in enumerate(('tom1', 'tom1', 'tom2', 'tom2', 'tom3', 'tom3', 'tom4', 'tom4')):
-                    s.play(9, b, 2 + i * .25, .2, DRUM[t], 80 + i * 3, 2)
-    s.end(n)
-    return s
+# --- PANIC2 and PANIC3: the fight goes on, breaking up --------------------------------------------------------
+# The user (2026-10-24), on the first Systems Failing and Abandon Ship: "a bit too repetitive with themselves...
+# somehow you get stuck in this loop... maybe it can cut in pieces of the battle various musics and just add little
+# spurts of panic to an otherwise recognizable song... interspersed with those tritones or wild bars before going
+# back to the fight music", and then: bake it into the songs.  So each is a run through the three battles' own
+# blocks, quoted note for note (orch.excerpt: Contact's call and answer, Break and Attack's riff and its
+# Neapolitan horn, Furball's riff and its surprise), with two-bar bursts of panic between them, written with the
+# first versions' techniques.  Both at the battles' 140 in C: a panic comes in from the fight on the bar.
 
 
 def nm(q):
     return '%s%d' % (NAMES[q % 12], q // 12 - 1)
 
 
-# --- PANIC3: "Abandon Ship" (152 into 196): the hull under 15% ----------------------
-# The arc the user asked for: panic; hope (the fight's call in major on the horn, the strings warm, the harp);
-# hope dashed (the chords falling apart chromatically, the piccolo tumbling, timpani rolling); hope again, a step
-# higher on the brass; dashed harder (tritones on every eighth); then the panic again, speeding up from 152 to
-# about 196 over its last eight bars (the user loved the draft's speed-up), timed to take seven bars' time so
-# the piece stays whole bars at 152, and round again.
+_QUOTED = {}
 
-AS_PANIC = ['Cm', 'Gb', 'Cm', 'Gb', 'Db', 'G', 'Ab', 'D']
-AS_HOPE = ['C', 'G/B', 'Am', 'F', 'C', 'G', 'Ab', 'Bb']
-AS_HOPE2 = ['D', 'A/C#', 'Bm', 'G', 'D', 'A', 'Bb', 'C']
-AS_DASH = ['Gb', 'F', 'E', 'Eb']
+
+def quoted(name):
+    """the battle pieces, made once (the panics quote them)"""
+    if name not in _QUOTED:
+        make = {'contact': battles.contact, 'attack': battles.break_and_attack, 'furball': battles.furball}[name]
+        _QUOTED[name] = make()
+    return _QUOTED[name]
+
+
+def panic_song(bpm, seed, plan, bursts, sects_until=None):
+    """plan: ('fight', battle, its first bar, bars) or (burst, argument): the form, the bursts' chords from
+    bursts[burst][0](argument), drawn by bursts[burst][1](s, parts, bar, argument)"""
+    form = []
+    for step in plan:
+        if step[0] == 'fight':
+            form += ['Cm'] * step[3]
+        else:
+            form += bursts[step[0]][0](step[1])
+    s = Piece(bpm, seed, form, level=0.0)
+    parts = orchestra(s)
+    s.loop_at(0)
+    b = 0
+    for step in plan:
+        if sects_until is None or b < sects_until:
+            s.sect(b)
+        if step[0] == 'fight':
+            excerpt(s, quoted(step[1]), step[2], step[3], b)
+            b += step[3]
+        else:
+            restore(s, b)
+            bursts[step[0]][1](s, parts, b, step[1])
+            b += 2
+    s.end(len(form))
+    return s
+
+
+# Systems Failing's bursts (the hull under 35%)
+
+def sf_climb(s, c, b0, r0):
+    """the climb: the bass up a half step every two beats, the strings' cluster swelling, the horns' alarm (the
+    fifth, a half step up, a tritone on), the timpani and a snare roll into the fight's next downbeat"""
+    for k, b in enumerate((b0, b0 + 1)):
+        motor16(s, c['motor'], b, 60 + 6 * k)
+        low8(s, c['low'], b, 74 + 4 * k, figure=(0, 0, 12, 0, 0, 12, 0, 12))
+        for half in (0, 2):
+            r = chord(s.sym_at(b, half)).root
+            q = in_range(r, 60, 71)
+            swelled(s, c['strings'], b, half, 1.9, [q, q + 1], 56 + 6 * k, e0=60 + 20 * k, e1=118, e2=96)
+            s.play(c['timpani'], b, half, .5, in_range(r, 33, 44), 84 + 4 * k)
+            s.play(9, b, half, .2, DRUM['kick'], 112)
+            if not (k == 1 and half == 2):
+                x = in_range(r + 7, 55, 66)
+                s.line(c['horn'], b, '%s:%g:.75 %s:%g:.25 %s:%g:.9' % (nm(x), half, nm(x + 1), half + .75, nm(x + 6),
+                                                                       half + 1), 84)
+        q = in_range(r0 + 2 * k, 72, 83)
+        s.play(c['brass'], b, 1.5, .4, [q, q + 1], 78)
+    r = chord(s.sym_at(b0 + 1, 2)).root
+    s.roll(c['timpani'], b0 + 1, 2, 2, in_range(r, 33, 44), 40, 108, step=0.125)
+    snare_roll(s, b0 + 1, 2, 2, 40, 104)
+
+
+def sf_wild(s, c, b0, r):
+    """two wild bars: tritones on every eighth, the orchestra hitting the 3+3+2, a crash, the piccolo's alarm,
+    the brass's run up and the toms down"""
+    for k, b in enumerate((b0, b0 + 1)):
+        motor16(s, c['motor'], b, 70, figure=(1, 2, 1, 0))
+        for e in range(8):
+            q = in_range(r, 36, 47)
+            s.play(c['low'], b, e * .5, .45, q + (6 if e % 2 else 0), 86)
+            s.play(c['timpani'], b, e * .5, .3, in_range(r + (6 if e % 2 else 0), 33, 44), 76 + (e % 2) * 10)
+            if k == 0 or e < 4:
+                s.play(c['brass'], b, e * .5, .3, [in_range(r, 60, 71), in_range(r, 60, 71) + 6], 84 + (e % 2) * 8)
+        for beat in ACC332:
+            hit(s, c['hit'], b, beat, 112)
+    s.crash(b0, 0, 112)
+    trill(s, c['piccolo'], b0, 0, 2, in_range(r, 84, 95), in_range(r, 84, 95) + 6, 60)
+    run = [q for q in range(in_range(r, 64, 75), in_range(r, 64, 75) + 25) if (q - r) % 12 in DIM]
+    flurry(s, c['brass'], b0 + 1, 2, run, 0.125, 76, rise=1)
+    for i, t in enumerate(('tom1', 'tom1', 'tom2', 'tom2', 'tom3', 'tom3', 'tom4', 'tom4')):
+        s.play(9, b0 + 1, 2 + i * .25, .2, DRUM[t], 80 + i * 3, 2)
+
+
+def sf_failure(s, c, b0, _arg):
+    """the power failing: the motor gone, a low cluster swelling up from nothing, a heartbeat on the timpani, the
+    alarms; then the motor stuttering back, tritone stabs on the 3+3+2, the toms down"""
+    swelled(s, c['strings'], b0, 0, 3.9, [48, 49], 70, e0=20, e1=124, e2=110)
+    s.play(c['low'], b0, 0, 3.9, 36, 82)
+    for beat in (0, 2):
+        s.play(c['timpani'], b0, beat, .3, 'C2', 90)
+        s.play(c['timpani'], b0, beat + .375, .3, 'C2', 72)
+    trill(s, c['horn'], b0, 1, 3, 67, 68, 72)
+    trill(s, c['piccolo'], b0, 3, 1, 90, 91, 56)
+    b = b0 + 1
+    for k in range(16):
+        if k % 4 == 3 or k in (5, 6):
+            continue
+        q = 48 if k % 2 == 0 else (60 if k % 4 == 1 else 54)
+        s.play(c['motor'], b, k * .25, .2, q, 66 + (12 if k in (0, 8, 12) else 0), 3)
+    for beat in ACC332:
+        s.play(c['brass'], b, beat, .35, [60, 66], 90)
+        hit(s, c['hit'], b, beat, 110)
+    for i, t in enumerate(('tom1', 'tom2', 'tom3', 'tom4')):
+        s.play(9, b, 3.25 + i * .1875, .15, DRUM[t], 86 + i * 4, 2)
+
+
+def sf_alarm(s, c, b0, _arg):
+    """the alarm: the motor on a C pedal under diminished chords, the brass and the piccolo trilling in seconds,
+    the hits, the timpani and a snare roll into the fight's next downbeat"""
+    for k, b in enumerate((b0, b0 + 1)):
+        motor16(s, c['motor'], b, 64 + 6 * k, pedal=0)
+        low8(s, c['low'], b, 80, pedal=0)
+        trill(s, c['brass'], b, 0, 2 if k == 0 else 1.5, 72, 73, 76)
+        trill(s, c['piccolo'], b, 2 if k == 0 else 0, 2, 90, 91, 58)
+        s.play(c['timpani'], b, 0, .5, 'C2', 90)
+        hit(s, c['hit'], b, 0, 110)
+    hit(s, c['hit'], b0 + 1, 1.5, 104)
+    s.crash(b0, 0, 104)
+    s.roll(c['timpani'], b0 + 1, 2, 2, 'G1', 40, 110, step=.125)
+    snare_roll(s, b0 + 1, 2, 2, 40, 106)
+
+
+SF_BURSTS = {'climb': (lambda r0: ['%sm %sm' % (NAMES[r0 % 12], NAMES[(r0 + 1) % 12]),
+                                   '%sm %sdim' % (NAMES[(r0 + 2) % 12], NAMES[(r0 + 3) % 12])], sf_climb),
+             'wild': (lambda r: [NAMES[r % 12] + 'dim'] * 2, sf_wild),
+             'failure': (lambda _a: ['Cm', 'Cm'], sf_failure),
+             'alarm': (lambda _a: ['Cdim7', 'Cdim7'], sf_alarm)}
+SF_PLAN = [('fight', 'contact', 2, 4), ('climb', 0), ('fight', 'attack', 1, 4), ('wild', 0),
+           ('fight', 'furball', 2, 4), ('failure', 0), ('fight', 'contact', 10, 4), ('climb', 3),
+           ('fight', 'attack', 17, 4), ('wild', 6), ('fight', 'furball', 22, 4), ('alarm', 0)]
+
+
+def systems_failing():
+    return panic_song(BATTLE_BPM, 2414, SF_PLAN, SF_BURSTS)          # 36 bars, 61.7 s
+
+
+# Abandon Ship's bursts (the hull under 15%): shorter quotes, wilder bursts, and the speed-up into the loop
+
+def as_panic(s, c, b0, push=0):
+    """panic in tritones: the motor, the low strings' eighths with the tritone in them, the horns' cluster
+    swelling, the brass's tritone stabs with the hits, the piccolo falling"""
+    for b in (b0, b0 + 1):
+        r = chord(s.sym_at(b, 0)).root
+        motor16(s, c['motor'], b, 62 + push, figure=(0, 1, 0, 2))
+        for e in range(8):
+            q = in_range(r, 36, 47)
+            s.play(c['low'], b, e * .5, .45, q + (6 if e % 4 == 3 else 0), 76 + (8 if e == 0 else 0))
+            s.play(c['timpani'], b, e * .5, .3, in_range(r + (6 if e % 2 else 0), 33, 44), 62 + (e % 2) * 10)
+        swelled(s, c['horn2'], b, 0, 3.8, [in_range(r, 60, 71), in_range(r, 60, 71) + 1], 66, e0=50, e1=120, e2=70)
+        for beat in (0, 1.5):
+            s.play(c['brass'], b, beat, .45, [in_range(r, 60, 71), in_range(r, 60, 71) + 6], 88 if beat == 0 else 80)
+            hit(s, c['hit'], b, beat, 104 + push // 2)
+        top = in_range(r, 84, 95)
+        flurry(s, c['piccolo'], b, 2, [top - (k * 3) % 13 for k in range(12)], 1 / 6, 54 + push // 2)
+    s.crash(b0, 0, 106)
+    snare_roll(s, b0 + 1, 3, 1, 30, 96)
+
+
+def as_hope(s, c, b0, _arg):
+    """hope dashed: a bar of C major (the call's leap on the horn, warm strings, the harp), then its chords
+    falling apart a half step a beat, the piccolo tumbling, the timpani rolling"""
+    octaves(s, c['motor'], range(b0, b0 + 1), 58)
+    s.pad(c['strings'], range(b0, b0 + 1), 55, 72, 3, 66)
+    s.arp(c['harp'], range(b0, b0 + 1), [0, 1, 2, 3, 2, 1, 2, 3], 0.25, 60, 84, 4, 50)
+    sung(s, c['horn'], b0, ['G4:0:1.5 C5:1.5:.5 E5:2:1.9'], 90, e0=80, e1=127, e2=104)
+    s.play(c['timpani'], b0, 0, .5, 'C2', 80)
+    s.play(9, b0, 0, .2, DRUM['kick'], 104)
+    s.crash(b0, 0, 96)
+    b = b0 + 1
+    motor16(s, c['motor'], b, 56, figure=(0, 2, 1, 2))
+    for beat in range(4):
+        h = chord(s.sym_at(b, beat))
+        s.play(c['brass'], b, beat, .9, tones(h, 60, 72), 90 - 2 * beat)
+        s.play(c['low'], b, beat, .9, in_range(h.root, 36, 47), 86)
+    flurry(s, c['piccolo'], b, 0, [88 - k for k in range(24)], 1 / 6, 62, rise=-1)
+    s.roll(c['timpani'], b, 0, 4, 'C2', 44, 100, step=0.125)
+    hit(s, c['hit'], b, 0, 108)
+
+
+def as_harder(s, c, b0, _arg):
+    """dashed harder: tritones on every eighth on the brass, the hits, a crash a bar, the piccolo falling, the
+    timpani rolling"""
+    for k, b in enumerate((b0, b0 + 1)):
+        r = chord(s.sym_at(b, 0)).root
+        motor16(s, c['motor'], b, 64, figure=(0, 2, 1, 2))
+        for e in range(8):
+            s.play(c['brass'], b, e * .5, .35, [in_range(r, 60, 71), in_range(r, 60, 71) + 6], 66 + (e % 2) * 8)
+        hit(s, c['hit'], b, 0, 102)
+        hit(s, c['hit'], b, 1.5, 94)
+        flurry(s, c['piccolo'], b, 0, [92 - k for k in range(24)], 1 / 6, 54, rise=-1)
+        s.play(c['low'], b, 0, 3.8, in_range(r, 36, 47), 80)
+        s.roll(c['timpani'], b, 0, 4, in_range(r, 33, 44), 40, 88, step=0.125)
+        s.crash(b, 0, 98 if k == 0 else 90)
+
+
+def as_cluster(s, c, b0, _arg):
+    """a cluster (C, D flat, F sharp, G) swelling on the brass and the strings over a timpani roll, then struck
+    on the beats with the hits, the toms down"""
+    cl = [60, 61, 66, 67]
+    swelled(s, c['brass'], b0, 0, 3.8, cl, 80, e0=30, e1=127, e2=120)
+    swelled(s, c['strings'], b0, 0, 3.8, [q - 12 for q in cl], 70, e0=30, e1=127, e2=120)
+    motor16(s, c['motor'], b0, 60, pedal=0)
+    s.roll(c['timpani'], b0, 0, 4, 'C2', 30, 110, step=0.125)
+    snare_roll(s, b0, 2, 2, 30, 100)
+    b = b0 + 1
+    motor16(s, c['motor'], b, 70, pedal=0, figure=(1, 2, 1, 0))
+    for beat in range(3):
+        s.play(c['brass'], b, beat, .35, cl, 96)
+        s.play(c['strings'], b, beat, .35, [q - 12 for q in cl], 84)
+        hit(s, c['hit'], b, beat, 112)
+    s.crash(b, 0, 110)
+    for i, t in enumerate(('tom1', 'tom2', 'tom3', 'tom4')):
+        s.play(9, b, 3 + i * .25, .2, DRUM[t], 88 + i * 3, 2)
+
+
+def as_call_off(s, c, b0, _arg):
+    """the fight's call a tritone off on the brass, the horn an octave under, over the motor's pedal C"""
+    call = [up(t, 6) for t in CT_CALL[:2]]
+    s.tune(c['brass'], b0, call, 92)
+    s.tune(c['horn'], b0, [up(t, -12) for t in call], 80)
+    for b in (b0, b0 + 1):
+        motor16(s, c['motor'], b, 64, pedal=0)
+        low8(s, c['low'], b, 82, pedal=0)
+        for beat in (0, 1.5):
+            hit(s, c['hit'], b, beat, 108)
+        s.play(c['timpani'], b, 0, .5, 'C2', 86)
+        s.play(c['timpani'], b, 2, .5, 'F#2', 80)
+    snare_roll(s, b0 + 1, 3, 1, 36, 100)
+
+
+def as_speedup(s, c, b0, _arg):
+    """the panic again, pushed, a crash a bar and a long snare roll into the loop"""
+    as_panic(s, c, b0, push=12)
+    s.crash(b0 + 1, 0, 110)
+    snare_roll(s, b0 + 1, 2, 2, 40, 110)
+
+
+AS_BURSTS = {'panic': (lambda _a: ['Cm', 'Gb'], lambda s, c, b, _a: as_panic(s, c, b)),
+             'hope': (lambda _a: ['C', 'Gb F E Eb'], as_hope),
+             'harder': (lambda _a: ['Gb', 'Eb'], as_harder),
+             'cluster': (lambda _a: ['C', 'C'], as_cluster),
+             'calloff': (lambda _a: ['Gb/C', 'Gb/C'], as_call_off),
+             'speedup': (lambda _a: ['Cm', 'Gb'], as_speedup)}
+AS_PLAN = [('panic', 0), ('fight', 'contact', 2, 4), ('hope', 0), ('fight', 'attack', 33, 2), ('harder', 0),
+           ('fight', 'furball', 18, 4), ('cluster', 0), ('fight', 'contact', 30, 4), ('calloff', 0),
+           ('fight', 'attack', 9, 4), ('panic', 0), ('fight', 'furball', 34, 4), ('speedup', 0)]
 
 
 def abandon_ship():
-    form = AS_PANIC + AS_HOPE + AS_DASH + AS_HOPE2 + AS_DASH + AS_PANIC
-    s = Piece(152, 2515, form, level=0.0)
-    ch = orchestra(s)
-    hn, mo, hi_, lo, br, hn2, pc, tp, hp, bs = (ch[k] for k in ('horn', 'motor', 'hit', 'low', 'brass', 'horn2',
-                                                              'piccolo', 'timpani', 'harp', 'bass'))
-    n = len(form)                                   # 8 + 8 + 4 + 8 + 4 + 8 = 40 bars; 39 bars' time at 152
-    s.loop_at(0)
-    for b in range(0, 33, 4):                       # (none inside the speed-up: its bars are not 152's)
-        s.sect(b)
-
-    def panic(b, push=0):
-        r = chord(form[b]).root
-        motor16(s, mo, b, 62 + push, figure=(0, 1, 0, 2))
-        for e in range(8):
-            q = in_range(r, 36, 47)
-            s.play(lo, b, e * .5, .45, q + (6 if e % 4 == 3 else 0), 74 + (8 if e == 0 else 0))
-            s.play(tp, b, e * .5, .3, in_range(r % 6, 36, 41), 60 + (e % 2) * 10)
-        swelled(s, hn2, b, 0, 3.8, [in_range(r, 60, 71), in_range(r, 60, 71) + 1], 66, e0=50, e1=120, e2=70)
-        for beat in (0, 1.5):
-            s.play(br, b, beat, .45, [in_range(r, 60, 71), in_range(r, 60, 71) + 6], 88 if beat == 0 else 80)
-            hit(s, hi_, b, beat, 104 + push // 2)
-        top = in_range(r, 84, 95)
-        flurry(s, pc, b, 2, [top - (k * 3) % 13 for k in range(12)], 1 / 6, 54 + push // 2)
-
-    for b in range(0, 8):
-        panic(b)
-    for b in (3, 7):
-        snare_roll(s, b, 3, 1, 30, 96)
-    s.crash(0, 0, 104)
-    # hope: the call in major on the horn, warm strings, the harp turning, the motor in octaves, a steadier
-    # timpani; the brass an octave up for the call's second half
-    octaves(s, mo, range(8, 16), 58)
-    s.arp(hp, range(8, 16), [0, 1, 2, 3, 2, 1, 2, 3], 0.25, 60, 84, 4, 50)
-    s.bass(bs, range(8, 16), [(0, 1.9, 'r'), (2, 1.9, 'r')], 74, lo=28, hi=40)
-    sung(s, hn, 8, [to_major(t) for t in CT_CALL], 90, e0=80, e1=127, e2=104)
-    s.tune(br, 12, [up(to_major(t), 12) for t in CT_CALL[4:]], 78)
-    for b in range(8, 16):
-        s.play(tp, b, 0, .5, in_range(chord(form[b]).bass, 33, 44), 80)
-        s.play(tp, b, 2, .5, in_range(chord(form[b]).bass, 33, 44), 68)
-        if b % 2 == 0:
-            s.play(9, b, 0, .2, DRUM['kick'], 104)
-    s.crash(8, 0, 100)
-    # dashed: the hope's chords falling apart, the piccolo tumbling, the timpani rolling
-    for D in (16, 28):
-        harder = D == 28
-        for b in range(D, D + 4):
-            r = chord(form[b]).root
-            motor16(s, mo, b, 50 + (10 if harder else 0), figure=(0, 2, 1, 2))
-            if harder:
-                for e in range(8):
-                    s.play(br, b, e * .5, .35, [in_range(r, 60, 71), in_range(r, 60, 71) + 6], 80 + (e % 2) * 10)
-                hit(s, hi_, b, 0, 110)
-            else:
-                s.play(br, b, 0, 1.4, tones(chord(form[b]), 60, 72), 88)
-                s.play(br, b, 2, 1.4, [q - 1 for q in tones(chord(form[b]), 60, 72)], 82)
-                s.play(9, b, 0, .2, DRUM['kick'], 104)
-            flurry(s, pc, b, 0, [88 + (4 if harder else 0) - k for k in range(24)], 1 / 6, 62, rise=-1)
-            s.play(lo, b, 0, 3.8, in_range(r, 36, 47), 84)
-            s.roll(tp, b, 0, 4, in_range(r % 6, 36, 41), 44 + (10 if harder else 0), 92 + (6 if harder else 0),
-                   step=0.125)
-        s.crash(D, 0, 110)
-        if harder:
-            s.crash(D + 2, 0, 104)
-    # hope again, a step higher: the brass with the call, the horn its second half
-    octaves(s, mo, range(20, 28), 60)
-    s.arp(hp, range(20, 28), [0, 1, 2, 3, 2, 1, 2, 3], 0.25, 62, 86, 4, 52)
-    s.bass(bs, range(20, 28), [(0, 1.9, 'r'), (2, 1.9, 'r')], 76, lo=28, hi=40)
-    sung(s, br, 20, [up(to_major(t), 14) for t in CT_CALL], 92, e0=80, e1=127, e2=104)
-    s.tune(hn, 24, [up(to_major(t), 2) for t in CT_CALL[4:]], 86)
-    for b in range(20, 28):
-        s.play(tp, b, 0, .5, in_range(chord(form[b]).bass, 33, 44), 82)
-        s.play(tp, b, 2, .5, in_range(chord(form[b]).bass, 33, 44), 70)
-        if b % 2 == 0:
-            s.play(9, b, 0, .2, DRUM['kick'], 106)
-    s.crash(20, 0, 104)
-    # the panic, faster and faster
-    for b in range(32, 40):
-        panic(b, push=(b - 32) * 2)
-    for b in (35, 39):
-        snare_roll(s, b, 3, 1, 34, 104)
-    s.crash(32, 0, 110)
-    for k, bpm in enumerate(accelerando(152, 32, 1)):     # eight bars in seven's time: 152 up to about 196
-        s.tempo(32 * 4 + k, bpm)
-    s.end(n)
+    s = panic_song(BATTLE_BPM, 2515, AS_PLAN, AS_BURSTS, sects_until=30)  # 36 bars; the last six faster
+    for k, bpm in enumerate(accelerando(BATTLE_BPM, 24, 1)):     # six bars in five's time: 140 up to about 200
+        s.tempo(30 * 4 + k, bpm)
     return s
 
 

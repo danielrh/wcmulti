@@ -102,9 +102,21 @@ every flight piece rewritten for the orchestra, and the score's remixes.
   happy and jumpy", "too much like a video game", while its lift "gets good
   again"; Starwake "feels somehow repetitive with the rest... we need
   something special here". Each of those passages is rewritten; what they
-  liked (Sensor Sweep's G major, Waypoint's lift) is kept. Starwake is in
-  3/4 now (`Piece(..., beats=3)`: the figures take the bar's length from
-  the piece).
+  liked (Sensor Sweep's G major, Waypoint's lift) is kept. Starwake went
+  into 3/4 (`Piece(..., beats=3)`: the figures take the bar's length from
+  the piece, which stays).
+- **Then** (the same day): Systems Failing and Abandon Ship "a bit too
+  repetitive with themselves... somehow you get stuck in this loop": "cut
+  in pieces of the battle various musics and just add little spurts of
+  panic to an otherwise recognizable song", baked into the songs ("we
+  don't necessarily need to invent a new music player technique"). So
+  each quotes the three battles' blocks note for note (`orch.excerpt`,
+  with the channels' programs and controllers chased; `orch.restore`
+  after) with two-bar bursts between them. And Starwake "too happy...
+  maybe we should simply delete it... unless we can really soup it up
+  with some very pensive minor pieces and some very fast minor pieces
+  with chimes": rewritten in D minor, laments and runs in turn, with a
+  new chimes patch (tubular bells, program 14).
 
 ## The songs (CC0, ours)
 
@@ -117,7 +129,7 @@ every flight piece rewritten for the orchestra, and the score's remixes.
 | CRUISE5 | Deep Lane | F minor, 144 | dark wonder: low strings in 3+3+2, the horn's tune falling through D flat and G flat, a darkest block (B flat minor to C7) of one falling figure on the 3+3+2 with the timpani, diminished piccolo flourishes |
 | CRUISE6 | Long Burn | A minor, 12/8 at 112 | anticipation: eight bars of repeated A's burning under turning chords, then the release into C# minor, the strings' tune |
 | CRUISE7 | Waypoint | C minor, 168 | brisk travel: the strings at a gallop over a pedal C, the brass's call in long notes over the horns' falling line, a lift through A flat and B flat, home through A flat and B flat to C |
-| CRUISE8 | Starwake | G lydian, 3/4 at 156 | the cycle's crown, the one piece in three and in a single pass: the harp's five-note figure turning over the bar, a tune that leaps a sixth, hemiolas, a hush, the last climb |
+| CRUISE8 | Starwake | D minor, 150 | pensive and very fast in turn: chimes tolling over the horn's lament, then runs (sixteenths, the chimes' fast figure, the horns falling D, C, B flat, A); the lament darker in G minor on the strings, the runs wilder round the Neapolitan E flat; chimes tolling A into the top |
 | HOMEWARD | Homeward, won | B flat, 12/8 at 108 | harp eighths, the horn's tune, a lift into D for a brass chorale, home through B flat |
 | HOMELOSS | Homeward, lost | B flat minor, 12/8 at 92 | the same, slower and sadder: horns for the brass, no hits, sinking a major third to G flat |
 | BATTLE1 | Contact | C sus pedal into C minor, 140 | the call on the horn answered by synth brass over spiccato sixteenths, low strings and timpani |
@@ -125,8 +137,8 @@ every flight piece rewritten for the orchestra, and the score's remixes.
 | BATTLE3 | Furball | C phrygian, 140 | the riff on synth brass and horn over driving fifths, up a minor third the second time, a tutti stop |
 | ROCKS | Rock Field | G minor, 120 | a march through the rocks (snare, timpani, low strings), the horn's theme, a drift through B flat with the harp and piccolo glinting, a brass descant |
 | PANIC1 | Hull Breach | C, 140 | the fight going on under the damage: a low cluster, alarms in seconds, the call a tritone off |
-| PANIC2 | Systems Failing | C rising, 140 | the bass climbing a half step a bar; every climb pays off in two wild bars |
-| PANIC3 | Abandon Ship | 152 to 196 | panic, hope (the call in major), dashed, hope higher, dashed harder, a speed-up |
+| PANIC2 | Systems Failing | C, 140 | the fight breaking up: the battles' blocks quoted in turn (Contact's call and answer, Break and Attack's riff and Neapolitan, Furball's riff and surprise), two-bar bursts between them: the half-step climb, wild tritone bars, the power failing, the alarm |
+| PANIC3 | Abandon Ship | 140 to 200 | shorter quotes, wilder bursts: panic in tritones, hope dashed, dashed harder, a cluster, the call a tritone off; the last six bars speeding up into the loop |
 | VICTORY1..3 | Splash One..Three | C, D, B flat | bittersweet: bVI-bVII-I, the minor plagal, a deceptive turn |
 | TRAGEDY | Wingman Lost | B flat minor, 52 | a funeral march, 14 s |
 
@@ -251,7 +263,7 @@ the flight. The schedule, in seconds:
 (Outbound's pass, then the next cruise piece spliced on), a fight for
 100 s (the battles cut together block by block), the way home
 (`tests/remix.txt`, `/flight 220`). `/scoretest 3` is the cycle's end:
-calm only, from Waypoint, Starwake (in 3/4) spliced on after it, then
+calm only, from Waypoint, Starwake spliced on after it, then
 Outbound (`tests/cycle.txt`, `/flight 160`). The music log's lines carry the music clock
 (`@ticks`, 240 a second), so a log rendered with `oplrender --log` can be
 cut and labelled.

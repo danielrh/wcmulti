@@ -148,7 +148,7 @@ static void follow(int mood)
 /* the test (/scoretest): calm, a rock field, a fight, the next battle chained on, a victory and a tragedy over it,
  * the three panics, the way home won and lost, dead.  /scoretest 2, the remixes: calm long enough for the next
  * cruise song to follow on, a fight long enough for the battles' blocks to be cut together, the way home.
- * /scoretest 3, the cycle's end: calm only, from Waypoint, Starwake (in 3/4) after it, then Outbound */
+ * /scoretest 3, the cycle's end: calm only, from Waypoint, Starwake after it, then Outbound */
 static void test_tick(unsigned long now)
 {
     static const unsigned char __far at1[] = { 8, 14, 22, 30, 38, 52, 60, 68, 78, 88, 98 };

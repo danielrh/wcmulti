@@ -7,16 +7,16 @@ move by thirds, hits where a groove would be, piccolo runs and harp sweeps, a ri
     CRUISE7  "Waypoint"    C minor, 168: a galloping string motor over a pedal C, the brass's call in long
                            notes over the horns' falling line, a lift into A flat and B flat, home through
                            A flat and B flat to C, the horns swelling on G
-    CRUISE8  "Starwake"    G lydian, 3/4 at 156, the set's one piece in three and in one pass: the harp's
-                           five-note figure turning over the bar, a tune that leaps a sixth, hemiolas, a hush,
-                           the horns swelling on D (into Outbound's E minor)
+    CRUISE8  "Starwake"    D minor, 150, pensive and very fast in turn: chimes tolling over a lament, then
+                           runs (sixteenths, the chimes' fast figure, the horns falling D, C, B flat, A), the
+                           lament darker in G minor, the runs wilder round the Neapolitan; chimes on A
     ROCKS    "Rock Field"  G minor, 120: asteroid and mine fields: a march (snare, timpani, low strings), the
                            strings tumbling in sixteenths, the horn's theme; a drift in B flat with harp and
                            piccolo glints; the theme again with a synth-brass descant
 
-The cruise pieces are in the set's cycle of keys (each riser on its own dominant, the next piece in the key a
-third or a fifth on): Outbound's E minor, G minor, B minor, D, F minor, A minor (Long Burn), C (Waypoint), G
-(Starwake), and E minor again.  Every piece marks its blocks for the score's follow-ons (Piece.sect).
+The cruise pieces are in the set's cycle of keys (each riser on its own dominant): Outbound's E minor, G minor,
+B minor, D, F minor, A minor (Long Burn), C minor (Waypoint), D minor (Starwake), and E minor again.  Every piece
+marks its blocks for the score's follow-ons (Piece.sect).
 """
 from compose import chord
 from songs import p
@@ -286,151 +286,119 @@ def waypoint():
     return s
 
 
-# --- CRUISE8: "Starwake" (G lydian, 3/4 at 156) -------------------------------------
-# The cycle's crown, the one piece in three: the harp's five-note figure turns over the six eighths of the bar,
-# so each bar starts it somewhere new, glittering in the ship's wake, and the spiccato rocks up its chord and back,
-# its accents 3+3 one bar and 2+2+2 the next.  Over a G that stays, A major comes and goes (lydian: the wonder of
-# a sharp four).  The tune leaps a sixth and climbs; the strings answer it in octaves; the turn into E minor
-# drives the leap up in sequence to a hemiola (E flat, F: two bars in three half notes), and the crown: the tune
-# with everything, hits on every other bar.  Then the hush: the harp alone, the horn far off with the tune's head,
-# the strings high and soft, the motor stealing back in; the answer once more, full, its hemiola landing on G with
-# a crash, and the horns swell on D over a timpani roll into the top, or on into Outbound's E minor (V to vi).
-# One arc in a single pass where the others go round twice.  (The user, 2026-10-24, on its 12/8 version: "This
-# feels somehow repetitive with the rest..we need something special here".)
+# --- CRUISE8: "Starwake" (D minor, 150) ---------------------------------------------
+# Pensive, then very fast, in turn.  Chimes toll over a lament on the horn (D minor, B flat, G minor, A7), the
+# spiccato soft, the low strings holding; then the music breaks into a run: the spiccato in sixteenths, the low
+# strings driving eighths, the chimes ringing a fast figure in eighths (each three-note group a step on: 3+3+2), the
+# horns in octaves falling down D minor's Andalusian steps (D minor, C, B flat, A), hits and a crash.  The lament
+# again on the strings in octaves, in G minor and darker (B flat minor's D flat on the way); and the run again,
+# wilder, rocking between D minor and its Neapolitan E flat, the brass an octave under the strings, the piccolo's
+# runs.  The
+# chimes toll A over a timpani roll and the horns swell into the top, or on into Outbound's E minor.  (The user,
+# 2026-10-24, on its two earlier versions: "repetitive with the rest", then "too happy... maybe we should simply
+# delete it... unless we can really soup it up with some very pensive minor pieces and some very fast minor pieces
+# with chimes".)
 
-SW_A = ['G', 'A/G', 'G', 'A/G', 'Em', 'Cmaj7', 'Am7', 'Dsus4 D']
-SW_B = ['G', 'A/G', 'Bm', 'Em', 'Cmaj7', 'Am7', 'Cmaj7/D', 'D']
-SW_C = ['Em', 'Cmaj7', 'Am', 'Bsus4 B', 'Em', 'C', 'Eb Eb F', 'F']
-SW_E = ['G', 'A/G', 'G', 'A/G', 'G', 'A/G', 'Cmaj7', 'Dsus4 D']
-SW_F = ['G', 'A/G', 'Bm', 'Em', 'Eb Eb F', 'F', 'G', 'G']
-SW_R = ['D', 'D', 'D', 'D']
-SW_TUNE = ['D4:0:1 B4:1:2', 'A4:0:1 C#5:1:2', 'D5:0:3', 'E5:0:1 D5:1:1 C#5:2:1', 'B4:0:2 G4:2:1', 'E5:0:3',
-           'D5:0:1 C5:1:1 A4:2:1', 'G4:0:1.5 F#4:1.5:1.5']
-SW_UNDER = ['B3:0:3', 'C#4:0:3', 'B3:0:3', 'A3:0:3', 'G3:0:3', 'B3:0:3', 'C4:0:3', 'A3:0:3']
-SW_ANSWER = ['D4:0:1 B4:1:2', 'A4:0:1 C#5:1:2', 'F#5:0:3', 'G5:0:1 F#5:1:1 E5:2:1', 'E5:0:1 G5:1:2',
-             'E5:0:1 C5:1:2', 'B4:0:3', 'A4:0:3']
-SW_ANSWER_UNDER = ['B3:0:3', 'C#4:0:3', 'D4:0:3', 'B3:0:3', 'G3:0:3', 'A3:0:3', 'G3:0:3', 'F#3:0:3']
-SW_TURN = ['B3:0:1 G4:1:2', 'G4:0:1 E5:1:2', 'E4:0:1 C5:1:2', 'E5:0:1.5 D#5:1.5:1.5', 'B4:0:1 G5:1:2',
-           'C5:0:1 E5:1:1 G5:2:1', 'G5:0:2 A5:2:1', 'A5:0:1 C6:1:2']
-SW_TURN_UNDER = ['G3:0:3', 'E4:0:3', 'C4:0:3', 'B3:0:3', 'G4:0:3', 'E4:0:3', 'Eb4:0:2 F4:2:1', 'F4:0:3']
-SW_LAST = SW_ANSWER[:4] + ['G5:0:2 A5:2:1', 'A5:0:1 C6:1:2', 'B5:0:3', 'G5:0:3']
-SW_LAST_UNDER = SW_ANSWER_UNDER[:4] + ['Bb4:0:2 C5:2:1', 'C5:0:3', 'D5:0:3', 'B4:0:3']
-WAKE = [0, 2, 4, 3, 1]                                  # the harp's five-note figure (its chord's notes, 4: up an octave)
-DORIAN = (0, 2, 3, 5, 7, 9, 10)
+SW_P1 = ['Dm', 'Bbmaj7/D', 'Gm/D', 'A7/C#', 'Dm', 'F/C', 'Bbmaj7', 'Asus4 A']
+SW_F1 = ['Dm', 'C', 'Bb', 'A', 'Dm', 'C', 'Bb', 'A7']
+SW_P2 = ['Gm', 'Ebmaj7', 'Cm9', 'D7sus4 D', 'Gm/Bb', 'Ebmaj7', 'Bbm6', 'A7sus4 A']
+SW_F2 = ['Dm', 'Eb', 'Dm', 'Eb', 'Bb', 'Gm', 'Eb', 'A7']
+SW_LAMENT = ['A4:0:3 F4:3:1', 'D5:0:2 C5:2:1 A4:3:1', 'Bb4:0:3 G4:3:1', 'E4:0:2 C#4:2:2', 'D4:0:1.5 F4:1.5:.5 A4:2:2',
+             'C5:0:3 A4:3:1', 'D5:0:2 C5:2:1 Bb4:3:1', 'A4:0:4']
+SW_LAMENT_UNDER = ['F3:0:4', 'F3:0:4', 'D3:0:4', 'G3:0:2 E3:2:2', 'F3:0:4', 'F3:0:4', 'F3:0:4', 'E3:0:2 C#3:2:2']
+SW_DRIVE = ['D5:0:2 A4:2:2', 'C5:0:2 G4:2:2', 'Bb4:0:2 F4:2:2', 'A4:0:3 E4:3:1', 'D5:0:1.5 E5:1.5:.5 F5:2:2',
+            'E5:0:1.5 D5:1.5:.5 C5:2:2', 'D5:0:2 Bb4:2:2', 'C#5:0:2 E5:2:2']
+SW_LAMENT2 = ['D5:0:3 Bb4:3:1', 'G5:0:2 F5:2:1 Eb5:3:1', 'D5:0:3 C5:3:1', 'C5:0:2 A4:2:1 F#4:3:1',
+              'Bb4:0:1.5 D5:1.5:.5 G5:2:2', 'G5:0:2 Bb5:2:1 G5:3:1', 'F5:0:2 Db5:2:2', 'E5:0:2 C#5:2:2']
+SW_LAMENT2_UNDER = ['G3:0:4', 'Bb3:0:4', 'G3:0:4', 'G3:0:2 F#3:2:2', 'G3:0:4', 'G3:0:4', 'F3:0:4', 'E3:0:4']
+SW_DRIVE2 = ['A5:0:2 F5:2:2', 'G5:0:2 Eb5:2:2', 'F5:0:2 D5:2:2', 'Eb5:0:2 Bb4:2:2', 'D5:0:2 F5:2:2', 'G5:0:3 Bb5:3:1',
+             'G5:0:2 Eb5:2:2', 'C#5:0:2 E5:2:2']
+CARILLON = [0, 2, 4, 1, 3, 5, 2, 4]                     # the chimes' run: rising threes a step apart (3+3+2)
+D_HARMONIC = (0, 1, 4, 5, 7, 8, 10)                     # (from A: D harmonic minor, A B flat C sharp D E F G)
+LOW_DRIVE = [(k * .5, .45, w) for k, w in enumerate('rr8r5r8r')]
 
 
-def rock3(s, ch, bars, vel, lo=43):
-    """3/4: the motor rocking in eighths, the bass and up its chord and back (its second, fourth, fifth, fourth
-    and second notes above the bass), the accents 2+2+2 one bar and 3+3 the next"""
+def toll(s, ch, bars, vel, lo=62, hi=73, dur=2.0):
+    """the chimes tolling: each bar's root on its downbeat, ringing"""
     for b in bars:
-        acc = (0, 3) if b % 2 else (0, 2, 4)
-        for k in range(6):
-            beat = k * 0.5
-            c = chord(s.sym_at(b, beat))
-            q = in_range(c.bass, lo, lo + 11)
-            if k:
-                pcs = {(c.root + t) % 12 for t in c.tones}
-                q = [x for x in range(q + 1, q + 40) if x % 12 in pcs][(0, 1, 3, 4, 3, 1)[k]]
-            s.play(ch, b, beat, 0.3, q, vel + (12 if k in acc else 0) + (4 if k == 0 else 0) - (4 if k % 2 else 0), 3)
-
-
-def hemiola(s, hi_, lo, tp, bar, vel):
-    """two bars of 3/4 struck as three half notes: the hits, the low strings and the timpani on each"""
-    for b, beat in ((bar, 0), (bar, 2), (bar + 1, 1)):
-        hit(s, hi_, b, beat, vel, timpani=tp)
-        s.play(lo, b, beat, 1.8, in_range(chord(s.sym_at(b, beat)).bass, 28, 39), 96, 3)
+        s.play(ch, b, 0, dur, in_range(chord(s.sym_at(b, 0)).root, lo, hi), vel, 3)
 
 
 def starwake():
-    form = ['G', 'G'] + SW_A + SW_B + SW_C + SW_A + SW_E + SW_F + SW_R
-    s = Piece(156, 1808, form, level=-1.0, beats=3)
+    form = ['Dm', 'Dm'] + SW_P1 + SW_F1 + SW_P2 + SW_F2 + ['A', 'A', 'A', 'A']
+    s = Piece(150, 1808, form, level=-0.6)
     ch = orchestra(s)
     mo, hi_, lo, br, hn, hn2, pc, tp, hp, st, bs = (ch[k] for k in ('motor', 'hit', 'low', 'brass', 'horn', 'horn2',
                                                                  'piccolo', 'timpani', 'harp', 'strings', 'bass'))
-    n = len(form)                                   # 2 + 52 = 54 bars, 62.3 s
-    A, B, C, D, E, F, R = 2, 10, 18, 26, 34, 42, 50
-    s.loop_at(A)
-    for b in (A, B, C, D, E, F):
+    cm = 12
+    s.setup(cm, 14, 96)                             # the chimes
+    n = len(form)                                   # 2 + 32 + 4 = 38 bars, 60.8 s
+    P1, F1, P2, F2, R = 2, 10, 18, 26, 34
+    s.loop_at(P1)
+    for b in range(P1, R, 4):
         s.sect(b)
-    # the wake: the harp's figure through it all, but for the riser's sweep
-    s.arp(hp, range(0, R + 3), WAKE, 0.5, 67, 91, 4, 50, accent=6, gate=0.6)
-    s.ramp(hp, 0, 2, 70, 127)                       # the intro: the wake alone, a G under it
-    s.play(tp, 0, 0, 1, 'G1', 70)
-    s.bass(bs, range(0, D), [(0, 1.4, 'r')], 70, lo=31, hi=43)
-    # the tune: the horn over the rocking strings, the low strings once a bar
-    rock3(s, mo, range(A, B), 56)
-    strokes12(s, lo, range(A, B), 80, at=(0,))
-    s.play(tp, A, 0, 1, 'G1', 82)
-    sung(s, hn, A, SW_TUNE, 82, e0=66, e1=124, e2=100)
-    # the answer: the strings in octaves, the horn under them
-    rock3(s, mo, range(B, C), 62)
-    strokes12(s, lo, range(B, C), 84, at=(0, 2))
-    s.crash(B, 0, 96)
-    hit(s, hi_, B, 0, 100, timpani=tp)
-    hit(s, hi_, B + 4, 0, 94, timpani=tp)
-    sung(s, st, B, [up(t, 12) for t in SW_ANSWER], 78, e0=66, e1=124, e2=100)
-    s.tune(st, B, SW_ANSWER, 70)
-    sung(s, hn, B, SW_ANSWER_UNDER, 66)
-    s.run(pc, B + 7, 1, scale_run(81, 93, DORIAN)[:8], 0.25, 58, 2)             # A up to A over D
-    # the turn: E minor, the leap in sequence on the horn, then the strings, up to the hemiola
-    rock3(s, mo, range(C, D), 66)
-    strokes12(s, lo, range(C, C + 6), 86, at=(0, 2))
-    hit(s, hi_, C, 0, 100, timpani=tp)
-    sung(s, hn, C, SW_TURN[:4], 84, e0=70, e1=124, e2=100)
-    s.tune(hn2, C, [up(t, -12) for t in SW_TURN[:4]], 64)
-    sung(s, st, C + 4, [up(t, 12) for t in SW_TURN[4:6]] + SW_TURN[6:], 80, e0=70, e1=124, e2=100)
-    s.tune(st, C + 4, SW_TURN[4:6] + [up(t, -12) for t in SW_TURN[6:]], 72)
-    sung(s, hn, C + 4, SW_TURN_UNDER[4:], 70)
-    s.tune(br, C + 6, [up(t, -12) for t in SW_TURN[6:]], 80)
-    s.run(pc, C + 3, 1, scale_run(83, 95, MAJOR)[:8], 0.25, 58, 2)             # B up to B
-    hemiola(s, hi_, lo, tp, C + 6, 106)
-    s.roll(9, C + 7, 1, 2, DRUM['snare'], 20, 86, step=0.125)
-    # the crown: the tune with everything, the brass on it, the strings an octave over, the horns under
-    rock3(s, mo, range(D, E), 70)
-    strokes12(s, lo, range(D, E), 92, at=(0, 2))
-    s.bass(bs, range(D, E), [(0, 1.4, 'r'), (2, 0.9, '5')], 78, lo=31, hi=43)
-    s.crash(D, 0, 112)
-    s.crash(D + 4, 0, 104)
-    for b in (D, D + 2, D + 4, D + 6):
-        hit(s, hi_, b, 0, 110 if b in (D, D + 4) else 102, timpani=tp)
-    s.tune(br, D, SW_TUNE, 88)
-    sung(s, st, D, [up(t, 12) for t in SW_TUNE], 82, e0=70, e1=124, e2=100)
-    sung(s, hn, D, SW_UNDER, 72)
-    s.run(pc, D + 3, 1, scale_run(85, 97, LYDIAN)[:8], 0.25, 58, 2)             # C sharp up: G lydian, high
-    s.run(pc, D + 7, 1, scale_run(86, 98, MAJOR)[:8], 0.25, 60, 2)              # D up to D, into the hush
-    # the hush: the wake alone, the strings high and soft, the horn far off; the motor stealing back in
-    s.bass(bs, range(E, R), [(0, 1.4, 'r')], 62, lo=31, hi=43)
-    s.pad(st, range(E, E + 6), 67, 83, 3, 46)
-    s.tune(hn, E + 2, SW_TUNE[:3], 66)                # (two bars of the wake alone first)
-    rock3(s, mo, range(E + 6, F), 58)
-    s.ramp(mo, E + 6, 2, 40, 127)
-    s.roll(tp, E + 6, 0, 6, 'D2', 8, 100)
-    sung(s, hn, E + 6, ['E4:0:3', 'G4:0:1.5 F#4:1.5:1.5'], 72, e0=50, e1=124, e2=110)
-    # the answer once more, full; its hemiola lands on G with a crash
-    rock3(s, mo, range(F, R), 72)
-    strokes12(s, lo, range(F, F + 4), 94, at=(0, 2))
-    strokes12(s, lo, range(F + 6, R), 96, at=(0, 2))
-    s.bass(bs, range(R, n), [(0, 1.4, 'r')], 76, lo=31, hi=43)
-    s.crash(F, 0, 114)
-    hit(s, hi_, F, 0, 110, timpani=tp)
-    hit(s, hi_, F + 2, 0, 102, timpani=tp)
-    sung(s, st, F, SW_LAST, 84, e0=70, e1=127, e2=104)
-    s.tune(st, F, [up(t, -12) for t in SW_LAST], 72)
-    sung(s, hn, F, SW_LAST_UNDER, 72)
-    s.tune(br, F + 4, [up(t, -12) for t in SW_LAST[4:]], 82)
-    hemiola(s, hi_, lo, tp, F + 4, 110)
-    s.crash(F + 6, 0, 116)
-    hit(s, hi_, F + 6, 0, 114, timpani=tp)
-    hit(s, hi_, F + 7, 0, 104, timpani=tp)
-    s.run(pc, F + 7, 1, scale_run(79, 91, MAJOR)[:8], 0.25, 62, 2)              # G up to G
-    # the riser on D: the horns swelling, the timpani rolling up from nothing, the harp sweeping up D
-    rock3(s, mo, range(R, n), 62)
-    s.ramp(mo, R, 4, 60, 127)
-    held(s, hn, R, 0, 12, 'A3', 74, e0=40, e1=127, e2=127)
-    held(s, hn2, R, 0, 12, 'F#3', 70, e0=40, e1=127, e2=127)
-    s.roll(tp, R, 0, 12, 'D2', 6, 112)
-    sweep(s, hp, R + 3, {2, 6, 9}, 50, 86, 58, beats=3)
-    s.roll(9, R + 3, 1, 2, DRUM['snare'], 18, 86, step=0.125)
+    # the intro: the chimes tolling D over a low D, the timpani rolling in
+    s.play(cm, 0, 0, 2.0, 'D5', 72)
+    s.play(cm, 0, 0, 2.0, 'D4', 60)
+    s.play(cm, 1, 0, 2.0, 'A4', 66)
+    s.play(lo, 0, 0, 7.8, 'D2', 74)
+    s.roll(tp, 1, 0, 4, 'D2', 10, 70)
+    s.arp(mo, range(0, 2), [0, 1, 2, 1], 0.25, 50, 69, 3, 40, accent=6, gate=0.5)
+    s.ramp(mo, 0, 2, 40, 127)
+    # the laments: the chimes tolling, the spiccato soft, the low strings holding, the harp in quarters
+    for P, tune, under, second in ((P1, SW_LAMENT, SW_LAMENT_UNDER, False), (P2, SW_LAMENT2, SW_LAMENT2_UNDER, True)):
+        toll(s, cm, range(P, P + 8), 64 if not second else 68)
+        s.arp(mo, range(P, P + 8), [0, 1, 2, 1], 0.25, 50, 69, 3, 40 if not second else 46, accent=6, gate=0.5)
+        s.bass(lo, range(P, P + 8), [(0, 3.8, 'r')], 78, lo=33, hi=44)
+        s.arp(hp, range(P, P + 8), [0, 1, 2, 3], 1, 57, 81, 4, 44, accent=4, gate=0.6)
+        s.play(tp, P, 0, 1, in_range(chord(s.sym_at(P, 0)).root, 33, 44), 72)
+        s.play(tp, P + 4, 0, 1, in_range(chord(s.sym_at(P + 4, 0)).root, 33, 44), 70)
+        if not second:
+            sung(s, hn, P, tune, 82, e0=60, e1=122, e2=94)
+            sung(s, hn2, P + 4, under[4:], 62)
+        else:
+            sung(s, st, P, tune, 80, e0=60, e1=122, e2=94)
+            s.tune(st, P, [up(t, -12) for t in tune], 70)
+            sung(s, hn, P, under, 66)
+        s.roll(tp, P + 7, 2, 2, 'A1', 20, 92, step=0.125)
+    # the runs: the spiccato in sixteenths, the low strings driving, the chimes' run, the horns (then the strings)
+    for F, tune, wild in ((F1, SW_DRIVE, False), (F2, SW_DRIVE2, True)):
+        s.arp(mo, range(F, F + 8), [0, 2, 1, 3, 2, 4, 3, 2], 0.25, 50, 74, 4, 60 if not wild else 64, accent=10,
+              gate=0.6)
+        s.bass(lo, range(F, F + 8), [(t, .35, w) for t, _d, w in LOW_DRIVE], 84, lo=36, hi=47)
+        s.arp(cm, range(F, F + 8), CARILLON, 0.5, 62 if not wild else 67, 86, 3, 60 if not wild else 64, accent=8,
+              gate=0.5)
+        for b in range(F, F + 8):
+            if b % 2:
+                r = in_range(chord(s.sym_at(b, 0)).root, 33, 44)
+                s.play(tp, b, 0, .5, r, 80)
+                s.play(tp, b, 2, .5, r, 74)
+                s.play(tp, b, 3, .25, r + 7 if r + 7 <= 44 else r - 5, 70)
+        for blk in (F, F + 4):
+            s.crash(blk, 0, 108 if blk == F else (104 if wild else 96))
+            for b in (blk, blk + 2):
+                for beat in (ACC332 if wild else (0, 1.5)):
+                    hit(s, hi_, b, beat, 108, timpani=tp if beat == 0 else None)
+        if not wild:
+            sung(s, hn, F, tune, 86, e0=80, e1=127, e2=108)
+            s.tune(hn2, F, [up(t, -12) for t in tune], 74)
+        else:
+            sung(s, st, F, tune, 82, e0=80, e1=127, e2=108)
+            s.tune(br, F, [up(t, -12) for t in tune], 82)
+            sung(s, hn, F, ['F4:0:4', 'G4:0:4', 'F4:0:4', 'G4:0:4', 'F4:0:4', 'D4:0:4', 'Eb4:0:4', 'E4:0:4'], 70)
+        s.run(pc, F + 3, 2, scale_run(81, 93, D_HARMONIC)[:8], 0.25, 58, 2)      # A up to A: D harmonic minor
+        s.run(pc, F + 7, 2, scale_run(81, 93, D_HARMONIC)[:8], 0.25, 62, 2)
+        s.roll(9, F + 7, 2, 2, DRUM['snare'], 18, 84, step=0.125)
+    # the riser on A: the spiccato pulsing, the chimes tolling A louder each bar, the horns swelling, the timpani
+    pulses(s, mo, range(R, n), 56)
+    s.ramp(mo, R, 4, 50, 127)
+    for k in range(4):
+        s.play(cm, R + k, 0, 2.0, ['A4', 'A3'] if k < 3 else ['A4', 'E5', 'A3'], 60 + 6 * k, 3)
+    held(s, hn, R, 0, 16, 'E4', 72, e0=40, e1=127, e2=127)
+    held(s, hn2, R, 0, 16, 'C#4', 68, e0=40, e1=127, e2=127)
+    s.roll(tp, R, 0, 16, 'A1', 6, 112)
+    sweep(s, hp, R + 3, {9, 1, 4}, 45, 88, 58)
+    s.roll(9, R + 3, 2, 2, DRUM['snare'], 18, 88, step=0.125)
     s.end(n)
     return s
 

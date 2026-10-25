@@ -7,7 +7,8 @@
     Piece.sections(a, b, every=4)   the markers every so many bars from a up to b
     orchestra(s)         the third draft's parts on their channels at their measured levels (ORCH)
 
-and the third draft's figures: octaves, pulses, pedal332, hit, held, sung, sweep.
+and the third draft's figures: octaves, pulses, pedal332, hit, held, sung, sweep; excerpt (bars of another piece
+quoted) and restore.
 """
 import random
 
@@ -137,7 +138,8 @@ class Piece(Comp):
         n = max(1, int(round(beats / step)))
         for k in range(n):
             pos = bar * self.beats + beat + k * step
-            self.play(ch, int(pos // self.beats), pos % self.beats, step * 0.9, pitch, round(v0 + (v1 - v0) * k / max(1, n - 1)), 2)
+            vel = round(v0 + (v1 - v0) * k / max(1, n - 1))
+            self.play(ch, int(pos // self.beats), pos % self.beats, step * 0.9, pitch, vel, 2)
 
     def run(self, ch, bar, beat, pitches, step, vel, rise=0):
         """a run (a harp's glissando, a flurry): the pitches one after another"""
@@ -164,6 +166,48 @@ class Piece(Comp):
     def end(self, bars):
         """a silent controller at the end of the last bar: the loop is whole bars"""
         self.cc(0, bars - 1, self.beats - 0.05, 11, 127)
+
+
+def excerpt(dst, src, bar0, bars, at):
+    """bars of another piece (its notes, controllers and programs, as they stand there: the chase) into this one
+    at bar `at`: the panics quote the battles.  A note still on at the excerpt's end is let go there."""
+    import midi
+    w = dst.beats * midi.PPQ
+    w0, w1, shift = bar0 * w, (bar0 + bars) * w, (at - bar0) * w
+    if not hasattr(dst, 'own_setup'):           # (this piece's own, before any excerpt: restore's)
+        dst.own_setup = {ch: [m for t, m in ev if t == 0 and (m[0] & 0xF0 == 0xC0 or
+                                                               (m[0] & 0xF0 == 0xB0 and m[1] in (7, 10)))]
+                         for ch, ev in dst.tracks.items()}
+    for ch, ev in src.tracks.items():
+        ev = sorted(ev, key=lambda e: (e[0], e[1][0] & 0xF0 == 0x90))
+        state = {}
+        for t, m in ev:
+            if t >= w0:
+                break
+            if m[0] & 0xF0 == 0xC0:
+                state['program'] = m
+            elif m[0] & 0xF0 == 0xB0 and m[1] in (7, 10, 11):
+                state[m[1]] = m
+        out = dst.tracks.setdefault(ch, [])
+        out.extend((at * w, m) for m in state.values())
+        sounding = set()
+        for t, m in ev:
+            if w0 <= t < w1:
+                out.append((t + shift, m))
+                if m[0] & 0xF0 == 0x90 and m[2]:
+                    sounding.add(m[1])
+                elif m[0] & 0xF0 in (0x80, 0x90):
+                    sounding.discard(m[1])
+        out.extend((w1 + shift - 1, bytes((0x80 | ch, q, 0))) for q in sounding)
+
+
+def restore(dst, bar):
+    """this piece's own programs and volumes again, and every expression full, from this bar (after an excerpt)"""
+    import midi
+    t = bar * dst.beats * midi.PPQ
+    for ch, own in getattr(dst, 'own_setup', {}).items():
+        dst.tracks[ch].extend((t, m) for m in own)
+        dst.tracks[ch].append((t, bytes((0xB0 | ch, 11, 127))))
 
 
 def hits(*beats, v=60):
