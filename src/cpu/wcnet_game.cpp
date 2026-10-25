@@ -149,6 +149,7 @@ static void load_wc2_code() {
     // overlay 116: mission spawning
     ovr(outerSpawnShipEntity, STUB116, 0x002A, 0x1CED, 2);   // outerSpawnShipEntity(missionShip, navPoint)
     ovr(enterNavPoint, STUB116, 0x0089, 0x1511, 1);          // set up a nav point: loads its ship types, despawns, spawns
+    ovr(loadNavTypes, STUB116, 0x004D, 0x1298, 1);           // loadNavTypes(nav point record*): load the ship types it names (+0x3F), drop the others
     ovr(navStepAltIntel, STUB116, 0x0093, 0x1428);          // a nav point step "ship N flies with intelligence file M" (ovr116:1395): about to load the packet into the slot's record
     // root: entities
     root(despawn, SEG006, 0x1AB7, 1);                        // despawn(ship)

@@ -781,21 +781,28 @@ private:
 // such a spawn, the record that names the ship -- the nav point's own or
 // one of its waves -- has its types loaded here by the game's own call, as
 // the server's game did when it spawned it.
+// WC2 is built the same way (five types loaded, ovr116:1298 loads a
+// record's; the next wave is ovr116:17F6, from ovr114:2196 once no enemy
+// fighter is left), and there a spawn of a type that is not loaded makes no
+// ship at all: Olympus's Jalkehi after the Drakhri (series 3, mission D)
+// never came on a wingman's machine.
 class ShipTypesJob : public VmJob {
 public:
     explicit ShipTypesJob(const Spawn &spawn) : spawn_(spawn), type_(-1), loading_(false) {}
     virtual bool start() {
-        enum { kNavRecords = 20, kWaveOff = 0x1E, kWaveDone = 0xff };
+        enum { kWaveOff = 0x1E, kWaveDone = 0xff };
+        const int navRecords = is_wc2() ? 10 : 20;
         int ms = (int)spawn_.mission_ship_id(), nav = (int)spawn_.situation_id();
         if (!code::loadNavTypes.known() || !ds::known(ds::loadedShipTypes) || !g_params.navPointShipsOff ||
-            ms < 0 || ms >= 0xffff || nav < 0 || nav >= kNavRecords || is_field_mission_ship(ms)) {
+            ms < 0 || ms >= 0xffff || nav < 0 || nav >= navRecords || is_field_mission_ship(ms)) {
             return false;
         }
-        type_ = (Bit16s)rd16((Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms));
+        Bit16u shipRec = (Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms);
+        type_ = is_wc2() ? rd8((Bit16u)(shipRec + 0x14)) : (Bit16s)rd16(shipRec);  // (WC2: a type byte after the name)
         if (type_ < 0 || type_loaded(type_)) {
             return false;
         }
-        for (int k = 0; nav + k < kNavRecords; k++) {
+        for (int k = 0; nav + k < navRecords; k++) {
             Bit16u rec = (Bit16u)(ds::navPointTable + g_params.navPointSize * (nav + k));
             Bit8u wave = rd8((Bit16u)(rec + kWaveOff));
             if (k > 0 && wave != k + 1 && wave != kWaveDone) {
@@ -822,10 +829,11 @@ public:
     virtual const char *describe() const { return "ship types"; }
 
 private:
-    static bool type_loaded(int type) {  // ovr145:0892
-        enum { kLoadedTypes = 4, kLoadedTypeSize = 13 };
-        for (int i = 0; i < kLoadedTypes; i++) {
-            if ((Bit8s)rd8((Bit16u)(ds::loadedShipTypes + kLoadedTypeSize * i)) == type) {
+    static bool type_loaded(int type) {  // ovr145:0892 (WC2: ovr116:123E)
+        const int loadedTypes = is_wc2() ? 5 : 4, loadedTypeSize = is_wc2() ? 0x16 : 13;
+        for (int i = 0; i < loadedTypes; i++) {
+            Bit16u entry = (Bit16u)(ds::loadedShipTypes + loadedTypeSize * i);
+            if ((is_wc2() ? (Bit16s)rd16(entry) : (Bit8s)rd8(entry)) == type) {
                 return true;
             }
         }

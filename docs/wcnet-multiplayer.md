@@ -167,6 +167,27 @@ extra health" and "wingman explodes" behaviour.
   box; turned onto one by the script, its guns still hit it: the screen
   place is worked out without a shape) and the host's shape after, drawn
   and boxed, "Target: Krant" on the VDU.
+* **The same in WC2, worse (2026-10-25, the user asked after the Krants).**
+  WC2 keeps five types (`dseg:45BB`, 0x16 bytes each, the type a word, -1
+  free; `ovr116:123E` is "is it loaded"), `ovr116:1298` loads a record's
+  three (`+0x3F`) and drops the rest, and the next wave is `ovr116:17F6`:
+  the record nav+k whose byte `+0x1E` is k+1, from `ovr114:2196` once no
+  enemy fighter is left in slots 0-9 (an explosion's end, `ovr114:24A9`,
+  or the "enemies near" test `ovr132:0494`).  A spawn of a type that is not
+  loaded there makes no ship at all.  A client does get to that step on its
+  own, but after the server's spawns: on the rig (two native instances,
+  series 3 mission D, Olympus: five Drakhri at the start, then four
+  Jalkehi) the wingman's game logged "spawn of mission ship 8 left slot 3
+  empty" for each Jalkehi and had none, so the wingman saw, targeted and
+  hit nothing the host was fighting.  `ShipTypesJob` takes WC2's layout
+  (and `loadNavTypes` is `stub116:004D` there; SO1's and SO2's by
+  `scripts/wcport.py`): the Jalkehi then came on both machines, in the
+  same slots, boxed on both screens.  SO2 series 1 mission 3 (the Gothri
+  after the Dorkathi) was tested too, with the client's own wave step held
+  off (its counter `dseg:46C4` poked to -1), since there the client's step
+  came first.  The missions with such a wave, from the MODULE files: WC2
+  series 1 mission D, 3 D, 5 B, 5 D, 7 B, 8 D, 10 A, 10 C, 11 C and 12 D;
+  SO2 1-3; none in SO1, nor in Culloden.
 * The per-instruction hook read ~15 words of guest memory for every emulated
   instruction (`isExecutingOverlay` per hook).
 

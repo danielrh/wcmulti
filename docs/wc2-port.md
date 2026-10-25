@@ -108,7 +108,11 @@ Stage 1 to 4 of the plan in section 10, for a mission the story flies with a win
     creates nothing.  The server's spawns after an autopilot reach a client
     before its own nav check has run, so the client runs the nav point setup
     first (`NavSetupJob`), with the spawns and despawns nested in it answered
-    as a client's own.
+    as a client's own.  A nav point's later wave of a type it did not load
+    (`ovr116:17F6`) had the same hole until 2026-10-25: before a spawn of a
+    type it has not loaded a client loads the types of the record naming
+    the ship (`ShipTypesJob`, `ovr116:1298`; docs/wcnet-multiplayer.md,
+    the Krants).
   * WC2 places a wingman by formation AI, not by a start offset.  The AI is
     off for a human's ship, so the client takes the position the server
     holds for its slot from the start state (this also fixed WC1, where a
