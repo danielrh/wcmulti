@@ -268,6 +268,7 @@
       </div>
       <form id="setup">
         <label title="A code of the page's own making starts with the game it is for (WC1, WC2, SM2, SO1, SO2, SO3)">Room code <input type="text" id="room" placeholder="WC1-4821" pattern="[A-Za-z0-9_\-]{4,64}" required></label>
+        <label class="check" title="A room of one: tick this when making one to fly the game alone, as it is, with its own wingman, its own menus and its saved games. Only the controller is the page's; no lobby server, nobody else comes in (not remembered)"><span class="boxrow"><input type="checkbox" id="oneSeat"></span>1 player</label>
         <label class="check" title="A room has two seats; tick this when making one to give it a third (in beta; not remembered)"><span class="boxrow"><input type="checkbox" id="threeSeats"><small class="beta">beta</small></span>3 players</label>
         <label>Callsign <input type="text" id="callsign" placeholder="Maverick"></label>
         <label id="firstnameLabel" hidden>First name <input type="text" id="firstname" placeholder="Christopher" maxlength="12"></label>

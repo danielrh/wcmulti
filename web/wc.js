@@ -803,6 +803,10 @@ function renderMission() {
   if (lobby.mission && isHost() && !Array.from(sel.options).some((o) => o.value === missionKey(lobby.mission))) lobby.mission = null;
   sel.value = missionKey(lobby.mission);
   sel.disabled = !isHost() || running;
+  // (A room of one flies the game as it is: its own campaign, collisions and
+  // all.  The frame rate stays: the hooks pace a flight alone too.)
+  const one = soloRoom();
+  for (const id of ["mission", "latency", "collisions"]) $(id).parentElement.hidden = one;
   $("collisions").value = `${lobby.rocks}-${lobby.wingBumps}`;
   $("collisions").disabled = !isHost();  // the host may switch them while flying too
   $("latency").value = lobby.latency;
@@ -816,12 +820,13 @@ function renderMission() {
     if (document.activeElement !== inp || !isHost() || running) inp.value = String(fpsInForce());
     inp.disabled = !isHost() || running;
   }
-  $("capHullLabel").hidden = !capshipOption || !lobbyCapHull() || !lobbyFlies();
+  $("capHullLabel").hidden = !capshipOption || !lobbyCapHull() || !lobbyFlies() || one;
   $("capHull").checked = lobby.capHull;
   $("capHull").disabled = !isHost() || running;
   const hints = (c && c.hints) || {};
   // (One line, cut with an ellipsis; the whole of it is the tooltip.)
-  const hint = !c ? (lobbyGameId() ? "" : "Load the game files to pick a mission.")
+  const hint = one ? "The game from its title screen: its own campaign and saved games, its own wingman."
+    : !c ? (lobbyGameId() ? "" : "Load the game files to pick a mission.")
     : lobby.mission ? `${missionLabel(lobby.mission)[0].toUpperCase()}${missionLabel(lobby.mission).slice(1)}. ${hints.forced || ""}`
     : (isHost() ? hints.host : hints.wing) || "";
   $("missionHint").textContent = hint;
@@ -878,6 +883,17 @@ const PRIVATE_KEY = "wc:private";
 const privateOn = () => $("private").checked;  // (the room is kept out of "Join open game")
 const myName = () => $("callsign").value.trim() || "Pilot " + (lobby.game ? lobby.game.selfId + 1 : "?");
 const isHost = () => lobby.game && lobby.game.selfId === 0;
+// A room of one ("1 player"): the page's own, with no lobby server and no
+// seat for anybody else.  Its flight is the game alone, as it is (WCSOLO):
+// its own wingman, menus and saved games; the hooks keep only the
+// controller's part and the frame pacing.
+const soloRoom = () => !!(lobby.game && lobby.game.solo);
+function soloGame(code) {
+  return { code, solo: true, selfId: 0, maxPlayers: 1, players: [{ id: 0, occupied: true }], iceServers: [],
+           onEvent: () => () => {}, sendReliable: async () => {}, close: () => {} };
+}
+const ROOM_HINT = $("lobbyHint").textContent;
+const SOLO_HINT = "A room of one, on this page alone: nobody else comes in. Leave it and join a room without \"1 player\" to fly with company.";
 
 function encodeLobby(obj) {
   const json = new TextEncoder().encode(JSON.stringify(obj));
@@ -1009,7 +1025,7 @@ function renderRoster() {
     const link = me ? "up" : (lobby.links.get(p.id) || (p.occupied ? "down" : ""));
     const name = me ? myName() : (lobby.names.get(p.id) || (p.occupied ? "…" : "empty seat"));
     const tags = [];
-    if (p.id === 0) tags.push("host");
+    if (p.id === 0) tags.push(g.solo ? "alone" : "host");
     if (me) tags.push("you");
     if (p.occupied && !me) tags.push(link === "up" ? "connected" : "connecting…");
     if (lobby.flying.has(p.id) || (me && running)) tags.push("flying");
@@ -1037,6 +1053,7 @@ function updateActions() {
     else if (!source && !lobby.game) status(linkWaits() ? `Load your game files (step 1) and you are in room ${$("room").value.trim()}; "Join room" takes a seat in it without them.` : "Load the game files and join a room first.");
     else if (!source) status(`Join succeeded; now load ${codeGame(lobby.game.code) ? codeGame(lobby.game.code).title : "the game files"} above.`);
     else if (!lobby.game) status("Game files ready; join a room to fly with friends.");
+    else if (soloRoom()) { $("fly").textContent = "Fly"; status(`Room ${lobby.game.code} is yours alone: press Fly.`); }
     else if (isHost()) { $("fly").textContent = "Fly (starts everyone)"; status(`You host room ${lobby.game.code}. Press Fly when your wingmen are in.`); }
     else { $("fly").textContent = "Fly"; status(lobby.flying.has(0) ? "The host is already flying: press Fly to join the mission." : "Waiting for the host to start; Fly joins on your own too."); }
   }
@@ -1205,9 +1222,10 @@ async function joinRoom({ create = true } = {}) {
   if (hall.isLobby(code)) { status(`${code} is the public lobby (enter it above); a room to fly in needs a code of its own.`); return; }
   if (!fitsRoom(code)) { linked = viaLink; return; }
   $("join").disabled = true;
-  status(`Joining room ${code}…`);
+  const solo = create && $("oneSeat").checked;
+  status(solo ? `Making room ${code} for one…` : `Joining room ${code}…`);
   try {
-    const game = await P2PGame.connect({
+    const game = solo ? soloGame(code) : await P2PGame.connect({
       server: serverUrl(),
       code,
       // A room code gets said out loud: nobody who hears it may take a
@@ -1237,7 +1255,9 @@ async function joinRoom({ create = true } = {}) {
     clearRoomFromAddress();
     $("lobby").hidden = false;
     $("leave").hidden = false;
-    $("share").hidden = false;
+    $("share").hidden = solo;
+    $("chatForm").hidden = solo;
+    $("lobbyHint").textContent = solo ? SOLO_HINT : ROOM_HINT;
     if (game.selfId === 0) lobby.mission = parseMission(query.get("mission")) || { series: 1, mis: 0 };
     lobby.rocks = game.selfId === 0 ? rocksMode({ 0: "off", 2: "soft" }[query.get("rocks")] || query.get("rocks")) : "on";
     lobby.wingBumps = game.selfId === 0 ? wingBumpsMode({ 0: "game", 1: "harmless" }[query.get("bumps")] || query.get("bumps")) : "harmless";
@@ -1245,9 +1265,10 @@ async function joinRoom({ create = true } = {}) {
     lobby.fps = game.selfId === 0 ? fpsValue(query.get("fps")) : 0;
     lobby.capHull = game.selfId === 0 && query.get("caphull") === "1";
     renderMission();
-    for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = true;
-    chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
-    log(`lobby: joined room ${code} as player ${game.selfId} of ${game.maxPlayers}`);
+    for (const id of ["room", "oneSeat", "threeSeats", "server", "relay"]) $(id).disabled = true;
+    if (solo) chatLine(`You are ${esc(myName())}, alone in room ${esc(code)}: Fly starts the game as it is, with its own wingman.`, "sys");
+    else chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
+    log(solo ? `lobby: room ${code} for one (no lobby server)` : `lobby: joined room ${code} as player ${game.selfId} of ${game.maxPlayers}`);
     renderRoster(); updateActions();
     $("chatInput").focus();
   } catch (e) {
@@ -1315,7 +1336,10 @@ function offerText() {
 // the pilot is in, and otherwise the one of the room form, joined now.
 async function myRoom() {
   if (running) return null;
+  const alone = "A room of one (\"1 player\") is not offered in the lobby: nobody can join it.";
+  if (!lobby.game && $("oneSeat").checked) { status(alone); return null; }
   if (!lobby.game) await joinRoom();
+  if (soloRoom()) { status(alone); return null; }
   return lobby.game ? { code: lobby.game.code, offer: offerText() } : null;
 }
 $("advertise").addEventListener("click", () => { if (lobby.game && !running) void hall.advertise(); });
@@ -1406,7 +1430,8 @@ function leaveRoom() {
   lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
   // (While the game runs, the button stays: the way out of it.)
   $("lobby").hidden = true; $("leave").hidden = !running; $("share").hidden = true; $("join").disabled = false;
-  for (const id of ["room", "threeSeats", "server", "relay"]) $(id).disabled = false;
+  for (const id of ["room", "oneSeat", "threeSeats", "server", "relay"]) $(id).disabled = false;
+  $("chatForm").hidden = false;
   $("roster").innerHTML = "";
   updateActions();
 }
@@ -1431,6 +1456,9 @@ function leaveButton() {
 window.addEventListener("beforeunload", (ev) => { if (running && !leavingForGood) { ev.preventDefault(); ev.returnValue = ""; } });
 
 $("setup").addEventListener("submit", (ev) => { ev.preventDefault(); void joinRoom(); });
+// (One seat or three, not both.)
+$("oneSeat").addEventListener("change", () => { if ($("oneSeat").checked) $("threeSeats").checked = false; });
+$("threeSeats").addEventListener("change", () => { if ($("threeSeats").checked) $("oneSeat").checked = false; });
 $("leave").addEventListener("click", leaveButton);
 // The link to this room, to the clipboard (shown in the status line where
 // the clipboard is out of reach).
@@ -1587,22 +1615,28 @@ async function start(fromGesture) {
     const { default: createDOSBox } = await import("./dosbox.js");
     // (WCNET_EXIT_STACK: should the game end by itself, its stack goes into the log.)
     const env = { WCNET_LOG: cfg.verbose ? "2" : "1", WCNET_EXIT_STACK: "1", SDL_EMSCRIPTEN_KEYBOARD_ELEMENT: "#canvas" };
-    if (source.game.multiplayer) {
+    // (A room of one runs the game alone, as it is: soloRoom.)
+    const solo = soloRoom();
+    const together = source.game.multiplayer && !solo;
+    if (together) {
       env.WCROOM = cfg.code; env.WCLOBBY = cfg.server; env.WCPLAYERS = cfg.players;
       if (cfg.relay) env.WCLOBBY_RELAY = "1";
+    } else if (solo) {
+      env.WCSOLO = "1";
+      log(`${source.game.title} alone: the game as it is, the page's controller`);
     } else {
       log(`${source.game.title}: no multiplayer hooks for this game, running single-player`);
     }
     // The host's game decides and tells the wingmen's; theirs start the same.
-    if (source.game.multiplayer) env.WCROCKS = String(ROCKS[lobby.rocks]);
-    if (source.game.multiplayer) env.WCWINGBUMPS = String(WING_BUMPS[lobby.wingBumps]);
-    if (source.game.multiplayer && isHost()) env.WCNET_MODE = lobby.latency;
+    if (together) env.WCROCKS = String(ROCKS[lobby.rocks]);
+    if (together) env.WCWINGBUMPS = String(WING_BUMPS[lobby.wingBumps]);
+    if (together && isHost()) env.WCNET_MODE = lobby.latency;
     // (The wingmen's games take the host's with each mission; theirs agrees.)
     if (fpsInForce()) env.WCFPS = String(fpsInForce());
-    if (source.game.multiplayer && lobbyCapHull() && lobby.capHull) env.WCCAPHULL = String(CAP_HULL);
-    if (cfg.callsign) env.WCCALLSIGN = cfg.callsign;
-    if (cfg.lastname) env.WCLASTNAME = cfg.lastname;
-    if (cfg.firstname) env.WCFIRSTNAME = cfg.firstname;
+    if (together && lobbyCapHull() && lobby.capHull) env.WCCAPHULL = String(CAP_HULL);
+    if (cfg.callsign && !solo) env.WCCALLSIGN = cfg.callsign;
+    if (cfg.lastname && !solo) env.WCLASTNAME = cfg.lastname;
+    if (cfg.firstname && !solo) env.WCFIRSTNAME = cfg.firstname;
     // A wingman's game calls the leader's ship by the leader's callsign (the
     // targeting computer, the comm menu): the roster has it.
     if (!isHost() && lobby.names.get(0)) env.WCHOSTCALLSIGN = lobby.names.get(0);
@@ -1611,7 +1645,7 @@ async function start(fromGesture) {
     // command line (the registry says which).
     const campaign = gameInfo() && gameInfo().campaign;
     let missionArgs = "";
-    if (lobby.mission && source.game.multiplayer && campaign) {
+    if (lobby.mission && together && campaign) {
       if (campaign.missionArgs) {
         missionArgs = " " + campaign.missionArgs(lobby.mission);
       } else {
@@ -1666,7 +1700,7 @@ async function start(fromGesture) {
 
     sayHello();
     renderRoster(); renderMission();
-    status(source.game.multiplayer ? `Room ${cfg.code}: starting…` : `Starting ${source.game.title}…`);
+    status(together ? `Room ${cfg.code}: starting…` : `Starting ${source.game.title}…`);
     canvas.focus();
     // ?cmd=... runs another DOS command instead of the game (debugging aid).
     // RetroVega: ?res=1 the sharp sets; ?field=D its flights start in an
@@ -1701,7 +1735,7 @@ async function start(fromGesture) {
     for (const ev of ["pagehide", "visibilitychange"]) window.addEventListener(ev, keepSaves);
     $("fullscreen").hidden = false;
     if (fromGesture) goFullscreen();
-    status(source.game.multiplayer
+    status(together
       ? `Room ${cfg.code}. "Copy link" (step 2) gives friends the way in.`
       : `${source.game.title} is running.`);
   } catch (e) {

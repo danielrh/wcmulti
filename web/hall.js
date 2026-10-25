@@ -733,7 +733,7 @@ export function initHall(opts) {
   async function advertise() {
     if (shut) return false;
     const mine = await opts.room();
-    if (!mine) { if (inside()) note("Nothing to advertise: you are in no room (step 2 says why)."); return false; }
+    if (!mine) { if (inside()) note("Nothing to advertise (step 2 says why)."); return false; }
     if (!inside() && !(await enter())) return false;
     if (say(mine.offer)) { $("hallInput").value = ""; hint(); return true; }
     $("hallInput").value = mine.offer;

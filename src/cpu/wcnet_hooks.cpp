@@ -1116,6 +1116,25 @@ static bool pointer_off() {
     return g_pointerOff != 0;
 }
 
+// WCSOLO=1 (the page's room of one): the game flown alone, as it is.  The
+// hooks keep only what a controller needs (the built-in joystick, the pad
+// as mouse and keys, the crosshair a pad hides; they go by where a flight
+// begins and ends) and the frame pacing, without which a WC1 flight would
+// run at the menus' cycles.  No network, no mission picked for the game, no
+// names written into it, no CHEAT hull, its intro played: the wingman is
+// the game's own.
+static bool solo() {
+    static int on = -1;
+    if (on < 0) {
+        const char *env = getenv("WCSOLO");
+        on = env && env[0] && env[0] != '0' ? 1 : 0;
+        if (on) {
+            wclog(1, "flying alone (WCSOLO=1): only the controller's hooks and the frame pacing");
+        }
+    }
+    return on != 0;
+}
+
 // A callsign with CHEAT in it (any case) flies a ship that takes no damage
 // on its own machine: the game's own developer switch, the word do_damage
 // tests before touching slot 0 (WC.EXE dseg:00BA, ovr143:0ABD; WC2.EXE
@@ -1542,6 +1561,55 @@ static void check_hooks_slow() {
     }
 }
 
+// The hooks of a game flown alone (solo above): the same places as above
+// for the flight's beginning, end and frames, and nothing else.
+static void check_hooks_solo() {
+    if (at_location(code::cockpitPointer) && pointer_off()) {
+        reg_eip += 4;
+        return;
+    }
+    if (at_location(code::missionStarting) || at_location(code::missionStartingDirect)) {
+        g_inMission = true;
+        g_frameSeen = false;
+    }
+    if (at_location(code::simulatorStart)) {
+        in_simulation += 1;
+    }
+    if (in_simulation) {
+        if (at_location(code::simulatorEnd)) {
+            in_simulation -= 1;
+        }
+        return;
+    }
+    if (at_location(code::missionEnded) || at_location(code::missionEndedDirect)) {
+        g_inMission = false;
+    }
+    if (Trampoline::at_hook()) {
+        g_trampoline.on_bounce();
+    }
+    if (at_location(code::mainLoopTop)) {
+        if (!g_frameSeen) {
+            g_frameSeen = true;
+            g_flightCount++;
+        }
+        if (g_joyDropping) {
+            joystick_drop(true);
+        }
+        static int lastFrame = -1;
+        if (rd16(ds::frameCounter) != lastFrame) {
+            if (pace_frame(true)) {
+                g_trampoline.run_before_current_instruction();
+                return;  // early: back here when the frame is due
+            }
+            lastFrame = rd16(ds::frameCounter);
+            perf_frame();
+        }
+        if (g_trampoline.has_pending()) {
+            g_trampoline.run_before_current_instruction();  // (the test aids' game calls)
+        }
+    }
+}
+
 }  // namespace wc
 
 #ifdef __EMSCRIPTEN__
@@ -1687,6 +1755,9 @@ static void web_input_tick() {
         wc::joystick_set(wc::joystick_port_value(g_webJoyX, 0), wc::joystick_port_value(g_webJoyY, 1), g_webJoyButtons);
     }
     g_webJoyMoved = false;
+    if (wc::solo()) {
+        g_webRocksWanted = g_webWingBumpsWanted = g_webLatencyWanted = -1;  // (the room's, and there is none)
+    }
     if (g_webRocksWanted >= 0) {
         wc_net_set_rocks(g_webRocksWanted);
         g_webRocksWanted = -1;
@@ -1804,6 +1875,13 @@ bool wc_net_helmet_name(int *vduOrigin) {
     // (BlankHelmetName reads and paints the picture's columns 22..52 and rows
     // 16..21: all of them are to be on the game's screen)
     return vduOrigin[0] >= 0 && vduOrigin[0] + 53 <= 320 && vduOrigin[1] >= 0 && vduOrigin[1] + 22 <= 200;
+}
+
+// The hint about the comms key (sdlmain.cpp) is for the Wing Commanders
+// flown together: RetroVega has no comms, and a game flown alone (WCSOLO)
+// nobody to call.
+bool wc_net_comms_hint() {
+    return wc::g_build != wc::BUILD_RV && !wc::solo();
 }
 
 // A drone riding behind the leader looks at the leader's ship through its
@@ -2004,9 +2082,11 @@ void wc_net_check_cpu_hooks() {
     if (tick) {
         g_asyncCounter = 0;
         wc::pace_tick();
-        tap_keys();
-        if (DS != 0) {
-            apply_pilot_names();
+        if (!solo()) {
+            tap_keys();
+            if (DS != 0) {
+                apply_pilot_names();
+            }
         }
         auto_keys();
         key_script();
@@ -2032,6 +2112,10 @@ void wc_net_check_cpu_hooks() {
     }
     Bit32u ip = reg_eip;
     if (ip >= 0x10000 || !g_watch[ip]) {
+        return;
+    }
+    if (solo()) {
+        check_hooks_solo();
         return;
     }
     check_hooks_slow();
