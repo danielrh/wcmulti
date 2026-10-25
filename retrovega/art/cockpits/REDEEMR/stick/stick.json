@@ -3,9 +3,7 @@
  "scale": 0.4954,
  "grown": 2.104,
  "dropped": 21.0,
- "hides": [
-  "hull_bar 0"
- ],
+ "hides": [],
  "mount": [
   314,
   372

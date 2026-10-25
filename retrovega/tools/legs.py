@@ -13,7 +13,9 @@ blocked the legs).
 
 A cockpit's entry in data/legs.json:
   moves   [x, y, w, h, dx, dy]: a box of the kit's art copied dx, dy along (from the art as it was, in order); a panel
-          control or a damage layer inside it goes with it
+          control or a damage layer inside it goes with it.  Also what the bigger hand hid (tools/joysticks.py; the
+          user's pick, 2026-10-25): the Redeemer's SHIELD, ARMOR and HULL bars swapped with the grille left of them,
+          the Progeny's E/M box with its EJECT box
   wells   the footwells: a polygon, deep (the row it is black from, under the dash) and near (the row it would be
           lightest at, below the screen); fill: the art in it replaced (a panel cut away) rather than darkened;
           feather: how many pixels in from its edge the dark comes in full (4)

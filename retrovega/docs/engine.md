@@ -515,9 +515,13 @@ RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
   controls, by at most 35 pixels: the Schroedinger 32, the Goddard 30,
   the Lancelot 21, the Gawain 15. Where that is not enough, a display
   sits right above the stick, and the set goes only as far as hides no
-  more than 35 would: the Redeemer's HULL bar, the Pacifier's SYSTEMS
-  display and the Progeny's EMCON knob stay behind the hand
-  (`joysticks.py` names them; stick.json `hides`).
+  more than 35 would (`joysticks.py` names what is left; stick.json
+  `hides`). For two of those the panel moved instead (the user's pick,
+  data/legs.json `moves`): the Redeemer's SHIELD, ARMOR and HULL bars
+  swap places with the grille left of them, and the Progeny's E/M box
+  (the EMCON knob and lamps) with its EJECT box, which now sits behind
+  the hand. The Pacifier's SYSTEMS display stays partly behind its stick
+  head (the user's: as it is).
 - **The pilot's legs** (the user's, 2026-10-24: the footpads either side
   of the stick read as knees with nothing after them, as if the legs were
   curled back; in the Goddard and the Redeemer, legs against the

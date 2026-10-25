@@ -1,5 +1,5 @@
 {
- "about": "The pilot's legs under the dash (tools/legs.py): per cockpit, boxes of art moved, the footwells (a polygon, the row it is black from, the row it would be lightest at, fill: the art replaced) and the legs (hip below the screen, knee, half widths, the well they show in).",
+ "about": "The pilot's legs under the dash (tools/legs.py): per cockpit, boxes of art moved (for the legs, or out from behind the hand), the footwells (a polygon, the row it is black from, the row it would be lightest at, fill: the art replaced) and the legs (hip below the screen, knee, half widths, the well they show in).",
  "cockpits": {
   "GODDARD": {
    "wells": [
@@ -12,6 +12,10 @@
    ]
   },
   "REDEEMR": {
+   "moves": [
+    [200, 301, 120, 28, -50, 0],
+    [150, 301, 50, 28, 120, 0]
+   ],
    "wells": [
     {"poly": [[172, 352], [266, 352], [268, 400], [150, 400], [166, 372]], "deep": 352, "near": 410},
     {"poly": [[374, 352], [464, 352], [472, 372], [490, 400], [372, 400]], "deep": 352, "near": 410}
@@ -32,6 +36,10 @@
    ]
   },
   "PROGENY": {
+   "moves": [
+    [574, 296, 63, 51, -59, 0],
+    [515, 296, 63, 51, 59, 0]
+   ],
    "wells": [
     {"poly": [[150, 340], [262, 340], [262, 400], [140, 400]], "deep": 340, "near": 408},
     {"poly": [[378, 340], [500, 340], [505, 400], [378, 400]], "deep": 340, "near": 408}
