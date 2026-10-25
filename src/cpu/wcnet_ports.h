@@ -17,6 +17,7 @@ static void load_sm2_code() {
     ovr(aiSetSpeedReturn, 0x10EC, 0x010B, 0x0918);                 // ovr140:0918 (ovr143:0918)
     ovr(outerSpawnShipEntity, 0x1107, 0x00B6, 0x11A5, 2);          // ovr142:11A5 (ovr145:115D)
     ovr(enterNavPoint, 0x1107, 0x0075, 0x09B5, 1);                 // ovr142:09B5 (ovr145:098F)
+    ovr(loadNavTypes, 0x1107, 0x003E, 0x0912, 1);                  // ovr142:0912 (ovr145:08EC)
     ovr(despawn, 0x10C2, 0x01DD, 0x1C29, 1);                       // ovr137:1C29 (ovr140:1C16)
     ovr(aiShipThink, 0x1185, 0x00CA, 0x160E, 1);                   // ovr160:160E (ovr163:160E)
     ovr(aiFighterThink, 0x1185, 0x0101, 0x13CF, 1);                // ovr160:13CF (ovr163:13CF)

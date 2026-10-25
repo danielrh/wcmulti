@@ -133,6 +133,40 @@ extra health" and "wingman explodes" behaviour.
   fly-by the km are the game's own moving of the ship, not the AI's).  Both
   routines are held off a human's slot now (`aiFighterThink`; SM2 at the
   same offsets).
+* **A wave of a new ship type was invisible on the wingman's machine
+  (Venice 2, 2026-10-25, the user's play).**  At Nav 2 the Krants that come
+  after the last of the Salthi could be targeted by the wingman but not
+  seen or boxed, and so hardly hit.  The game keeps four ship types loaded
+  (`dseg:C13A`, 13 bytes each: the type, then far pointers to its shapes),
+  and a spawn copies its type's shape pointer into the slot
+  (`ovr143:02D1`, `dseg:C754`): a ship spawned while its type is not
+  loaded has none for good (a later load of the type gives it to the slots
+  of that type, `ovr145:04E3`).  A nav point's setup loads the two types
+  its record names (`ovr145:08EC` from `ovr145:0A66`, the record's word
+  pair at `+0x35`), and the nav point's waves are the records after its
+  own, record nav+k with byte `+0x1E` = k+1: `ovr145:0DCD` loads the next
+  wave's types, marks the record done (0xff), counts on (`dseg:660B`) and
+  spawns its ships, once the last enemy fighter's explosion is over
+  (`ovr143:178B` -> `ovr143:1758`).  On a client that step never comes:
+  the exploded fighter stays in its slot (its removal is the server's) and
+  still counts, and the server's removal arrives together with the wave's
+  spawns.  A wave of the same types (the second pair of Gratha at Nav 1)
+  showed because its type was loaded already; Venice 2's Nav 2 wave names
+  Fralthi and Krant where the nav point named Fralthi and Salthi (of the
+  eleven missions of Hubble's Star, Venice and Hell's Kitchen read, Venice
+  1 and 4, Hubble's Star 3 and Hell's Kitchen 3 have such waves too).  Now
+  a client, before replaying a spawn of a type it has not loaded, loads the
+  types of the record that names the ship -- the nav point's own or one of
+  its waves -- by the game's own call (`ShipTypesJob`, `loadNavTypes`), as
+  the server's game did; a spawn of a loaded type changes nothing.  (The
+  same happens when the server's spawns at a nav point reach a client
+  before its own setup of that nav point, an autopilot's arrival: those
+  ships were unseen for the frames in between, and now are not.)  On the
+  rig (two native instances, Venice 2, the Salthi destroyed by the key
+  script) the wingman's Krant slots had a null shape before (not drawn, no
+  box; turned onto one by the script, its guns still hit it: the screen
+  place is worked out without a shape) and the host's shape after, drawn
+  and boxed, "Target: Krant" on the VDU.
 * The per-instruction hook read ~15 words of guest memory for every emulated
   instruction (`isExecutingOverlay` per hook).
 

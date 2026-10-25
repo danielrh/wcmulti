@@ -765,6 +765,77 @@ private:
     int nav_;
 };
 
+// WC.EXE keeps four ship types loaded (ds::loadedShipTypes), and a spawn
+// copies its type's shapes into the slot (ovr143:02D1): a ship spawned
+// while its type is not loaded has none for good -- nothing drawn and no
+// box around it, nothing for a pilot to aim at (its place on the screen
+// is still worked out, and a bolt that finds it hits).  A nav
+// point's setup loads the types its record names (ovr145:0A66), and so
+// does the step that brings on the nav point's next wave (ovr145:0DCD, once
+// the last enemy fighter's explosion is over, ovr143:1758): the waves are
+// the records after the nav point's, record nav+k with byte +0x1E = k+1.
+// On a client that step never comes, since the dying fighter stays in its
+// slot until the server removes it, and the wave's spawns follow the
+// removal; so a wave of a type the nav point did not have (Venice 2's
+// Krants after the Salthi) was invisible on a wingman's machine.  Before
+// such a spawn, the record that names the ship -- the nav point's own or
+// one of its waves -- has its types loaded here by the game's own call, as
+// the server's game did when it spawned it.
+class ShipTypesJob : public VmJob {
+public:
+    explicit ShipTypesJob(const Spawn &spawn) : spawn_(spawn), type_(-1), loading_(false) {}
+    virtual bool start() {
+        enum { kNavRecords = 20, kWaveOff = 0x1E, kWaveDone = 0xff };
+        int ms = (int)spawn_.mission_ship_id(), nav = (int)spawn_.situation_id();
+        if (!code::loadNavTypes.known() || !ds::known(ds::loadedShipTypes) || !g_params.navPointShipsOff ||
+            ms < 0 || ms >= 0xffff || nav < 0 || nav >= kNavRecords || is_field_mission_ship(ms)) {
+            return false;
+        }
+        type_ = (Bit16s)rd16((Bit16u)(ds::missionShipTable + g_params.missionShipSize * ms));
+        if (type_ < 0 || type_loaded(type_)) {
+            return false;
+        }
+        for (int k = 0; nav + k < kNavRecords; k++) {
+            Bit16u rec = (Bit16u)(ds::navPointTable + g_params.navPointSize * (nav + k));
+            Bit8u wave = rd8((Bit16u)(rec + kWaveOff));
+            if (k > 0 && wave != k + 1 && wave != kWaveDone) {
+                break;  // the end of the nav point's waves
+            }
+            for (int i = 0; i < 10; i++) {
+                if (rd16((Bit16u)(rec + g_params.navPointShipsOff + 2 * i)) == ms) {
+                    wclog(1, "mission ship %d is a ship type (%d) not loaded here: loading the types of nav point %d%s",
+                          ms, type_, nav, k ? "'s next wave" : "");
+                    call_of(code::loadNavTypes).arg(rec).invoke();
+                    loading_ = true;
+                    return true;
+                }
+            }
+        }
+        wclog(1, "mission ship %d is a ship type (%d) not loaded here, and nav point %d does not name it", ms, type_, nav);
+        return false;
+    }
+    virtual void finish() {
+        if (loading_ && !type_loaded(type_)) {
+            wclog(0, "ship type %d is still not loaded here: mission ship %d will not be seen", type_, (int)spawn_.mission_ship_id());
+        }
+    }
+    virtual const char *describe() const { return "ship types"; }
+
+private:
+    static bool type_loaded(int type) {  // ovr145:0892
+        enum { kLoadedTypes = 4, kLoadedTypeSize = 13 };
+        for (int i = 0; i < kLoadedTypes; i++) {
+            if ((Bit8s)rd8((Bit16u)(ds::loadedShipTypes + kLoadedTypeSize * i)) == type) {
+                return true;
+            }
+        }
+        return false;
+    }
+    Spawn spawn_;
+    int type_;
+    bool loading_;
+};
+
 // A drone's copy of the server's player.  A wingman gets that body from the
 // spawn of the ship he flies himself (EntityMap::record_spawn); a drone
 // flies nothing the mission knows, so it spawns the mission's player ship a
@@ -1511,6 +1582,9 @@ void enqueue_remote_event(const Event &ev) {
     if (ev.has_spawn()) {
         if (is_wc2() && g_session->is_client() && ev.spawn().has_situation_id() && ev.spawn().situation_id() != 0xffff) {
             g_trampoline.enqueue(new NavSetupJob((int)ev.spawn().situation_id()));  // nothing to do when it is current
+        }
+        if (g_session->is_client() && code::loadNavTypes.known()) {
+            g_trampoline.enqueue(new ShipTypesJob(ev.spawn()));  // nothing to do when the ship's type is loaded
         }
         g_trampoline.enqueue(new SpawnJob(SpawnJob::REPLAY, ev.spawn()));
     }

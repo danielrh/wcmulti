@@ -93,6 +93,7 @@ static void load_wc1_code() {
     // overlay 145: mission spawning
     ovr(outerSpawnShipEntity, STUB145, 0x00B6, 0x115D, 2); // outerSpawnShipEntity(missionShip, situation)
     ovr(enterNavPoint, STUB145, 0x0075, 0x098F, 1);        // set up a nav point (situation): despawn, fields, spawn
+    ovr(loadNavTypes, STUB145, 0x003E, 0x08EC, 1);         // loadNavTypes(nav point record*): load the ship types it names (+0x35), drop the others
     // overlay 140: entities
     ovr(despawn, STUB140, 0x01DD, 0x1C16, 1);              // despawn(ship)
     // overlay 163: AI

@@ -98,6 +98,7 @@ WC_DS(systemDamage, 0xD24C, 0xD532, 0x468D, 0x4697, 0x4933)  // [systemDamage] b
 WC_DS(cockpitDamage, 0x8CB2, 0x8FA0, 0xB18E, 0xB08A, 0xB320)  // [cockpitDamage] word per cockpit instrument (4): 1 = broken (ovr134:325E)
 WC_DS(navPointState, 0xD25D, 0xD543, 0x44F2, 0x44FC, 0x4798)  // 8 x 19 bytes: mission tree progress
 WC_DS(navPointTable, 0x687C, 0x6B9E, 0x71DC, 0x71E6, 0x7482)  // [navPoints] 0x4d bytes per nav point; its mission ships are ten words at +0x39
+WC_DS(loadedShipTypes, 0xC13A, 0xC420, 0x0000, 0x0000, 0x0000)        // WC1: [loadedShipTypes + 13*i] byte: the ship type loaded in record i (four; 0xff free), then far pointers to its shapes; a spawn copies its type's into the slot (ovr143:02D1), a load gives them to the slots of that type there are (ovr145:04E3); ovr145:0892 is the game's "is it loaded"
 WC_DS(playerMissionShip, 0x9560, 0x984A, 0xC1B4, 0xC0B0, 0xC346)  // [playerMissionShip] word: which mission ship the player flies
 WC_DS(cloakState, 0x0000, 0x0000, 0x70A8, 0x70B2, 0x734E)              // WC2: [cloakState + 2*slot] word: 2 no cloaking device, 1 cloaked, 0 visible
 WC_DS(gunTable, 0xC472, 0xC758, 0x67D4, 0x67DE, 0x6A7A)           // per slot: a count, then a record per gun, type word first (WC1 0x33 bytes, 5 a gun; WC2 0xA1, 10 a gun, 0x0B is a turret)
