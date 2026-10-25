@@ -1,7 +1,9 @@
 {
  "set": "arm2",
  "scale": 0.2724,
+ "grown": 1.0,
  "dropped": 18.0,
+ "hides": [],
  "mount": [
   602,
   374

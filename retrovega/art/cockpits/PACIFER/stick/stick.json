@@ -1,7 +1,14 @@
 {
  "set": "arm2",
- "scale": 0.2138,
- "dropped": 9.0,
+ "scale": 0.5027,
+ "grown": 2.351,
+ "dropped": 33.0,
+ "hides": [
+  "speed",
+  "surv_page 1",
+  "survival",
+  "survival 0"
+ ],
  "mount": [
   324,
   387
@@ -21,56 +28,56 @@
   {
    "file": "p0.png",
    "pose": "NW",
-   "x": 306,
-   "y": 332
+   "x": 270,
+   "y": 323
   },
   {
    "file": "p1.png",
    "pose": "N",
-   "x": 306,
-   "y": 331
+   "x": 289,
+   "y": 322
   },
   {
    "file": "p2.png",
    "pose": "NE",
-   "x": 307,
-   "y": 331
+   "x": 300,
+   "y": 322
   },
   {
    "file": "p3.png",
    "pose": "W",
-   "x": 298,
-   "y": 329
+   "x": 252,
+   "y": 318
   },
   {
    "file": "p4.png",
    "pose": "CENTER",
-   "x": 306,
-   "y": 327
+   "x": 289,
+   "y": 312
   },
   {
    "file": "p5.png",
    "pose": "E",
-   "x": 306,
-   "y": 332
+   "x": 308,
+   "y": 323
   },
   {
    "file": "p6.png",
    "pose": "SW",
-   "x": 303,
-   "y": 326
+   "x": 264,
+   "y": 309
   },
   {
    "file": "p7.png",
    "pose": "S",
-   "x": 306,
-   "y": 325
+   "x": 283,
+   "y": 307
   },
   {
    "file": "p8.png",
    "pose": "SE",
-   "x": 306,
-   "y": 328
+   "x": 301,
+   "y": 313
   }
  ]
 }

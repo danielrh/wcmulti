@@ -7,8 +7,9 @@ The user's (2026-10-24): the footpads either side of the stick read as knees wit
 pilot's legs were curled back (in Goddard and Redeemer, legs against the control panel); the legs go on under the
 dash.  No shoes: they come up from the bottom edge in the flight suit's olive and fade out to black in the footwells,
 which go dark, the footpads mostly hidden.  Lancelot's COMM FREQ and E/M panels lose their inner ends for them, its
-EJECT box and NAV readout moved out into the room; the Schroedinger's EJECT box and the Pacifier's lower-left panel
-are cut away (the user's, the same day: no one-legged pilot).
+NAV readout moved out into the room; the Schroedinger's EJECT box and the Pacifier's lower-left panel are cut away
+(the user's, the same day: no one-legged pilot), and so are the Gawain's and the Lancelot's EJECT boxes (they
+blocked the legs).
 
 A cockpit's entry in data/legs.json:
   moves   [x, y, w, h, dx, dy]: a box of the kit's art copied dx, dy along (from the art as it was, in order); a panel

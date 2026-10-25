@@ -9,15 +9,24 @@ horizontal line where it comes from; and the same nine bare (the stick alone) as
 cockpit's own scale and place (exactly the kit's old stick: its size and its mount).  The user's rulings: the hand
 on the stick, the stick at its intended place and its cockpit's scale, the arm never synthesised - the cut edge off
 the bottom of the screen; where that means it, the stick goes lower (its base cropped by the screen's edge, the old
-socket painted out of the cockpit).
+socket painted out of the cockpit).  Then (2026-10-24) the hands read far too small beside the pilot's legs (tools/legs.py):
+an arm is not that much thinner than a leg, and nearer - so a set is grown about its fist (where the kit's grip was)
+until the fist is FIST of a knee's width (data/legs.json), the stick with it (its base off the bottom of the screen),
+and lowered (nearer, as it is) until its upright pose hides none of the displays and the panel's controls, by at most
+CLEAR - where that is not enough (a display right above the stick), only as far as hides no more of them than CLEAR
+would.
+The user named seven cockpits; the Franklin's side stick, at the screen's edge, keeps the kit's size.
 
 For each cockpit:
   * the scale: the handed upright pose's stick (its own pixels, neither skin nor sleeve: the base) matched by
     overlap against the bare upright one's, over a range of scales and offsets;
   * each handed pose at that scale, put on its own bare pose (matched the same way, the offset only), so the stick
     stands where and as big as the cockpit's was;
+  * the growth: the whole set scaled about the upright pose's fist, by FIST x the knee's width / the fist's;
   * the drop: the least that puts every pose's cut edge (its sleeve's lowest row) at or past the screen's bottom
-    row, the whole set lowered by it.
+    row, the whole set lowered by it; a grown set's, the least that leaves the displays (cockpit.json's regions) and
+    the controls (build/panels/KEY/panel.json: a build first) clear of its upright pose, up to CLEAR (else the least
+    that hides no more of them than CLEAR does).
 
 Out: art/cockpits/KEY/stick/p0.png .. p8.png (pose: row * 3 + column; rows forward / upright / back, columns left /
 upright / right; cropped), stick.json (each pose's place), socket.png / .json (the old socket painted out, when the
@@ -40,6 +49,10 @@ SHIPS = {'SCHROED': 'schroedinger', 'FRANKLN': 'franklin', 'GAWAIN': 'gawain', '
          'PACIFER': 'pacifier', 'LANCELT': 'lancelot', 'PROGENY': 'progeny', 'GODDARD': 'goddard'}
 POSES = ['NW', 'N', 'NE', 'W', 'CENTER', 'E', 'SW', 'S', 'SE']   # p0 .. p8
 UP = 4                                  # (the matching done at 4 x the screen's scale)
+LEGS = os.path.join(ROOT, 'data', 'legs.json')
+FIST = 0.9                              # the fist's width to a knee's: a fist is a little narrower, and nearer
+KIT_SIZE = {'FRANKLN'}                  # (not grown: the user named the other seven)
+CLEAR = 35                              # a grown set lowered at most this far to clear the panel (the fist in sight)
 
 
 def parts(a):
@@ -189,6 +202,58 @@ def match(ref, pose, scales):
     return best[1], best[2], best[3], best[0]
 
 
+def growth(key, hand, k):
+    """how much the set grows (1: not at all) and its fist's middle in the handed pose's pixels: the fist (the
+    widest row of the biggest piece of skin: a bronze base reads as skin too) at FIST of the knees' width"""
+    lab, n = ndimage.label(parts(hand)[0])
+    skin = lab == np.argmax(ndimage.sum(np.ones(lab.shape), lab, range(1, n + 1))) + 1
+    ys, xs = np.nonzero(skin)
+    legs = json.load(open(LEGS))['cockpits'].get(key, {}).get('legs', [])
+    if key in KIT_SIZE or not legs:
+        return 1.0, (xs.mean(), ys.mean())
+    knee = np.mean([2 * l['r'][1] for l in legs])
+    return float(FIST * knee / (skin.sum(axis=1).max() * k)), (xs.mean(), ys.mean())
+
+
+def scaled(a, k):
+    """a handed pose at k screen pixels to its own, premultiplied"""
+    w, h = max(1, int(round(a.shape[1] * k))), max(1, int(round(a.shape[0] * k)))
+    return np.asarray(Image.fromarray(premul(a)).resize((w, h), Image.LANCZOS))
+
+
+def on_screen(m, x0, y0):
+    """a mask put at x0, y0 on the screen, clipped"""
+    out = np.zeros((SCREEN[1], SCREEN[0]), bool)
+    sx0, sy0 = max(0, x0), max(0, y0)
+    sx1, sy1 = min(SCREEN[0], x0 + m.shape[1]), min(SCREEN[1], y0 + m.shape[0])
+    if sx1 > sx0 and sy1 > sy0:
+        out[sy0:sy1, sx0:sx1] = m[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0]
+    return out
+
+
+def keep_clear(key, cj):
+    """what a hand should not hide: the displays (cockpit.json's regions) and the panel's controls (the built
+    panel.json, when there is one; the cabin's lamps aside), as (name, mask)"""
+    yy, xx = np.mgrid[0:SCREEN[1], 0:SCREEN[0]]
+    out = []
+    for n, r in cj.get('regions', {}).items():
+        if isinstance(r, dict):
+            m = (xx - r['cx']) ** 2 + (yy - r['cy']) ** 2 <= r['r'] ** 2
+        else:
+            m = np.zeros((SCREEN[1], SCREEN[0]), bool)
+            m[r[1]:r[1] + r[3], r[0]:r[0] + r[2]] = True
+        out.append((n, m))
+    pj = os.path.join(ROOT, 'build', 'panels', key, 'panel.json')
+    if os.path.exists(pj):
+        for c in json.load(open(pj))['controls']:
+            if c['fn'] != 'cabin':
+                x, y, w, h = c['rect']
+                m = np.zeros((SCREEN[1], SCREEN[0]), bool)
+                m[max(0, y):y + h, max(0, x):x + w] = True
+                out.append(('%s %d' % (c['fn'], c.get('arg', 0)), m))
+    return out
+
+
 def up(a):
     return np.asarray(Image.fromarray(a).resize((a.shape[1] * UP, a.shape[0] * UP), Image.NEAREST))
 
@@ -219,6 +284,11 @@ def build(key, src, out_root):
         _s, dx, dy, sc = match(refs[pid], hands[pid], [s])
         scores.append(float(sc))
         placed.append((pid, ref_at[pid][0] + dx / UP, ref_at[pid][1] + dy / UP))
+    # the growth: about the upright pose's fist, so the grip stays where the kit's was
+    g, (fx, fy) = growth(key, hands['CENTER'], k)
+    ax, ay = placed[4][1] + fx * k, placed[4][2] + fy * k
+    placed = [(pid, ax + g * (x - ax), ay + g * (y - ay)) for pid, x, y in placed]
+    k *= g
     # the drop: every pose's cut edge (its sleeve's lowest row) at or past the screen's last row
     drop = 0.0
     for pid, x, y in placed:
@@ -228,6 +298,15 @@ def build(key, src, out_root):
     drop = float(np.ceil(drop))
     d = os.path.join(out_root, key)
     cj = json.load(open(os.path.join(d, 'cockpit.json')))
+    hidden = []
+    if g != 1:
+        keep = keep_clear(key, cj)
+        m = scaled(hands['CENTER'], k)[..., 3] >= 128
+        x0, y0 = int(round(placed[4][1])), int(round(placed[4][2]))
+        hides = [{n for n, t in keep if (on_screen(m, x0, y0 + dd) & t).any()}
+                 for dd in range(int(drop), max(int(drop), CLEAR) + 1)]
+        i = next(i for i, h in enumerate(hides) if h <= hides[-1])
+        drop, hidden = float(int(drop) + i), sorted(hides[i])
     os.makedirs(os.path.join(d, 'stick'), exist_ok=True)
     for f in ('socket.png', 'socket.json'):
         if os.path.exists(os.path.join(d, 'stick', f)):
@@ -238,9 +317,8 @@ def build(key, src, out_root):
     fill_socket(d, cj, old)
     out = []
     for i, (pid, x, y) in enumerate(placed):
-        a = hands[pid]
-        w, h = max(1, int(round(a.shape[1] * k))), max(1, int(round(a.shape[0] * k)))
-        im = np.asarray(Image.fromarray(premul(a)).resize((w, h), Image.LANCZOS))
+        im = scaled(hands[pid], k)
+        h, w = im.shape[:2]
         x0, y0 = int(round(x)), int(round(y + drop))
         screen = np.zeros((SCREEN[1], SCREEN[0], 4), np.uint8)
         sx0, sy0 = max(0, x0), max(0, y0)
@@ -251,10 +329,10 @@ def build(key, src, out_root):
         cx0, cx1, cy0, cy1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
         Image.fromarray(screen[cy0:cy1, cx0:cx1], 'RGBA').save(os.path.join(d, 'stick', 'p%d.png' % i))
         out.append({'file': 'p%d.png' % i, 'pose': pid, 'x': int(cx0), 'y': int(cy0)})
-    json.dump({'set': 'arm2', 'scale': round(float(k), 4), 'dropped': drop,
+    json.dump({'set': 'arm2', 'scale': round(float(k), 4), 'grown': round(g, 3), 'dropped': drop, 'hides': hidden,
                'mount': bare['world_mount_anchor'], 'match': [round(v, 3) for v in scores], 'poses': out},
               open(os.path.join(d, 'stick', 'stick.json'), 'w'), indent=1)
-    return k, drop, scores
+    return k, g, drop, scores, hidden
 
 
 def preview(keys, out_root, path):
@@ -303,9 +381,10 @@ def main():
         z.extractall(src, [n for n in z.namelist() if '__MACOSX' not in n])
     keys = args.keys or list(SHIPS)
     for key in keys:
-        k, drop, scores = build(key, src, args.out)
-        print('joysticks: %-8s scale %.3f, lowered %2d px, poses on their bare ones %s'
-              % (key, k, drop, ' '.join('%.2f' % v for v in scores)))
+        k, g, drop, scores, hidden = build(key, src, args.out)
+        print('joysticks: %-8s scale %.3f (grown %.2f), lowered %2d px, poses on their bare ones %s%s'
+              % (key, k, g, drop, ' '.join('%.2f' % v for v in scores),
+                 '; upright, it hides ' + ', '.join(hidden) if hidden else ''))
     if args.sheet:
         preview(keys, args.out, args.sheet)
 

@@ -505,7 +505,19 @@ RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
   9, the Goddard 3, the rest not at all; the base then cropped by the
   screen's edge). The kit's socket is painted out of the base (its hole
   and collar filled with the plate round them, speckled like it): the new
-  stick has its own base.
+  stick has its own base. Then (the user's, 2026-10-24) the hands read far
+  too small beside the legs: an arm is not much thinner than a leg, and
+  nearer. So each set except the Franklin's (its side stick at the
+  screen's edge; the user named the other seven) is grown about its fist,
+  where the kit's grip was, until the fist is 0.9 of a knee's width
+  (data/legs.json): 1.8 to 2.4 times. It is then lowered (nearer, as it
+  is) until its upright pose hides none of the displays or the panel's
+  controls, by at most 35 pixels: the Schroedinger 32, the Goddard 30,
+  the Lancelot 21, the Gawain 15. Where that is not enough, a display
+  sits right above the stick, and the set goes only as far as hides no
+  more than 35 would: the Redeemer's HULL bar, the Pacifier's SYSTEMS
+  display and the Progeny's EMCON knob stay behind the hand
+  (`joysticks.py` names them; stick.json `hides`).
 - **The pilot's legs** (the user's, 2026-10-24: the footpads either side
   of the stick read as knees with nothing after them, as if the legs were
   curled back; in the Goddard and the Redeemer, legs against the
@@ -515,15 +527,17 @@ RV.DAT, a record each (`RvCockpit`, src/rvasset.h):
   in the sleeve's olive and creases comes up from below the screen. Each
   leg's knee rounds off into the dark and its shin carries on under the
   dash, so no shoes are drawn and most of each footpad is covered. Where
-  only a slot between two boxes is free (the Gawain's vents), the leg is
-  glimpsed there in their shade. The Schroedinger is lopsided: its right
+  only a slot between two boxes is free (the Gawain's right vent), the
+  leg is glimpsed there in their shade. The Gawain's and the Lancelot's
+  EJECT boxes are gone (the user's, 2026-10-24: they blocked the legs),
+  their left legs in their place. The Schroedinger is lopsided: its right
   leg is in the hollow under the radar and its left takes the EJECT box's
   place (the user's: the wing may block an ejection anyway, and a one-legged
   pilot looked wrong; Ctrl+E still ejects). The Pacifier's lower-left
   panel is cut away below its lamp row, which stays as the dash's lip, its
   afterburner and target lamps with it. The Lancelot's COMM FREQ and E/M panels lose their
-  inner ends (the user's pick): its EJECT box and NAV readout move out
-  over them and its legs take their old place. The 1-knob goes, so its
+  inner ends (the user's pick): its NAV readout moves out over E/M's and
+  its legs take their old place. The 1-knob goes, so its
   radio shows the hundreds and tens only, and so do the EMCON lamps (K
   still works). A control, a label or a damage overlay inside a moved box
   moves with it; one left under the legs is dropped, an overlay's pixels
