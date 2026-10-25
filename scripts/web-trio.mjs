@@ -45,10 +45,10 @@ async function open(name, callsign, before) {
   }
   await page.goto(u.toString());
   if (maker) {
-    // Whoever makes the room makes it for three: the box is read when the
+    // Whoever makes the room makes it for three: the count is read when the
     // room is made, and a page opened by a room link joins (and locks the
-    // box) as soon as it loads, so the host types the code instead.
-    await page.check("#threeSeats");
+    // count) as soon as it loads, so the host types the code instead.
+    await page.fill("#seats", "3");
     await page.fill("#room", room);
     await page.click("#join");
   }

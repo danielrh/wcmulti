@@ -865,7 +865,7 @@ shell command still starts/stops the server or connects.  Useful environment:
 | `WCROCKS=0` / `WCROCKS=soft` | on the host: fly without asteroid and mine fields, or with rocks that do a sixteenth of their damage to a player's own ship (everyone follows the host; `/rocks on`, `/rocks soft`, `/rocks off` in the comms prompt switch it in flight) |
 | `WCNET_AUTOKEYS=1` | test aid: press Enter through the briefing, then `A` (autopilot) once in space |
 | `WCNET=0` | fly alone: no server, no room, the game's own wingman (a single-player control for experiments) |
-| `WCSOLO=1` | the game alone, as it is (the page's "1 player" room): of the hooks only the controller's part (the built-in joystick, the pad as mouse and keys, the crosshair a pad hides, and where a flight begins and ends, which they go by) and the frame pacing run; no network, no `MIS`/`SERIES`, no names written into the game, no `CHEAT` hull, no comms-key hint, the intro (the orchestra) plays and a death ends in the game's own funeral |
+| `WCSOLO=1` | the game alone, as it is (the page's room of one, Players 1): of the hooks only the controller's part (the built-in joystick, the pad as mouse and keys, the crosshair a pad hides, and where a flight begins and ends, which they go by) and the frame pacing run; no network, no `MIS`/`SERIES`, no names written into the game, no `CHEAT` hull, no comms-key hint, the intro (the orchestra) plays and a death ends in the game's own funeral |
 | `WCNET_KEYSCRIPT="8:c,9.5:1,10:@after"` | test aid: once in space, at each emulated second press that key (letter, digit, `enter`, `esc`, `space`, held 150 ms) or, for `@tag`, dump the data segment to `WCNET_DUMP_DIR/tag.bin` and log the comm line, VDU text, mission, pilot bytes and KIA words; `!status=N` ends the mission as the game would (1 landed, 4 died, ...), `!kill=SLOT` destroys a ship on the server through the broadcast path of a real kill, `!poke=HEXOFF:HEXBYTE` writes the data segment, `!mouse=X:Y` puts the mouse pointer at those fractions of its range, `!button=N:1` / `N:0` presses and releases a mouse button, `+key` / `-key` hold and release a key, `!pos=X:Y:Z` moves the machine's own ship, `!face=SLOT` turns it towards a slot (`npc`: the first ship no human flies, `rock`: one of its field's rocks), `!rock=SLOT` puts one of its rocks or mines on that ship so the game's collision code finds them touching (`!rock=0`: dead ahead of its own guns instead), `!rocks=1` / `!rocks=0` / `!rocks=2` switches the fields on, off or soft as the host's lobby option does, `!hit=QTY` (or `!hit=QTY:back`) damages the machine's own ship through the game's `do_damage` as a hit from ahead (or behind) would and logs shields, armor, systems and cockpit flags, `!shot=NAME` writes the game's screen to `WCNET_DUMP_DIR/NAME.ppm` (for runs with no display), and every `@tag` line also lists the field state (`fields N inside|outside rocks <slots>`), and `wait` holds the script until the next mission's first frame and restarts the clock there (`skip` does the same and taps Esc every two seconds on the way, through the scenes), `!steer` logs the view WC2 steers in, its steps of turn and the turn it is asked for, `!mem` logs the free bytes of WC2's own heap (its loader's "MAIN"), `!vga=NAME` writes the video memory (320x200 palette indices and the 768-byte palette) to `WCNET_DUMP_DIR/NAME.vga`, `!where` logs CS:IP and the far return addresses up the stack; `WCNET_AUTOKEYS` then only handles briefings and debriefings |
 | `WCNET_SKIPBARRACKS=1` | test aid: never stop in the rec room or the barracks, so a scripted run goes from a debriefing straight to the next briefing |
 | `WCNET_WATCH=C260:16` | debugging aid: log every change of that part of the data segment (hex offset, length) with the address of the instruction after the write (`F000:xxxx` is a DOSBox callback: a DOS call wrote it), and every DOS file call of the game (`int 21h` open, create, close, read, write, seek: `dos: ...` lines with handle, length, buffer and file name), so that a stray read can be told from its file |
@@ -975,8 +975,8 @@ top-level README for the workflow).  What differs:
   `WCCALLSIGN`, `WCLASTNAME`, `WCLOBBY_RELAY`, `WCNET_LOG`, plus anything
   given as `?env.NAME=value` (so `MIS`, `SERIES` and `WCNET_AUTOKEYS` work
   for testing, as in `scripts/web-smoke.sh`).
-* **A room of one.**  "1 player" in the room form (beside "3 players",
-  not remembered) makes a room on the page alone: no lobby server is
+* **A room of one.**  Players 1 in the room form (the counter beside the
+  room code: 1, 2 or 3, 2 by default, not remembered) makes a room on the page alone: no lobby server is
   asked (`soloGame` in `web/wc.js` stands in for the `P2PGame`), nobody
   else can come in, there is no link, no chat input and nothing to
   advertise.  Fly starts the game with `WCSOLO=1` and no `WCROOM`: the game
@@ -1379,7 +1379,7 @@ top-level README for the workflow).  What differs:
   briefing.
 * Two client slots (network ids 1 and 3 when they connect; the slot each
   flies is decided with the mission's start state): rooms have two
-  seats (three when the host ticks "3 players", marked beta, on making one), and a
+  seats (three when the host sets Players to 3, marked beta, on making one), and a
   third pilot's ship is made by the host's game when the wing has none
   free (docs/wc2-port.md section 4).
 * Rocks and mines are per machine (section 2): two pilots in the same field

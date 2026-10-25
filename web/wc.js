@@ -883,7 +883,7 @@ const PRIVATE_KEY = "wc:private";
 const privateOn = () => $("private").checked;  // (the room is kept out of "Join open game")
 const myName = () => $("callsign").value.trim() || "Pilot " + (lobby.game ? lobby.game.selfId + 1 : "?");
 const isHost = () => lobby.game && lobby.game.selfId === 0;
-// A room of one ("1 player"): the page's own, with no lobby server and no
+// A room of one (Players 1): the page's own, with no lobby server and no
 // seat for anybody else.  Its flight is the game alone, as it is (WCSOLO):
 // its own wingman, menus and saved games; the hooks keep only the
 // controller's part and the frame pacing.
@@ -893,7 +893,9 @@ function soloGame(code) {
            onEvent: () => () => {}, sendReliable: async () => {}, close: () => {} };
 }
 const ROOM_HINT = $("lobbyHint").textContent;
-const SOLO_HINT = "A room of one, on this page alone: nobody else comes in. Leave it and join a room without \"1 player\" to fly with company.";
+const SOLO_HINT = "A room of one, on this page alone: nobody else comes in. Leave it and join a room with Players at 2 or 3 to fly with company.";
+// The seats of a room this page makes: 1, 2 (the default) or 3.
+const seatCount = () => Math.min(3, Math.max(1, Math.round(Number($("seats").value)) || 2));
 
 function encodeLobby(obj) {
   const json = new TextEncoder().encode(JSON.stringify(obj));
@@ -1222,7 +1224,7 @@ async function joinRoom({ create = true } = {}) {
   if (hall.isLobby(code)) { status(`${code} is the public lobby (enter it above); a room to fly in needs a code of its own.`); return; }
   if (!fitsRoom(code)) { linked = viaLink; return; }
   $("join").disabled = true;
-  const solo = create && $("oneSeat").checked;
+  const solo = create && seatCount() === 1;
   status(solo ? `Making room ${code} for one…` : `Joining room ${code}…`);
   try {
     const game = solo ? soloGame(code) : await P2PGame.connect({
@@ -1235,12 +1237,12 @@ async function joinRoom({ create = true } = {}) {
       // dies, and the host makes a new room.  Tokenless "claims" would let
       // anyone with the code replace a player after 40 s of lobby silence,
       // which is every player in flight.
-      // A room has two seats; "3 players" (beta) gives it a third, never
+      // A room has two seats; Players 3 (beta) gives it a third, never
       // more: a third pilot gets a ship of the mission's wing, or one the
       // host's game makes (a second wingman, a second gunner), when they
-      // come.  The box is off by default and not remembered.
+      // come.  The count is 2 by default and not remembered.
       create: !create ? undefined
-        : { maxPlayers: $("threeSeats").checked ? 3 : 2, waitUntilFull: false, allowLateJoin: true,
+        : { maxPlayers: seatCount(), waitUntilFull: false, allowLateJoin: true,
             allowReconnect: true, allowReplacement: false, reconnectPolicy: "token-only" },
       storage: "session",
       storageKey: "wclobby-" + code,
@@ -1265,7 +1267,7 @@ async function joinRoom({ create = true } = {}) {
     lobby.fps = game.selfId === 0 ? fpsValue(query.get("fps")) : 0;
     lobby.capHull = game.selfId === 0 && query.get("caphull") === "1";
     renderMission();
-    for (const id of ["room", "oneSeat", "threeSeats", "server", "relay"]) $(id).disabled = true;
+    for (const id of ["room", "seats", "server", "relay"]) $(id).disabled = true;
     if (solo) chatLine(`You are ${esc(myName())}, alone in room ${esc(code)}: Fly starts the game as it is, with its own wingman.`, "sys");
     else chatLine(`You are ${esc(myName())}, player ${game.selfId + 1} of ${game.maxPlayers} in room ${esc(code)}${game.selfId === 0 ? " (host)" : ""}. "Copy link" gives friends the way in.`, "sys");
     log(solo ? `lobby: room ${code} for one (no lobby server)` : `lobby: joined room ${code} as player ${game.selfId} of ${game.maxPlayers}`);
@@ -1336,8 +1338,8 @@ function offerText() {
 // the pilot is in, and otherwise the one of the room form, joined now.
 async function myRoom() {
   if (running) return null;
-  const alone = "A room of one (\"1 player\") is not offered in the lobby: nobody can join it.";
-  if (!lobby.game && $("oneSeat").checked) { status(alone); return null; }
+  const alone = "A room of one (Players 1) is not offered in the lobby: nobody can join it.";
+  if (!lobby.game && seatCount() === 1) { status(alone); return null; }
   if (!lobby.game) await joinRoom();
   if (soloRoom()) { status(alone); return null; }
   return lobby.game ? { code: lobby.game.code, offer: offerText() } : null;
@@ -1430,7 +1432,7 @@ function leaveRoom() {
   lobby.names.clear(); lobby.links.clear(); lobby.flying.clear(); lobby.games.clear();
   // (While the game runs, the button stays: the way out of it.)
   $("lobby").hidden = true; $("leave").hidden = !running; $("share").hidden = true; $("join").disabled = false;
-  for (const id of ["room", "oneSeat", "threeSeats", "server", "relay"]) $(id).disabled = false;
+  for (const id of ["room", "seats", "server", "relay"]) $(id).disabled = false;
   $("chatForm").hidden = false;
   $("roster").innerHTML = "";
   updateActions();
@@ -1456,9 +1458,9 @@ function leaveButton() {
 window.addEventListener("beforeunload", (ev) => { if (running && !leavingForGood) { ev.preventDefault(); ev.returnValue = ""; } });
 
 $("setup").addEventListener("submit", (ev) => { ev.preventDefault(); void joinRoom(); });
-// (One seat or three, not both.)
-$("oneSeat").addEventListener("change", () => { if ($("oneSeat").checked) $("threeSeats").checked = false; });
-$("threeSeats").addEventListener("change", () => { if ($("threeSeats").checked) $("oneSeat").checked = false; });
+// (Players: 1, 2 or 3, whatever is typed; three is in beta.)
+$("seats").addEventListener("input", () => { $("seatsBeta").hidden = seatCount() !== 3; });
+$("seats").addEventListener("change", () => { $("seats").value = seatCount(); $("seatsBeta").hidden = seatCount() !== 3; });
 $("leave").addEventListener("click", leaveButton);
 // The link to this room, to the clipboard (shown in the status line where
 // the clipboard is out of reach).

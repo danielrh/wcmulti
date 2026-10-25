@@ -188,8 +188,8 @@ client is:
   and the other wingmen's alike (`ClientSession::is_remote_player_slot`).
   A wingman that spawns inside the leader or another human is put on the
   left wing, the next on the right (`take_station`).  Rooms have two
-  seats unless the host ticks "3 players" (marked beta) when making one,
-  which gives three and never more (the box is off by default and not
+  seats unless the host sets Players to 3 (marked beta) when making one,
+  which gives three and never more (the count is 2 by default and not
   remembered); the page's `#players` field is gone.  The host reads the
   room's size once (`room_seats`: the lobby room's own, or `WCPLAYERS` over
   TCP, two by default; `so3/rig/w2trio.sh` sets 3) and logs "a room of N".
