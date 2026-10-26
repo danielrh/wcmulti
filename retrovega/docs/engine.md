@@ -182,8 +182,14 @@ it already reads.
 ## Saving: a bunk is a slot
 
 - **Slots:** the quarters' bunk hotspot opens the bunk list, 8 bunks.
+- **Touch:** every key of the menu has a button that does the same (SAVE,
+  LOAD, QUIT, BACK or CLOSE; SAVE and CANCEL at the name), a close box at
+  the top right, and a click outside the panel closes it: a phone, with no
+  keys, works it all (the user's report, 2026-10-26: stuck in it on a
+  phone). `tests/bunk-touch.txt` works it by clicks alone.
 - **Files:** a bunk's save is `BUNK01.SAV` .. `BUNK08.SAV`; the player
-  names it (24 characters).
+  names it (24 characters), or leaves it empty for "Bunk N" (the name
+  prompt says so: a phone cannot type).
 - **Contents:** a fixed-size record: magic, version, bunk, name, base,
   campaign node, mission within the node, wins in the node, the running
   trend, the random seed, and the player's fighter and livery choice.

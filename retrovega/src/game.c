@@ -779,10 +779,83 @@ static void talk_speed_row(int y0, int y1)
     }
 }
 
+/* the bunk menu's buttons: each does what its key does, so a touch screen (a phone, where there are no keys to
+ * press) can work the whole menu; the close box at the top right, and a click outside the panel, close it */
+#define BUNK_X0 90
+#define BUNK_Y0 40
+#define BUNK_W 460
+#define BUNK_H 300
+#define BTN_Y 313
+#define BTN_H 21
+#define CLOSE_X 522
+#define CLOSE_Y 46
+typedef struct { const char *label; int key, ch; } Button;
+
+static int bunk_buttons(Button *b)
+{
+    int n = 0;
+    if (g_mode == MODE_NAME) {
+        b[n].label = "SAVE (Enter)"; b[n].key = KEY_ENTER; b[n++].ch = 0;
+        b[n].label = "CANCEL (Esc)"; b[n].key = KEY_ESC; b[n++].ch = 0;
+        return n;
+    }
+    if (g_bunk_sel >= 0) {
+        b[n].label = "SAVE (S)"; b[n].key = KEY_CHAR; b[n++].ch = 's';
+        if (g_bunk_full[g_bunk_sel]) {
+            b[n].label = "LOAD (L)"; b[n].key = KEY_CHAR; b[n++].ch = 'l';
+        }
+    }
+    if (g_can_quit) {
+        b[n].label = "QUIT (Q)"; b[n].key = KEY_CHAR; b[n++].ch = 'q';
+    }
+    b[n].label = g_bunk_sel >= 0 ? "BACK (Esc)" : "CLOSE (Esc)"; b[n].key = KEY_ESC; b[n++].ch = 0;
+    return n;
+}
+
+static int button_x(const Button *b, int i, int *w)   /* left to right from the panel's text column */
+{
+    int k, x = 110;
+    for (k = 0; k < i; k++)
+        x += gfx_text_width(FONT_BODY, b[k].label) + 12 + 8;
+    *w = gfx_text_width(FONT_BODY, b[i].label) + 12;
+    return x;
+}
+
+static void close_bunks(void);
+
+/* a click on the bunk menu as the key it stands for (KEY_NONE: a click on nothing of it) */
+static void bunk_click(Input *in)
+{
+    Button b[5];
+    int i, w, n = bunk_buttons(b);
+    if (!in->clicked)
+        return;
+    in->clicked = 0;
+    if ((in->x >= CLOSE_X && in->x < CLOSE_X + 20 && in->y >= CLOSE_Y && in->y < CLOSE_Y + 20)
+        || in->x < BUNK_X0 || in->x >= BUNK_X0 + BUNK_W || in->y < BUNK_Y0 || in->y >= BUNK_Y0 + BUNK_H) {
+        g_mode = MODE_BUNK;             /* (the close box, or outside: the whole menu closes) */
+        close_bunks();
+        in->key = KEY_NONE;
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        int x = button_x(b, i, &w);
+        if (in->x >= x && in->x < x + w && in->y >= BTN_Y && in->y < BTN_Y + BTN_H) {
+            in->key = b[i].key;
+            in->ch = b[i].ch;
+            return;
+        }
+    }
+    in->clicked = 1;                    /* (on a bunk's row or a talk speed: bunk_input's own) */
+}
+
 static void bunk_overlay(int y0, int y1)
 {
-    int i;
-    panel(90, 40, 460, 300, y0, y1);
+    Button b[5];
+    int i, w, n;
+    panel(BUNK_X0, BUNK_Y0, BUNK_W, BUNK_H, y0, y1);
+    gfx_frame(CLOSE_X, CLOSE_Y, 20, 20, UI_PANEL_EDGE, y0, y1);   /* the close box */
+    gfx_text(FONT_BODY, CLOSE_X + 6, CLOSE_Y + 3, "X", RV_TEXT_AMBER, y0, y1);
     gfx_text(FONT_TITLE, 106, 50, "YOUR BUNK", RV_TEXT_AMBER, y0, y1);
     for (i = 0; i < BUNKS; i++) {
         char s[80];
@@ -798,14 +871,23 @@ static void bunk_overlay(int y0, int y1)
     }
     if (g_mode != MODE_NAME)
         talk_speed_row(y0, y1);
-    gfx_text(FONT_BODY, 110, 318, g_bunk_sel < 0 ? (g_can_quit ? "pick a bunk; Esc to close; Q quits to DOS" : "pick a bunk; Esc to close")
-             : g_mode == MODE_NAME ? "name it, then Enter"
-             : g_can_quit ? "S save here    L load    Q quit    Esc back" : "S save here    L load    Esc back", RV_TEXT_AMBER, y0, y1);
+    n = bunk_buttons(b);
+    for (i = 0; i < n; i++) {
+        int x = button_x(b, i, &w);
+        gfx_fill(x, BTN_Y, w, BTN_H, UI_BLACK, y0, y1);
+        gfx_frame(x, BTN_Y, w, BTN_H, UI_PANEL_EDGE, y0, y1);
+        gfx_text(FONT_BODY, x + 6, BTN_Y + 5, b[i].label, RV_TEXT_AMBER, y0, y1);
+    }
+    if (g_bunk_sel < 0)
+        gfx_text(FONT_BODY, button_x(b, n - 1, &w) + w + 14, BTN_Y + 5, "pick a bunk", RV_TEXT_GREY, y0, y1);
     if (g_mode == MODE_NAME) {
-        char s[40];
-        sprintf(s, "name: %s_", g_name);
+        char s[48];
+        if (g_name[0])
+            sprintf(s, "name: %s_", g_name);
+        else
+            sprintf(s, "name: _   (Bunk %d if left empty)", g_bunk_sel + 1);
         gfx_fill(104, SPEED_Y - 4, 432, 22, UI_BLACK, y0, y1);      /* (in the talk speeds' place) */
-        gfx_text(FONT_BODY, 110, SPEED_Y, s, RV_TEXT_WHITE, y0, y1);
+        gfx_text(FONT_BODY, 110, SPEED_Y, s, g_name[0] ? RV_TEXT_WHITE : RV_TEXT_GREY, y0, y1);
     }
 }
 
@@ -827,9 +909,13 @@ static void close_bunks(void)
     vid_dirty(30, 350);
 }
 
-static void bunk_input(const Input *in)
+static void bunk_input(const Input *in0)
 {
+    Input c = *in0, *in = &c;
     int row = (in->y - 83) / 26;
+    bunk_click(in);
+    if (g_mode != MODE_BUNK)
+        return;
     if (in->key == KEY_ESC) {
         if (g_bunk_sel >= 0) g_bunk_sel = -1; else close_bunks();
         vid_dirty(30, 350);
@@ -885,9 +971,13 @@ static void bunk_input(const Input *in)
     }
 }
 
-static void name_input(const Input *in)
+static void name_input(const Input *in0)
 {
+    Input c = *in0, *in = &c;
     int n = strlen(g_name);
+    bunk_click(in);
+    if (g_mode != MODE_NAME)
+        return;
     if (in->key == KEY_ESC) {
         g_mode = MODE_BUNK;
     } else if (in->key == KEY_BACKSPACE && n) {

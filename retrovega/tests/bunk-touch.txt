@@ -1,0 +1,36 @@
+# the bunk menu by clicks alone, as on a phone (no keys):
+# the close box; a bunk, SAVE, the name prompt's SAVE (no
+# name typed: "Bunk 1"); a click outside the panel.
+# tests/run.sh tests/bunk-touch.txt
+wait 12
+click
+wait 4
+move 118 213
+wait 2
+click
+wait 4
+shot B01MENU
+move 532 56
+click
+wait 3
+shot B02CLOSD
+move 118 213
+wait 2
+click
+wait 4
+move 300 92
+click
+wait 3
+shot B03PICKD
+move 125 323
+click
+wait 3
+shot B04NAME
+move 125 323
+click
+wait 3
+shot B05SAVED
+move 600 380
+click
+wait 3
+shot B06OUTSD
