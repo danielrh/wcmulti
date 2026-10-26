@@ -103,7 +103,8 @@ await waitLog(new RegExp(`(stub: roomEntered[^]*){${n + 3}}`), 8000); await slee
 await shot("deck");
 if (!await hotspot(478, 176, "the deck's fighter")) process.exit(1);
 t = await waitLog(/flight: L1c0|runHangar|flight: slot/, 150000);   // (the page fetches and makes the flight's sets first)
-const flying = logs.some((l) => /runHangarMission/.test(l)) || /flight: slot/.test(t);
+// (the flight's own start line, "flight: MISSION, N ships": the ships' spawn lines are the game's logic's)
+const flying = logs.some((l) => /runHangarMission/.test(l)) || /flight: slot|flight: \S+, \d+ ships/.test(t);
 console.log(flying ? "ok   the flight started" : "FAIL no flight started (" + (t.split("\n").slice(-3).join(" | ")) + ")");
 await sleep(4000); await shot("flight-4s");
 await sleep(8000); await shot("flight-12s");
