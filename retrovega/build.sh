@@ -1,7 +1,8 @@
 #!/bin/sh
 # Build RV.EXE (and the M0 check, HELLO.EXE) with Open Watcom 2 and NASM.
 #   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE (DEBUG=1: unoptimised, -d2;
-#                            RV_COMMS=face: the comm faces without breathing gear, their mouths speaking)
+#                            RV_COMMS=face: the comm faces without breathing gear, their mouths speaking;
+#                            CODE=1: the code and RVGAME.DAT only, everything else as the last build left it)
 # The toolchain lives in ~/opt/watcom (docs/engine.md); WATCOM overrides it.
 set -e
 cd "$(dirname "$0")"
@@ -12,8 +13,10 @@ mkdir -p "$OUT"
 python3 tools/rvabi.py --c-header > src/rvhooks.h
 python3 tools/rvabi.py --asm > src/rvhook.asm
 python3 tools/rvdata.py --out "$OUT/RVGAME.DAT" --header src/rvdata.h
+if [ -z "${CODE:-}" ]; then
 python3 tools/midi.py --out "$OUT" > /dev/null
 python3 tools/oplbank.py --out "$OUT/RVOPL.BNK" > /dev/null
+fi
 # optimised (the flight benchmark found -ox worth half again as many sprites a
 # frame as -od); DEBUG=1 builds -od -d2 for the debugger
 if [ -n "${DEBUG:-}" ]; then OPT="-od -d2"; else OPT="-ox -d1"; fi
@@ -22,6 +25,7 @@ nasm -f obj -i src/ -o "$OUT/rvhook.obj" src/rvhook.asm
 nasm -f obj -o "$OUT/lowlevel.obj" src/lowlevel.asm
 nasm -f obj -o "$OUT/lasers_a.obj" src/lasers.asm
 nasm -f obj -o "$OUT/rocks_a.obj" src/rocks.asm
+if [ -z "${CODE:-}" ]; then
 # the comm link's faces (one helmet render, every pilot's face behind its visor, each alien's helmet: ~40 s), when
 # their sources change.  RV_COMMS=face builds the pilots without their breathing gear, the bare face's mouth
 # speaking (the user's option, to weigh its cost); the default, mask, is the user's ruling
@@ -72,6 +76,7 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     [ "$s" -nt build/rvdat/SHIP20.RV ] && [ "$s" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$s" 3 3 2 > /dev/null
     h="$OUT/SHIP20.RVH"             # (the block mode: a capital at a quarter, drawn as 4 x 4 blocks)
     [ "$h" -nt build/rvdat/SHIP20.RV ] && [ "$h" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$h" 0 0 0 1 4 > /dev/null
+fi
 fi
 ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls rocks missiles sky collide flames comms panel cockpit world shots hud logic flight game main"
 for c in $ENGINE hello; do

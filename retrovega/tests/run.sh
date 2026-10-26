@@ -7,6 +7,8 @@
 # RVT.EXE, the test build with the demos, benchmarks and self-tests in.
 # EXE=RVT.EXE (or RV.EXE) picks one regardless.
 # NOBUILD=1 skips the build; CYCLES=N runs at N cycles (the page runs 50000); TIMEOUT=S (300).
+# DOSBOX=path runs another DOSBox (any stock one runs RV.EXE; the default is this repository's native build);
+# SHOW=1 opens its window (the default is headless).
 set -e
 cd "$(dirname "$0")/.."
 [ -n "$NOBUILD" ] || ./build.sh > /dev/null
@@ -26,6 +28,7 @@ if [ -z "$EXE" ]; then
 fi
 sed -e 's#mount c ../dos#mount c '"$PWD"'/build/dos#' -e "s#RV.EXE /script WALK.TXT#$exe /script WALK.TXT $*#" \
     -e "s#^cycles=.*#cycles=${CYCLES:-40000}#" tests/rv.conf > build/dosrun/run.conf
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy timeout ${TIMEOUT:-300} ~/dev/dosbox3d/build-native/src/dosbox \
+[ -n "$SHOW" ] || export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
+timeout ${TIMEOUT:-300} ${DOSBOX:-$HOME/dev/dosbox3d/build-native/src/dosbox} \
     -conf build/dosrun/run.conf > build/dosrun/dosbox.log 2>&1 || true
 grep -v "^stub" build/dos/RVLOG.TXT

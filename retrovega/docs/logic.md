@@ -442,6 +442,36 @@ The scan for this guide, most needed first:
    - mines have no art;
    - gun mounts are placeholders.
 
+## Building and running
+
+**On this machine** (the sandbox), everything is installed:
+
+1. `cd ~/dev/dosbox3d/retrovega`, then `./build.sh`. It writes everything to `build/dos/`:
+   - `RV.EXE`, the game, and `RVT.EXE`, the test build with the demos and self-tests;
+   - the data: `RV.DAT`, `RVGAME.DAT`, `BALLS.DAT`, `ROCKS.DAT`, `SKY.DAT`, `SHAPES.DAT`, `RVOPL.BNK`, the songs, and the ships' views and sets.
+
+   `DEBUG=1 ./build.sh` builds without optimising, with debug info. `CODE=1 ./build.sh` rebuilds only the code (below).
+2. Check that it built. **`build.sh` does not stop on a C error**: read its output for `Error!`, and check that `build/dos/RV.EXE`'s time is now. `grep ^DGROUP build/dos/RV.MAP` gives DGROUP's size (0x10000 is full).
+3. Test it headless: `tests/run.sh tests/guns.txt /zoom 1 /flight 20 /ship 0`, then read `build/dos/RVLOG.TXT` and the `.BMP` screenshots (see Testing).
+4. Play it in a window: `tests/play.sh`, or `tests/play.sh /field 120`, or `EXE=RVT.EXE tests/play.sh /zoom 1`.
+   - Through the rooms: the bar's hatch to the briefing; Esc through the briefing; the fighter on the deck.
+   - In flight: arrows (or the mouse) steer, Q and E roll, `+` `-` F S set the throttle, Tab is the afterburner, Space or the left button fires, Enter fires a missile, T and Y pick a target, C calls the carrier to land.
+   - The flight's Escape does nothing (the user's rule, it is the browser's key); Q in the bunk menu quits.
+
+**On a fresh Ubuntu machine** (24.04 or later, x86-64):
+
+1. `git clone git@github.com:fireflyk64/dosbox3d.git`, then `cd dosbox3d` and `git checkout retrovega`.
+2. Install the packages: `sudo apt install build-essential nasm python3 python3-numpy python3-pil python3-scipy python3-venv dosbox libegl1 libgl1-mesa-dri`. The two GL packages are Mesa, which `moderngl` renders the rocks with, headless.
+3. Install Open Watcom 2:
+   - download `ow-snapshot.tar.xz` from the "Current-build" release of https://github.com/open-watcom/open-watcom-v2/releases (this one is the 2026-10-01 snapshot);
+   - `mkdir -p ~/opt/watcom && tar -xJf ow-snapshot.tar.xz -C ~/opt/watcom`. `build.sh` uses `~/opt/watcom/binl64`; set `WATCOM=` for another place.
+4. Make the art tools' venv: `python3 -m venv ~/.venvs/retrovega-art && ~/.venvs/retrovega-art/bin/pip install numpy pillow scipy moderngl`.
+5. Build: `cd retrovega && ./build.sh`.
+   - The first build takes several minutes: it renders the balls, the rocks and the sky, makes the comm faces and the panels, packs `RV.DAT` and pre-renders the ships' sets.
+   - Later builds redo only what changed, except `RV.DAT` and the code: `CODE=1` skips `RV.DAT` while only code has changed.
+   - The art sources (`art/*/src`) are not needed: they are git-ignored, and their cut results are committed.
+6. Run with the stock DOSBox: `DOSBOX=dosbox tests/run.sh tests/flight.txt /flight 14` (headless), or `DOSBOX=dosbox tests/play.sh` (a window). RV.EXE needs nothing but a standard DOSBox (`machine=svga_s3`, `memsize=63`, XMS on, EMS off: `tests/rv.conf`). This repository's own DOSBox (the multiplayer layer) is only needed for multiplayer.
+
 ## Testing
 
 - `tests/run.sh SCRIPT [switches]` plays a script headless in DOSBox. The log is `build/dos/RVLOG.TXT`, the screenshots `build/dos/*.BMP`.
