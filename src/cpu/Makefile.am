@@ -10,7 +10,7 @@ libcpu_a_SOURCES = callback.cpp cpu.cpp flags.cpp modrm.cpp modrm.h core_full.cp
 		   wcnet_perf.h wcnet_perf.cpp \
 		   wcnet_vm.h wcnet_vm.cpp wcnet_transport.h wcnet_transport.cpp wcnet_entities.h wcnet_entities.cpp \
 		   wcnet_events.h wcnet_events.cpp wcnet_session.h wcnet_session.cpp wcnet_hooks.cpp \
-		   wcnet_lobby.h wcnet_lobby.cpp
+		   wcnet_lobby.h wcnet_lobby.cpp wcnet_lab.h wcnet_lab.cpp
 
 if FUNARRAY_CORE
 PREPROCESSED_FILES = core_simple_fun.ii core_normal_fun.ii core_prefetch_fun.ii

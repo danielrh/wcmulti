@@ -24,6 +24,7 @@
 #include "dosbox.h"
 #include "video.h"
 #include "render.h"
+#include "../cpu/wcnet_lab.h"
 #include "setup.h"
 #include "control.h"
 #include "mapper.h"
@@ -218,6 +219,9 @@ void RENDER_EndUpdate( bool abort ) {
 		CAPTURE_AddImage( render.src.width, render.src.height, render.src.bpp, pitch,
 			flags, fps, (Bit8u *)&scalerSourceCache, (Bit8u*)&render.pal.rgb );
 	}
+	if (GCC_UNLIKELY(wclab_on))  // the walkthrough recorder (src/cpu/wcnet_lab.cpp)
+		WCLAB_VideoFrame(render.src.width, render.src.height, render.src.bpp, render.scale.cachePitch,
+			(Bit8u *)&scalerSourceCache, (Bit8u*)&render.pal.rgb);
 	if ( render.scale.outWrite ) {
 		GFX_EndUpdate( abort? NULL : Scaler_ChangedLines );
 		render.frameskip.hadSkip[render.frameskip.index] = 0;

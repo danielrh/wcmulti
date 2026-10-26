@@ -26,6 +26,7 @@
 #include "wcnet_perf.h"
 #include "wcnet_log.h"
 #include "wcnet_rv.h"
+#include "wcnet_lab.h"
 #include "callback.h"
 #include "cpu.h"
 #include "regs.h"
@@ -878,6 +879,8 @@ static void key_script() {
         int status = atoi(item.c_str() + 8);
         wclog(1, "key script %.1fs (t=%.1f): mission status %d -> %d", t, now / 1000.0, rd16(ds::missionStatus), status);
         wr16(ds::missionStatus, (Bit16u)status);
+    } else if (lab_script_item(item, t)) {
+        // (the walkthrough recorder's items: wcnet_lab.cpp)
     } else {
         KBD_KEYS k = script_key(item);
         if (k == KBD_NONE) {
@@ -1532,6 +1535,7 @@ static void check_hooks_slow() {
         if (g_joyDropping) {
             joystick_drop(true);
         }
+        lab_game_frame();
         maybe_dump_data_segment();
         hold_cheat_hull();
         capship_hull_tick();
@@ -1560,6 +1564,7 @@ static void check_hooks_slow() {
             wclog(1, "key script: rock %d put onto slot %d", rock, g_rockOnto);
             g_rockOnto = -1;
         }
+        lab_after_frame_hooks();
     }
 }
 
@@ -1597,6 +1602,7 @@ static void check_hooks_solo() {
         if (g_joyDropping) {
             joystick_drop(true);
         }
+        lab_game_frame();
         static int lastFrame = -1;
         if (rd16(ds::frameCounter) != lastFrame) {
             if (pace_frame(true)) {
@@ -1609,6 +1615,7 @@ static void check_hooks_solo() {
         if (g_trampoline.has_pending()) {
             g_trampoline.run_before_current_instruction();  // (the test aids' game calls)
         }
+        lab_after_frame_hooks();
     }
 }
 
@@ -2072,7 +2079,12 @@ void wc_net_check_cpu_hooks() {
         watching = (env && env[0]) ? 1 : 0;
     }
     bool tick = false;
-    if (watching) {
+    if (lab_per_instruction()) {
+        // (The walkthrough recorder's trace or watch: every instruction comes here.)
+        lab_instruction();
+        wc_net_countdown = 0;
+        tick = ++g_asyncCounter >= 1000;
+    } else if (watching) {
         // (Debugging: every instruction comes here.)
         memory_watch();
         wc_net_countdown = 0;
