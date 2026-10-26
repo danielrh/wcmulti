@@ -41,6 +41,9 @@ extern unsigned g_npilots, g_nnodes, g_nmissions;
 extern RvShipType __far g_shiptypes[RV_SHIPTYPES];
 extern unsigned g_nshiptypes;
 const RvShipType __far *ship_type(unsigned type);   /* data/ships.csv's row for a type, or NULL */
+extern RvWeapon __far g_weapons[RV_WEAPONS];
+extern unsigned g_nweapons;
+const RvWeapon __far *weapon(unsigned type);    /* data/weapons.csv's row for a weapon type (a gun record's), or NULL */
 
 int camp_load_data(const char *path);
 void camp_new(void);

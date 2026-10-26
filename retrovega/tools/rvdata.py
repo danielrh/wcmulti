@@ -34,11 +34,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 3                             # 2: the ship types' engines; 3: their hit boxes and vitals
+VERSION = 4                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
+                                        # and each type's loadout
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
-          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64}
+          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
-        'NAME': 24, 'NODE_ID': 8, 'LINE': 72}
+        'NAME': 24, 'NODE_ID': 8, 'LINE': 72, 'CODE': 6, 'WNAME': 20}
 FIELDS = {'asteroid': 9, 'mine': 10}                 # their EntityType, as fieldTable keeps them
 NONE, GOOD, BAD = 0xFF, 0xFE, 0xFD                   # node edges: a node index, or an ending
 SHIP_PLAYER, SHIP_WINGMAN = 0xFF, 0xFE               # mission ship types chosen at run time
@@ -63,7 +64,9 @@ HEADER = [('char', 'magic[8]', '8s'), ('unsigned short', 'version', 'H'), ('unsi
           ('unsigned short', 'nmissions', 'H'), ('unsigned short', 'mission_size', 'H'),
           ('unsigned long', 'missions_at', 'L'), ('unsigned short', 'start_node', 'H'),
           ('unsigned short', 'nshiptypes', 'H'), ('unsigned short', 'shiptype_size', 'H'),
-          ('unsigned long', 'shiptypes_at', 'L'), ('unsigned char', 'reserved[22]', '22s')]
+          ('unsigned long', 'shiptypes_at', 'L'), ('unsigned short', 'nweapons', 'H'),
+          ('unsigned short', 'weapon_size', 'H'), ('unsigned long', 'weapons_at', 'L'),
+          ('unsigned char', 'reserved[14]', '14s')]
 # a ship type: data/ships.csv's row, its numbers as the simulation wants them
 SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME]', '%ds' % TEXT['NAME']),
             ('unsigned char', 'type', 'B'), ('unsigned char', 'side', 'B'), ('unsigned char', 'flags', 'B'),
@@ -77,7 +80,8 @@ SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME
             ('unsigned short', 'missiles', 'H'), ('unsigned char', 'nengines', 'B'), ('unsigned char', 'pad', 'B'),
             ('signed char', 'engine[RV_ENGINES][4]', '%db' % (4 * 4)),
             ('unsigned char', 'hit[3]', '3B'), ('unsigned char', 'core', 'B'), ('unsigned char', 'nvitals', 'B'),
-            ('signed char', 'vital[RV_VITALS][3]', '%db' % (3 * 8))]
+            ('signed char', 'vital[RV_VITALS][3]', '%db' % (3 * 8)),
+            ('unsigned char', 'loadout[RV_GUNTABLE]', '%ds' % 0x33)]
 SHIPTYPE_FLAG_PLAYER = 1               # the player may fly it (a cockpit kit exists)
 # a ship type's engines (data/engines.csv, tools/engines.py): x, y, z in its sprites' box (127 = the half box; +x
 # the ship's left, +z the nose) and the glow's radius, min(0.3 size, 0.09) of the half box, in 1/1024ths
@@ -86,6 +90,23 @@ ENGINES = 4
 # (127 = the sprites' half box), its core's radius (the biggest sphere about its middle inside its sprite at every
 # view), and points (mounts, nose, tail, wingtips) in the engines' frame
 VITALS = 8
+# its loadout (ships.csv's guns, turrets and missiles columns: "2xPRT 2xION", "rear:2xLAS", "2xTOR 2xHS"): the gun
+# table a ship of the type starts with, as the slot's gunTable keeps it (spec 4.5): a count, then GUNS records of
+# 5 bytes: the weapon's type (a word), the mount across and up (int8, 1/32 of the ship's half box: collide_half),
+# the state (bit 7 destroyed; a gun's cooldown frames, a launcher's rounds).  A gun and a turret are a record each,
+# a missile kind one launcher with its rounds.  The mounts are placeholders: a type's guns spread evenly over the
+# middle 60% of its hit box's width, a little below its middle; turrets above, launchers under the belly
+GUNTABLE, GUNS = 0x33, 10
+# a weapon (data/weapons.csv): its kind, look (how its shot is drawn), lock, and numbers; range in km (the csv's
+# thousands of km)
+WEAPON = [('char', 'code[RV_CODE]', '%ds' % TEXT['CODE']), ('char', 'name[RV_WNAME]', '%ds' % TEXT['WNAME']),
+          ('unsigned char', 'type', 'B'), ('unsigned char', 'kind', 'B'), ('unsigned char', 'look', 'B'),
+          ('unsigned char', 'lock', 'B'), ('unsigned short', 'damage', 'H'), ('unsigned short', 'speed_kps', 'H'),
+          ('unsigned short', 'range_km', 'H'), ('unsigned char', 'refire', 'B'), ('unsigned char', 'energy', 'B'),
+          ('unsigned char', 'lock_tenths', 'B'), ('unsigned char', 'pad', 'B')]
+WEAPON_KINDS = ['gun', 'turret', 'missile', 'torpedo', 'rocket', 'mine', 'special']
+WEAPON_LOOKS = ['bolt', 'slug', 'plasma', 'fire', 'star', 'beam', 'missile', 'none']   # slug .. star: BALL_* + 1
+WEAPON_LOCKS = ['none', 'heat', 'image', 'auto', 'proximity']   # (an empty cell: none)
 PILOT = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'callsign[RV_CALLSIGN]', '%ds' % TEXT['CALLSIGN']),
          ('char', 'name[RV_NAME]', '%ds' % TEXT['NAME']), ('unsigned char', 'role', 'B'),
          ('unsigned char', 'pad', 'B'), ('char', 'line[RV_LINE]', '%ds' % TEXT['LINE'])]
@@ -164,6 +185,56 @@ def parse_missions(path):
     return missions
 
 
+def compile_weapons():
+    """data/weapons.csv: {code: (type, kind)} and the packed records"""
+    weapons, out = {}, []
+    rows = load_csv('weapons.csv')
+    if len(rows) > LIMITS['WEAPONS']:
+        raise Fail('weapons.csv: %d weapons, at most %d' % (len(rows), LIMITS['WEAPONS']))
+    for r in rows:
+        where = 'weapons.csv %s' % r['code']
+        if r['kind'] not in WEAPON_KINDS or r['look'] not in WEAPON_LOOKS or (r['lock'] or 'none') not in WEAPON_LOCKS:
+            raise Fail('%s: kind %r, look %r or lock %r unknown' % (where, r['kind'], r['look'], r['lock']))
+        t = int(r['type'], 16)
+        weapons[r['code']] = (t, r['kind'])
+        out.append(struct.pack(fmt(WEAPON), text(r['code'], TEXT['CODE'], where), text(r['name'], TEXT['WNAME'], where),
+                               t, WEAPON_KINDS.index(r['kind']), WEAPON_LOOKS.index(r['look']),
+                               WEAPON_LOCKS.index(r['lock'] or 'none'), int(r['damage']), int(r['speed_kps']),
+                               int(round(float(r['range_km']) * 1000)), int(r['refire_frames'] or 0),
+                               int(r['energy'] or 0), int(round(float(r['lock_s'] or 0) * 10)), 0))
+    return weapons, out
+
+
+def compile_loadout(r, weapons, hit):
+    """a ships.csv row's guns, turrets and missiles: (guns, missile rounds, the gun table's bytes)"""
+    recs, guns, rounds = [], 0, 0
+    for col in ('guns', 'turrets', 'missiles'):
+        for tok in r[col].split():
+            place, _, tok = tok.rpartition(':')
+            try:
+                count, code = tok.split('x', 1)
+                count = int(count)
+            except ValueError:
+                raise Fail('ships.csv %s %s: %r is not NxCODE' % (r['key'], col, tok))
+            if code not in weapons:
+                raise Fail('ships.csv %s %s: no weapon %s in weapons.csv' % (r['key'], col, code))
+            t, kind = weapons[code]
+            if col == 'missiles':
+                recs.append((t, 0, -8, min(count, 127)))       # a launcher under the belly, its rounds
+                rounds += count
+                continue
+            for i in range(count):                             # a record a gun, spread across the middle
+                x = (2 * i + 1 - count) / max(count, 1) * 0.6 * hit[0] / 127 * 32
+                recs.append((t, int(round(x)), 12 if col == 'turrets' else -2, 0))
+            guns += count if col == 'guns' else 0
+    if len(recs) > GUNS:
+        print('rvdata: ships.csv %s: %d guns and launchers, the gun table keeps %d' % (r['key'], len(recs), GUNS),
+              file=sys.stderr)
+        recs = recs[:GUNS]
+    table = bytes([len(recs)]) + b''.join(struct.pack('<Hbbb', *rec) for rec in recs)
+    return guns, rounds, table + bytes(GUNTABLE - len(table))
+
+
 def compile_all():
     people = load_csv('people.csv')
     pilot_index = {p['key']: i for i, p in enumerate(people)}
@@ -174,6 +245,7 @@ def compile_all():
     cockpit_keys = list(json.load(open(os.path.join(DATA, 'cockpits.json')))['ships'])
     if len(ships_csv) > LIMITS['SHIPTYPES']:
         raise Fail('ships.csv: %d types, at most %d' % (len(ships_csv), LIMITS['SHIPTYPES']))
+    weapons, out_weapons = compile_weapons()
     out_types = []
     engines_csv = {r['key']: r for r in load_csv('engines.csv')}
     hits_csv = {r['key']: r for r in load_csv('hitboxes.csv')}
@@ -196,7 +268,7 @@ def compile_all():
             vit += [clamp(float(h['%s%d' % (c, i)])) for c in ('x', 'y', 'z')]
         nvitals = len(vit) // 3
         vit += [0] * (3 * VITALS - len(vit))
-        count = lambda k: int(r[k].split('x')[0]) if r[k] and 'x' in r[k] else 0
+        guns, rounds, loadout = compile_loadout(r, weapons, hit)
         for k in ('yaw_dps', 'pitch_dps', 'roll_dps'):
             if n(k) > 255:
                 raise Fail('ships.csv %s: %s %d does not fit a byte' % (r['key'], k, n(k)))
@@ -205,9 +277,9 @@ def compile_all():
                                      SHIPTYPE_FLAG_PLAYER if r['key'] in cockpit_keys else 0,
                                      cockpit_keys.index(r['key']) if r['key'] in cockpit_keys else 0xFF,
                                      n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), n('yaw_dps'),
-                                     n('pitch_dps'), n('roll_dps'), count('guns'), n('shield_f'), n('shield_r'),
+                                     n('pitch_dps'), n('roll_dps'), guns, n('shield_f'), n('shield_r'),
                                      n('armor_f'), n('armor_r'), n('armor_l'), n('armor_rt'), n('hull'),
-                                     n('lod0_px'), count('missiles'), nengines, 0, *eng, *hit, core, nvitals, *vit))
+                                     n('lod0_px'), rounds, nengines, 0, *eng, *hit, core, nvitals, *vit, loadout))
     talk_ok = {frozenset((r['a'], r['b'])): r['talk'] == 'yes' for r in load_csv('relations.csv')}
     for pair in talk_ok:
         for k in pair:
@@ -352,7 +424,7 @@ def compile_all():
                               text(p['callsign'] or p['key'].title(), TEXT['CALLSIGN'], 'people.csv'),
                               text(p['name'], TEXT['NAME'], 'people.csv'), ROLES[p['role']], 0,
                               text(p['line'], TEXT['LINE'], 'people.csv %s line' % p['key'])) for p in people]
-    return out_pilots, out_nodes, out_missions, out_types, node_index[nodes[0]['node']]
+    return out_pilots, out_nodes, out_missions, out_types, out_weapons, node_index[nodes[0]['node']]
 
 
 def check_dag(nodes):
@@ -391,6 +463,8 @@ def header_text(sizes):
     out.append('#define RV_ROOMS %d' % len(ROOMS))
     out.append('#define RV_ENGINES %d' % ENGINES)
     out.append('#define RV_VITALS %d' % VITALS)
+    out.append('#define RV_GUNTABLE %d' % GUNTABLE)
+    out.append('#define RV_GUNS %d' % GUNS)
     for k, v in TEXT.items():
         out.append('#define RV_%s %d' % (k, v))
     out += ['', '/* node edges */', '#define RV_NODE_NONE 0x%02X' % NONE, '#define RV_NODE_GOOD 0x%02X' % GOOD,
@@ -410,10 +484,14 @@ def header_text(sizes):
     for k, v in ROLES.items():
         out.append('#define RV_ROLE_%s %d' % (k.upper(), v))
     out.append('#define RV_SHIPTYPE_FLAG_PLAYER %d' % SHIPTYPE_FLAG_PLAYER)
+    for names, prefix in ((WEAPON_KINDS, 'RV_WK_'), (WEAPON_LOOKS, 'RV_LOOK_'), (WEAPON_LOCKS, 'RV_LOCK_')):
+        for i, k in enumerate(names):
+            out.append('#define %s%s %d' % (prefix, k.upper(), i))
     out += ['', '#pragma pack(1)', c_struct('RvGameHeader', HEADER), c_struct('RvPilot', PILOT),
             c_struct('RvNode', NODE), c_struct('RvNav', NAV), c_struct('RvShip', SHIP), c_struct('RvTalk', TALK),
             c_struct('RvField', FIELD),
-            c_struct('RvMission', MISSION), c_struct('RvShipType', SHIPTYPE), '#pragma pack()', '']
+            c_struct('RvMission', MISSION), c_struct('RvShipType', SHIPTYPE), c_struct('RvWeapon', WEAPON),
+            '#pragma pack()', '']
     for k, v in sizes.items():
         out.append('#define RV_%s_SIZE %d' % (k, v))
     # the quarter sine wave for the simulation's integer trigonometry (flight.c):
@@ -435,26 +513,27 @@ def main():
     ap.add_argument('--header', default=os.path.join(ROOT, 'src', 'rvdata.h'))
     args = ap.parse_args()
     try:
-        pilots, nodes, missions, types, start = compile_all()
+        pilots, nodes, missions, types, weapons, start = compile_all()
     except Fail as e:
         sys.exit('rvdata: %s' % e)
     sizes = {'HEADER': struct.calcsize(fmt(HEADER)), 'PILOT': len(pilots[0]), 'NODE': len(nodes[0]),
-             'MISSION': len(missions[0]), 'SHIPTYPE': len(types[0])}
+             'MISSION': len(missions[0]), 'SHIPTYPE': len(types[0]), 'WEAPON': len(weapons[0])}
     hsize = sizes['HEADER']
     pilots_at = hsize
     nodes_at = pilots_at + len(pilots) * sizes['PILOT']
     missions_at = nodes_at + len(nodes) * sizes['NODE']
     types_at = missions_at + len(missions) * sizes['MISSION']
+    weapons_at = types_at + len(types) * sizes['SHIPTYPE']
     head = struct.pack(fmt(HEADER), b'RVGAME', VERSION, hsize, len(pilots), sizes['PILOT'], pilots_at,
                        len(nodes), sizes['NODE'], nodes_at, len(missions), sizes['MISSION'], missions_at, start,
-                       len(types), sizes['SHIPTYPE'], types_at, b'')
+                       len(types), sizes['SHIPTYPE'], types_at, len(weapons), sizes['WEAPON'], weapons_at, b'')
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, 'wb') as f:
-        f.write(head + b''.join(pilots) + b''.join(nodes) + b''.join(missions) + b''.join(types))
+        f.write(head + b''.join(pilots) + b''.join(nodes) + b''.join(missions) + b''.join(types) + b''.join(weapons))
     with open(args.header, 'w') as f:
         f.write(header_text(sizes))
-    print('%s: %d pilots, %d nodes, %d missions (%d bytes each), %d ship types, %d bytes'
-          % (args.out, len(pilots), len(nodes), len(missions), sizes['MISSION'], len(types),
+    print('%s: %d pilots, %d nodes, %d missions (%d bytes each), %d ship types, %d weapons, %d bytes'
+          % (args.out, len(pilots), len(nodes), len(missions), sizes['MISSION'], len(types), len(weapons),
              os.path.getsize(args.out)))
 
 

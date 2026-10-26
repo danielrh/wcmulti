@@ -456,11 +456,22 @@ same name has:
 The game calls `rv_flight_run()`; it returns when `missionStatus` is set:
 1 landed (the 20 seconds are up), 5 exit (Esc), or whatever the layer
 writes. `flight_frame` is one simulation step: `frameCounter++`, then
-`ship_physics` for every slot that holds a ship (the player's steering
-or the stand-in AI's turn, acceleration toward `setSpeed`, velocity =
-front x kps / 20 as spec §6 has it, position += velocity, the frame
-re-orthonormalised), then the picture. The loop is free-running for the
-benchmark; the 20 fps pacing of spec §6 comes with combat.
+`logic_frame()`, then the picture, then a wait to 30 frames a second.
+
+`logic_frame()` is the game's logic, in `src/logic.c`, written by hand.
+Since 2026-10-26 its main loop and its fire loop are empty steps for the
+user to fill; the first flight's steering, stand-in AI and damage model
+are in git (`git show 65bc2a7b:retrovega/src/flight.c`). Its helpers are:
+
+- `world.h`: vectors, a slot's ship, spawning, the gameplay random stream;
+- `shots.h`: the gunfire, kept as a list outside the slot table, with a stand-in bolt slot for `do_damage`;
+- `hud.h`: marks over the view;
+- the weapons and loadouts, now in RVGAME.DAT v4;
+- the trigger, in `g_pilot`.
+
+[logic.md](logic.md) is its guide: the order of a step, the helpers, the
+rules the multiplayer layer needs kept, the budgets, and what the engine
+still lacks.
 
 Three fixed-block scalars were added for it: `rvCockpitDamage` (a bit per
 damage layer), `rvBenchCount` and `rvFps` (so the layer or the page can

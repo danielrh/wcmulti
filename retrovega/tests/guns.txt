@@ -1,0 +1,36 @@
+# the guns, once logic.c fires them: run with /zoom 1 /flight 20 (one Gawain dead ahead, swinging 1,200 .. 6,000 km;
+# /ship 0 for lasers): the trigger held in bursts; "shots: N fired, M hits" at the end, G0*.BMP the pictures
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 30
+hold fire 40
+wait 3
+shot G01FIRE
+wait 6
+shot G02FLY
+wait 60
+hold fire 60
+wait 40
+shot G03HIT
+wait 90
+key esc
+wait 16
+log done

@@ -3,7 +3,7 @@
 #define RVDATA_H
 
 #define RVGAME_MAGIC "RVGAME"
-#define RVGAME_VERSION 3
+#define RVGAME_VERSION 4
 
 #define RV_PILOTS 16
 #define RV_NODES 32
@@ -15,9 +15,12 @@
 #define RV_TALKS 4
 #define RV_FIELDS 4
 #define RV_SHIPTYPES 64
+#define RV_WEAPONS 48
 #define RV_ROOMS 2
 #define RV_ENGINES 4
 #define RV_VITALS 8
+#define RV_GUNTABLE 51
+#define RV_GUNS 10
 #define RV_ID 16
 #define RV_TITLE 48
 #define RV_BRIEFING 640
@@ -28,6 +31,8 @@
 #define RV_NAME 24
 #define RV_NODE_ID 8
 #define RV_LINE 72
+#define RV_CODE 6
+#define RV_WNAME 20
 
 /* node edges */
 #define RV_NODE_NONE 0xFF
@@ -80,6 +85,26 @@
 #define RV_ROLE_XO 3
 #define RV_ROLE_TECH 4
 #define RV_SHIPTYPE_FLAG_PLAYER 1
+#define RV_WK_GUN 0
+#define RV_WK_TURRET 1
+#define RV_WK_MISSILE 2
+#define RV_WK_TORPEDO 3
+#define RV_WK_ROCKET 4
+#define RV_WK_MINE 5
+#define RV_WK_SPECIAL 6
+#define RV_LOOK_BOLT 0
+#define RV_LOOK_SLUG 1
+#define RV_LOOK_PLASMA 2
+#define RV_LOOK_FIRE 3
+#define RV_LOOK_STAR 4
+#define RV_LOOK_BEAM 5
+#define RV_LOOK_MISSILE 6
+#define RV_LOOK_NONE 7
+#define RV_LOCK_NONE 0
+#define RV_LOCK_HEAT 1
+#define RV_LOCK_IMAGE 2
+#define RV_LOCK_AUTO 3
+#define RV_LOCK_PROXIMITY 4
 
 #pragma pack(1)
 typedef struct {
@@ -99,7 +124,10 @@ typedef struct {
     unsigned short nshiptypes;
     unsigned short shiptype_size;
     unsigned long shiptypes_at;
-    unsigned char reserved[22];
+    unsigned short nweapons;
+    unsigned short weapon_size;
+    unsigned long weapons_at;
+    unsigned char reserved[14];
 } RvGameHeader;
 typedef struct {
     char key[RV_KEY];
@@ -199,14 +227,31 @@ typedef struct {
     unsigned char core;
     unsigned char nvitals;
     signed char vital[RV_VITALS][3];
+    unsigned char loadout[RV_GUNTABLE];
 } RvShipType;
+typedef struct {
+    char code[RV_CODE];
+    char name[RV_WNAME];
+    unsigned char type;
+    unsigned char kind;
+    unsigned char look;
+    unsigned char lock;
+    unsigned short damage;
+    unsigned short speed_kps;
+    unsigned short range_km;
+    unsigned char refire;
+    unsigned char energy;
+    unsigned char lock_tenths;
+    unsigned char pad;
+} RvWeapon;
 #pragma pack()
 
 #define RV_HEADER_SIZE 68
 #define RV_PILOT_SIZE 120
 #define RV_NODE_SIZE 22
 #define RV_MISSION_SIZE 1424
-#define RV_SHIPTYPE_SIZE 115
+#define RV_SHIPTYPE_SIZE 166
+#define RV_WEAPON_SIZE 40
 
 /* sin(i/256 x 90 degrees) x 16384, i = 0..256: the simulation's trigonometry (flight.c) */
 #ifdef RV_TABLES

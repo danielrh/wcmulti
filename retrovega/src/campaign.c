@@ -18,6 +18,8 @@ RvNode g_nodes[RV_NODES];
 unsigned g_npilots, g_nnodes, g_nmissions;
 RvShipType __far g_shiptypes[RV_SHIPTYPES];
 unsigned g_nshiptypes;
+RvWeapon __far g_weapons[RV_WEAPONS];
+unsigned g_nweapons;
 static RvGameHeader g_head;
 static XmsBlock g_missions;
 
@@ -65,9 +67,16 @@ int camp_load_data(const char *path)
         fread(buf, 1, sizeof(RvShipType), f);
         _fmemcpy(&g_shiptypes[i], buf, sizeof(RvShipType));
     }
+    RV_ASSERT(g_head.nweapons <= RV_WEAPONS && g_head.weapon_size == sizeof(RvWeapon));
+    g_nweapons = g_head.nweapons;
+    fseek(f, g_head.weapons_at, SEEK_SET);
+    for (i = 0; i < g_nweapons; i++) {
+        fread(buf, 1, sizeof(RvWeapon), f);
+        _fmemcpy(&g_weapons[i], buf, sizeof(RvWeapon));
+    }
     fclose(f);
-    rv_log("game data: %u pilots, %u nodes, %u missions, %u ship types", g_npilots, g_nnodes, g_nmissions,
-           g_nshiptypes);
+    rv_log("game data: %u pilots, %u nodes, %u missions, %u ship types, %u weapons", g_npilots, g_nnodes, g_nmissions,
+           g_nshiptypes, g_nweapons);
     return 1;
 }
 
@@ -77,6 +86,15 @@ const RvShipType __far *ship_type(unsigned type)
     for (i = 0; i < g_nshiptypes; i++)
         if (g_shiptypes[i].type == type)
             return &g_shiptypes[i];
+    return 0;
+}
+
+const RvWeapon __far *weapon(unsigned type)
+{
+    unsigned i;
+    for (i = 0; i < g_nweapons; i++)
+        if (g_weapons[i].type == type)
+            return &g_weapons[i];
     return 0;
 }
 

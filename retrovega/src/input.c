@@ -15,7 +15,8 @@
  *     key NAME     left right up down enter esc backspace f12 tab backtab,
  *                  or one letter
  *     hold NAME N  an arrow key held down for N ticks (the script goes on:
- *                  two holds at once steer diagonally)
+ *                  two holds at once steer diagonally); rleft, rright the
+ *                  flight's roll keys, fire its trigger
  *     type TEXT    the characters of TEXT, then enter
  *     shot NAME    the screen as NAME.BMP
  *     log TEXT     a line in RVLOG.TXT
@@ -40,7 +41,7 @@ static int g_mouse, g_x = 320, g_y = 200, g_keyboard, g_slack, g_buttons;
 static int g_steer = 1;
 static unsigned long g_steer_at, g_held;    /* clock240: the last step; how long the arrows are held */
 static long g_fx, g_fy;                     /* the pointer while steering, in 1/256 pixel */
-static unsigned long g_hold_until[6];       /* a script's held arrows (and rleft, rright): until this BIOS tick */
+static unsigned long g_hold_until[7];       /* a script's held arrows (and rleft, rright, fire): until this BIOS tick */
 
 /* int 9: which keys are down, by scan code; the BIOS's handler still runs */
 static void (__interrupt __far *g_old9)(void);
@@ -211,6 +212,8 @@ static void script_step(Input *in)
                 g_hold_until[k - KEY_LEFT] = ticks() + n;
             else if (sscanf(arg, "%15s %d", name, &n) == 2 && (!strcmp(name, "rleft") || !strcmp(name, "rright")))
                 g_hold_until[!strcmp(name, "rleft") ? 4 : 5] = ticks() + n;   /* the flight's roll keys */
+            else if (sscanf(arg, "%15s %d", name, &n) == 2 && !strcmp(name, "fire"))
+                g_hold_until[6] = ticks() + n;   /* the flight's trigger */
             else
                 rv_log("script: hold %s?", arg);
             continue;
@@ -300,6 +303,10 @@ void in_steer(int on)
 int in_arrows(void) { return arrows(); }
 
 int in_key_down(int scan) { return g_down[scan & 0x7F] != 0; }
+
+int in_button(void) { return g_buttons; }
+
+int in_trigger(void) { return g_down[0x39] || ticks() < g_hold_until[6]; }
 
 void in_poll(Input *in)
 {

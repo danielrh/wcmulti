@@ -109,6 +109,8 @@ void in_warp(int x, int y);
 void in_steer(int on);                 /* the arrows steer the pointer (on unless a menu takes them) */
 int in_arrows(void);                   /* held: bit 0 left, 1 right, 2 up, 3 down, 4 roll left (Q), 5 roll right (E) */
 int in_key_down(int scan);             /* a key held, by scan code */
+int in_button(void);                   /* the left mouse button held */
+int in_trigger(void);                  /* the flight's trigger held: Space, or a script's `hold fire N` */
 unsigned long ticks(void);             /* BIOS ticks, 18.2 a second */
 /* wait for the next interrupt (the music clock's, 240 a second): a loop that
  * waits for something should halt each time round rather than spin, so the

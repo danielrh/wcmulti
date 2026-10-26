@@ -35,6 +35,10 @@
 #include "collide.h"
 #include "score.h"
 #include "flight.h"
+#include "world.h"
+#include "shots.h"
+#include "hud.h"
+#include "logic.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
 int g_flight_timed = 0;                 /* /flight N given: the flight lands by itself after N seconds (the tests);
@@ -116,12 +120,8 @@ static unsigned char __far g_was_exact[RV_MAX_SHIP_SLOT + 1];   /* drawn exactly
 static unsigned char __far g_hold[RV_MAX_SHIP_SLOT + 1];   /* frames left before a demoted ship may be drawn exactly */
 static int g_nplan;
 #define FLIGHT_TICKS ((unsigned long)g_flight_seconds * 240)   /* ... on the 240 Hz clock */
-/* the shield words (front, rear) and the armour words (front, rear, left, right) of a slot */
-#define SHIELD(s, k) (((unsigned short *)curShield)[(s) * 2 + (k)])
-#define SHIELD_MAX(s, k) (((unsigned short *)shieldMax)[(s) * 2 + (k)])
-#define ARMOR(s, k) (((unsigned short *)armorState)[(s) * 4 + (k)])
 #define FPS_WINDOW 8                    /* frames the rate is measured over */
-#define FPS_WANT 30
+#define FPS_WANT LOGIC_HZ
 #define BENCH_MAX 900
 #define STARS 2000                      /* over the whole sky: the opening sees a twentieth of it */
 
@@ -159,67 +159,7 @@ static unsigned vrnd(void)
     return (unsigned)(g_vseed >> 16) & 0x7FFF;
 }
 
-/* --- the world's geometry --- */
-
-static void vec_norm(RvVec3 *v)
-{
-    unsigned long len = lf_sqrt((unsigned long)(v->x * v->x + v->y * v->y + v->z * v->z));
-    if (!len)
-        return;
-    v->x = v->x * 256 / (long)len;
-    v->y = v->y * 256 / (long)len;
-    v->z = v->z * 256 / (long)len;
-}
-
-static long vec_dot(const RvVec3 *a, const RvVec3 *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
-
-static void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b)
-{
-    out->x = (a->y * b->z - a->z * b->y) / 256;
-    out->y = (a->z * b->x - a->x * b->z) / 256;
-    out->z = (a->x * b->y - a->y * b->x) / 256;
-}
-
-/* a and b turned by angle t in their plane: a' = a cos + b sin, b' = b cos - a sin */
-static void rotate_pair(RvVec3 *a, RvVec3 *b, int t)
-{
-    long c = lf_cos(t), s = lf_sin(t);
-    RvVec3 na, nb;
-    na.x = (a->x * c + b->x * s) >> 14; na.y = (a->y * c + b->y * s) >> 14; na.z = (a->z * c + b->z * s) >> 14;
-    nb.x = (b->x * c - a->x * s) >> 14; nb.y = (b->y * c - a->y * s) >> 14; nb.z = (b->z * c - a->z * s) >> 14;
-    *a = na;
-    *b = nb;
-}
-
-/* the frame kept right-handed and unit length (the layer may write values that drift) */
-static void orthonormalise(int s)
-{
-    RvVec3 *f = &gOrientationFrontVector[s], *r = &gOrientationRightVector[s], *u = &gOrientationUpVector[s];
-    long d;
-    vec_norm(f);
-    d = vec_dot(f, r) / 256;
-    r->x -= f->x * d / 256; r->y -= f->y * d / 256; r->z -= f->z * d / 256;
-    vec_norm(r);
-    vec_cross(u, f, r);
-    vec_norm(u);
-}
-
-static void face(int s, int yaw, int pitch)
-{
-    gOrientationFrontVector[s].x = 0; gOrientationFrontVector[s].y = 0; gOrientationFrontVector[s].z = 256;
-    gOrientationRightVector[s].x = 256; gOrientationRightVector[s].y = 0; gOrientationRightVector[s].z = 0;
-    gOrientationUpVector[s].x = 0; gOrientationUpVector[s].y = 256; gOrientationUpVector[s].z = 0;
-    rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], yaw);
-    rotate_pair(&gOrientationFrontVector[s], &gOrientationUpVector[s], pitch);
-    orthonormalise(s);
-}
-
-/* --- the simulation --- */
-
-static const RvShipType __far *type_of(int s)
-{
-    return ship_type(gInstanceShipTypes[s]);
-}
+/* --- the simulation: the game's logic (logic.c) a step, then the test scenes' scripted ships --- */
 
 /* degrees a second to the turn per frame (1024 a turn, 20 frames a second) */
 static int turn_step(int dps, int steer)
@@ -227,65 +167,26 @@ static int turn_step(int dps, int steer)
     return (int)((long)dps * 1024 / 360 / 20 * steer / 9);
 }
 
-static void ship_physics(int s)
+/* a test scene's ship (frozen to the game's logic: CTL_FROZEN) moved as its scene wants: 1 when it was one */
+static int test_motion(int s)
 {
-    const RvShipType __far *t = type_of(s);
-    long want = (long)setSpeed[s], have = (long)speedLo[s], accel;
-    int yaw = 0, pitch = 0;
-    if (!t)
-        return;
-    if (s == 0 && g_sys.burning)        /* (the afterburner: its own top speed) */
-        want = t->ab_kps > t->max_kps ? t->ab_kps : t->max_kps * 3L / 2;
-    if (rvController[s] == 1) {
-        yaw = g_steer_x;
-        pitch = g_steer_y;
-        if (g_steer_roll)
-            rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(t->roll_dps, g_steer_roll));
-    } else if (rvController[s] == 0 && commAnimInfo[s] == 0) {
-        /* a friendly stand-in keeps station off the player's right, 1,000 km out and 2,500 ahead,
-         * flying level and straight (it does not roll with the player) */
-        gPositionVector[s].x = gPositionVector[0].x + 256L * 1000;
-        gPositionVector[s].y = gPositionVector[0].y;
-        gPositionVector[s].z = gPositionVector[0].z + 256L * 2500;
-        speedLo[s] = speedLo[0];
-        return;
-    } else if (rvController[s] == 0) {
-        /* an enemy stand-in: turns toward the player while far, passes by when near */
-        RvVec3 d;
-        long dr, du, df, dist;
-        d.x = (gPositionVector[0].x - gPositionVector[s].x) / 256;   /* in km */
-        d.y = (gPositionVector[0].y - gPositionVector[s].y) / 256;
-        d.z = (gPositionVector[0].z - gPositionVector[s].z) / 256;
-        dr = vec_dot(&d, &gOrientationRightVector[s]) / 256;
-        du = vec_dot(&d, &gOrientationUpVector[s]) / 256;
-        df = vec_dot(&d, &gOrientationFrontVector[s]) / 256;
-        dist = (dr < 0 ? -dr : dr) + (du < 0 ? -du : du) + (df < 0 ? -df : df);   /* km, roughly */
-        if (dist > 3000 || df < 0) {
-            yaw = dr > 0 ? 6 : dr < 0 ? -6 : 0;
-            pitch = du > 0 ? -5 : du < 0 ? 5 : 0;
-        } else {
-            /* passing: a slow turn, and a steady roll about its own axis */
-            yaw = (int)((s & 1) ? 3 : -3);
-            rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(t->roll_dps, (s & 1) ? 4 : -4));
-        }
-    }
     if (g_lasers && s >= 1 && s <= 2) {
         /* the laser benchmark's two big ships: in place, rolling and turning (so they are drawn exactly, turned
          * and scaled every frame).  (An `if (s == 0) ... else` here, the player rolling in the first arm, was
          * miscompiled by -ox: slot 0 ran the else arm's turns.) */
-        rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(40, s == 1 ? 9 : -6));
-        rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(15, 9));
-        orthonormalise(s);
-        return;
+        vec_turn(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(40, s == 1 ? 9 : -6));
+        vec_turn(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(15, 9));
+        ship_orthonormalise(s);
+        return 1;
     }
     if (g_flames_demo && s >= 1) {
         /* the flames scene: in place, each yawing at its own rate, the odd ones pitching too, so every view of
          * their engines comes round */
-        rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(20 + 7 * s, (s & 2) ? 9 : -9));
+        vec_turn(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(20 + 7 * s, (s & 2) ? 9 : -9));
         if (s & 1)
-            rotate_pair(&gOrientationFrontVector[s], &gOrientationUpVector[s], turn_step(11, 9));
-        orthonormalise(s);
-        return;
+            vec_turn(&gOrientationFrontVector[s], &gOrientationUpVector[s], turn_step(11, 9));
+        ship_orthonormalise(s);
+        return 1;
     }
     if (g_zoom && s == 1) {
         /* the zoom scene's ship, 1,200 .. 6,000 km away on a twelve-second swing: /zoom 1 rolls it
@@ -295,100 +196,23 @@ static void ship_physics(int s)
         long d = g_zoom == 3 ? 256L * 9000 + ((lf_cos((int)(frameCounter * 1024L / 240 % 1024)) * 6000L) >> 14) * 256
                              : 256L * 3600 + ((lf_cos((int)(frameCounter * 1024L / 240 % 1024)) * 2400L) >> 14) * 256;
         if (g_zoom == 1)
-            rotate_pair(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(60, 9));
+            vec_turn(&gOrientationRightVector[s], &gOrientationUpVector[s], turn_step(60, 9));
         else
-            rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(12, 9));
+            vec_turn(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(12, 9));
         gPositionVector[s].z = gPositionVector[0].z + d;
-        return;
+        return 1;
     }
-    if (yaw)
-        rotate_pair(&gOrientationFrontVector[s], &gOrientationRightVector[s], turn_step(t->yaw_dps, yaw));
-    if (pitch)
-        rotate_pair(&gOrientationFrontVector[s], &gOrientationUpVector[s], turn_step(t->pitch_dps, pitch));
-    orthonormalise(s);
-    /* the throttle: kps a second of acceleration, a frame's worth */
-    accel = (long)t->accel / 20 + 1;
-    if (have < want) have = have + accel > want ? want : have + accel;
-    if (have > want) have = have - accel < want ? want : have - accel;
-    speedLo[s] = (unsigned long)have;
-    /* 1 kps = 12.8 position units a frame: front (256 = 1.0) x kps / 20 */
-    gVelocityVector[s].x = gOrientationFrontVector[s].x * have / 20;
-    gVelocityVector[s].y = gOrientationFrontVector[s].y * have / 20;
-    gVelocityVector[s].z = gOrientationFrontVector[s].z * have / 20;
-    gPositionVector[s].x += gVelocityVector[s].x;
-    gPositionVector[s].y += gVelocityVector[s].y;
-    gPositionVector[s].z += gVelocityVector[s].z;
-}
-
-/* the damage model's first cut, the do_damage thunk's body (the layer hooks the thunk: spec 5.1): a hit spends
- * the shield on the side it came from (front or rear), then that side's armour (front, rear, left or right), then
- * the hull (damagePoints, to the type's hull at most); the player takes none while playerCanBeDamaged is 0.
- * `where` is the hit's place (a near RvVec3).  Returns what it took, 0 when nothing was done.  Nothing dies of it
- * yet: a ship at its hull's end stays there (the combat's work) */
-unsigned short __far __cdecl do_damage_impl(unsigned short src, unsigned short dst, unsigned short qty,
-                                            unsigned short where)
-{
-    const RvShipType __far *t;
-    const RvVec3 *w = (const RvVec3 *)where;
-    long dx, dy, dz, f, r;
-    unsigned left = qty, k;
-    unsigned short *p;
-    int sh, ar;
-    (void)src;
-    if (!RV_SLOT_OK(dst) || (maybeEntityType[dst] != 0xC && maybeEntityType[dst] != 0xD) || !qty
-        || (dst == 0 && !playerCanBeDamaged) || (t = type_of(dst)) == 0)
-        return 0;
-    dx = (w->x - gPositionVector[dst].x) / 256;   /* (km) */
-    dy = (w->y - gPositionVector[dst].y) / 256;
-    dz = (w->z - gPositionVector[dst].z) / 256;
-    f = dx * gOrientationFrontVector[dst].x + dy * gOrientationFrontVector[dst].y + dz * gOrientationFrontVector[dst].z;
-    r = dx * gOrientationRightVector[dst].x + dy * gOrientationRightVector[dst].y + dz * gOrientationRightVector[dst].z;
-    sh = f >= 0 ? 0 : 1;
-    ar = labs(f) >= labs(r) ? sh : r >= 0 ? 3 : 2;
-    for (k = 0; k < 2 && left; k++) {
-        p = k == 0 ? &SHIELD(dst, sh) : &ARMOR(dst, ar);
-        if (*p >= left) {
-            *p -= left;
-            left = 0;
-        } else {
-            left -= *p;
-            *p = 0;
-        }
-    }
-    damagePoints[dst] = (unsigned short)(damagePoints[dst] + left > t->hull ? t->hull : damagePoints[dst] + left);
-    return qty;
+    return 0;
 }
 
 static void sim_step(void)
 {
     int s;
     frameCounter++;
-    for (s = 0; s <= RV_MAX_SHIP_SLOT; s++)
-        if (maybeEntityType[s] == 0xC || maybeEntityType[s] == 0xD)
-            ship_physics(s);
-}
-
-/* a ship into a slot: its type's numbers, at a place, facing a way */
-static void spawn(int s, int type, int side, int controller, long x, long y, long z, int yaw)
-{
-    const RvShipType __far *t = ship_type(type);
-    RV_CHECK(s, RV_SLOTS);
-    maybeEntityType[s] = t && t->type >= 0x20 ? 0xD : 0xC;
-    gInstanceShipTypes[s] = (unsigned short)type;
-    commAnimInfo[s] = (unsigned short)side;
-    rvController[s] = (unsigned char)controller;
-    gPositionVector[s].x = x; gPositionVector[s].y = y; gPositionVector[s].z = z;
-    face(s, yaw, 0);
-    setSpeed[s] = t ? t->cruise_kps : 200;
-    speedLo[s] = setSpeed[s];
-    SHIELD(s, 0) = SHIELD_MAX(s, 0) = t ? t->shield_f : 10;
-    SHIELD(s, 1) = SHIELD_MAX(s, 1) = t ? t->shield_r : 10;
-    ARMOR(s, 0) = t ? t->armor_f : 10;
-    ARMOR(s, 1) = t ? t->armor_r : 10;
-    ARMOR(s, 2) = t ? t->armor_l : 10;
-    ARMOR(s, 3) = t ? t->armor_rt : 10;
-    coreHp[s] = 4;
-    rvFlags[s] = 0;
+    logic_frame();
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
+        if (rvController[s] == CTL_FROZEN && slot_is_ship(s))
+            test_motion(s);
 }
 
 /* --- the picture --- */
@@ -504,7 +328,7 @@ static unsigned long g_t_plan;          /* the frame's plan (which ships, how dr
 /* a ship's afterburner: faster than its type's top speed (the flames scene: every other ship) */
 static int burning(int s)
 {
-    const RvShipType __far *t = type_of(s);
+    const RvShipType __far *t = slot_type(s);
     if (g_flames_demo)
         return (s & 1) == 0;
     return t && speedLo[s] > (unsigned long)t->max_kps;
@@ -608,7 +432,7 @@ static void plan_draws(void)
             /* the view and the turn its picture will have (an exact one's true roll, a set's roll step, the far
              * sizes' none): the flames line up with the ship as drawn */
             ships_drawn(g_plan[i].set, plan_how(i), &rel, &cam, &ship, g_plan[i].scale, &p, &nb, &nh);
-            flames_add(type_of(sl), &p, nb, nh, g_plan[i].scale, burning(sl), sl, &g_plan[i].fl);
+            flames_add(slot_type(sl), &p, nb, nh, g_plan[i].scale, burning(sl), sl, &g_plan[i].fl);
         }
         g_t_flames += clock240() - t0;
         g_t_flames_set += clock240() - t0;
@@ -669,7 +493,7 @@ int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
     o->sx = (short)(ax < -16000 ? -16000 : ax > 16000 ? 16000 : ax);
     o->sy = (short)(ay < -16000 ? -16000 : ay > 16000 ? 16000 : ay);
     sc = (int)((long)scale_of(&rel) * cam->focal / 400);   /* (the sprites' size is the flight's, at its focal length) */
-    t = type_of(slot);
+    t = slot_type(slot);
     o->half = (short)(t ? (long)t->lod0_px * sc / 512 : 4);
     if (o->half < 2)
         o->half = 2;
@@ -701,47 +525,8 @@ int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
 
 #ifdef RV_TESTS
 /* the /boxes check: brackets at each box's corners (the sprite's cyan, the steady square amber), clipped to the band
- * and the opening as the world is */
-static void hud_run(int xa, int xb, int y, int colour, int y0, int y1, const short __far *ext, int ey0, int rows)
-{
-    unsigned char __far *row;
-    if (y < y0 || y >= y1)
-        return;
-    if (ext) {
-        if (y < ey0 || y >= ey0 + rows)
-            return;
-        if (xa < ext[2 * (y - ey0)]) xa = ext[2 * (y - ey0)];
-        if (xb > ext[2 * (y - ey0) + 1]) xb = ext[2 * (y - ey0) + 1];
-    }
-    if (xa < 0) xa = 0;
-    if (xb > SCR_W) xb = SCR_W;
-    if (xa >= xb)
-        return;
-    row = vid_row(y);
-    _fmemset(row + xa, colour, xb - xa);
-}
-
-static void brackets(int x0, int y0b, int x1, int y1b, int colour, int y0, int y1, const short __far *ext, int ey0,
-                     int rows)
-{
-    int aw = (x1 - x0) / 4, ah = (y1b - y0b) / 4, k;
-    if (aw > 10) aw = 10;
-    if (ah > 10) ah = 10;
-    if (aw < 2) aw = 2;
-    if (ah < 2) ah = 2;
-    hud_run(x0, x0 + aw, y0b, colour, y0, y1, ext, ey0, rows);
-    hud_run(x1 - aw, x1, y0b, colour, y0, y1, ext, ey0, rows);
-    hud_run(x0, x0 + aw, y1b - 1, colour, y0, y1, ext, ey0, rows);
-    hud_run(x1 - aw, x1, y1b - 1, colour, y0, y1, ext, ey0, rows);
-    for (k = 0; k < ah; k++) {
-        hud_run(x0, x0 + 1, y0b + k, colour, y0, y1, ext, ey0, rows);
-        hud_run(x1 - 1, x1, y0b + k, colour, y0, y1, ext, ey0, rows);
-        hud_run(x0, x0 + 1, y1b - 1 - k, colour, y0, y1, ext, ey0, rows);
-        hud_run(x1 - 1, x1, y1b - 1 - k, colour, y0, y1, ext, ey0, rows);
-    }
-}
-
-static void boxes_draw(int y0, int y1, const short __far *ext, int ey0, int rows)
+ * and the opening as the world is (hud.c) */
+static void boxes_draw(int y0, int ey0)
 {
     static const char __far s_box[] = "boxes: frame %u slot %d at %d,%d: box %d,%d - %d,%d, half %d, way %d, %s%s";
     RvCamera cam;
@@ -758,8 +543,8 @@ static void boxes_draw(int y0, int y1, const short __far *ext, int ey0, int rows
                     b.visible ? "visible" : b.ahead ? "ahead, off the view" : "behind", b.exact ? ", exact" : "");
         if (!b.visible)
             continue;
-        brackets(b.sx - b.half, b.sy - b.half, b.sx + b.half + 1, b.sy + b.half + 1, UI_AMBER3, y0, y1, ext, ey0, rows);
-        brackets(b.x0, b.y0, b.x1, b.y1, UI_HILITE, y0, y1, ext, ey0, rows);
+        hud_brackets(b.sx - b.half, b.sy - b.half, b.sx + b.half + 1, b.sy + b.half + 1, UI_AMBER3);
+        hud_brackets(b.x0, b.y0, b.x1, b.y1, UI_HILITE);
     }
 }
 
@@ -802,8 +587,8 @@ static void collide_demo_step(void)
         g_cd_pos[0].x += 256L * 14;
         g_cd_pos[1].x -= 256L * 14;
     }
-    face(1, 256, 0);
-    face(2, 768, 0);
+    ship_face(1, 256, 0);
+    ship_face(2, 768, 0);
     for (i = 0; i < 2; i++)
         *(LfVec *)&gPositionVector[1 + i] = g_cd_pos[i];
     g_cd_hit = 0;
@@ -852,21 +637,7 @@ static int to_screen(const LfVec *w, int *sx, int *sy)
     return 1;
 }
 
-static void hud_line(int xa, int ya, int xb, int yb, int colour, int y0, int y1, const short __far *ext, int ey0,
-                     int rows)
-{
-    int dx = xb - xa, dy = yb - ya, n = abs(dx) > abs(dy) ? abs(dx) : abs(dy), i;
-    if (!n)
-        n = 1;
-    if (n > 2000)
-        return;
-    for (i = 0; i <= n; i++) {
-        int x = xa + (int)((long)dx * i / n), y = ya + (int)((long)dy * i / n);
-        hud_run(x, x + 1, y, colour, y0, y1, ext, ey0, rows);
-    }
-}
-
-static void collide_overlay(int y0, int y1, const short __far *ext, int ey0, int rows)
+static void collide_overlay(void)
 {
     LfVec c[8], v[16];
     int sx[8], sy[8], on[8], s, k, b, n, x, y;
@@ -879,13 +650,12 @@ static void collide_overlay(int y0, int y1, const short __far *ext, int ey0, int
         for (k = 0; k < 8; k++)
             for (b = 1; b < 8; b <<= 1)
                 if (!(k & b) && on[k] && on[k | b])
-                    hud_line(sx[k], sy[k], sx[k | b], sy[k | b], g_cd_hit ? UI_RED : UI_GREY5, y0, y1, ext, ey0,
-                             rows);
+                    hud_line(sx[k], sy[k], sx[k | b], sy[k | b], g_cd_hit ? UI_RED : UI_GREY5);
         for (k = 0; k < n; k++)
             if (to_screen(&v[k], &x, &y)) {
-                int col = k == 0 ? UI_WHITE : k <= type_of(s)->nengines ? 159 : UI_AMBER4, j;
+                int col = k == 0 ? UI_WHITE : k <= slot_type(s)->nengines ? 159 : UI_AMBER4, j;
                 for (j = -1; j <= 1; j++)
-                    hud_run(x - 1, x + 2, y + j, col, y0, y1, ext, ey0, rows);
+                    hud_run(x - 1, x + 2, y + j, col);
             }
     }
 }
@@ -956,9 +726,9 @@ static void ft_sheet(void)
         set[c] = ships_find(types[c]);
         if (set[c] < 0)
             return;
-        rotate_pair(&f, &r, turn[c][0]);
-        rotate_pair(&f, &u, turn[c][1]);
-        rotate_pair(&r, &u, turn[c][2]);
+        vec_turn(&f, &r, turn[c][0]);
+        vec_turn(&f, &u, turn[c][1]);
+        vec_turn(&r, &u, turn[c][2]);
         ship[c].front = *(LfVec *)&f;
         ship[c].right = *(LfVec *)&r;
         ship[c].up = *(LfVec *)&u;
@@ -1034,11 +804,11 @@ static void flame_test(void)
                 LfBasis ship;
                 LfVec rel;
                 if (o % 8 == 0) {
-                    rotate_pair(&f, &r, o * 37);
+                    vec_turn(&f, &r, o * 37);
                 } else {
-                    rotate_pair(&f, &r, o * 97 + 13);
-                    rotate_pair(&f, &u, o * 61 + ti * 29);
-                    rotate_pair(&r, &u, o * 151 + ti * 71);
+                    vec_turn(&f, &r, o * 97 + 13);
+                    vec_turn(&f, &u, o * 61 + ti * 29);
+                    vec_turn(&r, &u, o * 151 + ti * 71);
                 }
                 ship.front = *(LfVec *)&f;
                 ship.right = *(LfVec *)&r;
@@ -1243,9 +1013,9 @@ static void hull_demo_step(void)
     gPositionVector[1].z = 256L * 1800;
     if (g_demo_frame == 1)
         hull_bolt_time();
-    face(1, (int)(g_demo_frame * 1024L / 300 % 1024), (int)((long)lf_sin((int)(g_demo_frame * 1024L / 200)) * 200 >> 14));
-    rotate_pair(&gOrientationRightVector[1], &gOrientationUpVector[1], (int)(g_demo_frame * 1024L / 450 % 1024));
-    orthonormalise(1);
+    ship_face(1, (int)(g_demo_frame * 1024L / 300 % 1024), (int)((long)lf_sin((int)(g_demo_frame * 1024L / 200)) * 200 >> 14));
+    vec_turn(&gOrientationRightVector[1], &gOrientationUpVector[1], (int)(g_demo_frame * 1024L / 450 % 1024));
+    ship_orthonormalise(1);
     _fmemset(g_hd_hit, 0, sizeof g_hd_hit);
     flight_camera(&cam);
     if (flight_ent_box(1, &cam, &b) && b.visible) {
@@ -1293,7 +1063,7 @@ static void hull_report(void)
             g_hd_bolt_us100 / 100, g_hd_bolt_us100 % 100);
 }
 
-static void hull_overlay(int y0, int y1, const short __far *ext, int ey0, int rows)
+static void hull_overlay(void)
 {
     int gx, gy;
     if (g_record && !(frameCounter & 1))
@@ -1302,10 +1072,10 @@ static void hull_overlay(int y0, int y1, const short __far *ext, int ey0, int ro
         for (gx = 0; gx < HD_GX; gx++) {
             int x = g_hd_x0 + gx * g_hd_dx, y = g_hd_y0 + gy * g_hd_dy;
             if (g_hd_hit[gy][gx]) {
-                hud_run(x - 1, x + 1, y - 1, UI_RED, y0, y1, ext, ey0, rows);
-                hud_run(x - 1, x + 1, y, UI_RED, y0, y1, ext, ey0, rows);
+                hud_run(x - 1, x + 1, y - 1, UI_RED);
+                hud_run(x - 1, x + 1, y, UI_RED);
             } else {
-                hud_run(x, x + 1, y, UI_GREY3, y0, y1, ext, ey0, rows);
+                hud_run(x, x + 1, y, UI_GREY3);
             }
         }
 }
@@ -1323,6 +1093,7 @@ static void draw_world(int y0, int y1)
     int path;
     unsigned long t0;
     g_world_calls++;
+    hud_band(y0, y1, ext, ey0, rows);
     sky_draw(0, y0, y1, ext, ey0, rows);   /* the far things behind the stars (nebulae, galaxies), the stars, those
                                            over them (planets) */
     draw_stars(y0, y1);
@@ -1331,6 +1102,7 @@ static void draw_world(int y0, int y1)
     if (g_lasers)
         lasers_draw_far(y0, y1, ext, ey0, rows);
 #endif
+    shots_draw_far(y0, y1, ext, ey0, rows);   /* the far shots: lines and a pixel or a few */
     rocks_draw_small(y0, y1, ext, ey0, rows);   /* the far rocks: a few pixels each */
     rocks_draw_begin();
     if (g_bl_cap)                       /* the far balls: a pixel or a few */
@@ -1380,14 +1152,16 @@ static void draw_world(int y0, int y1)
         bolts_draw_near(y0, y1, ext, ey0, rows);
     if (g_bl_cap)
         balls_draw_near(y0, y1, ext, ey0, rows);
+    shots_draw_near(y0, y1, ext, ey0, rows);
     missiles_draw(y0, y1, ext, ey0, rows);
+    logic_hud();                        /* the game's own marks over the view */
 #ifdef RV_TESTS
     if (g_boxes)
-        boxes_draw(y0, y1, ext, ey0, rows);
+        boxes_draw(y0, ey0);
     if (g_collide_demo)
-        collide_overlay(y0, y1, ext, ey0, rows);
+        collide_overlay();
     if (g_hull_demo)
-        hull_overlay(y0, y1, ext, ey0, rows);
+        hull_overlay();
     /* the benchmark's copies */
     if (bench)
         for (i = 0; i < g_nbench; i++)
@@ -1495,13 +1269,6 @@ static void systems_start(void)
     g_flicker = 0;
 }
 
-static long km_to(int s)                /* km from the player, roughly (the largest axis and half the rest) */
-{
-    long dx = labs(gPositionVector[s].x - gPositionVector[0].x) / 256, dy = labs(gPositionVector[s].y - gPositionVector[0].y) / 256,
-         dz = labs(gPositionVector[s].z - gPositionVector[0].z) / 256, m = dx > dy ? (dx > dz ? dx : dz) : (dy > dz ? dy : dz);
-    return m + (dx + dy + dz - m) / 2;
-}
-
 static int is_ship(int s)
 {
     return s > 0 && s <= RV_MAX_SHIP_SLOT && (maybeEntityType[s] == 0xC || maybeEntityType[s] == 0xD);
@@ -1524,7 +1291,7 @@ static void target_nearest(void)
     int s, best = -1;
     long d, bd = 0;
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
-        if (is_ship(s) && commAnimInfo[s] != 0 && ((d = km_to(s)) < bd || best < 0)) {
+        if (is_ship(s) && commAnimInfo[s] != 0 && ((d = player_km(s)) < bd || best < 0)) {
             best = s;
             bd = d;
         }
@@ -1601,10 +1368,10 @@ static void systems_tick(void)
     g_sys.target_hot = g_sys.lock = 0;
     g_sys.target_name[0] = 0;
     if ((s = g_sys.target) >= 0) {
-        const RvShipType __far *tt = type_of(s);
+        const RvShipType __far *tt = slot_type(s);
         RvVec3 d;
         long z, len;
-        g_sys.target_km = km_to(s);
+        g_sys.target_km = player_km(s);
         if (tt)
             _fstrncpy(g_sys.target_name, tt->name, sizeof g_sys.target_name - 1);
         d.x = (gPositionVector[s].x - gPositionVector[0].x) / 16;
@@ -1665,7 +1432,7 @@ static void systems_tick(void)
     }
     g_sys.autopilot_ready = g_m && g_m->nnav;
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
-        if (is_ship(s) && commAnimInfo[s] == 1 && km_to(s) < 8000)
+        if (is_ship(s) && commAnimInfo[s] == 1 && player_km(s) < 8000)
             g_sys.autopilot_ready = 0;
 }
 
@@ -1722,7 +1489,7 @@ static void gather(void)
         if (maybeEntityType[s] != 0xC && maybeEntityType[s] != 0xD)
             continue;
         /* (EMCON OFF: a dark scope; beyond the range knob's: not shown) */
-        if (g_sys.emcon == EMCON_OFF || km_to(s) > (4000L << g_sys.radar_range))
+        if (g_sys.emcon == EMCON_OFF || player_km(s) > (4000L << g_sys.radar_range))
             continue;
         d.x = (gPositionVector[s].x - gPositionVector[0].x) / 16;
         d.y = (gPositionVector[s].y - gPositionVector[0].y) / 16;
@@ -2013,9 +1780,9 @@ static void sky_demo_step(void)
 {
     int t = g_demo_frame;
     int yaw = (int)((long)lf_sin((int)(t * 1024L / 450)) * 40 >> 14), pitch = (int)((long)lf_sin((int)(t * 1024L / 225)) * 14 >> 14);
-    face(0, yaw, pitch);
-    rotate_pair(&gOrientationRightVector[0], &gOrientationUpVector[0], (int)(t * 1024L / 360 % 1024));
-    orthonormalise(0);
+    ship_face(0, yaw, pitch);
+    vec_turn(&gOrientationRightVector[0], &gOrientationUpVector[0], (int)(t * 1024L / 360 % 1024));
+    ship_orthonormalise(0);
     if (++g_demo_frame >= SKY_FRAMES)
         missionStatus = 1;              /* landed */
 }
@@ -2026,6 +1793,24 @@ static void missiles_frame(void)
 {
     LfBasis cam;
     const RvCockpit __far *c = cockpit_record();
+    if (!g_missile_demo) {              /* the missiles are slots (EntityType ET_MISSILE): the first MISSILE_MAX drawn */
+        Missile __far *p = missiles_pool();
+        int s, k = 0;
+        for (s = 1; s <= RV_MAX_SHIP_SLOT && k < MISSILE_MAX; s++)
+            if (maybeEntityType[s] == ET_MISSILE) {
+                p[k].x = gPositionVector[s].x;
+                p[k].y = gPositionVector[s].y;
+                p[k].z = gPositionVector[s].z;
+                p[k].dx = (short)gOrientationFrontVector[s].x;
+                p[k].dy = (short)gOrientationFrontVector[s].y;
+                p[k].dz = (short)gOrientationFrontVector[s].z;
+                p[k].live = 1;
+                p[k].burn = 1;
+                k++;
+            }
+        for (; k < MISSILE_MAX; k++)
+            p[k].live = 0;
+    }
     basis_of(0, &cam);
     missiles_place(gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, &cam, SCR_W / 2, g_cam_cy, 400,
                    c ? c->open_y0 : 0, c ? c->open_y1 : SCR_H);
@@ -2188,8 +1973,8 @@ static void lasers_setup(int enemy_type)
     int k;
     /* the two big ships, 1,500 and 2,100 km ahead (drawn exactly), and the player still */
     memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
-    spawn(1, enemy_type, 1, 4, -256L * 380, 256L * 60, 256L * 1500, 300);
-    spawn(2, g_camp.player_ship, 0, 4, 256L * 520, -256L * 90, 256L * 2100, 700);
+    ship_spawn(1, enemy_type, 1, 4, -256L * 380, 256L * 60, 256L * 1500, 300);
+    ship_spawn(2, g_camp.player_ship, 0, 4, 256L * 520, -256L * 90, 256L * 2100, 700);
     for (k = g_big_ships + 1; k <= 2; k++)
         maybeEntityType[k] = 0;         /* (/bigships: fewer; their sets stay loaded for the far ones) */
     for (k = 0; k < 3; k++)
@@ -2203,7 +1988,7 @@ static void lasers_setup(int enemy_type)
         g_lz_ship[k].pos.x = (lf_sin(a) * d >> 14) * 256;
         g_lz_ship[k].pos.y = (lf_sin(e) * d >> 14) * 256;
         g_lz_ship[k].pos.z = (lf_cos(a) * d >> 14) * 256;
-        face(RV_SCRATCH_SLOT, (int)(vrnd() % 1024), (int)(vrnd() % 300) - 150);
+        ship_face(RV_SCRATCH_SLOT, (int)(vrnd() % 1024), (int)(vrnd() % 300) - 150);
         g_lz_ship[k].b.front = *(const LfVec *)&gOrientationFrontVector[RV_SCRATCH_SLOT];
         g_lz_ship[k].b.right = *(const LfVec *)&gOrientationRightVector[RV_SCRATCH_SLOT];
         g_lz_ship[k].b.up = *(const LfVec *)&gOrientationUpVector[RV_SCRATCH_SLOT];
@@ -2450,7 +2235,7 @@ static void balls_report(void)
 void __far __cdecl flight_startup(void)
 {
     const RvMission __far *m = g_m;
-    int i, k, n = 1, enemy_type = -1;
+    int i, k, n = 1, enemy_type = -1, scene = g_zoom || g_flames_demo || g_lasers;   /* (a test scene: its own ships) */
     unsigned long now;
     memset(maybeEntityType, 0, RV_SLOTS * 2);
     _fmemset(g_was_exact, 0, sizeof g_was_exact);
@@ -2467,31 +2252,23 @@ void __far __cdecl flight_startup(void)
         g_camp.player_ship = (unsigned char)(g_test_ship - 1);
     g_my_type = ship_type(g_camp.player_ship);
     cockpit_load(g_camp.player_ship);
-    spawn(0, g_camp.player_ship, 0, 1, 0, 0, 0, 0);
-    /* the mission's ships round the player: the wingman alongside, the rest
-     * a few hundred kilometres out ahead, flying their circles */
-    for (i = 0; i < m->nship && n <= RV_MAX_SHIP_SLOT; i++) {
-        const RvShip __far *sh = &m->ship[i];
-        int type = sh->type == RV_SHIP_PLAYER || sh->type == RV_SHIP_WINGMAN ? g_camp.player_ship : sh->type;
-        if (sh->type == RV_SHIP_PLAYER)
-            continue;
-        if (sh->side == 1 && enemy_type < 0)
-            enemy_type = type;
-        for (k = 0; k < sh->count && n <= RV_MAX_SHIP_SLOT; k++, n++) {
-            int a = (int)(vrnd() % 342) - 171;             /* within 60 degrees of the nose */
-            /* (sin x distance would overflow a long: the distance goes in as km) */
-            long dist = 256L * (4000 + (long)(vrnd() % 8000)), sx = (lf_sin(a) * (dist >> 8)) >> 6, sz = (lf_cos(a) * (dist >> 8)) >> 6;
-            spawn(n, type, sh->side, 0, sx, (long)(vrnd() % 20000) * 20 - 200000L, sz, sh->type == RV_SHIP_WINGMAN ? 0 : a + 512);
-            rv_log("flight: slot %d type %02X spawned at bearing %d, %ld km: %ld,%ld", n, type, a, dist / 256, sx, sz);
-        }
-    }
+    /* the play's random stream for this flight (the same mission flown again from the same save starts the same;
+     * with the layer, the host's seed), then the game's logic puts the mission's ships in the slots */
+    randomSeed = 0x52560000UL + (unsigned long)camp_mission_index() * 977UL + g_camp.flown;
+    logic_start(m);
+    for (i = 1; i <= RV_MAX_SHIP_SLOT; i++)
+        if (slot_is_ship(i))
+            n = i + 1;
+    for (i = 0; i < m->nship && enemy_type < 0; i++)   /* (the benchmark's and the test scenes' enemy) */
+        if (m->ship[i].side == 1 && m->ship[i].type != RV_SHIP_PLAYER)
+            enemy_type = m->ship[i].type == RV_SHIP_WINGMAN ? g_camp.player_ship : m->ship[i].type;
     if (enemy_type < 0)
         enemy_type = 0x08;
     if (g_zoom) {
         /* a test aid: one Gawain dead ahead, a little off the nose, rolling, swinging in and out */
         n = 1;
         memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
-        spawn(1, 0x02, 0, 4, 0, 0, 256L * 4000, 512 + 100);
+        ship_spawn(1, 0x02, 0, 4, 0, 0, 256L * 4000, 512 + 100);
         setSpeed[1] = speedLo[1] = 0;
         setSpeed[0] = speedLo[0] = 0;
         ships_load(0x02);
@@ -2512,7 +2289,7 @@ void __far __cdecl flight_startup(void)
                                         { -1100, -330, 3000 }, { 0, -330, 3300 }, { 1100, -330, 3000 } };
         memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
         for (k = 0; k < 6; k++) {
-            spawn(k + 1, types[k], 1, 4, 256L * at[k][0], 256L * at[k][1], 256L * at[k][2], k * 170);
+            ship_spawn(k + 1, types[k], 1, 4, 256L * at[k][0], 256L * at[k][1], 256L * at[k][2], k * 170);
             setSpeed[k + 1] = speedLo[k + 1] = 0;
             ships_load(types[k]);
         }
@@ -2522,7 +2299,7 @@ void __far __cdecl flight_startup(void)
     }
     if (g_capital && n <= RV_MAX_SHIP_SLOT) {
         /* a test aid: the Vigilance off to the left, ahead, standing still */
-        spawn(n, 0x20, 0, 4, -256L * 3000, 0, 256L * 5000, 256);
+        ship_spawn(n, 0x20, 0, 4, -256L * 3000, 0, 256L * 5000, 256);
         maybeEntityType[n] = 0xD;
         setSpeed[n] = speedLo[n] = 0;
         ships_load(0x20);
@@ -2532,18 +2309,25 @@ void __far __cdecl flight_startup(void)
         rv_log("lasers: DOS memory free before the ship sets: %lu KB", bolts_dos_free() / 1024);
     {
         /* the sets this flight needs, asked of the page when they are not beside RV.EXE (ships_want) */
-        unsigned char want[RV_MAX_SHIP_SLOT + 2];
+        unsigned char want[RV_MAX_SHIP_SLOT + 2 + RV_SHIPS];
         int nw = 0;
         want[nw++] = (unsigned char)enemy_type;
         want[nw++] = g_camp.player_ship;
         for (i = 1; i < n && nw < (int)sizeof want; i++)
             want[nw++] = (unsigned char)gInstanceShipTypes[i];
+        for (i = 0; i < m->nship && nw < (int)sizeof want && !scene; i++)
+            if (m->ship[i].type < RV_SHIP_WINGMAN)
+                want[nw++] = m->ship[i].type;
         ships_want(want, nw, 1);
     }
     g_set_enemy = ships_load(enemy_type);
     g_set_wing = ships_load(g_camp.player_ship);
     for (i = 1; i < n; i++)
         ships_load(gInstanceShipTypes[i]);
+    for (i = 0; i < m->nship && !scene; i++)   /* (the mission's ships not in yet: its later waves are drawn too.
+                                           SHIP_SETS types at most) */
+        if (m->ship[i].type < RV_SHIP_WINGMAN)
+            ships_load(m->ship[i].type);
 #ifdef RV_TESTS
     if (g_lasers)
         lasers_sets();
@@ -2558,6 +2342,7 @@ void __far __cdecl flight_startup(void)
     }
     g_cam_cy = cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2;
     ships_set_camera(SCR_W / 2, g_cam_cy, 400);
+    shots_flight_start(!g_lasers);      /* (the laser benchmark and its demos keep the bolts' and balls' pools) */
 #ifdef RV_TESTS
     if (g_set_enemy >= 0) {
         /* the benchmark's sprite: the biggest of the type's band views at the sets' first resident step (84 %) */
@@ -2711,6 +2496,14 @@ unsigned short __far __cdecl flight_keys(void)
         g_steer_y = oy > 12 ? (oy > 80 ? 9 : oy * 9 / 80) : oy < -12 ? (oy < -80 ? -9 : oy * 9 / 80) : 0;
     }
     steerInput = ((unsigned long)(unsigned short)(short)g_steer_x << 16) | (unsigned short)(short)g_steer_y;
+    /* the pilot's controls for the game's logic (logic.h): the turn, the trigger (Space, or the left button held with
+     * the pointer in the view: below it the panel's controls take the clicks), the missile, the afterburner */
+    g_pilot.steer_x = (signed char)g_steer_x;
+    g_pilot.steer_y = (signed char)g_steer_y;
+    g_pilot.roll = (signed char)g_steer_roll;
+    g_pilot.guns = (unsigned char)(in_trigger() || (in_button() && c && in.y < c->open_y1));
+    g_pilot.missile = (unsigned char)(in.key == KEY_ENTER);
+    g_pilot.afterburner = g_sys.burning;
     if (in.x != g_scene.px || in.y != g_scene.py) {
         g_scene.px = in.x;
         g_scene.py = in.y;
@@ -2774,6 +2567,13 @@ void __far __cdecl flight_frame(void)
     }
 #endif
     missiles_frame();                   /* (after the plan: the ships' flames are the frame's first) */
+    {
+        LfBasis cam;                    /* the shots (shots.c): through the camera, as the bolts and the balls */
+        const RvCockpit __far *c = cockpit_record();
+        basis_of(0, &cam);
+        shots_place((const LfVec *)&gPositionVector[0], &cam, SCR_W / 2, g_cam_cy, 400, c ? c->open_y0 : 0,
+                    c ? c->open_y1 : SCR_H);
+    }
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];
     g_frame_t[k] = now;
@@ -2782,7 +2582,9 @@ void __far __cdecl flight_frame(void)
 #ifdef RV_TESTS
     bench_step();
 #endif
-    /* the benchmark's scenery: a damage layer more every three seconds (not in the laser benchmark: they hid its readout) */
+#ifdef RV_TESTS
+    /* the benchmark's scenery: a damage layer more every three seconds (not in the laser benchmark: they hid its
+     * readout).  (The test build's: in the game the damage is the game's logic's) */
     if (now >= g_damage_at && !g_lasers) {
         const RvCockpit __far *c = cockpit_record();
         int i;
@@ -2798,6 +2600,7 @@ void __far __cdecl flight_frame(void)
         SHIELD(0, 0) = SHIELD(0, 0) > 2 ? SHIELD(0, 0) - 2 : 0;
         ARMOR(0, 0) = ARMOR(0, 0) > 1 ? ARMOR(0, 0) - 1 : 0;
     }
+#endif
     gather();
     cockpit_dirty(&g_st);
     {
@@ -2912,6 +2715,8 @@ int flight_fly(const RvMission __far *m)
     in_steer(1);
     ships_draw_log();
     rocks_report();
+    logic_end();
+    shots_flight_end();
     rocks_flight_end();
     comms_flight_end();
     ships_unload();
