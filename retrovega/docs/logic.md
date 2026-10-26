@@ -26,7 +26,9 @@ This guide covers:
 - the rules the multiplayer layer needs kept;
 - memory and time: what is tight;
 - asteroid fields;
-- what the engine still lacks.
+- what the engine still lacks;
+- the sized types, and the host harness (rvsim): the logic on Linux and in a browser, under gdb, rr, valgrind and
+  the sanitizers.
 
 ## Files
 
@@ -39,6 +41,8 @@ This guide covers:
 | `src/collide.h` | collisions: ship against ship, point and segment against a ship's hull | helpers |
 | `src/flight.h` | the camera, and where a ship is on the screen (`flight_ent_box`) | helpers |
 | `src/rvhooks.h` | the slot arrays and scalars (generated from `abi/rvabi.def`), and the thunk prototypes | the ABI |
+| `src/rvtypes.h` | `int16_t`, `uint32_t` and the rest: the types to write in (see "Sized types") | helpers |
+| `host/` | rvsim, the host harness: the logic built for Linux or a browser (see "The host harness") | the harness |
 | `src/campaign.h` | `ship_type(type)`, `weapon(type)`, the mission being flown (`g_camp`) | data |
 | `src/panel.h` | `g_sys`, the cockpit's systems: target, lock, master arm, afterburner, decoys, fuel | the cockpit's |
 | `data/weapons.csv`, `data/ships.csv` | weapon numbers and looks; each ship type's guns, turrets and missiles | data |
@@ -117,7 +121,7 @@ spare near vector for `do_damage`'s `where`).
 
 ### Units and the integer maths
 
-- **Positions:** 256 a km, in `long`.
+- **Positions:** 256 a km, in `int32_t`.
   - A WC-scale fighter's half box is `lod0_px` × 3.125 km (`collide_half(s)`, in positions). That is about 450 km for a Gawain.
   - Ships spawn 4,000 to 12,000 km apart.
 - **Directions:** 256 = 1.0.
@@ -130,7 +134,7 @@ spare near vector for `do_damage`'s `where`).
 - **`KPS_HZ` (20) against `LOGIC_HZ` (30): a decision for you.**
   - The spec converts a kps at 20 steps a second; the flight steps 30 times a second. Everything therefore moves and turns 1.5 times its nominal rate. The first flight did too, and its feel (rocks, dodging) was tuned at that.
   - Set `KPS_HZ` to `LOGIC_HZ` in world.h if you want kps to mean km a second.
-- **`int` is 16 bits.** A `long` is 32: products of positions overflow fast.
+- **An `int16_t` is DOS's `int`, an `int32_t` its `long`** (see "Sized types"): products of positions overflow fast.
   - Turn positions into km (/ 256) before squaring or dotting: `ship_rel` and `vec_norm` work in km for that reason.
   - `sin` × a distance in positions overflows; take the distance in km.
 - **`game_rand()`** is the gameplay random stream: everything that changes play (spread, AI choices, damage rolls). It uses `randomSeed`, which the flight seeds per mission and save and the layer re-seeds before it replays a spawn or a hit. Anything that only looks different (sparks, flicker) must use its own generator, never `game_rand`.
@@ -147,6 +151,48 @@ spare near vector for `do_damage`'s `where`).
 | `ship_spawn(s, type, side, controller, x, y, z, yaw)` | a ship into slot s: its type's speeds, shields, armour and gun table (`ship_guns`); everything else reset |
 | `ship_clear(s)`, `ship_free_slot()` | empty a slot (nothing shown); the first empty ship slot |
 | `game_rand()` | 0..32767 from the gameplay stream |
+
+## Sized types: the same numbers on DOS and on a host
+
+The logic and every module the host harness shares with RV.EXE are written in
+`rvtypes.h`'s sized types, never plain `int`, `long` or `short`:
+
+| write | on DOS (Watcom) | for |
+|---|---|---|
+| `int16_t`, `uint16_t` | `int`, `unsigned` | counters, slots, angles, the slot table's words |
+| `int32_t`, `uint32_t` | `long`, `unsigned long` | positions, products, speeds |
+| `int8_t`, `uint8_t` | `signed char`, `unsigned char` | the slot table's bytes, gun mounts |
+| `INT32_C(256)`, `UINT32_C(1)` | `256L`, `1UL` | 32-bit constants (`256L` is 64 bits on a 64-bit host) |
+
+- A `long` is 64 bits on a 64-bit host, so a product that overflows on DOS would not overflow there. As `int32_t` it is 32 bits everywhere.
+- The switch changed nothing on DOS: RV.EXE built from them is byte for byte the one before. Watcom's `int16_t` is `short`, the same 16 bits as its `int`.
+- `rvhooks.h` and `rvdata.h` are generated in these types (tools/rvabi.py, tools/rvdata.py).
+- Watcom's `char` is unsigned; the host build says so too (`-funsigned-char`).
+- Compilers without `<stdint.h>` (Watcom 11 and older, Turbo and Borland C, Microsoft C before 2010) get `rvtypes.h`'s own typedefs. `RV_NO_STDINT` forces them.
+
+**What sized types cannot make the same: C does its arithmetic in `int`.** That
+is 16 bits on DOS and 32 on a host, and an `int16_t` or `uint16_t` is widened to
+`int` before any operator. So an expression differs whenever its value passes
+16 bits before it is stored:
+
+| a, b are `int16_t` or `uint16_t` | DOS | host |
+|---|---|---|
+| `a = 300, b = 200; int32_t p = a * b;` | -5536 (wrapped at 16 bits, then widened) | 60000 |
+| `a = 1, b = 2` (`uint16_t`); `int32_t d = a - b;` | 65535 | -1 |
+| `if (a + b < 0)`, a and b near 30,000 | true | false |
+| `(a * b) >> 8` | the wrapped product, shifted | the whole one |
+
+The rules that make them the same:
+
+- **Store a 16-bit result before using it again:** `int16_t c = a * b;`, then use `c`. The store wraps the host's value as DOS wraps it.
+- **Do wide arithmetic in `int32_t` on purpose:** `(int32_t)a * b`, never `a * b` in the hope that it fits.
+- **Cast a `uint16_t` difference back:** `(uint16_t)(frameCounter - then)` for a timer that wraps.
+- **`%d` takes 16 bits on DOS, `%ld` 32:** pass an `int16_t` to `%d` and an `int32_t` to `%ld`. The host's log reads both as an `int`, so it cannot catch a mismatch.
+
+The checks catch what slips through:
+
+- UBSan stops on a 32-bit signed overflow, which DOS would wrap silently.
+- clang's truncation check (`CC=clang host/build.sh`) stops when a value is stored into an `int16_t` or `uint16_t` it does not fit: a 16-bit overflow, or a shield going below 0 to 65534. It catches what is stored, not the middle of an expression; the rules above cover those.
 
 ## The main loop, step by step
 
@@ -168,7 +214,7 @@ and hit what is where it now is.
    - The speed toward `setSpeed`, by the type's `accel`. The afterburner's speed is `ab_kps` while `rvAfterburner[s]` is lit.
    - `gVelocityVector` = front × speed (`KPS_STEP`), then position += velocity.
    - A `CTL_PUPPET` only coasts: position += velocity.
-5. **`step_shots`**: `shots_move()`, then for each shot `shot_hit(i, &slot, &where)`. On a hit: `do_damage(shot_source(i), slot, shot(i)->damage, (unsigned short)&where)`, then `shot_remove(i)`. Walk the list backwards when removing.
+5. **`step_shots`**: `shots_move()`, then for each shot `shot_hit(i, &slot, &where)`. On a hit: `do_damage(shot_source(i), slot, shot(i)->damage, RV_WHERE(&where))`, then `shot_remove(i)`. Walk the list backwards when removing.
 6. **`step_missiles`**: missiles are ship slots of type `ET_MISSILE`. They steer like ships, toward `missileTarget[s]`, and burst on a proximity test (`collide_point` or a distance), through `do_damage`.
 7. **`step_collisions`**: `collide_coarse(a, b)`, then `collide_ships(a, b, &push, &depth)`. Move b by `push` (or each by half), and charge both through `do_damage`.
 8. **`step_deaths`**:
@@ -267,8 +313,11 @@ owner, weapon and damage, and returns 10. It stays valid until the next
 
 Every hurt goes through this thunk: shots, rams, missiles, and the rocks
 (rocks.c calls it, with the field's hazard slot as `src`). `where` is a near
-pointer to an `RvVec3`: a local `RvVec3` works (the stack is in DGROUP), or
-`tempVector`. It returns what it did, 0 for nothing.
+pointer to an `RvVec3`: pass `RV_WHERE(&v)` for a vector of yours (a local
+works: the stack is in DGROUP), and in `do_damage_impl` read it as
+`RV_WHERE_VEC(where)`. On DOS these are plain casts; the host harness maps the
+16-bit pointer to its own memory. Only read it there. It returns what it did,
+0 for nothing.
 
 The rules the layer needs:
 
@@ -471,6 +520,124 @@ The scan for this guide, most needed first:
    - Later builds redo only what changed, except `RV.DAT` and the code: `CODE=1` skips `RV.DAT` while only code has changed.
    - The art sources (`art/*/src`) are not needed: they are git-ignored, and their cut results are committed.
 6. Run with the stock DOSBox: `DOSBOX=dosbox tests/run.sh tests/flight.txt /flight 14` (headless), or `DOSBOX=dosbox tests/play.sh` (a window). RV.EXE needs nothing but a standard DOSBox (`machine=svga_s3`, `memsize=63`, XMS on, EMS off: `tests/rv.conf`). This repository's own DOSBox (the multiplayer layer) is only needed for multiplayer.
+7. For the host harness (below):
+   - `sudo dpkg --add-architecture i386 && sudo apt update`
+   - `sudo apt install gcc-multilib libsdl2-dev libsdl2-dev:i386 gdb valgrind libc6-dbg:i386 rr`
+   - for `CC=clang`: `sudo apt install clang llvm libclang-rt-NN-dev`, NN being `clang --version`'s. **Not** `libclang-rt-NN-dev:i386`: it conflicts with gcc-multilib, and apt removes gcc-multilib (and rr) to install it. The amd64 package has the 32-bit runtimes too.
+   - for `WEB=1`, the Emscripten SDK: `git clone https://github.com/emscripten-core/emsdk ~/emsdk && ~/emsdk/emsdk install latest && ~/emsdk/emsdk activate latest`.
+   - Then `host/build.sh` and `build/host32/rvsim`. The harness needs neither Watcom nor DOSBox.
+
+## The host harness (rvsim)
+
+`rvsim` is a flight with the game's logic and nothing else, built for Linux
+(32- or 64-bit) or a browser from the same sources as RV.EXE: `src/logic.c`,
+world, shots, collide, lightfield, hud and campaign. Whatever in them is DOS,
+`host/` provides: the fixed block is an array, XMS blocks are host memory with
+every move bounds-checked, and the screen is a buffer.
+
+**None of the assembly is in it, and nothing is written twice.** The
+assembly is all drawing (bolts, balls, rocks' rows, the stars), memory moves
+and DOS calls. The harness draws its own picture: each ship's hit box with a
+nose line, the shots as lines, the stars, a radar, and `logic_hud` over them.
+
+Not in it: the sprites, the cockpit and its panel, the sound, the rooms, the
+asteroid fields, and the multiplayer layer. rocks.c is a field's simulation
+and drawing in one; a host version of its simulation is the next step for
+field combat.
+
+### Build
+
+`host/build.sh`. The options are environment variables:
+
+| setting | what |
+|---|---|
+| (none) | `build/host32/rvsim`: 32-bit, UBSan, an SDL2 window |
+| `ARCH=64` | 64-bit (`build/host64/`) |
+| `SAN=asan` | AddressSanitizer with UBSan; `SAN=none` for neither (for valgrind) |
+| `CC=clang` | clang, which adds its 16-bit truncation check |
+| `SDL=0` | headless only |
+| `OPT=-O0` | no optimisation, for stepping in gdb (the default is -O1; always -g3) |
+| `LOGIC=path.c` | another file in `src/logic.c`'s place (an experiment), built into its own directory |
+| `WEB=1` | the browser build: `build/hostweb/` (`index.html`, `rvsim.js`, `.wasm`, `.data`) |
+
+The directory names the build: `build/host64-asan`, `build/host32-clang`,
+`build/host32-none-nosdl`, `build/host32-mylogic`. RVGAME.DAT and SHAPES.DAT
+are made beside the program, so rvsim needs nothing else.
+
+### Run
+
+`build/host32/rvsim` flies a new campaign's first mission in a window, at 30
+steps a second. `--help` lists the options:
+
+- `--mission N`, `--ship T`, `--seed S`: what to fly.
+- `--headless --frames N`: no window, as fast as it goes (900 steps unless told).
+- `--record FILE`, `--replay FILE`: the controls a step at a time, with the throttle (the engine's keys set it). A replay flies the same flight exactly; the mission, ship and seed come from the file.
+- `--hash N`: the world's hash (the fixed block and the shot list) every N steps. Equal runs give equal hashes: compare a 32-bit build with a 64-bit one, or a run before and after a change that should not alter play.
+- `--shot FILE.ppm`: the last picture.
+- `--trace`: every thunk call in the log.
+- `--check-src`: each `do_damage` runs twice, the second time with `src` 0xFFFF on a copy of the fixed block, and the shields, armour, hull, guns and death are compared (the layer's replay rule).
+- `--strict`: abort at the first broken rule, so a debugger stops there.
+
+Keys: arrows steer, Q and E roll, Space or the left button fires, Enter fires
+a missile, Tab is the afterburner, `+` `-` F S set the throttle, M (or the
+right button held) steers by the mouse, P pauses, N steps once while paused,
+Esc ends.
+
+### What it checks
+
+At every thunk call and after every step (host/host.c). Each break is logged
+as `RULE:` with its step, and the exit code is 3:
+
+- `fireGunFromShip` that puts no shot in the world and returns no missile (it must never refuse); a returned slot that is not `ET_MISSILE`; a gun past the ship's guns.
+- `do_damage` with a `src` that is not a bolt, ship, missile or field hazard, or a bolt whose parent is no ship; with `--check-src`, an amount that depends on `src`.
+- `rand()` or `srand()` called: play's randomness is `game_rand`.
+- A ship's orientation vectors no longer 256 long or no longer square (`ship_orthonormalise` after turning); a parent, target or missile target that is not a slot; an `rvController` outside `CTL_*`; a ship type with no data.
+
+These stop the run where they happen, with an abort, so a debugger or rr is at
+the line:
+
+- UBSan: signed overflow, a negative or too-far shift, division by zero. Its first find was in collide.c, a negative number shifted left (now `* 256`).
+- `RV_CHECK` and `RV_ASSERT` (an index past a table, a shot past the list), and an XMS move past its block.
+- ASan (`SAN=asan`): out-of-bounds and use-after-free, heap and stack.
+- clang's truncation check (`CC=clang`): a value stored into a narrower type it does not fit.
+
+`UBSAN_OPTIONS=halt_on_error=0` goes on past UBSan's reports.
+
+### Debugging
+
+- **A bug seen in play:** fly with `--record bug.rvin`. The recording then replays the bug in gdb, rr or valgrind, and in the other builds.
+- **gdb:** `OPT=-O0 host/build.sh`, then `gdb --args build/host32/rvsim --replay bug.rvin`. The build has the macros (-g3), so `print gPositionVector[1]`, `print SHIELD(1, 0)` and `print maybeEntityType[3]` work, and `break logic_frame if frameCounter == 300`.
+- **rr:** `rr record build/host64-none/rvsim --replay bug.rvin`, then `rr replay`, and go backwards from the crash to where a value went wrong (`watch -l gPositionVector[2].x`, then `reverse-continue`). rr needs hardware performance counters: most Linux desktops have them, most VMs do not (this sandbox's does not).
+- **valgrind:** `SAN=none host/build.sh`, then `valgrind --leak-check=full build/host32-none/rvsim --headless --frames 600`.
+
+### 32 and 64 bits
+
+The 32-bit build is the default because it is the closer: `int` and `long`
+are both 32 bits. The 64-bit build differs where code uses `long` (64 bits
+there) or a pointer's size. In the sized types the two compute the same
+world, and `tests/host/rvsim_test.sh` checks that their hashes match. When
+they differ for your code, run both with `--hash 1` and diff the outputs: the
+first different step is where they part.
+
+### In a browser
+
+`WEB=1 host/build.sh` builds `build/hostweb/` with Emscripten (`~/emsdk`, or
+`emcc` on PATH): wasm32, like the 32-bit build, without sanitizers. Serve the
+directory (`python3 -m http.server -d build/hostweb 8000`) and open it.
+`?mission=N&ship=T&seed=S` picks the flight, and `&trace` and `&checksrc`
+turn those options on; the log is under the view.
+
+`host/web/deploy.sh "what changed"` builds it, puts it at
+https://fireflyk64.github.io/rv/ (the Pages repository's `rv/`), and checks
+the live page with `host/web/check.mjs` (Playwright).
+
+### The self-test
+
+`tests/host/rvsim_test.sh` (`VALGRIND=1` adds valgrind):
+
+- the 32- and 64-bit builds fly the game's logic to the same hash, and its spawns are RV.EXE's (checked against `build/dos/RVLOG.TXT`'s, when that log has the mission);
+- a recording replays to the same hash;
+- `tests/host/rules_logic.c`, a logic that breaks the rules on purpose, has each break reported, and UBSan, `RV_CHECK` and clang's check each stop it.
 
 ## Testing
 
@@ -481,6 +648,7 @@ The scan for this guide, most needed first:
   - `/zoom 1` puts one Gawain dead ahead, swinging between 1,200 and 6,000 km. `/ship 0` flies the Schroedinger (lasers; the default Redeemer's slugs are pixels at range).
   - The script holds the trigger (`hold fire N`), takes `G01FIRE`..`G03HIT`, and the log ends with `shots: N fired, M hits`.
   - When I filled the loop with the first flight's stand-ins and a simple fire loop, it gave 82 shots and 32 hits, and the Gawain's shields and armour went to 0. That was the check of these helpers.
+- **The host harness** runs the logic on Linux, under gdb, rr, valgrind and the sanitizers, with the multiplayer rules checked (see "The host harness (rvsim)"). `tests/host/rvsim_test.sh` is its self-test.
 - `/field D` puts every flight in an asteroid field; `/boxes` brackets every ship (`flight_ent_box`'s check).
 - `rv_logf(s_fmt, ...)` writes a line to RVLOG.TXT. It opens and closes the file each line, so log events, not every step.
 - In the browser the log is `new TextDecoder().decode(DOSBox.FS.readFile("/game/RVLOG.TXT"))` in the console.

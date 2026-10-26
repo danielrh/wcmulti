@@ -462,7 +462,7 @@ void flight_camera(RvCamera *c)
     c->vy1 = ck ? ck->open_y1 : SCR_H;
 }
 
-int flight_ent_box(int slot, const RvCamera *cam, EntBox *o)
+int16_t flight_ent_box(int16_t slot, const RvCamera *cam, EntBox *o)
 {
     const RvShipType __far *t;
     RvCamera main_cam;
@@ -1006,7 +1006,8 @@ static void hull_demo_step(void)
     EntBox b;
     LfVec from, to, hit;
     long k;
-    int gx, gy, t;
+    int gx, gy;
+    int16_t t;
     unsigned long t0;
     gPositionVector[1].x = 0;
     gPositionVector[1].y = 0;

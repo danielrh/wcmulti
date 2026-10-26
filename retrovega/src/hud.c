@@ -4,10 +4,10 @@
 #include "rv.h"
 #include "hud.h"
 
-static int __far g_y0, __far g_y1, __far g_ey0, __far g_rows;
-static const short __far *__far g_ext;
+static int16_t __far g_y0, __far g_y1, __far g_ey0, __far g_rows;
+static const int16_t __far *__far g_ext;
 
-void hud_band(int y0, int y1, const short __far *ext, int ext_y0, int ext_rows)
+void hud_band(int16_t y0, int16_t y1, const int16_t __far *ext, int16_t ext_y0, int16_t ext_rows)
 {
     g_y0 = y0;
     g_y1 = y1;
@@ -16,9 +16,9 @@ void hud_band(int y0, int y1, const short __far *ext, int ext_y0, int ext_rows)
     g_rows = ext_rows;
 }
 
-void hud_run(int xa, int xb, int y, int colour)
+void hud_run(int16_t xa, int16_t xb, int16_t y, int16_t colour)
 {
-    unsigned char __far *row;
+    uint8_t __far *row;
     if (y < g_y0 || y >= g_y1)
         return;
     if (g_ext) {
@@ -35,9 +35,9 @@ void hud_run(int xa, int xb, int y, int colour)
     _fmemset(row + xa, colour, xb - xa);
 }
 
-void hud_dot(int x, int y, int colour) { hud_run(x, x + 1, y, colour); }
+void hud_dot(int16_t x, int16_t y, int16_t colour) { hud_run(x, x + 1, y, colour); }
 
-void hud_vline(int x, int ya, int yb, int colour)
+void hud_vline(int16_t x, int16_t ya, int16_t yb, int16_t colour)
 {
     if (ya < g_y0) ya = g_y0;
     if (yb > g_y1) yb = g_y1;
@@ -45,28 +45,28 @@ void hud_vline(int x, int ya, int yb, int colour)
         hud_run(x, x + 1, ya, colour);
 }
 
-void hud_line(int xa, int ya, int xb, int yb, int colour)
+void hud_line(int16_t xa, int16_t ya, int16_t xb, int16_t yb, int16_t colour)
 {
-    int dx = xb - xa, dy = yb - ya, n = abs(dx) > abs(dy) ? abs(dx) : abs(dy), i;
+    int16_t dx = xb - xa, dy = yb - ya, n = abs(dx) > abs(dy) ? abs(dx) : abs(dy), i;
     if (!n)
         n = 1;
     if (n > 2000)
         return;
     for (i = 0; i <= n; i++) {
-        int x = xa + (int)((long)dx * i / n), y = ya + (int)((long)dy * i / n);
+        int16_t x = xa + (int16_t)((int32_t)dx * i / n), y = ya + (int16_t)((int32_t)dy * i / n);
         hud_run(x, x + 1, y, colour);
     }
 }
 
-void hud_cross(int x, int y, int arm, int colour)
+void hud_cross(int16_t x, int16_t y, int16_t arm, int16_t colour)
 {
     hud_run(x - arm, x + arm + 1, y, colour);
     hud_vline(x, y - arm, y + arm + 1, colour);
 }
 
-void hud_brackets(int x0, int y0, int x1, int y1, int colour)
+void hud_brackets(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t colour)
 {
-    int aw = (x1 - x0) / 4, ah = (y1 - y0) / 4;
+    int16_t aw = (x1 - x0) / 4, ah = (y1 - y0) / 4;
     if (aw > 10) aw = 10;
     if (ah > 10) ah = 10;
     if (aw < 2) aw = 2;
@@ -81,9 +81,9 @@ void hud_brackets(int x0, int y0, int x1, int y1, int colour)
     hud_vline(x1 - 1, y1 - ah, y1, colour);
 }
 
-void hud_diamond(int x, int y, int r, int colour)
+void hud_diamond(int16_t x, int16_t y, int16_t r, int16_t colour)
 {
-    int k;
+    int16_t k;
     for (k = 0; k <= r; k++) {
         hud_dot(x - r + k, y - k, colour);
         hud_dot(x + r - k, y - k, colour);

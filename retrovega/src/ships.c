@@ -1151,7 +1151,8 @@ static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256,
     if (xa < left) xa = left;
     if (xb > left + r.ow) xb = left + r.ow;
     for (oy = y0; oy < y1; oy++) {
-        int ca = xa, cb = xb, xs, xe;
+        int ca = xa, cb = xb;
+        int16_t xs, xe;
         long ed;
         unsigned char __far *row;
         if (!row_clip(oy, &ca, &cb, ext, ext_y0, ext_rows)
@@ -1590,7 +1591,7 @@ long ships_selftest(void)
             if (r.ow > 60)
                 continue;
             for (y = 0; y < r.oh; y++) {
-                int xs, xe;
+                int16_t xs, xe;
                 for (x = 0; x < 64; x++) out_c[x] = out_a[x] = (unsigned char)(200 + x);
                 lf_rotate_row(pic, 9, 7, &r, y, 0, r.ow, out_c);
                 if (lf_rotate_span(&r, 9, 7, y, 0, r.ow, &xs, &xe))

@@ -7,7 +7,7 @@
 
 /* --- trigonometry --- */
 
-long lf_sin(int a)
+int32_t lf_sin(int16_t a)
 {
     a &= 1023;
     if (a < 256) return rv_qsin[a];
@@ -16,11 +16,11 @@ long lf_sin(int a)
     return -rv_qsin[1024 - a];
 }
 
-long lf_cos(int a) { return lf_sin(a + 256); }
+int32_t lf_cos(int16_t a) { return lf_sin(a + 256); }
 
-unsigned long lf_sqrt(unsigned long v)
+uint32_t lf_sqrt(uint32_t v)
 {
-    unsigned long r = 0, bit = 1UL << 30;
+    uint32_t r = 0, bit = UINT32_C(1) << 30;
     while (bit > v)
         bit >>= 2;
     while (bit) {
@@ -36,16 +36,16 @@ unsigned long lf_sqrt(unsigned long v)
 }
 
 /* atan2 in 1024ths of a turn, by octant and a search of the quarter table */
-int lf_atan2(long y, long x)
+int16_t lf_atan2(int32_t y, int32_t x)
 {
-    long ax = x < 0 ? -x : x, ay = y < 0 ? -y : y, t;
-    int a, lo = 0, hi = 256;
+    int32_t ax = x < 0 ? -x : x, ay = y < 0 ? -y : y, t;
+    int16_t a, lo = 0, hi = 256;
     if (!ax && !ay)
         return 0;
-    t = (ay < ax ? ay : ax) * 16384L / (ay < ax ? ax : ay);   /* tan of the angle from the nearer axis */
+    t = (ay < ax ? ay : ax) * INT32_C(16384) / (ay < ax ? ax : ay);   /* tan of the angle from the nearer axis */
     while (hi - lo > 1) {
-        int mid = (lo + hi) / 2;
-        if ((long)rv_qsin[mid] <= (t * rv_qsin[256 - mid]) >> 14)
+        int16_t mid = (lo + hi) / 2;
+        if ((int32_t)rv_qsin[mid] <= (t * rv_qsin[256 - mid]) >> 14)
             lo = mid;
         else
             hi = mid;
@@ -58,33 +58,33 @@ int lf_atan2(long y, long x)
 
 /* --- which view --- */
 
-int lf_view_of(long vx, long vy, long vz, int nb, int nh)
+int16_t lf_view_of(int32_t vx, int32_t vy, int32_t vz, int16_t nb, int16_t nh)
 {
-    long r;
-    int elev, head, band, h, full = 2 * (nh - 1);
+    int32_t r;
+    int16_t elev, head, band, h, full = 2 * (nh - 1);
     while (vx > 16000 || vx < -16000 || vy > 16000 || vy < -16000 || vz > 16000 || vz < -16000) {
         vx /= 4;                        /* the squares below must fit: the angles do not change */
         vy /= 4;
         vz /= 4;
     }
-    r = (long)lf_sqrt((unsigned long)(vx * vx + vz * vz));
+    r = (int32_t)lf_sqrt((uint32_t)(vx * vx + vz * vz));
     elev = lf_atan2(vy, r);             /* 256 = straight above */
     head = lf_atan2(vx, vz);            /* 0 nose toward the viewer, 256 = the ship's left (the renderer's +x) */
     if (elev > 512) elev -= 1024;       /* -512..512 */
     /* the band: the nearest of the nb + 2 rows top .. bottom, each 1024 / (2 (nb + 1)) apart */
-    band = (int)((2L * (256 - elev) * (nb + 1) + 512) / 1024);
+    band = (int16_t)((INT32_C(2) * (256 - elev) * (nb + 1) + 512) / 1024);
     if (band <= 0) return 0;            /* the top */
     if (band >= nb + 1) return 1 + nb * nh;
     band--;
-    h = (int)(((long)head * (nh - 1) * 2 + 512) / 1024) % full;   /* the nearest heading step */
+    h = (int16_t)(((int32_t)head * (nh - 1) * 2 + 512) / 1024) % full;   /* the nearest heading step */
     if (h <= nh - 1)
         return 1 + band * nh + h;
     return 2 + nb * nh + band * (nh - 2) + (h - nh);               /* 180 + step .. 360 - step */
 }
 
-int lf_pair_of(int v, int nb, int nh)
+int16_t lf_pair_of(int16_t v, int16_t nb, int16_t nh)
 {
-    int band, j, k, base = 2 + nb * nh;
+    int16_t band, j, k, base = 2 + nb * nh;
     if (v == 0 || v == 1 + nb * nh)
         return v;
     if (v < base) {
@@ -101,12 +101,12 @@ int lf_pair_of(int v, int nb, int nh)
 
 /* --- where --- */
 
-static long dot(const LfVec *a, const LfVec *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
+static int32_t dot(const LfVec *a, const LfVec *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
 
-void lf_view_rot(int v, int nb, int nh, LfViewRot *r)
+void lf_view_rot(int16_t v, int16_t nb, int16_t nh, LfViewRot *r)
 {
-    int band, e, h, base = 2 + nb * nh;
-    long se, ce, sh, ch;
+    int16_t band, e, h, base = 2 + nb * nh;
+    int32_t se, ce, sh, ch;
     if (v == 0 || v == 1 + nb * nh) {  /* the top and the bottom: heading 90 (shipviews.lattice) */
         e = v ? -256 : 256;
         h = 256;
@@ -129,22 +129,23 @@ void lf_view_rot(int v, int nb, int nh, LfViewRot *r)
     r->m[6] = sh * ce >> 14; r->m[7] = se; r->m[8] = ch * ce >> 14;
 }
 
-void lf_sprite_point(const LfViewRot *r, int roll, long x, long y, long z, long *sx, long *sy, long *sz)
+void lf_sprite_point(const LfViewRot *r, int16_t roll, int32_t x, int32_t y, int32_t z, int32_t *sx, int32_t *sy,
+                     int32_t *sz)
 {
-    long qx = (r->m[0] * x + r->m[1] * y + r->m[2] * z) >> 14;
-    long qy = (r->m[3] * x + r->m[4] * y + r->m[5] * z) >> 14;
-    long c = lf_cos(roll), s = lf_sin(roll);
+    int32_t qx = (r->m[0] * x + r->m[1] * y + r->m[2] * z) >> 14;
+    int32_t qy = (r->m[3] * x + r->m[4] * y + r->m[5] * z) >> 14;
+    int32_t c = lf_cos(roll), s = lf_sin(roll);
     *sz = (r->m[6] * x + r->m[7] * y + r->m[8] * z) >> 14;
     /* the picture's x right, y down (-qy), then turned clockwise on the screen */
     *sx = (qx * c + qy * s) >> 14;
     *sy = (qx * s - qy * c) >> 14;
 }
 
-void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx, int cy, int focal, int nb, int nh,
-              LfPlace *out)
+void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int16_t cx, int16_t cy, int16_t focal,
+              int16_t nb, int16_t nh, LfPlace *out)
 {
     LfVec d, back;
-    long x, y, z, ux, uy;
+    int32_t x, y, z, ux, uy;
     d.x = rel->x / 16;                  /* 16 units = 1/16 km: keeps the products in a long */
     d.y = rel->y / 16;
     d.z = rel->z / 16;
@@ -158,8 +159,8 @@ void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx,
     out->roll = 0;
     if (z < 2)
         return;
-    out->sx = cx + (int)(x * focal / z);
-    out->sy = cy - (int)(y * focal / z);     /* the camera's up is up the screen */
+    out->sx = cx + (int16_t)(x * focal / z);
+    out->sy = cy - (int16_t)(y * focal / z);     /* the camera's up is up the screen */
     if (out->sx < -320 || out->sx > 960 || out->sy < -320 || out->sy > 720)
         return;
     out->on_screen = 1;
@@ -183,16 +184,16 @@ void lf_place(const LfVec *rel, const LfBasis *cam, const LfBasis *ship, int cx,
     }
 }
 
-void lf_sky(const LfVec *dir, const LfVec *up, const LfBasis *cam, int cx, int cy, int focal, LfPlace *out)
+void lf_sky(const LfVec *dir, const LfVec *up, const LfBasis *cam, int16_t cx, int16_t cy, int16_t focal, LfPlace *out)
 {
-    long x = dot(dir, &cam->right) / 256, y = dot(dir, &cam->up) / 256, z = dot(dir, &cam->front) / 256;
-    out->depth = 0x7FFFFFFFL;
+    int32_t x = dot(dir, &cam->right) / 256, y = dot(dir, &cam->up) / 256, z = dot(dir, &cam->front) / 256;
+    out->depth = INT32_C(0x7FFFFFFF);
     out->on_screen = 0;
     out->sx = out->sy = out->view = out->roll = 0;
     if (z < 2)
         return;
-    out->sx = cx + (int)(x * focal / z);
-    out->sy = cy - (int)(y * focal / z);
+    out->sx = cx + (int16_t)(x * focal / z);
+    out->sy = cy - (int16_t)(y * focal / z);
     if (out->sx < -320 || out->sx > 960 || out->sy < -320 || out->sy > 720)
         return;
     out->on_screen = 1;
@@ -201,47 +202,47 @@ void lf_sky(const LfVec *dir, const LfVec *up, const LfBasis *cam, int cx, int c
 
 /* --- the kernels --- */
 
-void lf_colmap(int src_w, int dst_w, unsigned short LF_FAR *map)
+void lf_colmap(int16_t src_w, int16_t dst_w, uint16_t LF_FAR *map)
 {
-    int x;
+    int16_t x;
     for (x = 0; x < dst_w; x++)
-        map[x] = (unsigned short)((long)x * src_w / dst_w);
+        map[x] = (uint16_t)((int32_t)x * src_w / dst_w);
 }
 
-void lf_scale_row(const unsigned char LF_FAR *line, const unsigned short LF_FAR *map, int xa, int xb,
-                  unsigned char LF_FAR *out)
+void lf_scale_row(const uint8_t LF_FAR *line, const uint16_t LF_FAR *map, int16_t xa, int16_t xb,
+                  uint8_t LF_FAR *out)
 {
-    int x;
+    int16_t x;
     for (x = xa; x < xb; x++) {
-        unsigned char p = line[map[x]];
+        uint8_t p = line[map[x]];
         if (p)
             out[x] = p;
     }
 }
 
-void lf_rotate_setup(int w, int h, int cx, int cy, int roll, int scale256, LfRot *r)
+void lf_rotate_setup(int16_t w, int16_t h, int16_t cx, int16_t cy, int16_t roll, int16_t scale256, LfRot *r)
 {
     /* output = R (source - origin) * scale, R clockwise on a y-down screen:
      * [c -s; s c]; the inverse takes an output offset back: [c s; -s c] / scale */
-    long c = lf_cos(roll), s = lf_sin(roll);        /* 16384 = 1.0 */
-    long xs[4], ys[4], minx = 0, maxx = 0, miny = 0, maxy = 0;
-    int i;
+    int32_t c = lf_cos(roll), s = lf_sin(roll);        /* 16384 = 1.0 */
+    int32_t xs[4], ys[4], minx = 0, maxx = 0, miny = 0, maxy = 0;
+    int16_t i;
     xs[0] = -cx; ys[0] = -cy;
     xs[1] = w - cx; ys[1] = -cy;
     xs[2] = -cx; ys[2] = h - cy;
     xs[3] = w - cx; ys[3] = h - cy;
     for (i = 0; i < 4; i++) {
-        long ox = ((xs[i] * c - ys[i] * s) >> 14) * scale256 / 256;
-        long oy = ((xs[i] * s + ys[i] * c) >> 14) * scale256 / 256;
+        int32_t ox = ((xs[i] * c - ys[i] * s) >> 14) * scale256 / 256;
+        int32_t oy = ((xs[i] * s + ys[i] * c) >> 14) * scale256 / 256;
         if (ox < minx) minx = ox;
         if (ox > maxx) maxx = ox;
         if (oy < miny) miny = oy;
         if (oy > maxy) maxy = oy;
     }
-    r->ocx = (int)-minx + 1;
-    r->ocy = (int)-miny + 1;
-    r->ow = (int)(maxx - minx) + 2;
-    r->oh = (int)(maxy - miny) + 2;
+    r->ocx = (int16_t)-minx + 1;
+    r->ocy = (int16_t)-miny + 1;
+    r->ow = (int16_t)(maxx - minx) + 2;
+    r->oh = (int16_t)(maxy - miny) + 2;
     /* 16.16 steps: a column step moves (c, -s) / scale in the source */
     r->du = (c * 4) * 256 / scale256;
     r->dv = (-s * 4) * 256 / scale256;
@@ -250,31 +251,31 @@ void lf_rotate_setup(int w, int h, int cx, int cy, int roll, int scale256, LfRot
     /* both origins are pixel centres: output pixel (x, y) is (x - ocx, y - ocy)
      * from the origin, and lands on the source pixel under (cx + 0.5, cy + 0.5)
      * plus the turned offset */
-    r->u00 = ((long)cx << 16) + 32768L + (-(long)r->ocx) * r->du + (-(long)r->ocy) * r->dru;
-    r->v00 = ((long)cy << 16) + 32768L + (-(long)r->ocx) * r->dv + (-(long)r->ocy) * r->drv;
+    r->u00 = ((int32_t)cx << 16) + INT32_C(32768) + (-(int32_t)r->ocx) * r->du + (-(int32_t)r->ocy) * r->dru;
+    r->v00 = ((int32_t)cy << 16) + INT32_C(32768) + (-(int32_t)r->ocx) * r->dv + (-(int32_t)r->ocy) * r->drv;
 }
 
-void lf_rotate_row(const unsigned char LF_FAR *dense, int w, int h, const LfRot *r, int y, int xa, int xb,
-                   unsigned char LF_FAR *out)
+void lf_rotate_row(const uint8_t LF_FAR *dense, int16_t w, int16_t h, const LfRot *r, int16_t y, int16_t xa, int16_t xb,
+                   uint8_t LF_FAR *out)
 {
-    long u = r->u00 + (long)y * r->dru + (long)xa * r->du;
-    long v = r->v00 + (long)y * r->drv + (long)xa * r->dv;
-    int x;
+    int32_t u = r->u00 + (int32_t)y * r->dru + (int32_t)xa * r->du;
+    int32_t v = r->v00 + (int32_t)y * r->drv + (int32_t)xa * r->dv;
+    int16_t x;
     for (x = xa; x < xb; x++, u += r->du, v += r->dv) {
-        long su = u >> 16, sv = v >> 16;
-        unsigned char p;
+        int32_t su = u >> 16, sv = v >> 16;
+        uint8_t p;
         if (su < 0 || sv < 0 || su >= w || sv >= h)
             continue;
-        p = dense[(unsigned)sv * w + (unsigned)su];
+        p = dense[(uint16_t)sv * w + (uint16_t)su];
         if (p)
             out[x] = p;
     }
 }
 
 /* x such that lo <= a + x * d < hi, as [xs, xe) (16.16 a, d; lo, hi whole) */
-static int span_of(long a, long d, long lo, long hi, int *xs, int *xe)
+static int16_t span_of(int32_t a, int32_t d, int32_t lo, int32_t hi, int16_t *xs, int16_t *xe)
 {
-    long s, e;
+    int32_t s, e;
     if (d == 0) {
         if (a < lo || a >= hi)
             return 0;
@@ -297,19 +298,20 @@ static int span_of(long a, long d, long lo, long hi, int *xs, int *xe)
         while (e < 32000 && a + (e + 1) * d >= lo) e++;
         e++;
     }
-    if (s > *xs) *xs = (int)s;
-    if (e < *xe) *xe = (int)e;
+    if (s > *xs) *xs = (int16_t)s;
+    if (e < *xe) *xe = (int16_t)e;
     return *xs < *xe;
 }
 
-int lf_rotate_span(const LfRot *r, int w, int h, int y, int xa, int xb, int *xs, int *xe)
+int16_t lf_rotate_span(const LfRot *r, int16_t w, int16_t h, int16_t y, int16_t xa, int16_t xb, int16_t *xs,
+                       int16_t *xe)
 {
-    long u = r->u00 + (long)y * r->dru, v = r->v00 + (long)y * r->drv;
+    int32_t u = r->u00 + (int32_t)y * r->dru, v = r->v00 + (int32_t)y * r->drv;
     *xs = xa;
     *xe = xb;
-    if (!span_of(u, r->du, 0, (long)w << 16, xs, xe))
+    if (!span_of(u, r->du, 0, (int32_t)w << 16, xs, xe))
         return 0;
-    if (!span_of(v, r->dv, 0, (long)h << 16, xs, xe))
+    if (!span_of(v, r->dv, 0, (int32_t)h << 16, xs, xe))
         return 0;
     return *xs < *xe;
 }

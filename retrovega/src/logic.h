@@ -10,12 +10,12 @@
 
 /* the pilot's controls this step (flight.c reads them before the step) */
 typedef struct {
-    signed char steer_x;                /* -9 .. 9: + turns the nose right */
-    signed char steer_y;                /* -9 .. 9: + pulls the nose up (the down arrow, a stick pulled back) */
-    signed char roll;                   /* -9 .. 9: + lifts the right wing (E), - the left (Q) */
-    unsigned char guns;                 /* the trigger held: Space, the left button in the view, a script's hold fire */
-    unsigned char missile;              /* Enter pressed this step */
-    unsigned char afterburner;          /* Tab held while there is fuel (flight.c's systems: g_sys.burning) */
+    int8_t steer_x;                     /* -9 .. 9: + turns the nose right */
+    int8_t steer_y;                     /* -9 .. 9: + pulls the nose up (the down arrow, a stick pulled back) */
+    int8_t roll;                        /* -9 .. 9: + lifts the right wing (E), - the left (Q) */
+    uint8_t guns;                       /* the trigger held: Space, the left button in the view, a script's hold fire */
+    uint8_t missile;                    /* Enter pressed this step */
+    uint8_t afterburner;                /* Tab held while there is fuel (flight.c's systems: g_sys.burning) */
 } PilotInput;
 extern PilotInput __far g_pilot;
 

@@ -110,7 +110,7 @@ static unsigned char *turned(const Dense *src, int scale, int roll, LfRot *r)
     lf_rotate_setup(src->w, src->h, src->ox, src->oy, roll, scale, r);
     img = calloc((size_t)r->ow * r->oh, 1);
     for (y = 0; y < r->oh; y++) {
-        int xs, xe;
+        int16_t xs, xe;
         if (lf_rotate_span(r, src->w, src->h, y, 0, r->ow, &xs, &xe))
             lf_rotate_row(src->px, src->w, src->h, r, y, xs, xe, img + (long)y * r->ow);
     }

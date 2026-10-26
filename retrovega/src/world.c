@@ -9,16 +9,16 @@
 #include "collide.h"
 #include "world.h"
 
-long vec_dot(const RvVec3 *a, const RvVec3 *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
+int32_t vec_dot(const RvVec3 *a, const RvVec3 *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
 
 void vec_norm(RvVec3 *v)
 {
-    unsigned long len = lf_sqrt((unsigned long)(v->x * v->x + v->y * v->y + v->z * v->z));
+    uint32_t len = lf_sqrt((uint32_t)(v->x * v->x + v->y * v->y + v->z * v->z));
     if (!len)
         return;
-    v->x = v->x * 256 / (long)len;
-    v->y = v->y * 256 / (long)len;
-    v->z = v->z * 256 / (long)len;
+    v->x = v->x * 256 / (int32_t)len;
+    v->y = v->y * 256 / (int32_t)len;
+    v->z = v->z * 256 / (int32_t)len;
 }
 
 void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b)
@@ -28,9 +28,9 @@ void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b)
     out->z = (a->x * b->y - a->y * b->x) / 256;
 }
 
-void vec_turn(RvVec3 *a, RvVec3 *b, int t)
+void vec_turn(RvVec3 *a, RvVec3 *b, int16_t t)
 {
-    long c = lf_cos(t), s = lf_sin(t);
+    int32_t c = lf_cos(t), s = lf_sin(t);
     RvVec3 na, nb;
     na.x = (a->x * c + b->x * s) >> 14; na.y = (a->y * c + b->y * s) >> 14; na.z = (a->z * c + b->z * s) >> 14;
     nb.x = (b->x * c - a->x * s) >> 14; nb.y = (b->y * c - a->y * s) >> 14; nb.z = (b->z * c - a->z * s) >> 14;
@@ -38,21 +38,21 @@ void vec_turn(RvVec3 *a, RvVec3 *b, int t)
     *b = nb;
 }
 
-int slot_is_ship(int s)
+int16_t slot_is_ship(int16_t s)
 {
     return s >= 0 && s <= RV_MAX_SHIP_SLOT && (maybeEntityType[s] == ET_SHIP || maybeEntityType[s] == ET_CAPSHIP);
 }
 
-const RvShipType __far *slot_type(int s)
+const RvShipType __far *slot_type(int16_t s)
 {
     return ship_type(gInstanceShipTypes[s]);
 }
 
 /* the frame kept right-handed and unit length (the layer may write values that drift) */
-void ship_orthonormalise(int s)
+void ship_orthonormalise(int16_t s)
 {
     RvVec3 *f = &gOrientationFrontVector[s], *r = &gOrientationRightVector[s], *u = &gOrientationUpVector[s];
-    long d;
+    int32_t d;
     vec_norm(f);
     d = vec_dot(f, r) / 256;
     r->x -= f->x * d / 256; r->y -= f->y * d / 256; r->z -= f->z * d / 256;
@@ -61,7 +61,7 @@ void ship_orthonormalise(int s)
     vec_norm(u);
 }
 
-void ship_face(int s, int yaw, int pitch)
+void ship_face(int16_t s, int16_t yaw, int16_t pitch)
 {
     gOrientationFrontVector[s].x = 0; gOrientationFrontVector[s].y = 0; gOrientationFrontVector[s].z = 256;
     gOrientationRightVector[s].x = 256; gOrientationRightVector[s].y = 0; gOrientationRightVector[s].z = 0;
@@ -71,14 +71,14 @@ void ship_face(int s, int yaw, int pitch)
     ship_orthonormalise(s);
 }
 
-long player_km(int s)
+int32_t player_km(int16_t s)
 {
-    long dx = labs(gPositionVector[s].x - gPositionVector[0].x) / 256, dy = labs(gPositionVector[s].y - gPositionVector[0].y) / 256,
+    int32_t dx = labs(gPositionVector[s].x - gPositionVector[0].x) / 256, dy = labs(gPositionVector[s].y - gPositionVector[0].y) / 256,
          dz = labs(gPositionVector[s].z - gPositionVector[0].z) / 256, m = dx > dy ? (dx > dz ? dx : dz) : (dy > dz ? dy : dz);
     return m + (dx + dy + dz - m) / 2;
 }
 
-void ship_rel(int from, int s, RvVec3 *out)
+void ship_rel(int16_t from, int16_t s, RvVec3 *out)
 {
     RvVec3 d;
     d.x = (gPositionVector[s].x - gPositionVector[from].x) / 256;   /* (km: a km's 256 squared would overflow) */
@@ -89,7 +89,7 @@ void ship_rel(int from, int s, RvVec3 *out)
     out->z = vec_dot(&d, &gOrientationFrontVector[from]) / 256;
 }
 
-void ship_guns(int s)
+void ship_guns(int16_t s)
 {
     const RvShipType __far *t = slot_type(s);
     if (t)
@@ -98,14 +98,14 @@ void ship_guns(int s)
         gunTable[s * gunTable_SIZE] = 0;
 }
 
-void ship_spawn(int s, int type, int side, int controller, long x, long y, long z, int yaw)
+void ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32_t x, int32_t y, int32_t z, int16_t yaw)
 {
     const RvShipType __far *t = ship_type(type);
     RV_CHECK(s, RV_SLOTS);
     maybeEntityType[s] = t && t->type >= 0x20 ? ET_CAPSHIP : ET_SHIP;
-    gInstanceShipTypes[s] = (unsigned short)type;
-    commAnimInfo[s] = (unsigned short)side;
-    rvController[s] = (unsigned char)controller;
+    gInstanceShipTypes[s] = (uint16_t)type;
+    commAnimInfo[s] = (uint16_t)side;
+    rvController[s] = (uint8_t)controller;
     gPositionVector[s].x = x; gPositionVector[s].y = y; gPositionVector[s].z = z;
     gVelocityVector[s].x = gVelocityVector[s].y = gVelocityVector[s].z = 0;
     ship_face(s, yaw, 0);
@@ -131,11 +131,11 @@ void ship_spawn(int s, int type, int side, int controller, long x, long y, long 
     shipAiState[s] = 0;
     damageProperty[s] = 0;
     rvAfterburner[s] = 0;
-    gMaybeShipRadius[s] = (unsigned short)(collide_half(s) / 256);   /* (km: the half box) */
+    gMaybeShipRadius[s] = (uint16_t)(collide_half(s) / 256);   /* (km: the half box) */
     rvFlags[s] = 0;
 }
 
-void ship_clear(int s)
+void ship_clear(int16_t s)
 {
     RV_CHECK(s, RV_SLOTS);
     maybeEntityType[s] = ET_NONE;
@@ -145,17 +145,17 @@ void ship_clear(int s)
     shipAiState[s] = 0;
 }
 
-int ship_free_slot(void)
+int16_t ship_free_slot(void)
 {
-    int s;
+    int16_t s;
     for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
         if (maybeEntityType[s] == ET_NONE)
             return s;
     return -1;
 }
 
-unsigned game_rand(void)
+uint16_t game_rand(void)
 {
-    randomSeed = randomSeed * 1103515245UL + 12345UL;
-    return (unsigned)(randomSeed >> 16) & 0x7FFF;
+    randomSeed = randomSeed * UINT32_C(1103515245) + UINT32_C(12345);
+    return (uint16_t)(randomSeed >> 16) & 0x7FFF;
 }

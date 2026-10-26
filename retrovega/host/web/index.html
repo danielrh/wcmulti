@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RetroVega rvsim</title>
+<link rel="icon" href="data:,">
+<style>
+  /* the dosbox page's cockpit look (web/index.html): green on black, amber for what matters, flat colours only */
+  :root {
+    color-scheme: dark;
+    --bg: #03060a; --line2: #123f29; --panel: #06110c;
+    --green: #5ef38c; --green2: #2fae62; --amber: #ffcf40; --amber2: #b98a12; --red: #ff5b4d;
+    --text: #cfe9d9; --muted: #7aa58b;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--mono); }
+  main { max-width: 1000px; margin: 0 auto; padding: 8px 16px 24px; }
+  #top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 4px 2px 8px; margin-bottom: 10px;
+    border-bottom: 1px solid var(--line2); }
+  h1 { margin: 0; color: var(--amber); font: italic 800 22px/1 Eurostile, "Bank Gothic", "Segoe UI", system-ui, sans-serif;
+    letter-spacing: .22em; text-transform: uppercase; }
+  .sub { color: var(--muted); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; }
+  #rev { margin-left: auto; color: var(--muted); font-size: 11px; }
+  form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 10px; }
+  label { color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+  input { width: 5em; padding: 5px 6px; border: 1px solid var(--green2); background: #020705; color: var(--green);
+    font: 13px var(--mono); }
+  button { padding: 7px 14px; border: 1px solid var(--amber2); background: #f0b92c; color: #1c1300; cursor: pointer;
+    font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  button:hover { background: #ffd765; }
+  #view { position: relative; border: 1px solid var(--line2); background: #000; }
+  canvas { display: block; width: 100%; aspect-ratio: 4 / 3; image-rendering: pixelated; outline: none; }
+  #over { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .75);
+    color: var(--amber); font-size: 15px; letter-spacing: .1em; text-align: center; }
+  #over[hidden] { display: none; }
+  #status { min-height: 1.45em; margin: 6px 0; color: var(--green); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .keys { color: var(--muted); font-size: 12px; }
+  .keys b { color: var(--text); font-weight: 600; }
+  #log { height: 180px; margin: 10px 0 0; padding: 8px 10px; overflow: auto; border: 1px solid var(--line2);
+    background: var(--panel); color: var(--text); font-size: 12px; white-space: pre-wrap; }
+  .rule { color: var(--red); }
+  p { margin: 8px 0; color: var(--muted); }
+  a { color: var(--green); }
+</style>
+</head>
+<body>
+<main>
+  <div id="top">
+    <h1>RetroVega</h1><span class="sub">rvsim: the game's logic, nothing else</span>
+    <span id="rev">@REV@</span>
+  </div>
+  <form id="pick">
+    <label for="mission">Mission</label><input id="mission" name="mission" type="number" min="0" max="59" value="0">
+    <label for="ship">Ship</label><input id="ship" name="ship" type="number" min="0" max="63" placeholder="3">
+    <label for="seed">Seed</label><input id="seed" name="seed" placeholder="game's" style="width: 8em">
+    <button type="submit">Fly</button>
+  </form>
+  <div id="view">
+    <canvas id="canvas" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="over" hidden></div>
+  </div>
+  <div id="status">Loading…</div>
+  <div class="keys"><b>Arrows</b> steer · <b>Q E</b> roll · <b>Space</b> or left button fires · <b>Enter</b> missile ·
+    <b>Tab</b> afterburner · <b>+ − F S</b> throttle · <b>M</b> or right button: mouse steering · <b>P</b> pause ·
+    <b>N</b> a step · <b>Esc</b> ends</div>
+  <pre id="log"></pre>
+  <p>The flight as the game's logic (src/logic.c) runs it, built for the browser from the same sources as RV.EXE:
+    hit boxes for ships, lines for shots, no sprites, cockpit or sound. While the logic's steps are still empty,
+    nothing moves. Docs: retrovega/docs/logic.md, "The host harness".</p>
+</main>
+<script>
+  // the flight's options from the address (?mission=&ship=&seed=), as rvsim's command line
+  const q = new URLSearchParams(location.search), args = [];
+  for (const k of ['mission', 'ship', 'seed']) {
+    const v = q.get(k);
+    if (v !== null && v !== '') {
+      args.push('--' + k, v);
+      document.getElementById(k).value = v;
+    }
+  }
+  if (q.has('trace')) args.push('--trace');
+  if (q.has('checksrc')) args.push('--check-src');
+  const logEl = document.getElementById('log'), statusEl = document.getElementById('status');
+  let lines = 0;
+  function log(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    if (/RULE:|runtime error|rv_fail/.test(text)) div.className = 'rule';
+    logEl.appendChild(div);
+    if (++lines > 400) { logEl.firstChild.remove(); lines--; }
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  // the end of a flight (sim.c: Esc, or the logic's missionStatus)
+  function rvsimOver(status) {
+    const o = document.getElementById('over');
+    o.textContent = 'The flight is over (missionStatus ' + status + '). Fly again with the button above.';
+    o.hidden = false;
+  }
+  const canvas = document.getElementById('canvas');
+  var Module = {
+    canvas: canvas,
+    arguments: args,
+    print: log,
+    printErr: log,
+    setStatus: t => { statusEl.textContent = t || 'Click the view, then fly.'; },
+    onRuntimeInitialized: () => canvas.focus(),
+  };
+  // the window's title is the flight's state (sim.c sets it): show it under the view as well
+  new MutationObserver(() => { statusEl.textContent = document.title; })
+    .observe(document.querySelector('title'), { childList: true, characterData: true, subtree: true });
+  canvas.addEventListener('mousedown', () => canvas.focus());
+</script>
+<script async src="rvsim.js"></script>
+</body>
+</html>

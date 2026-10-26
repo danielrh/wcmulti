@@ -26,7 +26,7 @@
 #include "campaign.h"
 #include "collide.h"
 
-#define HALF_PER_PX 800L                /* positions of half box per sprite pixel across (lod0_px): 2500/400 km / 2 x 256 */
+#define HALF_PER_PX INT32_C(800)        /* positions of half box per sprite pixel across (lod0_px): 2500/400 km / 2 x 256 */
 #define SN 64                           /* a silhouette's cells across */
 #define SROW 8                          /* bytes a row */
 #define SMASK 512
@@ -36,28 +36,28 @@
 
 typedef struct {
     const RvShipType __far *t;
-    const unsigned char __far *m;       /* its silhouettes, or 0: its box */
+    const uint8_t __far *m;             /* its silhouettes, or 0: its box */
     LfVec c;                            /* its middle (positions) */
-    long ax[3][3];                      /* its right, up, front (256 = 1.0) */
-    long h[3];                          /* its box's half extents along them (positions) */
-    long cs[3];                         /* a silhouette cell's size along them */
-    long H;                             /* its half box */
+    int32_t ax[3][3];                   /* its right, up, front (256 = 1.0) */
+    int32_t h[3];                       /* its box's half extents along them (positions) */
+    int32_t cs[3];                      /* a silhouette cell's size along them */
+    int32_t H;                          /* its half box */
 } Body;
 
 static XmsBlock __far g_shape_blk;
-static unsigned char __far g_shape_of[256];   /* a type's silhouettes in the block (0xFF none) */
-static struct { unsigned char __far *m; short type; unsigned used; } __far g_cache[CACHE];
-static unsigned __far g_tick;
+static uint8_t __far g_shape_of[256];   /* a type's silhouettes in the block (0xFF none) */
+static struct { uint8_t __far *m; int16_t type; uint16_t used; } __far g_cache[CACHE];
+static uint16_t __far g_tick;
 static Body __far g_body[RV_MAX_SHIP_SLOT + 1];   /* each slot's, as last taken (reused while it stands) */
-static unsigned char __far g_body_ok[RV_MAX_SHIP_SLOT + 1];
+static uint8_t __far g_body_ok[RV_MAX_SHIP_SLOT + 1];
 
-int collide_reserve(void)
+int16_t collide_reserve(void)
 {
     static const char __far s_magic[] = "RVSHAPE", __far s_none[] = "collide: no SHAPES.DAT",
         __far s_in[] = "collide: %d ships' silhouettes, %lu KB in XMS";
     FILE *f = fopen("SHAPES.DAT", "rb");
-    unsigned char *buf = rv_filebuf;
-    int n, i;
+    uint8_t *buf = rv_filebuf;
+    int16_t n, i;
     _fmemset(g_shape_of, 0xFF, sizeof g_shape_of);
     g_shape_blk = 0;
     if (!f) {
@@ -67,32 +67,32 @@ int collide_reserve(void)
     fread(buf, 1, 16, f);
     n = buf[10] | buf[11] << 8;
     if (_fmemcmp(buf, s_magic, 8) || (buf[8] | buf[9] << 8) != 1 || (buf[12] | buf[13] << 8) != SN || n < 1 || n > 255
-        || (g_shape_blk = xms_alloc((unsigned long)n * SBYTES, XMS_RESIDENT)) == 0) {
+        || (g_shape_blk = xms_alloc((uint32_t)n * SBYTES, XMS_RESIDENT)) == 0) {
         fclose(f);
         return 0;
     }
     for (i = 0; i < n; i++) {
         fread(buf, 1, 2, f);
-        g_shape_of[buf[0]] = (unsigned char)i;
+        g_shape_of[buf[0]] = (uint8_t)i;
         fread(buf, 1, 1024, f);
-        xms_put(g_shape_blk, (unsigned long)i * SBYTES, buf, 1024);
+        xms_put(g_shape_blk, (uint32_t)i * SBYTES, buf, 1024);
         fread(buf, 1, SBYTES - 1024, f);
-        xms_put(g_shape_blk, (unsigned long)i * SBYTES + 1024, buf, SBYTES - 1024);
+        xms_put(g_shape_blk, (uint32_t)i * SBYTES + 1024, buf, SBYTES - 1024);
     }
     fclose(f);
-    rv_logf(s_in, n, (unsigned long)n * SBYTES / 1024);
+    rv_logf(s_in, n, (uint32_t)n * SBYTES / 1024);
     return 1;
 }
 
 /* a type's silhouettes, from XMS into the cache the first time (the least recently used slot given up) */
-static const unsigned char __far *shape(unsigned type)
+static const uint8_t __far *shape(uint16_t type)
 {
-    int i, lru = 0;
+    int16_t i, lru = 0;
     if (!g_shape_blk || type > 255 || g_shape_of[type] == 0xFF)
         return 0;
     g_tick++;
     for (i = 0; i < CACHE; i++)
-        if (g_cache[i].m && g_cache[i].type == (short)type) {
+        if (g_cache[i].m && g_cache[i].type == (int16_t)type) {
             g_cache[i].used = g_tick;
             return g_cache[i].m;
         }
@@ -104,17 +104,17 @@ static const unsigned char __far *shape(unsigned type)
         if (g_cache[i].used < g_cache[lru].used)
             lru = i;
     }
-    if (!g_cache[lru].m && (g_cache[lru].m = (unsigned char __far *)_fmalloc(SBYTES)) == 0)
+    if (!g_cache[lru].m && (g_cache[lru].m = (uint8_t __far *)_fmalloc(SBYTES)) == 0)
         return 0;
-    xms_get(g_shape_blk, (unsigned long)g_shape_of[type] * SBYTES, g_cache[lru].m, SBYTES);
-    g_cache[lru].type = (short)type;
+    xms_get(g_shape_blk, (uint32_t)g_shape_of[type] * SBYTES, g_cache[lru].m, SBYTES);
+    g_cache[lru].type = (int16_t)type;
     g_cache[lru].used = g_tick;
     return g_cache[lru].m;
 }
 
 void collide_flight_end(void)
 {
-    int i;
+    int16_t i;
     for (i = 0; i < CACHE; i++) {
         if (g_cache[i].m)
             _ffree(g_cache[i].m);
@@ -123,14 +123,14 @@ void collide_flight_end(void)
     _fmemset(g_body_ok, 0, sizeof g_body_ok);
 }
 
-static int is_ship(int s)
+static int16_t is_ship(int16_t s)
 {
     return s >= 0 && s <= RV_MAX_SHIP_SLOT && (maybeEntityType[s] == 0xC || maybeEntityType[s] == 0xD);
 }
 
-static int body(int s, Body *o)
+static int16_t body(int16_t s, Body *o)
 {
-    int i;
+    int16_t i;
     if (!is_ship(s))
         return 0;
     if (g_body_ok[s] && g_body[s].c.x == gPositionVector[s].x && g_body[s].c.y == gPositionVector[s].y
@@ -149,7 +149,7 @@ static int body(int s, Body *o)
     o->ax[1][0] = gOrientationUpVector[s].x; o->ax[1][1] = gOrientationUpVector[s].y; o->ax[1][2] = gOrientationUpVector[s].z;
     o->ax[2][0] = gOrientationFrontVector[s].x; o->ax[2][1] = gOrientationFrontVector[s].y;
     o->ax[2][2] = gOrientationFrontVector[s].z;
-    o->H = (long)o->t->lod0_px * HALF_PER_PX;
+    o->H = (int32_t)o->t->lod0_px * HALF_PER_PX;
     for (i = 0; i < 3; i++) {
         o->h[i] = o->H * o->t->hit[i] / 127;
         o->cs[i] = 2 * o->h[i] / SN;
@@ -161,17 +161,17 @@ static int body(int s, Body *o)
     return 1;
 }
 
-long collide_half(int slot)
+int32_t collide_half(int16_t slot)
 {
     const RvShipType __far *t;
     if (!is_ship(slot) || (t = ship_type(gInstanceShipTypes[slot])) == 0)
         return 0;
-    return (long)t->lod0_px * HALF_PER_PX;
+    return (int32_t)t->lod0_px * HALF_PER_PX;
 }
 
-int collide_coarse(int a, int b)
+int16_t collide_coarse(int16_t a, int16_t b)
 {
-    long ha = collide_half(a), hb = collide_half(b), R = ha + hb, dx, dy, dz;
+    int32_t ha = collide_half(a), hb = collide_half(b), R = ha + hb, dx, dy, dz;
     if (a == b || !ha || !hb)
         return 0;
     dx = gPositionVector[b].x - gPositionVector[a].x;
@@ -187,30 +187,30 @@ int collide_coarse(int a, int b)
 }
 
 /* the cell of a coordinate on axis i (-1 outside the box) */
-static int cell(const Body *B, int i, long v)
+static int16_t cell(const Body *B, int16_t i, int32_t v)
 {
-    long c;
+    int32_t c;
     if (v <= -B->h[i] || v >= B->h[i])
         return -1;
     c = (v + B->h[i]) / B->cs[i];
-    return c >= SN ? SN - 1 : (int)c;
+    return c >= SN ? SN - 1 : (int16_t)c;
 }
 
 /* a point in B's frame (positions) in B's hull */
-static int in_hull(const Body *B, const long l[3])
+static int16_t in_hull(const Body *B, const int32_t l[3])
 {
-    int x = cell(B, 0, l[0]), y = cell(B, 1, l[1]), z = cell(B, 2, l[2]);
+    int16_t x = cell(B, 0, l[0]), y = cell(B, 1, l[1]), z = cell(B, 2, l[2]);
     if (x < 0 || y < 0 || z < 0)
         return 0;
     return !B->m || (BIT(B->m, 0, z, x) && BIT(B->m, 1, y, z) && BIT(B->m, 2, y, x));
 }
 
 /* the least move (in B's frame, positions) that takes a point in B's hull out of it; its length back */
-static long way_out(const Body *B, const long l[3], long mv[3])
+static int32_t way_out(const Body *B, const int32_t l[3], int32_t mv[3])
 {
-    static const unsigned char __far plane[3][2] = { { 0, 2 }, { 2, 1 }, { 0, 1 } };   /* a mask's column, row axes */
-    int c[3], k, j, dir, best_ax = 0;
-    long best = 0x7FFFFFFFL, d;
+    static const uint8_t __far plane[3][2] = { { 0, 2 }, { 2, 1 }, { 0, 1 } };   /* a mask's column, row axes */
+    int16_t c[3], k, j, dir, best_ax = 0;
+    int32_t best = INT32_C(0x7FFFFFFF), d;
     for (k = 0; k < 3; k++)
         c[k] = cell(B, k, l[k]);
     mv[0] = mv[1] = mv[2] = 0;
@@ -226,7 +226,7 @@ static long way_out(const Body *B, const long l[3], long mv[3])
     for (k = 0; k < 3; k++)
         for (j = 0; j < 2; j++)         /* along the mask's columns (j 0) and its rows (j 1) */
             for (dir = -1; dir <= 1; dir += 2) {
-                int a = plane[k][j], o = plane[k][1 - j], e = c[a];
+                int16_t a = plane[k][j], o = plane[k][1 - j], e = c[a];
                 do
                     e += dir;
                 while (e >= 0 && e < SN && (j == 0 ? BIT(B->m, k, c[o], e) : BIT(B->m, k, e, c[o])));
@@ -245,7 +245,7 @@ static long way_out(const Body *B, const long l[3], long mv[3])
 }
 
 /* the world vector of a move in B's frame */
-static void to_world(const Body *B, const long mv[3], LfVec *w)
+static void to_world(const Body *B, const int32_t mv[3], LfVec *w)
 {
     w->x = (mv[0] * B->ax[0][0] + mv[1] * B->ax[1][0] + mv[2] * B->ax[2][0]) / 256;
     w->y = (mv[0] * B->ax[0][1] + mv[1] * B->ax[1][1] + mv[2] * B->ax[2][1]) / 256;
@@ -253,26 +253,26 @@ static void to_world(const Body *B, const long mv[3], LfVec *w)
 }
 
 /* d x t / 1024 for t in 0 .. 1024 without overflow */
-static long part_of(long d, long t)
+static int32_t part_of(int32_t d, int32_t t)
 {
     return d / 1024 * t + d % 1024 * t / 1024;
 }
 
 /* a world point in B's frame (positions; the offset shifted down first: good to 32,768 km) */
-static void to_local(const Body *B, const LfVec *p, long l[3])
+static void to_local(const Body *B, const LfVec *p, int32_t l[3])
 {
-    long dx = (p->x - B->c.x) >> 2, dy = (p->y - B->c.y) >> 2, dz = (p->z - B->c.z) >> 2;
-    int i;
+    int32_t dx = (p->x - B->c.x) >> 2, dy = (p->y - B->c.y) >> 2, dz = (p->z - B->c.z) >> 2;
+    int16_t i;
     for (i = 0; i < 3; i++)
         l[i] = (dx * B->ax[i][0] + dy * B->ax[i][1] + dz * B->ax[i][2]) >> 6;
 }
 
 /* vital k of ship P (0 its core, then its engines, then its other vitals) along its right, up, front (positions),
  * and its radius; 0 past the last */
-static int vital(const Body *P, int k, long q[3], long *r)
+static int16_t vital(const Body *P, int16_t k, int32_t q[3], int32_t *r)
 {
-    const signed char __far *v;
-    int ne = P->t->nengines;
+    const int8_t __far *v;
+    int16_t ne = P->t->nengines;
     if (k == 0) {                       /* the core: the biggest sphere about its middle inside its sprite at every
                                            view, to 95% (the user's definition; 0 for a ship whose middle shows space) */
         q[0] = q[1] = q[2] = 0;
@@ -285,19 +285,19 @@ static int vital(const Body *P, int k, long q[3], long *r)
         v = P->t->vital[k - 1 - ne];
     else
         return 0;
-    q[0] = -(long)v[0] * P->H / 127;    /* (its sprites' +x is the ship's left) */
-    q[1] = (long)v[1] * P->H / 127;
-    q[2] = (long)v[2] * P->H / 127;
+    q[0] = -(int32_t)v[0] * P->H / 127;   /* (its sprites' +x is the ship's left) */
+    q[1] = (int32_t)v[1] * P->H / 127;
+    q[2] = (int32_t)v[2] * P->H / 127;
     *r = 0;
     return 1;
 }
 
 /* P's vitals in B's hull: the deepest one's depth (0: none in it), and the least move of P that frees it (world).
  * A sphere (the core) is its middle and six points a radius off it along B's axes */
-static long vitals_in(const Body *B, const Body *P, LfVec *move)
+static int32_t vitals_in(const Body *B, const Body *P, LfVec *move)
 {
-    long t[3], M[3][3], best = 0, q[3], r;
-    int i, j, k, s;
+    int32_t t[3], M[3][3], best = 0, q[3], r;
+    int16_t i, j, k, s;
     for (i = 0; i < 3; i++) {
         t[i] = ((P->c.x - B->c.x) * B->ax[i][0] + (P->c.y - B->c.y) * B->ax[i][1] + (P->c.z - B->c.z) * B->ax[i][2])
                / 256;
@@ -305,11 +305,11 @@ static long vitals_in(const Body *B, const Body *P, LfVec *move)
             M[i][j] = (B->ax[i][0] * P->ax[j][0] + B->ax[i][1] * P->ax[j][1] + B->ax[i][2] * P->ax[j][2]) / 256;
     }
     for (k = 0; vital(P, k, q, &r); k++) {
-        long l[3];
+        int32_t l[3];
         for (i = 0; i < 3; i++)
             l[i] = t[i] + (M[i][0] * q[0] + M[i][1] * q[1] + M[i][2] * q[2]) / 256;
         for (s = 0; s < (r ? 7 : 1); s++) {
-            long p[3], mv[3], d;
+            int32_t p[3], mv[3], d;
             for (i = 0; i < 3; i++)
                 p[i] = l[i] + (s && (s - 1) / 2 == i ? ((s & 1) ? r : -r) : 0);
             if (!in_hull(B, p))
@@ -323,19 +323,19 @@ static long vitals_in(const Body *B, const Body *P, LfVec *move)
     return best;
 }
 
-int collide_ships(int a, int b, LfVec *push, long *depth)
+int16_t collide_ships(int16_t a, int16_t b, LfVec *push, int32_t *depth)
 {
     Body A, B;
     LfVec m;
-    long d;
-    unsigned long va, vb;
+    int32_t d;
+    uint32_t va, vb;
     push->x = push->y = push->z = 0;
     if (depth)
         *depth = 0;
     if (!collide_coarse(a, b) || !body(a, &A) || !body(b, &B))
         return 0;
-    va = (unsigned long)(A.h[0] >> 10) * (A.h[1] >> 10) * (A.h[2] >> 10);
-    vb = (unsigned long)(B.h[0] >> 10) * (B.h[1] >> 10) * (B.h[2] >> 10);
+    va = (uint32_t)(A.h[0] >> 10) * (A.h[1] >> 10) * (A.h[2] >> 10);
+    vb = (uint32_t)(B.h[0] >> 10) * (B.h[1] >> 10) * (B.h[2] >> 10);
     /* the smaller's hull against the bigger's vitals first; then the bigger's hull against the smaller's */
     if (va <= vb) {
         if ((d = vitals_in(&A, &B, &m)) != 0) {
@@ -359,10 +359,10 @@ int collide_ships(int a, int b, LfVec *push, long *depth)
     return d != 0;
 }
 
-int collide_point(int slot, const LfVec *p, LfVec *push)
+int16_t collide_point(int16_t slot, const LfVec *p, LfVec *push)
 {
     Body B;
-    long l[3], mv[3];
+    int32_t l[3], mv[3];
     if (!body(slot, &B))
         return 0;
     if (labs(p->x - B.c.x) >= B.H || labs(p->y - B.c.y) >= B.H || labs(p->z - B.c.z) >= B.H)
@@ -377,11 +377,11 @@ int collide_point(int slot, const LfVec *p, LfVec *push)
     return 1;
 }
 
-int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t1024)
+int16_t collide_segment(int16_t slot, const LfVec *a, const LfVec *b, LfVec *hit, int16_t *t1024)
 {
     Body B;
-    long la[3], lb[3], ea[3], eb[3], p[3], dp[3], n, k, big, t0 = 0, t1 = 1024;
-    int i;
+    int32_t la[3], lb[3], ea[3], eb[3], p[3], dp[3], n, k, big, t0 = 0, t1 = 1024;
+    int16_t i;
     if (!body(slot, &B))
         return 0;
     /* the segment's box against the ship's: nothing near, nothing more */
@@ -393,15 +393,15 @@ int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t
     to_local(&B, b, lb);
     /* clipped to the box (t in 1024ths of the way from a to b) */
     for (i = 0; i < 3; i++) {
-        long d = lb[i] - la[i];
+        int32_t d = lb[i] - la[i];
         if (!d) {
             if (la[i] <= -B.h[i] || la[i] >= B.h[i])
                 return 0;
             continue;
         }
         {
-            long na = -B.h[i] - la[i], nb = B.h[i] - la[i], ta, tb;
-            while (labs(na) > 0x1FFFFFL || labs(nb) > 0x1FFFFFL) {   /* (x 1024 inside 2^31) */
+            int32_t na = -B.h[i] - la[i], nb = B.h[i] - la[i], ta, tb;
+            while (labs(na) > INT32_C(0x1FFFFF) || labs(nb) > INT32_C(0x1FFFFF)) {   /* (x 1024 inside 2^31) */
                 na /= 2;
                 nb /= 2;
                 d /= 2;
@@ -411,7 +411,7 @@ int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t
             ta = na * 1024 / d;
             tb = nb * 1024 / d;
             if (ta > tb) {
-                long x = ta;
+                int32_t x = ta;
                 ta = tb;
                 tb = x;
             }
@@ -423,7 +423,7 @@ int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t
         return 0;
     /* in cell units (8 fraction bits) from where it enters to where it leaves, at most half a cell an axis a step */
     for (i = 0, big = 0; i < 3; i++) {
-        long x0 = la[i] + part_of(lb[i] - la[i], t0), x1 = la[i] + part_of(lb[i] - la[i], t1);
+        int32_t x0 = la[i] + part_of(lb[i] - la[i], t0), x1 = la[i] + part_of(lb[i] - la[i], t1);
         ea[i] = (x0 + B.h[i]) * 256 / B.cs[i];
         eb[i] = (x1 + B.h[i]) * 256 / B.cs[i];
         if (labs(eb[i] - ea[i]) > big)
@@ -431,15 +431,16 @@ int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t
     }
     n = big / 128 + 1;
     for (i = 0; i < 3; i++) {
-        p[i] = ea[i] << 8;              /* (16 fraction bits as it goes) */
-        dp[i] = ((eb[i] - ea[i]) << 8) / n;
+        p[i] = ea[i] * 256;             /* (16 fraction bits as it goes; * 256, not << 8: a negative one's shift is
+                                           undefined in C, the host harness's UBSan found) */
+        dp[i] = (eb[i] - ea[i]) * 256 / n;
     }
     for (k = 0; k <= n; k++) {
-        int x = (int)(p[0] >> 16), y = (int)(p[1] >> 16), z = (int)(p[2] >> 16);
+        int16_t x = (int16_t)(p[0] >> 16), y = (int16_t)(p[1] >> 16), z = (int16_t)(p[2] >> 16);
         if (x >= 0 && x < SN && y >= 0 && y < SN && z >= 0 && z < SN
             && (!B.m || (BIT(B.m, 0, z, x) && BIT(B.m, 1, y, z) && BIT(B.m, 2, y, x)))) {
             if (hit) {
-                long l[3];
+                int32_t l[3];
                 LfVec w;
                 for (i = 0; i < 3; i++)
                     l[i] = (p[i] >> 8) * B.cs[i] / 256 - B.h[i];
@@ -449,7 +450,7 @@ int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t
                 hit->z = B.c.z + w.z;
             }
             if (t1024)                  /* how far along, a to b */
-                *t1024 = (int)(t0 + (t1 - t0) * k / n);
+                *t1024 = (int16_t)(t0 + (t1 - t0) * k / n);
             return 1;
         }
         for (i = 0; i < 3; i++)
@@ -458,21 +459,21 @@ int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t
     return 0;
 }
 
-int collide_shape(int slot, LfVec corner[8], LfVec *v, int maxv)
+int16_t collide_shape(int16_t slot, LfVec corner[8], LfVec *v, int16_t maxv)
 {
     Body P;
-    long q[3], r;
-    int k, n = 0, i;
+    int32_t q[3], r;
+    int16_t k, n = 0, i;
     if (!body(slot, &P))
         return 0;
     for (k = 0; k < 8; k++) {
-        long sa = k & 1 ? P.h[0] : -P.h[0], su = k & 2 ? P.h[1] : -P.h[1], sf = k & 4 ? P.h[2] : -P.h[2];
+        int32_t sa = k & 1 ? P.h[0] : -P.h[0], su = k & 2 ? P.h[1] : -P.h[1], sf = k & 4 ? P.h[2] : -P.h[2];
         corner[k].x = P.c.x + (sa * P.ax[0][0] + su * P.ax[1][0] + sf * P.ax[2][0]) / 256;
         corner[k].y = P.c.y + (sa * P.ax[0][1] + su * P.ax[1][1] + sf * P.ax[2][1]) / 256;
         corner[k].z = P.c.z + (sa * P.ax[0][2] + su * P.ax[1][2] + sf * P.ax[2][2]) / 256;
     }
     for (k = 0; n < maxv && vital(&P, k, q, &r); k++, n++) {
-        long w[3];
+        int32_t w[3];
         for (i = 0; i < 3; i++)
             w[i] = (q[0] * P.ax[0][i] + q[1] * P.ax[1][i] + q[2] * P.ax[2][i]) / 256;
         v[n].x = P.c.x + w[0];

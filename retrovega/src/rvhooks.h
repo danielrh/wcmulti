@@ -11,6 +11,8 @@
 #ifndef RVHOOKS_H
 #define RVHOOKS_H
 
+#include "rvtypes.h"
+
 #define RV_ABI_VERSION 1
 #define RV_SLOTS 128
 #define RV_MAX_SHIP_SLOT 9
@@ -18,7 +20,7 @@
 #define RV_SCRATCH_SLOT (RV_SLOTS - 1)
 #define RV_FIXED_BYTES 0x8000
 #define RV_SIGNATURE "Loading RETROVEGA"
-#define RV_SLOT_OK(s) ((unsigned)(s) < RV_SLOTS)
+#define RV_SLOT_OK(s) ((uint16_t)(s) < RV_SLOTS)
 
 /* RVHOOK header: loadSeg:0000 */
 #define RVHOOK_MAGIC_OFF   0x00   /* "RVHOOK" */
@@ -27,194 +29,202 @@
 #define RVHOOK_NTHUNK_OFF  0x0C
 #define RVHOOK_NSITE_OFF   0x0E
 
-typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientations */
+typedef struct { int32_t x, y, z; } RvVec3;   /* 256 = 1 km, or 1.0 for orientations */
+
+/* where the fixed block is: DS:0000 on DOS; the host harness's DGROUP stand-in, rv_dgroup (host/host.c) */
+#ifdef RV_HOST
+extern uint8_t rv_dgroup[];
+#define RV_AT(t, off) ((t)(rv_dgroup + (off)))
+#else
+#define RV_AT(t, off) ((t)(off))
+#endif
 
 /* --- header: 0x0000- --- */
-#define rvNullGuard                    ((unsigned char *)0x0000)  /* 1 x 16 bytes */ /* zeros: a write through a near NULL shows up here */
+#define rvNullGuard                    RV_AT(uint8_t *, 0x0000)  /* 1 x 16 bytes */ /* zeros: a write through a near NULL shows up here */
 #define rvNullGuard_SIZE               16
-#define rvPuppetHeader                 ((unsigned char *)0x0010)  /* 1 x 48 bytes */ /* "RVPUPPET", ABI version, SLOTS, MAXSHIPSLOT, sizes (spec 4.1) */
+#define rvPuppetHeader                 RV_AT(uint8_t *, 0x0010)  /* 1 x 48 bytes */ /* "RVPUPPET", ABI version, SLOTS, MAXSHIPSLOT, sizes (spec 4.1) */
 #define rvPuppetHeader_SIZE            48
-#define rvPuppetDirectory              ((unsigned char *)0x0040)  /* 1 x 192 bytes */ /* one word per VAR/SLOT/TABLE below, in this order: its offset */
+#define rvPuppetDirectory              RV_AT(uint8_t *, 0x0040)  /* 1 x 192 bytes */ /* one word per VAR/SLOT/TABLE below, in this order: its offset */
 #define rvPuppetDirectory_SIZE         192
 
 /* --- scalars: 0x0100- --- */
-#define missionStatus                  (*(unsigned short *)0x0100) /* 0 flying, 1 landed, 2 ejected, 3 on the carrier, 4 dead, 5 exit */
+#define missionStatus                  (*RV_AT(uint16_t *, 0x0100)) /* 0 flying, 1 landed, 2 ejected, 3 on the carrier, 4 dead, 5 exit */
 #define missionStatus_SIZE             2
-#define playerCanBeDamaged             (*(unsigned short *)0x0102) /* do_damage ignores slot 0 while zero */
+#define playerCanBeDamaged             (*RV_AT(uint16_t *, 0x0102)) /* do_damage ignores slot 0 while zero */
 #define playerCanBeDamaged_SIZE        2
-#define frameCounter                   (*(unsigned short *)0x0104) /* +1 per simulation frame, nothing else */
+#define frameCounter                   (*RV_AT(uint16_t *, 0x0104)) /* +1 per simulation frame, nothing else */
 #define frameCounter_SIZE              2
-#define randomSeed                     (*(unsigned long *)0x0106) /* the only gameplay random state (spec 6.3) */
+#define randomSeed                     (*RV_AT(uint32_t *, 0x0106)) /* the only gameplay random state (spec 6.3) */
 #define randomSeed_SIZE                4
-#define currentNavPoint                (*(unsigned short *)0x010A)
+#define currentNavPoint                (*RV_AT(uint16_t *, 0x010A))
 #define currentNavPoint_SIZE           2
-#define currentMission                 (*(unsigned char *)0x010C)
+#define currentMission                 (*RV_AT(uint8_t *, 0x010C))
 #define currentMission_SIZE            1
-#define currentSeries                  (*(unsigned char *)0x010E)
+#define currentSeries                  (*RV_AT(uint8_t *, 0x010E))
 #define currentSeries_SIZE             1
-#define playerMissionShip              (*(unsigned short *)0x0110) /* which mission ship the player flies */
+#define playerMissionShip              (*RV_AT(uint16_t *, 0x0110)) /* which mission ship the player flies */
 #define playerMissionShip_SIZE         2
-#define playerTarget                   (*(unsigned short *)0x0112) /* slot, 0xffff none */
+#define playerTarget                   (*RV_AT(uint16_t *, 0x0112)) /* slot, 0xffff none */
 #define playerTarget_SIZE              2
-#define landedOn                       (*(unsigned short *)0x0114) /* slot landed on, 0xffff none */
+#define landedOn                       (*RV_AT(uint16_t *, 0x0114)) /* slot landed on, 0xffff none */
 #define landedOn_SIZE                  2
-#define victoryPoints                  (*(unsigned short *)0x0116) /* the mission's score, nonzero won: for now the roll at launch (game.c); the layer carries it */
+#define victoryPoints                  (*RV_AT(uint16_t *, 0x0116)) /* the mission's score, nonzero won: for now the roll at launch (game.c); the layer carries it */
 #define victoryPoints_SIZE             2
-#define pendingCampaign                (*(unsigned short *)0x0118) /* 0xffff none */
+#define pendingCampaign                (*RV_AT(uint16_t *, 0x0118)) /* 0xffff none */
 #define pendingCampaign_SIZE           2
-#define savedGameLoaded                (*(unsigned short *)0x011A)
+#define savedGameLoaded                (*RV_AT(uint16_t *, 0x011A))
 #define savedGameLoaded_SIZE           2
-#define skipRecRoom                    (*(unsigned short *)0x011C) /* nonzero: runHangarMission goes straight to the barracks */
+#define skipRecRoom                    (*RV_AT(uint16_t *, 0x011C)) /* nonzero: runHangarMission goes straight to the barracks */
 #define skipRecRoom_SIZE               2
-#define fieldCount                     (*(unsigned short *)0x011E)
+#define fieldCount                     (*RV_AT(uint16_t *, 0x011E))
 #define fieldCount_SIZE                2
-#define fieldRockTally                 (*(unsigned short *)0x0120) /* RV: the rocks kept round the player */
+#define fieldRockTally                 (*RV_AT(uint16_t *, 0x0120)) /* RV: the rocks kept round the player */
 #define fieldRockTally_SIZE            2
-#define currentField                   (*(unsigned short *)0x0122) /* offset of the field record the player is in, 0 none */
+#define currentField                   (*RV_AT(uint16_t *, 0x0122)) /* offset of the field record the player is in, 0 none */
 #define currentField_SIZE              2
-#define mouseShift                     (*(unsigned char *)0x0124) /* 1: mouse x 0..639 -> logical x 0..319 (as WC2 states it) */
+#define mouseShift                     (*RV_AT(uint8_t *, 0x0124)) /* 1: mouse x 0..639 -> logical x 0..319 (as WC2 states it) */
 #define mouseShift_SIZE                1
-#define rvVideoMode                    (*(unsigned char *)0x0126) /* 0 320x200 (mode 13h), 1 640x400 (VESA 100h) */
+#define rvVideoMode                    (*RV_AT(uint8_t *, 0x0126)) /* 0 320x200 (mode 13h), 1 640x400 (VESA 100h) */
 #define rvVideoMode_SIZE               1
-#define steerInput                     (*(unsigned long *)0x0128) /* pitch (down +), yaw: -9..9 keys, 1..5 and 8 from the pointer */
+#define steerInput                     (*RV_AT(uint32_t *, 0x0128)) /* pitch (down +), yaw: -9..9 keys, 1..5 and 8 from the pointer */
 #define steerInput_SIZE                4
-#define steerStepsX                    ((unsigned char *)0x012C)  /* 1 x 12 bytes */ /* pointer distances where each turn step begins, logical 320x200 px */
+#define steerStepsX                    RV_AT(uint8_t *, 0x012C)  /* 1 x 12 bytes */ /* pointer distances where each turn step begins, logical 320x200 px */
 #define steerStepsX_SIZE               12
-#define steerStepsY                    ((unsigned char *)0x0138)  /* 1 x 12 bytes */
+#define steerStepsY                    RV_AT(uint8_t *, 0x0138)  /* 1 x 12 bytes */
 #define steerStepsY_SIZE               12
-#define viewRect                       ((unsigned char *)0x0144)  /* 1 x 8 bytes */ /* 3D view left, top, right, bottom in LOGICAL 320x200 coordinates */
+#define viewRect                       RV_AT(uint8_t *, 0x0144)  /* 1 x 8 bytes */ /* 3D view left, top, right, bottom in LOGICAL 320x200 coordinates */
 #define viewRect_SIZE                  8
-#define commTextTimer                  (*(unsigned short *)0x014C)
+#define commTextTimer                  (*RV_AT(uint16_t *, 0x014C))
 #define commTextTimer_SIZE             2
-#define commSpeaker                    (*(unsigned short *)0x014E)
+#define commSpeaker                    (*RV_AT(uint16_t *, 0x014E))
 #define commSpeaker_SIZE               2
-#define commVdu                        ((unsigned char *)0x0150)  /* 1 x 16 bytes */ /* the comm VDU; its screen rectangle is four words at +4 (logical) */
+#define commVdu                        RV_AT(uint8_t *, 0x0150)  /* 1 x 16 bytes */ /* the comm VDU; its screen rectangle is four words at +4 (logical) */
 #define commVdu_SIZE                   16
-#define commGlobalTxt                  ((unsigned char *)0x0160)  /* 1 x 80 bytes */
+#define commGlobalTxt                  RV_AT(uint8_t *, 0x0160)  /* 1 x 80 bytes */
 #define commGlobalTxt_SIZE             80
-#define vduText                        ((unsigned char *)0x01B0)  /* 1 x 160 bytes */
+#define vduText                        RV_AT(uint8_t *, 0x01B0)  /* 1 x 160 bytes */
 #define vduText_SIZE                   160
-#define pilotCallsign                  ((unsigned char *)0x0250)  /* 1 x 14 bytes */
+#define pilotCallsign                  RV_AT(uint8_t *, 0x0250)  /* 1 x 14 bytes */
 #define pilotCallsign_SIZE             14
-#define pilotLastName                  ((unsigned char *)0x025E)  /* 1 x 14 bytes */
+#define pilotLastName                  RV_AT(uint8_t *, 0x025E)  /* 1 x 14 bytes */
 #define pilotLastName_SIZE             14
-#define pilotRecords                   ((unsigned char *)0x026C)  /* 1 x 16 bytes */ /* near pointers, one per named pilot (8); name at +0xE */
+#define pilotRecords                   RV_AT(uint8_t *, 0x026C)  /* 1 x 16 bytes */ /* near pointers, one per named pilot (8); name at +0xE */
 #define pilotRecords_SIZE              16
-#define statusPilots                   ((unsigned char *)0x027C)  /* 1 x 16 bytes */ /* word per named pilot: 0 alive, else series*4 + mission of death */
+#define statusPilots                   RV_AT(uint8_t *, 0x027C)  /* 1 x 16 bytes */ /* word per named pilot: 0 alive, else series*4 + mission of death */
 #define statusPilots_SIZE              16
-#define systemDamage                   ((unsigned char *)0x028C)  /* 1 x 10 bytes */ /* byte per system (9 used), 0..4 */
+#define systemDamage                   RV_AT(uint8_t *, 0x028C)  /* 1 x 10 bytes */ /* byte per system (9 used), 0..4 */
 #define systemDamage_SIZE              10
-#define cockpitDamage                  ((unsigned char *)0x0296)  /* 1 x 8 bytes */ /* word per instrument (4): 1 broken */
+#define cockpitDamage                  RV_AT(uint8_t *, 0x0296)  /* 1 x 8 bytes */ /* word per instrument (4): 1 broken */
 #define cockpitDamage_SIZE             8
-#define vduStatus10WhenPlayerHitsSmth  (*(unsigned short *)0x029E)
+#define vduStatus10WhenPlayerHitsSmth  (*RV_AT(uint16_t *, 0x029E))
 #define vduStatus10WhenPlayerHitsSmth_SIZE 2
-#define tempVector                     ((unsigned char *)0x02A0)  /* 1 x 12 bytes */
+#define tempVector                     RV_AT(uint8_t *, 0x02A0)  /* 1 x 12 bytes */
 #define tempVector_SIZE                12
-#define entitiesToDespawn              ((unsigned char *)0x02AC)  /* 1 x 20 bytes */ /* slots of the current field's rocks or mines, 0xff free (RV: always free, no rock is a slot) */
+#define entitiesToDespawn              RV_AT(uint8_t *, 0x02AC)  /* 1 x 20 bytes */ /* slots of the current field's rocks or mines, 0xff free (RV: always free, no rock is a slot) */
 #define entitiesToDespawn_SIZE         20
-#define navPointState                  ((unsigned char *)0x02C0)  /* 1 x 152 bytes */ /* 8 x 19 bytes: mission tree progress */
+#define navPointState                  RV_AT(uint8_t *, 0x02C0)  /* 1 x 152 bytes */ /* 8 x 19 bytes: mission tree progress */
 #define navPointState_SIZE             152
-#define campaignTable                  (*(unsigned short *)0x0358) /* near pointer to the campaign table (spec 4.4) */
+#define campaignTable                  (*RV_AT(uint16_t *, 0x0358)) /* near pointer to the campaign table (spec 4.4) */
 #define campaignTable_SIZE             2
-#define rvPlayerCount                  (*(unsigned char *)0x035A) /* humans in the flight, written by the layer (1 in single player) */
+#define rvPlayerCount                  (*RV_AT(uint8_t *, 0x035A)) /* humans in the flight, written by the layer (1 in single player) */
 #define rvPlayerCount_SIZE             1
-#define rvNetRole                      (*(unsigned char *)0x035C) /* 0 single player, 1 host, 2 client: the engine only reads it */
+#define rvNetRole                      (*RV_AT(uint8_t *, 0x035C)) /* 0 single player, 1 host, 2 client: the engine only reads it */
 #define rvNetRole_SIZE                 1
-#define rvCockpitDamage                (*(unsigned long *)0x035E) /* a bit per cockpit damage layer (tools/cockpits.py BITS): its overlay shows while set */
+#define rvCockpitDamage                (*RV_AT(uint32_t *, 0x035E)) /* a bit per cockpit damage layer (tools/cockpits.py BITS): its overlay shows while set */
 #define rvCockpitDamage_SIZE           4
-#define rvBenchCount                   (*(unsigned short *)0x0362) /* the flight benchmark's live sprite count (docs/engine.md, "Flight") */
+#define rvBenchCount                   (*RV_AT(uint16_t *, 0x0362)) /* the flight benchmark's live sprite count (docs/engine.md, "Flight") */
 #define rvBenchCount_SIZE              2
-#define rvFps                          (*(unsigned short *)0x0364) /* frames a second x 10, as the game measures them */
+#define rvFps                          (*RV_AT(uint16_t *, 0x0364)) /* frames a second x 10, as the game measures them */
 #define rvFps_SIZE                     2
 
 /* --- scratch: 0x0400- --- */
-#define aLoadingWingCom                ((unsigned char *)0x0400)  /* 1 x 128 bytes */ /* starts "Loading RETROVEGA" (the layer's signature), then its scratch */
+#define aLoadingWingCom                RV_AT(uint8_t *, 0x0400)  /* 1 x 128 bytes */ /* starts "Loading RETROVEGA" (the layer's signature), then its scratch */
 #define aLoadingWingCom_SIZE           128
-#define aSorryAnErrorHasOccured        ((unsigned char *)0x0480)  /* 1 x 256 bytes */ /* the layer's call thunks; the game never reads either again */
+#define aSorryAnErrorHasOccured        RV_AT(uint8_t *, 0x0480)  /* 1 x 256 bytes */ /* the layer's call thunks; the game never reads either again */
 #define aSorryAnErrorHasOccured_SIZE   256
 
 /* --- entities: 0x0600- --- */
-#define maybeEntityType                ((unsigned short *)0x0600)  /* [128] */ /* EntityType (spec 4.3) */
+#define maybeEntityType                RV_AT(uint16_t *, 0x0600)  /* [128] */ /* EntityType (spec 4.3) */
 #define maybeEntityType_SIZE           2
-#define gInstanceShipTypes             ((unsigned short *)0x0700)  /* [128] */ /* ship type: row of data/ships.csv */
+#define gInstanceShipTypes             RV_AT(uint16_t *, 0x0700)  /* [128] */ /* ship type: row of data/ships.csv */
 #define gInstanceShipTypes_SIZE        2
-#define parentShipForShip              ((unsigned char *)0x0800)  /* [128] */ /* 0xff none */
+#define parentShipForShip              RV_AT(uint8_t *, 0x0800)  /* [128] */ /* 0xff none */
 #define parentShipForShip_SIZE         1
-#define commAnimInfo                   ((unsigned short *)0x0880)  /* [128] */ /* side: 0 Terran (the player's), 1 Aera, 2 Rlaan */
+#define commAnimInfo                   RV_AT(uint16_t *, 0x0880)  /* [128] */ /* side: 0 Terran (the player's), 1 Aera, 2 Rlaan */
 #define commAnimInfo_SIZE              2
-#define shipStateByte                  ((unsigned char *)0x0980)  /* [128] */ /* pilot: 0..7 named pilots, 8 a human player, 0xff none */
+#define shipStateByte                  RV_AT(uint8_t *, 0x0980)  /* [128] */ /* pilot: 0..7 named pilots, 8 a human player, 0xff none */
 #define shipStateByte_SIZE             1
-#define slotMissionShip                ((unsigned short *)0x0A00)  /* [128] */ /* mission ship in the slot, 0xffff none */
+#define slotMissionShip                RV_AT(uint16_t *, 0x0A00)  /* [128] */ /* mission ship in the slot, 0xffff none */
 #define slotMissionShip_SIZE           2
-#define gPositionVector                ((RvVec3 *)0x0B00)  /* [128] */
+#define gPositionVector                RV_AT(RvVec3 *, 0x0B00)  /* [128] */
 #define gPositionVector_SIZE           12
-#define gVelocityVector                ((RvVec3 *)0x1100)  /* [128] */
+#define gVelocityVector                RV_AT(RvVec3 *, 0x1100)  /* [128] */
 #define gVelocityVector_SIZE           12
-#define gOrientationRightVector        ((RvVec3 *)0x1700)  /* [128] */
+#define gOrientationRightVector        RV_AT(RvVec3 *, 0x1700)  /* [128] */
 #define gOrientationRightVector_SIZE   12
-#define gOrientationUpVector           ((RvVec3 *)0x1D00)  /* [128] */
+#define gOrientationUpVector           RV_AT(RvVec3 *, 0x1D00)  /* [128] */
 #define gOrientationUpVector_SIZE      12
-#define gOrientationFrontVector        ((RvVec3 *)0x2300)  /* [128] */
+#define gOrientationFrontVector        RV_AT(RvVec3 *, 0x2300)  /* [128] */
 #define gOrientationFrontVector_SIZE   12
-#define setSpeed                       ((unsigned long *)0x2900)  /* [128] */ /* throttle, kps (spec 6.1) */
+#define setSpeed                       RV_AT(uint32_t *, 0x2900)  /* [128] */ /* throttle, kps (spec 6.1) */
 #define setSpeed_SIZE                  4
-#define speedLo                        ((unsigned long *)0x2B00)  /* [128] */ /* current speed, kps */
+#define speedLo                        RV_AT(uint32_t *, 0x2B00)  /* [128] */ /* current speed, kps */
 #define speedLo_SIZE                   4
-#define curShield                      ((unsigned long *)0x2D00)  /* [128] */ /* word[2]: front, rear */
+#define curShield                      RV_AT(uint32_t *, 0x2D00)  /* [128] */ /* word[2]: front, rear */
 #define curShield_SIZE                 4
-#define shieldMax                      ((unsigned long *)0x2F00)  /* [128] */
+#define shieldMax                      RV_AT(uint32_t *, 0x2F00)  /* [128] */
 #define shieldMax_SIZE                 4
-#define armorState                     ((unsigned char *)0x3100)  /* 128 x 8 bytes */ /* word[4]: front, rear, left, right */
+#define armorState                     RV_AT(uint8_t *, 0x3100)  /* 128 x 8 bytes */ /* word[4]: front, rear, left, right */
 #define armorState_SIZE                8
-#define damagePoints                   ((unsigned short *)0x3500)  /* [128] */ /* accumulated hull damage */
+#define damagePoints                   RV_AT(uint16_t *, 0x3500)  /* [128] */ /* accumulated hull damage */
 #define damagePoints_SIZE              2
-#define coreHp                         ((unsigned char *)0x3600)  /* [128] */ /* starts at 4 */
+#define coreHp                         RV_AT(uint8_t *, 0x3600)  /* [128] */ /* starts at 4 */
 #define coreHp_SIZE                    1
-#define hullCounter                    ((unsigned char *)0x3680)  /* [128] */
+#define hullCounter                    RV_AT(uint8_t *, 0x3680)  /* [128] */
 #define hullCounter_SIZE               1
-#define gunDamage                      ((unsigned char *)0x3700)  /* [128] */ /* 0..5 */
+#define gunDamage                      RV_AT(uint8_t *, 0x3700)  /* [128] */ /* 0..5 */
 #define gunDamage_SIZE                 1
-#define engineFlag                     ((unsigned char *)0x3780)  /* [128] */ /* 0xff disabled */
+#define engineFlag                     RV_AT(uint8_t *, 0x3780)  /* [128] */ /* 0xff disabled */
 #define engineFlag_SIZE                1
-#define gunEnergy                      ((unsigned short *)0x3800)  /* [128] */ /* recharges to 100 */
+#define gunEnergy                      RV_AT(uint16_t *, 0x3800)  /* [128] */ /* recharges to 100 */
 #define gunEnergy_SIZE                 2
-#define gunTable                       ((unsigned char *)0x3900)  /* 128 x 51 bytes */ /* count byte + 10 x 5-byte guns: type word, mount x, mount y, state */
+#define gunTable                       RV_AT(uint8_t *, 0x3900)  /* 128 x 51 bytes */ /* count byte + 10 x 5-byte guns: type word, mount x, mount y, state */
 #define gunTable_SIZE                  51
-#define missileTarget                  ((unsigned char *)0x5280)  /* [128] */ /* 0xff none */
+#define missileTarget                  RV_AT(uint8_t *, 0x5280)  /* [128] */ /* 0xff none */
 #define missileTarget_SIZE             1
-#define shipAiState                    ((unsigned short *)0x5300)  /* [128] */ /* 9 dying */
+#define shipAiState                    RV_AT(uint16_t *, 0x5300)  /* [128] */ /* 9 dying */
 #define shipAiState_SIZE               2
-#define gMaybeShipRadius               ((unsigned short *)0x5400)  /* [128] */ /* km */
+#define gMaybeShipRadius               RV_AT(uint16_t *, 0x5400)  /* [128] */ /* km */
 #define gMaybeShipRadius_SIZE          2
-#define formationOffset                ((unsigned char *)0x5500)  /* 128 x 6 bytes */ /* right, up, forward on the leader, km */
+#define formationOffset                RV_AT(uint8_t *, 0x5500)  /* 128 x 6 bytes */ /* right, up, forward on the leader, km */
 #define formationOffset_SIZE           6
-#define entityCullStatus               ((unsigned short *)0x5800)  /* [128] */ /* last frame's screen x, 0x8001 culled */
+#define entityCullStatus               RV_AT(uint16_t *, 0x5800)  /* [128] */ /* last frame's screen x, 0x8001 culled */
 #define entityCullStatus_SIZE          2
-#define entityScreenY                  ((unsigned short *)0x5900)  /* [128] */
+#define entityScreenY                  RV_AT(uint16_t *, 0x5900)  /* [128] */
 #define entityScreenY_SIZE             2
-#define damageProperty                 ((unsigned short *)0x5A00)  /* [128] */ /* bolts: damage; ships: AI timers */
+#define damageProperty                 RV_AT(uint16_t *, 0x5A00)  /* [128] */ /* bolts: damage; ships: AI timers */
 #define damageProperty_SIZE            2
-#define rvController                   ((unsigned char *)0x5B00)  /* [128] */ /* 0 AI, 1 the local player, 2 puppet (a remote human), 3 script, 4 frozen */
+#define rvController                   RV_AT(uint8_t *, 0x5B00)  /* [128] */ /* 0 AI, 1 the local player, 2 puppet (a remote human), 3 script, 4 frozen */
 #define rvController_SIZE              1
-#define rvNetId                        ((unsigned char *)0x5B80)  /* [128] */ /* network id, 0xff none: the layer's, the engine never reads it */
+#define rvNetId                        RV_AT(uint8_t *, 0x5B80)  /* [128] */ /* network id, 0xff none: the layer's, the engine never reads it */
 #define rvNetId_SIZE                   1
-#define rvFlags                        ((unsigned short *)0x5C00)  /* [128] */ /* 1 invulnerable, 2 local-only hazard, 4 docked, 8 jamming, 16 cloaked */
+#define rvFlags                        RV_AT(uint16_t *, 0x5C00)  /* [128] */ /* 1 invulnerable, 2 local-only hazard, 4 docked, 8 jamming, 16 cloaked */
 #define rvFlags_SIZE                   2
-#define rvLastWrite                    ((unsigned short *)0x5D00)  /* [128] */ /* frameCounter when the layer last wrote the slot's motion */
+#define rvLastWrite                    RV_AT(uint16_t *, 0x5D00)  /* [128] */ /* frameCounter when the layer last wrote the slot's motion */
 #define rvLastWrite_SIZE               2
-#define rvTarget                       ((unsigned char *)0x5E00)  /* [128] */ /* what this ship targets, 0xff none */
+#define rvTarget                       RV_AT(uint8_t *, 0x5E00)  /* [128] */ /* what this ship targets, 0xff none */
 #define rvTarget_SIZE                  1
-#define rvAfterburner                  ((unsigned char *)0x5E80)  /* [128] */ /* 0 off, 1 on */
+#define rvAfterburner                  RV_AT(uint8_t *, 0x5E80)  /* [128] */ /* 0 off, 1 on */
 #define rvAfterburner_SIZE             1
-#define rvLivery                       ((unsigned char *)0x5F00)  /* [128] */ /* row of data/liveries.csv: the ramps the sprite's paint pixels take */
+#define rvLivery                       RV_AT(uint8_t *, 0x5F00)  /* [128] */ /* row of data/liveries.csv: the ramps the sprite's paint pixels take */
 #define rvLivery_SIZE                  1
 
 /* --- mission: 0x6400- --- */
-#define navPointTable                  ((unsigned char *)0x6400)  /* 16 x 77 bytes */ /* ten mission-ship words at +0x39 */
+#define navPointTable                  RV_AT(uint8_t *, 0x6400)  /* 16 x 77 bytes */ /* ten mission-ship words at +0x39 */
 #define navPointTable_SIZE             77
-#define missionShipTable               ((unsigned char *)0x68D0)  /* 64 x 42 bytes */ /* +0 ship type, +2 side, +4 leader, +6 behaviour (4 pilot in formation, 6 the player) */
+#define missionShipTable               RV_AT(uint8_t *, 0x68D0)  /* 64 x 42 bytes */ /* +0 ship type, +2 side, +4 leader, +6 behaviour (4 pilot in formation, 6 the player) */
 #define missionShipTable_SIZE          42
-#define fieldTable                     ((unsigned char *)0x7350)  /* 7 x 20 bytes */ /* +0 type (9 rocks, 10 mines), +2 position (3 x int32), +14 radius (int32 km), +18 density */
+#define fieldTable                     RV_AT(uint8_t *, 0x7350)  /* 7 x 20 bytes */ /* +0 type (9 rocks, 10 mines), +2 position (3 x int32), +14 radius (int32 km), +18 density */
 #define fieldTable_SIZE                20
 
 /* --- thunks: RVHOOK offsets, and their far cdecl prototypes --- */
@@ -257,76 +267,76 @@ typedef struct { long x, y, z; } RvVec3;      /* 256 = 1 km, or 1.0 for orientat
 
 extern void __far __cdecl rvHello(void); /* first call after start-up: the layer can take DS from here */
 void __far __cdecl rvHello_impl(void);
-extern unsigned short __far __cdecl do_damage(unsigned short, unsigned short, unsigned short, unsigned short); /* (src, dst, qty, near Vec3* where) -> 0 when nothing was done */
-unsigned short __far __cdecl do_damage_impl(unsigned short, unsigned short, unsigned short, unsigned short);
-extern void __far __cdecl delayedDespawn(unsigned short, unsigned short); /* (src, ship) */
-void __far __cdecl delayedDespawn_impl(unsigned short, unsigned short);
-extern unsigned short __far __cdecl fireGunFromShip(unsigned short, unsigned short); /* (ship, gun) -> bolt or missile slot, 0xffff none */
-unsigned short __far __cdecl fireGunFromShip_impl(unsigned short, unsigned short);
-extern void __far __cdecl maybe_fire_all_guns(unsigned short); /* (ship) */
-void __far __cdecl maybe_fire_all_guns_impl(unsigned short);
-extern void __far __cdecl aiSetSpeed(unsigned short, unsigned short); /* (ship, speed): the AI's throttle; skipped for a puppet */
-void __far __cdecl aiSetSpeed_impl(unsigned short, unsigned short);
-extern unsigned short __far __cdecl outerSpawnShipEntity(unsigned short, unsigned short); /* (missionShip, navPoint) -> slot, 0xffff none */
-unsigned short __far __cdecl outerSpawnShipEntity_impl(unsigned short, unsigned short);
-extern void __far __cdecl enterNavPoint(unsigned short); /* (nav) */
-void __far __cdecl enterNavPoint_impl(unsigned short);
-extern void __far __cdecl despawn(unsigned short); /* (ship) */
-void __far __cdecl despawn_impl(unsigned short);
-extern void __far __cdecl aiShipThink(unsigned short); /* (slot): capital ships */
-void __far __cdecl aiShipThink_impl(unsigned short);
-extern void __far __cdecl aiFighterThink(unsigned short); /* (slot): fighters */
-void __far __cdecl aiFighterThink_impl(unsigned short);
-extern void __far __cdecl showCommMessage(unsigned short, unsigned short); /* (ship, msg); msg 0 = show commGlobalTxt as it is */
-void __far __cdecl showCommMessage_impl(unsigned short, unsigned short);
-extern void __far __cdecl autoAnimation(unsigned short, unsigned short, unsigned short); /* (camShipType, camMode, duration); (0,0,0) ends the camera */
-void __far __cdecl autoAnimation_impl(unsigned short, unsigned short, unsigned short);
+extern uint16_t __far __cdecl do_damage(uint16_t, uint16_t, uint16_t, uint16_t); /* (src, dst, qty, near Vec3* where) -> 0 when nothing was done */
+uint16_t __far __cdecl do_damage_impl(uint16_t, uint16_t, uint16_t, uint16_t);
+extern void __far __cdecl delayedDespawn(uint16_t, uint16_t); /* (src, ship) */
+void __far __cdecl delayedDespawn_impl(uint16_t, uint16_t);
+extern uint16_t __far __cdecl fireGunFromShip(uint16_t, uint16_t); /* (ship, gun) -> bolt or missile slot, 0xffff none */
+uint16_t __far __cdecl fireGunFromShip_impl(uint16_t, uint16_t);
+extern void __far __cdecl maybe_fire_all_guns(uint16_t); /* (ship) */
+void __far __cdecl maybe_fire_all_guns_impl(uint16_t);
+extern void __far __cdecl aiSetSpeed(uint16_t, uint16_t); /* (ship, speed): the AI's throttle; skipped for a puppet */
+void __far __cdecl aiSetSpeed_impl(uint16_t, uint16_t);
+extern uint16_t __far __cdecl outerSpawnShipEntity(uint16_t, uint16_t); /* (missionShip, navPoint) -> slot, 0xffff none */
+uint16_t __far __cdecl outerSpawnShipEntity_impl(uint16_t, uint16_t);
+extern void __far __cdecl enterNavPoint(uint16_t); /* (nav) */
+void __far __cdecl enterNavPoint_impl(uint16_t);
+extern void __far __cdecl despawn(uint16_t); /* (ship) */
+void __far __cdecl despawn_impl(uint16_t);
+extern void __far __cdecl aiShipThink(uint16_t); /* (slot): capital ships */
+void __far __cdecl aiShipThink_impl(uint16_t);
+extern void __far __cdecl aiFighterThink(uint16_t); /* (slot): fighters */
+void __far __cdecl aiFighterThink_impl(uint16_t);
+extern void __far __cdecl showCommMessage(uint16_t, uint16_t); /* (ship, msg); msg 0 = show commGlobalTxt as it is */
+void __far __cdecl showCommMessage_impl(uint16_t, uint16_t);
+extern void __far __cdecl autoAnimation(uint16_t, uint16_t, uint16_t); /* (camShipType, camMode, duration); (0,0,0) ends the camera */
+void __far __cdecl autoAnimation_impl(uint16_t, uint16_t, uint16_t);
 extern void __far __cdecl autopilotFinished(void); /* probe */
 void __far __cdecl autopilotFinished_impl(void);
 extern void __far __cdecl briefingStarted(void); /* probe */
 void __far __cdecl briefingStarted_impl(void);
-extern unsigned short __far __cdecl enterBarracks(void); /* -> 7 leaves at once (the layer's return value) */
-unsigned short __far __cdecl enterBarracks_impl(void);
+extern uint16_t __far __cdecl enterBarracks(void); /* -> 7 leaves at once (the layer's return value) */
+uint16_t __far __cdecl enterBarracks_impl(void);
 extern void __far __cdecl missionStarting(void); /* probe */
 void __far __cdecl missionStarting_impl(void);
 extern void __far __cdecl missionVictoryCalc(void); /* probe */
 void __far __cdecl missionVictoryCalc_impl(void);
 extern void __far __cdecl missionEnded(void); /* probe */
 void __far __cdecl missionEnded_impl(void);
-extern unsigned short __far __cdecl runHangarMission(void); /* nonzero: go on through the barracks */
-unsigned short __far __cdecl runHangarMission_impl(void);
+extern uint16_t __far __cdecl runHangarMission(void); /* nonzero: go on through the barracks */
+uint16_t __far __cdecl runHangarMission_impl(void);
 extern void __far __cdecl simulatorStart(void); /* probe */
 void __far __cdecl simulatorStart_impl(void);
 extern void __far __cdecl simulatorEnd(void); /* probe */
 void __far __cdecl simulatorEnd_impl(void);
 extern void __far __cdecl clearFields(void);
 void __far __cdecl clearFields_impl(void);
-extern unsigned short __far __cdecl farShipTest(unsigned short, unsigned short); /* (slot, km) -> 1 when the ship is too far to keep (spec 5.3) */
-unsigned short __far __cdecl farShipTest_impl(unsigned short, unsigned short);
-extern void __far __cdecl despawnQuietly(unsigned short); /* (slot): gone without explosion, debris or comm line */
-void __far __cdecl despawnQuietly_impl(unsigned short);
-extern void __far __cdecl setController(unsigned short, unsigned short); /* (slot, rvController value): also stops or starts its AI */
-void __far __cdecl setController_impl(unsigned short, unsigned short);
-extern void __far __cdecl playScene(unsigned short, unsigned short); /* (scene, arg): an in-flight cut-scene */
-void __far __cdecl playScene_impl(unsigned short, unsigned short);
+extern uint16_t __far __cdecl farShipTest(uint16_t, uint16_t); /* (slot, km) -> 1 when the ship is too far to keep (spec 5.3) */
+uint16_t __far __cdecl farShipTest_impl(uint16_t, uint16_t);
+extern void __far __cdecl despawnQuietly(uint16_t); /* (slot): gone without explosion, debris or comm line */
+void __far __cdecl despawnQuietly_impl(uint16_t);
+extern void __far __cdecl setController(uint16_t, uint16_t); /* (slot, rvController value): also stops or starts its AI */
+void __far __cdecl setController_impl(uint16_t, uint16_t);
+extern void __far __cdecl playScene(uint16_t, uint16_t); /* (scene, arg): an in-flight cut-scene */
+void __far __cdecl playScene_impl(uint16_t, uint16_t);
 extern void __far __cdecl rvFrameDone(void); /* probe: the frame is drawn and flipped */
 void __far __cdecl rvFrameDone_impl(void);
-extern void __far __cdecl roomEntered(unsigned short); /* (room): a room is on screen */
-void __far __cdecl roomEntered_impl(unsigned short);
-extern void __far __cdecl campaignNode(unsigned short, unsigned short); /* (node, mission): the campaign picked the next mission */
-void __far __cdecl campaignNode_impl(unsigned short, unsigned short);
-extern void __far __cdecl missionLoaded(unsigned short); /* (mission): its ships are in missionShipTable / navPointTable */
-void __far __cdecl missionLoaded_impl(unsigned short);
-extern void __far __cdecl missionResolved(unsigned short); /* (result): 1 won, 0 lost (first slice: a random roll) */
-void __far __cdecl missionResolved_impl(unsigned short);
-extern void __far __cdecl gameSaved(unsigned short); /* (bunk) */
-void __far __cdecl gameSaved_impl(unsigned short);
-extern void __far __cdecl gameLoaded(unsigned short); /* (bunk) */
-void __far __cdecl gameLoaded_impl(unsigned short);
-extern void __far __cdecl baseChanged(unsigned short); /* (base): the player's home ship changed */
-void __far __cdecl baseChanged_impl(unsigned short);
-extern void __far __cdecl uiMode(unsigned short); /* (on): 1 entering screens without flight, 0 leaving them */
-void __far __cdecl uiMode_impl(unsigned short);
+extern void __far __cdecl roomEntered(uint16_t); /* (room): a room is on screen */
+void __far __cdecl roomEntered_impl(uint16_t);
+extern void __far __cdecl campaignNode(uint16_t, uint16_t); /* (node, mission): the campaign picked the next mission */
+void __far __cdecl campaignNode_impl(uint16_t, uint16_t);
+extern void __far __cdecl missionLoaded(uint16_t); /* (mission): its ships are in missionShipTable / navPointTable */
+void __far __cdecl missionLoaded_impl(uint16_t);
+extern void __far __cdecl missionResolved(uint16_t); /* (result): 1 won, 0 lost (first slice: a random roll) */
+void __far __cdecl missionResolved_impl(uint16_t);
+extern void __far __cdecl gameSaved(uint16_t); /* (bunk) */
+void __far __cdecl gameSaved_impl(uint16_t);
+extern void __far __cdecl gameLoaded(uint16_t); /* (bunk) */
+void __far __cdecl gameLoaded_impl(uint16_t);
+extern void __far __cdecl baseChanged(uint16_t); /* (base): the player's home ship changed */
+void __far __cdecl baseChanged_impl(uint16_t);
+extern void __far __cdecl uiMode(uint16_t); /* (on): 1 entering screens without flight, 0 leaving them */
+void __far __cdecl uiMode_impl(uint16_t);
 
 /* --- sites: RVHOOK offsets in the flight loop (rvhook.asm) --- */
 #define RV_SITE_mainLoopTop            0x0400  /* interrupts on, no live registers but SI DI BP */

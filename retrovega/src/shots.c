@@ -16,11 +16,11 @@
 #include "shots.h"
 
 static Shot __far *__far g_s;           /* the list (SHOTS_MAX), or 0 */
-static int __far g_n;
-static int __far g_bolts, __far g_balls;   /* the pools' room (0: not ours, or none) */
-static unsigned __far g_added, __far g_hits;   /* the flight's shots and the hits shot_hit found (logged at its end) */
+static int16_t __far g_n;
+static int16_t __far g_bolts, __far g_balls;   /* the pools' room (0: not ours, or none) */
+static uint16_t __far g_added, __far g_hits;   /* the flight's shots and the hits shot_hit found (logged at its end) */
 
-int shots_flight_start(int own_pools)
+int16_t shots_flight_start(int16_t own_pools)
 {
     static const char __far s_room[] = "shots: room for %d (bolts drawn %d, balls %d)";
     shots_flight_end();
@@ -49,49 +49,49 @@ void shots_flight_end(void)
     g_n = g_bolts = g_balls = 0;
 }
 
-int shots_count(void) { return g_n; }
+int16_t shots_count(void) { return g_n; }
 
-Shot __far *shot(int i)
+Shot __far *shot(int16_t i)
 {
     RV_CHECK(i, g_n);
     return &g_s[i];
 }
 
-int shot_add(int owner, unsigned weapon_type, const RvVec3 *pos, const RvVec3 *vel)
+int16_t shot_add(int16_t owner, uint16_t weapon_type, const RvVec3 *pos, const RvVec3 *vel)
 {
     const RvWeapon __far *w = weapon(weapon_type);
     Shot __far *s;
     RvVec3 d;
-    long step;
+    int32_t step;
     if (!g_s || g_n >= SHOTS_MAX)
         return -1;
     s = &g_s[g_n];
     s->x = pos->x; s->y = pos->y; s->z = pos->z;
     s->vx = vel->x; s->vy = vel->y; s->vz = vel->z;
-    s->owner = (unsigned char)owner;
-    s->weapon = (unsigned short)weapon_type;
+    s->owner = (uint8_t)owner;
+    s->weapon = (uint16_t)weapon_type;
     s->look = w ? w->look : RV_LOOK_BOLT;
     s->damage = w ? w->damage : 1;
     /* its life: its weapon's range at its weapon's speed (a beam's speed is 0: two steps) */
-    s->life = w && w->speed_kps ? (unsigned short)((long)w->range_km * KPS_HZ / w->speed_kps) : 2;
+    s->life = w && w->speed_kps ? (uint16_t)((int32_t)w->range_km * KPS_HZ / w->speed_kps) : 2;
     if (!s->life)
         s->life = 1;
     /* its drawn half length along its way (a bolt's; a beam's the step it reaches) */
     d.x = vel->x / 256; d.y = vel->y / 256; d.z = vel->z / 256;   /* (km a step) */
-    step = (long)lf_sqrt((unsigned long)(d.x * d.x + d.y * d.y + d.z * d.z));
+    step = (int32_t)lf_sqrt((uint32_t)(d.x * d.x + d.y * d.y + d.z * d.z));
     vec_norm(&d);
     if (s->look == RV_LOOK_BEAM) {
-        step = step * 8 > 32000L ? 32000L : step * 8;   /* (half the step, x16, as a short can keep it) */
-        s->hx = (short)(d.x * step / 256); s->hy = (short)(d.y * step / 256); s->hz = (short)(d.z * step / 256);
+        step = step * 8 > INT32_C(32000) ? INT32_C(32000) : step * 8;   /* (half the step, x16, as a short can keep it) */
+        s->hx = (int16_t)(d.x * step / 256); s->hy = (int16_t)(d.y * step / 256); s->hz = (int16_t)(d.z * step / 256);
     } else {
-        s->hx = (short)(d.x * BOLT_HALF16 / 256); s->hy = (short)(d.y * BOLT_HALF16 / 256);
-        s->hz = (short)(d.z * BOLT_HALF16 / 256);
+        s->hx = (int16_t)(d.x * BOLT_HALF16 / 256); s->hy = (int16_t)(d.y * BOLT_HALF16 / 256);
+        s->hz = (int16_t)(d.z * BOLT_HALF16 / 256);
     }
     g_added++;
     return g_n++;
 }
 
-void shot_remove(int i)
+void shot_remove(int16_t i)
 {
     RV_CHECK(i, g_n);
     g_s[i] = g_s[--g_n];
@@ -99,7 +99,7 @@ void shot_remove(int i)
 
 void shots_move(void)
 {
-    int i;
+    int16_t i;
     maybeEntityType[SHOT_PROXY_SLOT] = ET_NONE;   /* (the stand-in is a step's) */
     for (i = g_n - 1; i >= 0; i--) {
         Shot __far *s = &g_s[i];
@@ -113,16 +113,16 @@ void shots_move(void)
     }
 }
 
-int shot_hit(int i, int *slot, RvVec3 *where)
+int16_t shot_hit(int16_t i, int16_t *slot, RvVec3 *where)
 {
     Shot __far *sh = shot(i);
     LfVec a, b, hit;
-    long ax = labs(sh->vx), ay = labs(sh->vy), az = labs(sh->vz);
-    int s, t;
+    int32_t ax = labs(sh->vx), ay = labs(sh->vy), az = labs(sh->vz);
+    int16_t s, t;
     b.x = sh->x; b.y = sh->y; b.z = sh->z;
     a.x = b.x - sh->vx; a.y = b.y - sh->vy; a.z = b.z - sh->vz;
     for (s = 0; s <= RV_MAX_SHIP_SLOT; s++) {
-        long r;
+        int32_t r;
         if (s == sh->owner || !slot_is_ship(s))
             continue;
         r = collide_half(s);            /* (the coarse test: within its half box and the step on every axis) */
@@ -139,10 +139,10 @@ int shot_hit(int i, int *slot, RvVec3 *where)
     return 0;
 }
 
-int shot_source(int i)
+int16_t shot_source(int16_t i)
 {
     Shot __far *sh = shot(i);
-    int p = SHOT_PROXY_SLOT;
+    int16_t p = SHOT_PROXY_SLOT;
     maybeEntityType[p] = ET_BOLT;
     parentShipForShip[p] = sh->owner;
     gInstanceShipTypes[p] = sh->weapon;
@@ -157,11 +157,11 @@ int shot_source(int i)
 
 /* --- the drawing --- */
 
-void shots_place(const LfVec *eye, const LfBasis *cam, int cx, int cy, int focal, int y0, int y1)
+void shots_place(const LfVec *eye, const LfBasis *cam, int16_t cx, int16_t cy, int16_t focal, int16_t y0, int16_t y1)
 {
     LzBolt __far *b = g_bolts ? bolts_pool() : 0;
     LzBall __far *ball = g_balls ? balls_pool() : 0;
-    int i, nb = 0, nl = 0;
+    int16_t i, nb = 0, nl = 0;
     if (!g_bolts && !g_balls)
         return;
     for (i = 0; i < g_n; i++) {
@@ -170,7 +170,8 @@ void shots_place(const LfVec *eye, const LfBasis *cam, int cx, int cy, int focal
             if (!b || nb >= g_bolts)
                 continue;
             /* (a bolt's middle: its head less its half length; positions are sixteenths x 16) */
-            b[nb].x = s->x - s->hx * 16L; b[nb].y = s->y - s->hy * 16L; b[nb].z = s->z - s->hz * 16L;
+            b[nb].x = s->x - s->hx * INT32_C(16); b[nb].y = s->y - s->hy * INT32_C(16);
+            b[nb].z = s->z - s->hz * INT32_C(16);
             b[nb].hx = s->hx; b[nb].hy = s->hy; b[nb].hz = s->hz;
             nb++;
         } else if (s->look >= RV_LOOK_SLUG && s->look <= RV_LOOK_STAR) {
@@ -178,8 +179,8 @@ void shots_place(const LfVec *eye, const LfBasis *cam, int cx, int cy, int focal
                 continue;
             ball[nl].x = s->x; ball[nl].y = s->y; ball[nl].z = s->z;
             ball[nl].vx = ball[nl].vy = ball[nl].vz = 0;   /* (drawn where the list has it, not flown) */
-            ball[nl].kind = (unsigned char)(s->look - RV_LOOK_SLUG);
-            ball[nl].phase = (unsigned char)i;
+            ball[nl].kind = (uint8_t)(s->look - RV_LOOK_SLUG);
+            ball[nl].phase = (uint8_t)i;
             nl++;
         }
     }
@@ -194,7 +195,7 @@ void shots_place(const LfVec *eye, const LfBasis *cam, int cx, int cy, int focal
     }
 }
 
-void shots_draw_far(int y0, int y1, const short __far *ext, int ext_y0, int ext_rows)
+void shots_draw_far(int16_t y0, int16_t y1, const int16_t __far *ext, int16_t ext_y0, int16_t ext_rows)
 {
     if (g_bolts)
         bolts_draw_far(y0, y1, ext, ext_y0, ext_rows);
@@ -202,7 +203,7 @@ void shots_draw_far(int y0, int y1, const short __far *ext, int ext_y0, int ext_
         balls_draw_far(y0, y1, ext, ext_y0, ext_rows);
 }
 
-void shots_draw_near(int y0, int y1, const short __far *ext, int ext_y0, int ext_rows)
+void shots_draw_near(int16_t y0, int16_t y1, const int16_t __far *ext, int16_t ext_y0, int16_t ext_rows)
 {
     if (g_bolts)
         bolts_draw_near(y0, y1, ext, ext_y0, ext_rows);

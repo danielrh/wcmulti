@@ -78,13 +78,13 @@ int main(void)
         int k, bad = 0;
         for (k = 0; k < (int)(sizeof want / sizeof want[0]); k++) {
             LfViewRot r;
-            long x, y, z;
+            int32_t x, y, z;
             lf_view_rot((int)want[k][0], 5, 7, &r);
             lf_sprite_point(&r, (int)want[k][1], 1000, 2000, 3000, &x, &y, &z);
             /* within 20 of the point's 3,742: the views' angles are 1024ths of a turn (30 degrees is 85 1/3) */
             if (labs(x - want[k][2]) > 20 || labs(y - want[k][3]) > 20 || labs(z - want[k][4]) > 20) {
-                printf("     view %ld roll %ld: %ld %ld %ld, want %ld %ld %ld\n", want[k][0], want[k][1], x, y, z,
-                       want[k][2], want[k][3], want[k][4]);
+                printf("     view %ld roll %ld: %ld %ld %ld, want %ld %ld %ld\n", want[k][0], want[k][1], (long)x,
+                       (long)y, (long)z, want[k][2], want[k][3], want[k][4]);
                 bad++;
             }
         }
@@ -103,7 +103,7 @@ int main(void)
     CHECK(p.on_screen && p.sx == 320 && p.sy == 100, "a ship dead ahead sits at the centre (%d,%d)", p.sx, p.sy);
     CHECK(p.view == 21, "flying the same way, its tail is toward us: view 21 (got %d)", p.view);
     CHECK(p.roll == 0, "and it is not turned (roll %d)", p.roll);
-    CHECK(p.depth == 2560, "depth is the distance along the view axis (%ld)", p.depth);
+    CHECK(p.depth == 2560, "depth is the distance along the view axis (%ld)", (long)p.depth);
     rel.x = 256 * 5; rel.z = 256 * 10;
     lf_place(&rel, &cam, &ship, 320, 100, 400, 5, 7, &p);
     CHECK(p.on_screen && p.sx == 520 && p.sy == 100, "5 km right at 10 km: 200 px right (%d,%d)", p.sx, p.sy);
@@ -215,7 +215,8 @@ int main(void)
      * nothing outside the source: on a solid 7 x 5 block at many turns and scales */
     {
         unsigned char block[35], out[160], ok = 1;
-        int roll, sc, y, x, xs, xe;
+        int roll, sc, y, x;
+        int16_t xs, xe;
         LfRot r;
         memset(block, 9, sizeof block);
         for (roll = 0; roll < 1024 && ok; roll += 37)

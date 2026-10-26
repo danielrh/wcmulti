@@ -11,25 +11,25 @@ enum { ENDING_NONE, ENDING_GOOD, ENDING_BAD };
 
 #pragma pack(1)
 typedef struct {
-    unsigned short missions, kills;     /* kills: the splash count */
-    unsigned long medals;               /* a bit each */
-    unsigned char alive, pad;
+    uint16_t missions, kills;           /* kills: the splash count */
+    uint32_t medals;                    /* a bit each */
+    uint8_t alive, pad;
 } RvPilotStats;
 
 typedef struct {
     char magic[6];
-    unsigned short version, size;
-    unsigned char bunk;
+    uint16_t version, size;
+    uint8_t bunk;
     char name[24];
-    unsigned char base;                 /* the ship the player lives on: 0 the carrier */
-    unsigned char node, mission;        /* the campaign node, and the mission within it (0-3) */
-    unsigned char wins;                 /* in this node */
-    short trend;                        /* the campaign's running total: wins minus losses */
-    unsigned char ending;               /* ENDING_* */
-    unsigned char player_ship, livery;  /* ships.csv type, liveries.csv row */
-    unsigned char pad;
-    unsigned long seed;
-    unsigned short flown;               /* missions flown in all */
+    uint8_t base;                       /* the ship the player lives on: 0 the carrier */
+    uint8_t node, mission;              /* the campaign node, and the mission within it (0-3) */
+    uint8_t wins;                       /* in this node */
+    int16_t trend;                      /* the campaign's running total: wins minus losses */
+    uint8_t ending;                     /* ENDING_* */
+    uint8_t player_ship, livery;        /* ships.csv type, liveries.csv row */
+    uint8_t pad;
+    uint32_t seed;
+    uint16_t flown;                     /* missions flown in all */
     RvPilotStats pilot[RV_PILOTS];
 } RvSave;
 #pragma pack()
@@ -37,24 +37,24 @@ typedef struct {
 extern RvSave g_camp;
 extern RvPilot g_pilots[RV_PILOTS];
 extern RvNode g_nodes[RV_NODES];
-extern unsigned g_npilots, g_nnodes, g_nmissions;
+extern uint16_t g_npilots, g_nnodes, g_nmissions;
 extern RvShipType __far g_shiptypes[RV_SHIPTYPES];
-extern unsigned g_nshiptypes;
-const RvShipType __far *ship_type(unsigned type);   /* data/ships.csv's row for a type, or NULL */
+extern uint16_t g_nshiptypes;
+const RvShipType __far *ship_type(uint16_t type);   /* data/ships.csv's row for a type, or NULL */
 extern RvWeapon __far g_weapons[RV_WEAPONS];
-extern unsigned g_nweapons;
-const RvWeapon __far *weapon(unsigned type);    /* data/weapons.csv's row for a weapon type (a gun record's), or NULL */
+extern uint16_t g_nweapons;
+const RvWeapon __far *weapon(uint16_t type);    /* data/weapons.csv's row for a weapon type (a gun record's), or NULL */
 
-int camp_load_data(const char *path);
+int16_t camp_load_data(const char *path);
 void camp_new(void);
-unsigned camp_mission_index(void);              /* the mission to fly next */
-void camp_mission(unsigned i, RvMission __far *out);
+uint16_t camp_mission_index(void);              /* the mission to fly next */
+void camp_mission(uint16_t i, RvMission __far *out);
 void camp_load_units(const RvMission __far *m);   /* missionShipTable and navPointTable, then missionLoaded */
-int camp_resolve(int won);                      /* scores the mission; returns 1 when the node is done */
+int16_t camp_resolve(int16_t won);                      /* scores the mission; returns 1 when the node is done */
 const char *camp_ending_text(void);
 
-int save_write(int bunk, const char *name);
-int save_read(int bunk, RvSave __far *out);     /* 0: empty or not a save */
-int save_load(int bunk);
+int16_t save_write(int16_t bunk, const char *name);
+int16_t save_read(int16_t bunk, RvSave __far *out);     /* 0: empty or not a save */
+int16_t save_load(int16_t bunk);
 
 #endif

@@ -16,29 +16,29 @@ enum { CHAN_WING, CHAN_CARRIER, CHAN_GUARD };
 
 /* the ship's systems as the panel shows and sets them (flight.c keeps them; flags combat will read are marked) */
 typedef struct {
-    unsigned char emcon;                /* EMCON_*: OFF dark (no scope, no lock, no running lights), PASSIVE (the
+    uint8_t emcon;                      /* EMCON_*: OFF dark (no scope, no lock, no running lights), PASSIVE (the
                                            scope unidentified, no friend-or-foe lock), ACTIVE (the radar on) */
-    unsigned char sensor;               /* SENSOR_*: the lock's seeker (combat: radar-guided or IR missiles) */
-    unsigned char iff;                  /* the IFF on: contacts identified (combat: friend-or-foe locks) */
-    unsigned char armed;                /* master arm (combat: the guns fire only armed) */
-    unsigned char muted;                /* comms muted: no comm faces, no hails */
-    unsigned char hold;                 /* the lock held */
-    unsigned char match, autotarget, autodecoy;   /* AUTO: match the target's speed, keep the nearest enemy
+    uint8_t sensor;                     /* SENSOR_*: the lock's seeker (combat: radar-guided or IR missiles) */
+    uint8_t iff;                        /* the IFF on: contacts identified (combat: friend-or-foe locks) */
+    uint8_t armed;                      /* master arm (combat: the guns fire only armed) */
+    uint8_t muted;                      /* comms muted: no comm faces, no hails */
+    uint8_t hold;                       /* the lock held */
+    uint8_t match, autotarget, autodecoy;   /* AUTO: match the target's speed, keep the nearest enemy
                                            targeted, decoys on a lock (combat) */
-    unsigned char decoys;               /* left (combat: X drops one) */
-    unsigned char radar_range;          /* 0 4,000 km, 1 8,000, 2 16,000 */
-    unsigned char surv_page;            /* the survival display's buttons' page */
-    unsigned char nav;                  /* the nav point chosen */
-    unsigned char chan;                 /* the radio's channel (CHAN_*): the last that talked */
-    unsigned char digit[3];             /* the frequency knobs as they stand (they step to the channel's) */
-    unsigned char talking;              /* a transmission coming in */
-    unsigned char lock, warn, burning, lights, autopilot_ready, target_hot;
-    int target;                         /* its slot, -1 none */
-    int heat, signature;                /* 0 .. 100 */
-    int heat_shown, sig_shown;          /* as the HEAT and SIGNATURE displays show them: taken every 5 s */
-    int fuel;                           /* afterburner fuel, 0 .. 1000 */
-    int hull;                           /* percent */
-    long target_km, nav_km;             /* -1: none */
+    uint8_t decoys;                     /* left (combat: X drops one) */
+    uint8_t radar_range;                /* 0 4,000 km, 1 8,000, 2 16,000 */
+    uint8_t surv_page;                  /* the survival display's buttons' page */
+    uint8_t nav;                        /* the nav point chosen */
+    uint8_t chan;                       /* the radio's channel (CHAN_*): the last that talked */
+    uint8_t digit[3];                   /* the frequency knobs as they stand (they step to the channel's) */
+    uint8_t talking;                    /* a transmission coming in */
+    uint8_t lock, warn, burning, lights, autopilot_ready, target_hot;
+    int16_t target;                     /* its slot, -1 none */
+    int16_t heat, signature;            /* 0 .. 100 */
+    int16_t heat_shown, sig_shown;      /* as the HEAT and SIGNATURE displays show them: taken every 5 s */
+    int16_t fuel;                       /* afterburner fuel, 0 .. 1000 */
+    int16_t hull;                       /* percent */
+    int32_t target_km, nav_km;          /* -1: none */
     char target_name[12];
 } ShipSystems;
 extern ShipSystems __far g_sys;

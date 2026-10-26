@@ -34,30 +34,30 @@ PilotInput __far g_pilot;
 void logic_start(const RvMission __far *m)
 {
     static const char __far s_spawn[] = "logic: slot %d type %02X spawned at bearing %d, %ld km: %ld,%ld";
-    int i, k, j = 0, n = 1;
+    int16_t i, k, j = 0, n = 1;
     _fmemset(&g_pilot, 0, sizeof g_pilot);
     ship_spawn(0, g_camp.player_ship, SIDE_TERRAN, CTL_PLAYER, 0, 0, 0, 0);
     shipStateByte[0] = 8;               /* (a human) */
     for (i = 0; i < m->nship; i++) {
         const RvShip __far *sh = &m->ship[i];
-        int type = sh->type == RV_SHIP_PLAYER || sh->type == RV_SHIP_WINGMAN ? g_camp.player_ship : sh->type;
+        int16_t type = sh->type == RV_SHIP_PLAYER || sh->type == RV_SHIP_WINGMAN ? g_camp.player_ship : sh->type;
         for (k = 0; k < sh->count; k++, j++) {
-            int a;
-            long dist, sx, sz;
+            int16_t a;
+            int32_t dist, sx, sz;
             if (sh->type == RV_SHIP_PLAYER) {
-                slotMissionShip[0] = (unsigned short)j;
+                slotMissionShip[0] = (uint16_t)j;
                 continue;
             }
             if (n > RV_MAX_SHIP_SLOT)
                 continue;
-            a = (int)(game_rand() % 342) - 171;   /* within 60 degrees of the nose */
+            a = (int16_t)(game_rand() % 342) - 171;   /* within 60 degrees of the nose */
             /* (sin x distance would overflow a long: the distance goes in as km) */
-            dist = KM * (4000 + (long)(game_rand() % 8000));
+            dist = KM * (4000 + (int32_t)(game_rand() % 8000));
             sx = (lf_sin(a) * (dist >> 8)) >> 6;
             sz = (lf_cos(a) * (dist >> 8)) >> 6;
-            ship_spawn(n, type, sh->side, CTL_AI, sx, (long)(game_rand() % 20000) * 20 - 200000L, sz,
+            ship_spawn(n, type, sh->side, CTL_AI, sx, (int32_t)(game_rand() % 20000) * 20 - INT32_C(200000), sz,
                        sh->type == RV_SHIP_WINGMAN ? 0 : a + 512);
-            slotMissionShip[n] = (unsigned short)j;
+            slotMissionShip[n] = (uint16_t)j;
             shipStateByte[n] = sh->pilot;
             rv_logf(s_spawn, n, type, a, dist / KM, sx, sz);
             n++;
@@ -149,8 +149,7 @@ void logic_end(void)
  * returns what it did, 0 nothing.  The player takes none while playerCanBeDamaged is 0.  Everything that hurts goes
  * through here (shots, rocks: rocks.c calls it, rams), and the layer replays a hit on the other machines with src a
  * bolt of the shooter's, the shooter's ship or 0xFFFF: what it does must not depend on src */
-unsigned short __far __cdecl do_damage_impl(unsigned short src, unsigned short dst, unsigned short qty,
-                                            unsigned short where)
+uint16_t __far __cdecl do_damage_impl(uint16_t src, uint16_t dst, uint16_t qty, uint16_t where)
 {
     (void)src;
     (void)dst;
@@ -164,7 +163,7 @@ unsigned short __far __cdecl do_damage_impl(unsigned short src, unsigned short d
  * energy: the deciding is the caller's (the layer replays this call on the other machines with the gun record as
  * the shooter's machine had it, so it must not refuse there); it sets the cooldown and spends the energy itself.
  * Returns a missile's slot (the layer maps it), else 0xFFFF */
-unsigned short __far __cdecl fireGunFromShip_impl(unsigned short ship, unsigned short gun)
+uint16_t __far __cdecl fireGunFromShip_impl(uint16_t ship, uint16_t gun)
 {
     (void)ship;
     (void)gun;
@@ -172,60 +171,60 @@ unsigned short __far __cdecl fireGunFromShip_impl(unsigned short ship, unsigned 
 }
 
 /* (ship): every one of its guns that is ready, fired through the fireGunFromShip thunk */
-void __far __cdecl maybe_fire_all_guns_impl(unsigned short ship)
+void __far __cdecl maybe_fire_all_guns_impl(uint16_t ship)
 {
     (void)ship;
 }
 
 /* (slot): a fighter's mind for a step (an AI ship's: the layer skips it on the machines where the ship is a
  * puppet) */
-void __far __cdecl aiFighterThink_impl(unsigned short s)
+void __far __cdecl aiFighterThink_impl(uint16_t s)
 {
     (void)s;
 }
 
 /* (slot): a capital ship's mind for a step: its turrets, its course */
-void __far __cdecl aiShipThink_impl(unsigned short s)
+void __far __cdecl aiShipThink_impl(uint16_t s)
 {
     (void)s;
 }
 
 /* (ship): the game's own ending of a ship (its explosion, its debris, a comm line), then the slot empty
  * (ship_clear).  The layer calls it when the host says a ship died */
-void __far __cdecl despawn_impl(unsigned short ship)
+void __far __cdecl despawn_impl(uint16_t ship)
 {
     (void)ship;
 }
 
 /* (src, ship): a ship's end that src brought about (a kill): the same, after its explosion's time */
-void __far __cdecl delayedDespawn_impl(unsigned short src, unsigned short ship)
+void __far __cdecl delayedDespawn_impl(uint16_t src, uint16_t ship)
 {
     (void)src;
     (void)ship;
 }
 
 /* (nav): the player has reached nav point `nav`: its ships and hazards come */
-void __far __cdecl enterNavPoint_impl(unsigned short nav)
+void __far __cdecl enterNavPoint_impl(uint16_t nav)
 {
     currentNavPoint = nav;
 }
 
 /* PLUMBING (ship, speed): the AI's throttle (the layer skips the call for a puppet) */
-void __far __cdecl aiSetSpeed_impl(unsigned short ship, unsigned short speed)
+void __far __cdecl aiSetSpeed_impl(uint16_t ship, uint16_t speed)
 {
     if (RV_SLOT_OK(ship))
         setSpeed[ship] = speed;
 }
 
 /* PLUMBING (slot, controller): who flies a slot (CTL_*): the layer's way to make a ship a puppet or give it back */
-void __far __cdecl setController_impl(unsigned short slot, unsigned short controller)
+void __far __cdecl setController_impl(uint16_t slot, uint16_t controller)
 {
     if (RV_SLOT_OK(slot))
-        rvController[slot] = (unsigned char)controller;
+        rvController[slot] = (uint8_t)controller;
 }
 
 /* PLUMBING (slot): gone with nothing to show (the layer's: a ship too far to keep, a duplicate) */
-void __far __cdecl despawnQuietly_impl(unsigned short slot)
+void __far __cdecl despawnQuietly_impl(uint16_t slot)
 {
     if (RV_SLOT_OK(slot))
         ship_clear(slot);
@@ -233,28 +232,28 @@ void __far __cdecl despawnQuietly_impl(unsigned short slot)
 
 /* PLUMBING (slot, km): 1 when a ship is too far from the player to keep (spec 5.3: the layer asks before it drops
  * one) */
-unsigned short __far __cdecl farShipTest_impl(unsigned short slot, unsigned short km)
+uint16_t __far __cdecl farShipTest_impl(uint16_t slot, uint16_t km)
 {
-    return slot_is_ship(slot) && player_km(slot) > (long)km;
+    return slot_is_ship(slot) && player_km(slot) > (int32_t)km;
 }
 
 /* PLUMBING (missionShip, navPoint): a mission ship (missionShipTable's record) into a free slot at its nav point
  * (navPointTable's, km), at its formation place off it; behaviour 6 (the player) takes slot 0.  The layer calls it
  * to put another player's ship into this machine's flight (it switches the record's behaviour from 6 to 4 around
  * the call): returns the slot, 0xFFFF none */
-unsigned short __far __cdecl outerSpawnShipEntity_impl(unsigned short missionShip, unsigned short navPoint)
+uint16_t __far __cdecl outerSpawnShipEntity_impl(uint16_t missionShip, uint16_t navPoint)
 {
-    const unsigned char *rec = missionShipTable + missionShipTable_SIZE * (missionShip & 63);
-    const unsigned char *nav = navPointTable + navPointTable_SIZE * (navPoint & 15);
-    unsigned short behaviour = *(const unsigned short *)(rec + 6);
-    int s = behaviour == 6 ? 0 : ship_free_slot();
+    const uint8_t *rec = missionShipTable + missionShipTable_SIZE * (missionShip & 63);
+    const uint8_t *nav = navPointTable + navPointTable_SIZE * (navPoint & 15);
+    uint16_t behaviour = *(const uint16_t *)(rec + 6);
+    int16_t s = behaviour == 6 ? 0 : ship_free_slot();
     if (missionShip >= 64 || s < 0)
         return 0xFFFF;
-    ship_spawn(s, *(const unsigned short *)rec, *(const unsigned short *)(rec + 2), s == 0 ? CTL_PLAYER : CTL_AI,
-               KM * (*(const short *)(nav + 2) + *(const short *)(rec + 10)),
-               KM * (*(const short *)(nav + 4) + *(const short *)(rec + 12)),
-               KM * (*(const short *)(nav + 6) + *(const short *)(rec + 14)), 0);
+    ship_spawn(s, *(const uint16_t *)rec, *(const uint16_t *)(rec + 2), s == 0 ? CTL_PLAYER : CTL_AI,
+               KM * (*(const int16_t *)(nav + 2) + *(const int16_t *)(rec + 10)),
+               KM * (*(const int16_t *)(nav + 4) + *(const int16_t *)(rec + 12)),
+               KM * (*(const int16_t *)(nav + 6) + *(const int16_t *)(rec + 14)), 0);
     slotMissionShip[s] = missionShip;
     shipStateByte[s] = s == 0 ? 8 : rec[16];
-    return (unsigned short)s;
+    return (uint16_t)s;
 }

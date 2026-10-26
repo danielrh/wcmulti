@@ -20,29 +20,29 @@
 
 #include "lightfield.h"
 
-int collide_reserve(void);              /* when the game starts (resident XMS): SHAPES.DAT in */
+int16_t collide_reserve(void);          /* when the game starts (resident XMS): SHAPES.DAT in */
 void collide_flight_end(void);          /* the silhouettes kept for the flight's types given back */
 
 /* a slot's ship: its half box in positions (256 a km): the flight draws a ship lod0_px across at full size, 2,500
  * km away at a focal length of 400, so its half box is lod0_px x 3.125 km; 0 when there is no ship there */
-long collide_half(int slot);
+int32_t collide_half(int16_t slot);
 
-int collide_coarse(int a, int b);       /* their bounding spheres touch */
+int16_t collide_coarse(int16_t a, int16_t b);   /* their bounding spheres touch */
 
 /* coarse, then fine: 0 when no vital is in the other's box; else *push (positions) is the least move of b that
  * frees the deepest (move a by -push instead, or each by half), *depth how deep it was */
-int collide_ships(int a, int b, LfVec *push, long *depth);
+int16_t collide_ships(int16_t a, int16_t b, LfVec *push, int32_t *depth);
 
 /* a world point in the ship in a slot: 1 when it is, and *push (if asked) the least move of the point out */
-int collide_point(int slot, const LfVec *p, LfVec *push);
+int16_t collide_point(int16_t slot, const LfVec *p, LfVec *push);
 
 /* a segment (a bolt from where it was, a, to where it is, b) against the ship in a slot: 1 when it goes in, *hit
  * (if asked) the first point of it in the hull and *t1024 (if asked) how far along it that is, 1024ths of a to b.
  * Its ends within 32,768 km of the ship */
-int collide_segment(int slot, const LfVec *a, const LfVec *b, LfVec *hit, int *t1024);
+int16_t collide_segment(int16_t slot, const LfVec *a, const LfVec *b, LfVec *hit, int16_t *t1024);
 
 /* a ship's hit box and vitals in the world, for drawing them: its box's eight corners, its vitals (the core
  * first, then the engines, then the rest): how many vitals (at most 1 + 4 + 8) */
-int collide_shape(int slot, LfVec corner[8], LfVec *vital, int maxv);
+int16_t collide_shape(int16_t slot, LfVec corner[8], LfVec *vital, int16_t maxv);
 
 #endif

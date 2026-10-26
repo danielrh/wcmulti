@@ -2,6 +2,8 @@
 #ifndef RVDATA_H
 #define RVDATA_H
 
+#include "rvtypes.h"
+
 #define RVGAME_MAGIC "RVGAME"
 #define RVGAME_VERSION 4
 
@@ -109,140 +111,140 @@
 #pragma pack(1)
 typedef struct {
     char magic[8];
-    unsigned short version;
-    unsigned short header_size;
-    unsigned short npilots;
-    unsigned short pilot_size;
-    unsigned long pilots_at;
-    unsigned short nnodes;
-    unsigned short node_size;
-    unsigned long nodes_at;
-    unsigned short nmissions;
-    unsigned short mission_size;
-    unsigned long missions_at;
-    unsigned short start_node;
-    unsigned short nshiptypes;
-    unsigned short shiptype_size;
-    unsigned long shiptypes_at;
-    unsigned short nweapons;
-    unsigned short weapon_size;
-    unsigned long weapons_at;
-    unsigned char reserved[14];
+    uint16_t version;
+    uint16_t header_size;
+    uint16_t npilots;
+    uint16_t pilot_size;
+    uint32_t pilots_at;
+    uint16_t nnodes;
+    uint16_t node_size;
+    uint32_t nodes_at;
+    uint16_t nmissions;
+    uint16_t mission_size;
+    uint32_t missions_at;
+    uint16_t start_node;
+    uint16_t nshiptypes;
+    uint16_t shiptype_size;
+    uint32_t shiptypes_at;
+    uint16_t nweapons;
+    uint16_t weapon_size;
+    uint32_t weapons_at;
+    uint8_t reserved[14];
 } RvGameHeader;
 typedef struct {
     char key[RV_KEY];
     char callsign[RV_CALLSIGN];
     char name[RV_NAME];
-    unsigned char role;
-    unsigned char pad;
+    uint8_t role;
+    uint8_t pad;
     char line[RV_LINE];
 } RvPilot;
 typedef struct {
     char id[RV_NODE_ID];
-    unsigned char layer;
-    signed char col;
-    unsigned short missions[RV_MISSIONS_PER_NODE];
-    unsigned char good;
-    unsigned char bad;
-    unsigned char pad[2];
+    uint8_t layer;
+    int8_t col;
+    uint16_t missions[RV_MISSIONS_PER_NODE];
+    uint8_t good;
+    uint8_t bad;
+    uint8_t pad[2];
 } RvNode;
 typedef struct {
-    unsigned char id;
-    unsigned char pad;
-    short x;
-    short y;
-    short z;
+    uint8_t id;
+    uint8_t pad;
+    int16_t x;
+    int16_t y;
+    int16_t z;
 } RvNav;
 typedef struct {
-    unsigned char type;
-    unsigned char side;
-    unsigned char nav;
-    unsigned char count;
-    unsigned char pilot;
-    unsigned char pad[3];
+    uint8_t type;
+    uint8_t side;
+    uint8_t nav;
+    uint8_t count;
+    uint8_t pilot;
+    uint8_t pad[3];
 } RvShip;
 typedef struct {
-    unsigned char room;
-    unsigned char speaker;
-    unsigned char listener;
-    unsigned char pad;
+    uint8_t room;
+    uint8_t speaker;
+    uint8_t listener;
+    uint8_t pad;
     char text[RV_TALK];
 } RvTalk;
 typedef struct {
-    unsigned char type;
-    unsigned char density;
-    short x;
-    short z;
-    short radius;
+    uint8_t type;
+    uint8_t density;
+    int16_t x;
+    int16_t z;
+    int16_t radius;
 } RvField;
 typedef struct {
     char id[RV_ID];
-    unsigned char node;
-    unsigned char type;
-    unsigned char music;
-    unsigned char nnav;
-    unsigned char nship;
-    unsigned char ntalk;
-    unsigned char nfield;
-    unsigned char pad;
+    uint8_t node;
+    uint8_t type;
+    uint8_t music;
+    uint8_t nnav;
+    uint8_t nship;
+    uint8_t ntalk;
+    uint8_t nfield;
+    uint8_t pad;
     char title[RV_TITLE];
     char briefing[RV_BRIEFING];
     char win[RV_RESULT];
     char lose[RV_RESULT];
     RvNav nav[RV_NAVS];
     RvShip ship[RV_SHIPS];
-    unsigned char seat[RV_ROOMS][RV_SEATS];
-    unsigned char pad2[2];
+    uint8_t seat[RV_ROOMS][RV_SEATS];
+    uint8_t pad2[2];
     RvTalk talk[RV_TALKS];
     RvField field[RV_FIELDS];
 } RvMission;
 typedef struct {
     char key[RV_KEY];
     char name[RV_NAME];
-    unsigned char type;
-    unsigned char side;
-    unsigned char flags;
-    unsigned char cockpit;
-    unsigned short cruise_kps;
-    unsigned short max_kps;
-    unsigned short ab_kps;
-    unsigned short accel;
-    unsigned char yaw_dps;
-    unsigned char pitch_dps;
-    unsigned char roll_dps;
-    unsigned char guns;
-    unsigned short shield_f;
-    unsigned short shield_r;
-    unsigned short armor_f;
-    unsigned short armor_r;
-    unsigned short armor_l;
-    unsigned short armor_rt;
-    unsigned short hull;
-    unsigned short lod0_px;
-    unsigned short missiles;
-    unsigned char nengines;
-    unsigned char pad;
-    signed char engine[RV_ENGINES][4];
-    unsigned char hit[3];
-    unsigned char core;
-    unsigned char nvitals;
-    signed char vital[RV_VITALS][3];
-    unsigned char loadout[RV_GUNTABLE];
+    uint8_t type;
+    uint8_t side;
+    uint8_t flags;
+    uint8_t cockpit;
+    uint16_t cruise_kps;
+    uint16_t max_kps;
+    uint16_t ab_kps;
+    uint16_t accel;
+    uint8_t yaw_dps;
+    uint8_t pitch_dps;
+    uint8_t roll_dps;
+    uint8_t guns;
+    uint16_t shield_f;
+    uint16_t shield_r;
+    uint16_t armor_f;
+    uint16_t armor_r;
+    uint16_t armor_l;
+    uint16_t armor_rt;
+    uint16_t hull;
+    uint16_t lod0_px;
+    uint16_t missiles;
+    uint8_t nengines;
+    uint8_t pad;
+    int8_t engine[RV_ENGINES][4];
+    uint8_t hit[3];
+    uint8_t core;
+    uint8_t nvitals;
+    int8_t vital[RV_VITALS][3];
+    uint8_t loadout[RV_GUNTABLE];
 } RvShipType;
 typedef struct {
     char code[RV_CODE];
     char name[RV_WNAME];
-    unsigned char type;
-    unsigned char kind;
-    unsigned char look;
-    unsigned char lock;
-    unsigned short damage;
-    unsigned short speed_kps;
-    unsigned short range_km;
-    unsigned char refire;
-    unsigned char energy;
-    unsigned char lock_tenths;
-    unsigned char pad;
+    uint8_t type;
+    uint8_t kind;
+    uint8_t look;
+    uint8_t lock;
+    uint16_t damage;
+    uint16_t speed_kps;
+    uint16_t range_km;
+    uint8_t refire;
+    uint8_t energy;
+    uint8_t lock_tenths;
+    uint8_t pad;
 } RvWeapon;
 #pragma pack()
 
@@ -260,7 +262,7 @@ typedef struct {
 #else
 #define RV_FAR
 #endif
-static const short RV_FAR rv_qsin[257] = {
+static const int16_t RV_FAR rv_qsin[257] = {
     0, 101, 201, 302, 402, 503, 603, 704, 804, 904, 1005, 1105,
     1205, 1306, 1406, 1506, 1606, 1706, 1806, 1906, 2006, 2105, 2205, 2305,
     2404, 2503, 2603, 2702, 2801, 2900, 2999, 3098, 3196, 3295, 3393, 3492,

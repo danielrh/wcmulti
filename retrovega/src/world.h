@@ -19,52 +19,65 @@ enum { CTL_AI, CTL_PLAYER, CTL_PUPPET, CTL_SCRIPT, CTL_FROZEN };
 /* commAnimInfo: the side */
 enum { SIDE_TERRAN, SIDE_AERA, SIDE_RLAAN };
 
-#define KM 256L                         /* positions a km */
+#define KM INT32_C(256)                 /* positions a km */
 #define ONE 256                         /* 1.0 in an orientation vector */
 #define TURN 1024                       /* a whole turn in lf_sin / lf_cos / lf_atan2's angles */
 #define KPS_HZ 20                       /* the step rate a kps is converted at: a kps is KM / KPS_HZ = 12.8 positions a
                                            step (spec 6.1).  The flight steps LOGIC_HZ times a second (logic.h): while
                                            the two differ everything moves LOGIC_HZ / KPS_HZ times its nominal speed */
-#define KPS_STEP(kps) ((long)(kps) * KM / KPS_HZ)   /* a speed in kps as positions a step */
+#define KPS_STEP(kps) ((int32_t)(kps) * KM / KPS_HZ)   /* a speed in kps as positions a step */
 
 /* a slot's shield words (k: 0 front, 1 rear) and armour words (k: 0 front, 1 rear, 2 left, 3 right) */
-#define SHIELD(s, k) (((unsigned short *)curShield)[(s) * 2 + (k)])
-#define SHIELD_MAX(s, k) (((unsigned short *)shieldMax)[(s) * 2 + (k)])
-#define ARMOR(s, k) (((unsigned short *)armorState)[(s) * 4 + (k)])
+#define SHIELD(s, k) (((uint16_t *)curShield)[(s) * 2 + (k)])
+#define SHIELD_MAX(s, k) (((uint16_t *)shieldMax)[(s) * 2 + (k)])
+#define ARMOR(s, k) (((uint16_t *)armorState)[(s) * 4 + (k)])
 /* a slot's gun table (spec 4.5): its count, and gun record g's weapon type, mount and state */
 #define GUN_COUNT(s) (gunTable[(s) * gunTable_SIZE])
 #define GUN_REC(s, g) (gunTable + (s) * gunTable_SIZE + 1 + (g) * 5)
-#define GUN_TYPE(s, g) (*(unsigned short *)GUN_REC(s, g))
-#define GUN_MOUNT_X(s, g) (((signed char *)GUN_REC(s, g))[2])   /* across, 1/32 of the half box (collide_half) */
-#define GUN_MOUNT_Y(s, g) (((signed char *)GUN_REC(s, g))[3])   /* up, the same */
+#define GUN_TYPE(s, g) (*(uint16_t *)GUN_REC(s, g))
+#define GUN_MOUNT_X(s, g) (((int8_t *)GUN_REC(s, g))[2])   /* across, 1/32 of the half box (collide_half) */
+#define GUN_MOUNT_Y(s, g) (((int8_t *)GUN_REC(s, g))[3])   /* up, the same */
 #define GUN_STATE(s, g) (GUN_REC(s, g)[4])   /* bit 7 destroyed; a gun's cooldown steps, a launcher's rounds */
 #define GUN_DESTROYED 0x80
 
 /* vectors (RvVec3: positions, or 256 = 1.0 for a direction) */
-long vec_dot(const RvVec3 *a, const RvVec3 *b);
+int32_t vec_dot(const RvVec3 *a, const RvVec3 *b);
 void vec_norm(RvVec3 *v);               /* to length 256 (no change to a zero vector) */
 void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b);   /* (a x b) / 256 */
-void vec_turn(RvVec3 *a, RvVec3 *b, int t);   /* a and b turned by t (TURN a whole turn) in their plane:
+void vec_turn(RvVec3 *a, RvVec3 *b, int16_t t);   /* a and b turned by t (TURN a whole turn) in their plane:
                                            a' = a cos + b sin, b' = b cos - a sin.  (front, right): a yaw to the
                                            right; (front, up): a pitch up; (right, up): a roll to the left */
 
+/* do_damage's `where`: a near pointer to an RvVec3 (on DOS its offset in DGROUP; the host harness maps one).  Pass
+ * RV_WHERE(&v) for a vector of yours (a local: the stack is in DGROUP), and read the one do_damage_impl was given
+ * through RV_WHERE_VEC(where) (only read it: on the host it can be a copy) */
+#ifdef RV_HOST
+uint16_t rv_where(const RvVec3 *v);
+#define RV_WHERE(p) rv_where(p)
+#define RV_WHERE_VEC(w) ((const RvVec3 *)(rv_dgroup + (uint16_t)(w)))
+#else
+#define RV_WHERE(p) ((uint16_t)(p))
+#define RV_WHERE_VEC(w) ((const RvVec3 *)(w))
+#endif
+
 /* a slot's ship */
-int slot_is_ship(int s);                /* 0 .. RV_MAX_SHIP_SLOT holding a ship or a capital ship */
-const RvShipType __far *slot_type(int s);   /* its type's numbers (data/ships.csv), or NULL */
-void ship_orthonormalise(int s);        /* its frame made unit length and square again (do it after turning it) */
-void ship_face(int s, int yaw, int pitch);   /* its frame set to face that way (TURN a whole turn), level */
-long player_km(int s);                  /* km from the player, roughly (the largest axis and half the rest) */
-void ship_rel(int from, int s, RvVec3 *out);   /* s as from sees it: right, up, ahead, in km */
+int16_t slot_is_ship(int16_t s);        /* 0 .. RV_MAX_SHIP_SLOT holding a ship or a capital ship */
+const RvShipType __far *slot_type(int16_t s);   /* its type's numbers (data/ships.csv), or NULL */
+void ship_orthonormalise(int16_t s);    /* its frame made unit length and square again (do it after turning it) */
+void ship_face(int16_t s, int16_t yaw, int16_t pitch);   /* its frame set to face that way (TURN a whole turn), level */
+int32_t player_km(int16_t s);           /* km from the player, roughly (the largest axis and half the rest) */
+void ship_rel(int16_t from, int16_t s, RvVec3 *out);   /* s as from sees it: right, up, ahead, in km */
 
 /* a ship into slot s: its type's numbers (speeds, shields, armour, the gun table its loadout), at a place
  * (positions), facing a way (TURN a whole turn of yaw), flown by `controller` (CTL_*) */
-void ship_spawn(int s, int type, int side, int controller, long x, long y, long z, int yaw);
-void ship_clear(int s);                 /* the slot empty (no explosion, nothing else: the caller's) */
-int ship_free_slot(void);               /* the first empty ship slot 1 .. RV_MAX_SHIP_SLOT, or -1 */
-void ship_guns(int s);                  /* its gun table from its type's loadout (ship_spawn does it) */
+void ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32_t x, int32_t y, int32_t z,
+                int16_t yaw);
+void ship_clear(int16_t s);             /* the slot empty (no explosion, nothing else: the caller's) */
+int16_t ship_free_slot(void);           /* the first empty ship slot 1 .. RV_MAX_SHIP_SLOT, or -1 */
+void ship_guns(int16_t s);              /* its gun table from its type's loadout (ship_spawn does it) */
 
 /* the gameplay random stream: randomSeed's (spec 6.3), so the layer can re-seed it before it replays a spawn or a
  * hit.  Only for what changes play; pictures take their own */
-unsigned game_rand(void);               /* 0 .. 32767 */
+uint16_t game_rand(void);               /* 0 .. 32767 */
 
 #endif

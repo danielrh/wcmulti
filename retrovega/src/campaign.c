@@ -15,20 +15,20 @@
 RvSave g_camp;
 RvPilot g_pilots[RV_PILOTS];
 RvNode g_nodes[RV_NODES];
-unsigned g_npilots, g_nnodes, g_nmissions;
+uint16_t g_npilots, g_nnodes, g_nmissions;
 RvShipType __far g_shiptypes[RV_SHIPTYPES];
-unsigned g_nshiptypes;
+uint16_t g_nshiptypes;
 RvWeapon __far g_weapons[RV_WEAPONS];
-unsigned g_nweapons;
+uint16_t g_nweapons;
 static RvGameHeader g_head;
 static XmsBlock g_missions;
 
-int camp_load_data(const char *path)
+int16_t camp_load_data(const char *path)
 {
     FILE *f = fopen(path, "rb");
-    unsigned char *buf = rv_filebuf;
-    static unsigned char __far mission[sizeof(RvMission) + 2];
-    unsigned i;
+    uint8_t *buf = rv_filebuf;
+    static uint8_t __far mission[sizeof(RvMission) + 2];
+    uint16_t i;
     if (!f)
         return 0;
     fread(&g_head, sizeof g_head, 1, f);
@@ -48,17 +48,17 @@ int camp_load_data(const char *path)
     fread(g_pilots, sizeof(RvPilot), g_npilots, f);
     fseek(f, g_head.nodes_at, SEEK_SET);
     fread(g_nodes, sizeof(RvNode), g_nnodes, f);
-    g_missions = xms_alloc((unsigned long)sizeof(RvMission) * g_nmissions, XMS_RESIDENT);
+    g_missions = xms_alloc((uint32_t)sizeof(RvMission) * g_nmissions, XMS_RESIDENT);
     RV_ASSERT(g_missions != 0);
     fseek(f, g_head.missions_at, SEEK_SET);
     for (i = 0; i < g_nmissions; i++) {
-        unsigned k;
+        uint16_t k;
         for (k = 0; k < sizeof(RvMission); k += sizeof rv_filebuf) {
-            unsigned part = sizeof(RvMission) - k < sizeof rv_filebuf ? sizeof(RvMission) - k : sizeof rv_filebuf;
+            uint16_t part = sizeof(RvMission) - k < sizeof rv_filebuf ? sizeof(RvMission) - k : sizeof rv_filebuf;
             fread(buf, 1, part, f);
             _fmemcpy(mission + k, buf, part);
         }
-        xms_put(g_missions, (unsigned long)i * sizeof(RvMission), mission, sizeof(RvMission));
+        xms_put(g_missions, (uint32_t)i * sizeof(RvMission), mission, sizeof(RvMission));
     }
     RV_ASSERT(g_head.nshiptypes <= RV_SHIPTYPES && g_head.shiptype_size == sizeof(RvShipType));
     g_nshiptypes = g_head.nshiptypes;
@@ -80,18 +80,18 @@ int camp_load_data(const char *path)
     return 1;
 }
 
-const RvShipType __far *ship_type(unsigned type)
+const RvShipType __far *ship_type(uint16_t type)
 {
-    unsigned i;
+    uint16_t i;
     for (i = 0; i < g_nshiptypes; i++)
         if (g_shiptypes[i].type == type)
             return &g_shiptypes[i];
     return 0;
 }
 
-const RvWeapon __far *weapon(unsigned type)
+const RvWeapon __far *weapon(uint16_t type)
 {
-    unsigned i;
+    uint16_t i;
     for (i = 0; i < g_nweapons; i++)
         if (g_weapons[i].type == type)
             return &g_weapons[i];
@@ -100,12 +100,12 @@ const RvWeapon __far *weapon(unsigned type)
 
 void camp_new(void)
 {
-    unsigned i;
+    uint16_t i;
     memset(&g_camp, 0, sizeof g_camp);
     memcpy(g_camp.magic, SAVE_MAGIC, 6);
     g_camp.version = SAVE_VERSION;
     g_camp.size = sizeof g_camp;
-    g_camp.node = (unsigned char)g_head.start_node;
+    g_camp.node = (uint8_t)g_head.start_node;
     g_camp.player_ship = 0x03;           /* the Redeemer, until Kit has a word */
     g_camp.seed = ticks();
     for (i = 0; i < RV_PILOTS; i++)
@@ -113,17 +113,17 @@ void camp_new(void)
     campaignNode(g_camp.node, g_camp.mission);
 }
 
-unsigned camp_mission_index(void)
+uint16_t camp_mission_index(void)
 {
     RV_CHECK(g_camp.node, g_nnodes);
     RV_CHECK(g_camp.mission, RV_MISSIONS_PER_NODE);
     return g_nodes[g_camp.node].missions[g_camp.mission];
 }
 
-void camp_mission(unsigned i, RvMission __far *out)
+void camp_mission(uint16_t i, RvMission __far *out)
 {
     RV_CHECK(i, g_nmissions);
-    xms_get(g_missions, (unsigned long)i * sizeof(RvMission), out, sizeof(RvMission));
+    xms_get(g_missions, (uint32_t)i * sizeof(RvMission), out, sizeof(RvMission));
 }
 
 /* the mission's ships into the tables the layer already reads (spec 4.4):
@@ -132,29 +132,29 @@ void camp_mission(unsigned i, RvMission __far *out)
  * the nav points' records of 0x4d bytes (+0 id, +2 position). */
 void camp_load_units(const RvMission __far *m)
 {
-    unsigned char *ships = missionShipTable, *navs = navPointTable;
-    unsigned i, n = 0, k;
+    uint8_t *ships = missionShipTable, *navs = navPointTable;
+    uint16_t i, n = 0, k;
     memset(ships, 0, missionShipTable_SIZE * 64);
     memset(navs, 0, navPointTable_SIZE * 16);
     RV_ASSERT(m->nnav <= RV_NAVS && m->nship <= RV_SHIPS);
     for (i = 0; i < m->nnav; i++) {
-        unsigned char *rec = navs + navPointTable_SIZE * i;
+        uint8_t *rec = navs + navPointTable_SIZE * i;
         rec[0] = m->nav[i].id;
-        *(short *)(rec + 2) = m->nav[i].x;
-        *(short *)(rec + 4) = m->nav[i].y;
-        *(short *)(rec + 6) = m->nav[i].z;
+        *(int16_t *)(rec + 2) = m->nav[i].x;
+        *(int16_t *)(rec + 4) = m->nav[i].y;
+        *(int16_t *)(rec + 6) = m->nav[i].z;
     }
     for (i = 0; i < m->nship; i++) {
         const RvShip __far *s = &m->ship[i];
         for (k = 0; k < s->count && n < 64; k++, n++) {
-            unsigned char *rec = ships + missionShipTable_SIZE * n;
-            unsigned type = s->type == RV_SHIP_PLAYER || s->type == RV_SHIP_WINGMAN ? g_camp.player_ship : s->type;
-            *(unsigned short *)(rec + 0) = type;
-            *(unsigned short *)(rec + 2) = s->side;
-            *(unsigned short *)(rec + 4) = s->type == RV_SHIP_PLAYER ? 0xFFFF : 0;
-            *(unsigned short *)(rec + 6) = s->type == RV_SHIP_PLAYER ? 6 : s->type == RV_SHIP_WINGMAN ? 4 : 0;
-            *(unsigned short *)(rec + 8) = s->nav;
-            *(short *)(rec + 10) = (short)(k * 2);
+            uint8_t *rec = ships + missionShipTable_SIZE * n;
+            uint16_t type = s->type == RV_SHIP_PLAYER || s->type == RV_SHIP_WINGMAN ? g_camp.player_ship : s->type;
+            *(uint16_t *)(rec + 0) = type;
+            *(uint16_t *)(rec + 2) = s->side;
+            *(uint16_t *)(rec + 4) = s->type == RV_SHIP_PLAYER ? 0xFFFF : 0;
+            *(uint16_t *)(rec + 6) = s->type == RV_SHIP_PLAYER ? 6 : s->type == RV_SHIP_WINGMAN ? 4 : 0;
+            *(uint16_t *)(rec + 8) = s->nav;
+            *(int16_t *)(rec + 10) = (int16_t)(k * 2);
             rec[16] = s->pilot;
         }
     }
@@ -162,14 +162,14 @@ void camp_load_units(const RvMission __far *m)
     missionStatus = 3;                   /* on the carrier */
     currentSeries = g_camp.node;
     currentMission = g_camp.mission;
-    rv_log("mission %.16Fs: %u nav points, %u mission ships", m->id, (unsigned)m->nnav, n);
+    rv_log("mission %.16Fs: %u nav points, %u mission ships", m->id, (uint16_t)m->nnav, n);
     missionLoaded(camp_mission_index());
 }
 
-int camp_resolve(int won)
+int16_t camp_resolve(int16_t won)
 {
     RvMission m;
-    unsigned i, next;
+    uint16_t i, next;
     camp_mission(camp_mission_index(), &m);
     g_camp.flown++;
     g_camp.wins += won ? 1 : 0;
@@ -178,7 +178,7 @@ int camp_resolve(int won)
         if (m.ship[i].pilot != RV_PILOT_NONE && m.ship[i].pilot < RV_PILOTS) {
             g_camp.pilot[m.ship[i].pilot].missions++;
             if (won)
-                g_camp.pilot[m.ship[i].pilot].kills += 1 + (unsigned)(ticks() % 3);
+                g_camp.pilot[m.ship[i].pilot].kills += 1 + (uint16_t)(ticks() % 3);
         }
     missionResolved(won ? 1 : 0);
     if (++g_camp.mission < RV_MISSIONS_PER_NODE) {
@@ -187,7 +187,7 @@ int camp_resolve(int won)
     }
     {
         const RvNode *n = &g_nodes[g_camp.node];
-        int good = g_camp.wins >= 3 || (g_camp.wins == 2 && g_camp.trend >= 0);
+        int16_t good = g_camp.wins >= 3 || (g_camp.wins == 2 && g_camp.trend >= 0);
         next = good ? n->good : n->bad;
         rv_log("node %.8s: %u wins, trend %d -> %s", n->id, g_camp.wins, g_camp.trend, good ? "good" : "bad");
     }
@@ -197,7 +197,7 @@ int camp_resolve(int won)
         g_camp.ending = next == RV_NODE_GOOD ? ENDING_GOOD : ENDING_BAD;
     } else {
         RV_CHECK(next, g_nnodes);
-        g_camp.node = (unsigned char)next;
+        g_camp.node = (uint8_t)next;
         campaignNode(g_camp.node, g_camp.mission);
     }
     return 1;
@@ -205,17 +205,17 @@ int camp_resolve(int won)
 
 /* --- the bunks: BUNK01.SAV .. BUNK08.SAV --- */
 
-static void bunk_path(int bunk, char *path)
+static void bunk_path(int16_t bunk, char *path)
 {
     sprintf(path, "BUNK%02d.SAV", bunk + 1);
 }
 
-int save_write(int bunk, const char *name)
+int16_t save_write(int16_t bunk, const char *name)
 {
     char path[16];
     FILE *f;
     RV_CHECK(bunk, BUNKS);
-    g_camp.bunk = (unsigned char)bunk;
+    g_camp.bunk = (uint8_t)bunk;
     strncpy(g_camp.name, name, sizeof g_camp.name - 1);
     g_camp.name[sizeof g_camp.name - 1] = 0;
     bunk_path(bunk, path);
@@ -229,7 +229,7 @@ int save_write(int bunk, const char *name)
     return 1;
 }
 
-int save_read(int bunk, RvSave __far *out)
+int16_t save_read(int16_t bunk, RvSave __far *out)
 {
     char path[16];
     FILE *f;
@@ -252,7 +252,7 @@ int save_read(int bunk, RvSave __far *out)
     return 1;
 }
 
-int save_load(int bunk)
+int16_t save_load(int16_t bunk)
 {
     static RvSave __far s;
     if (!save_read(bunk, &s))
