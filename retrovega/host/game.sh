@@ -9,6 +9,8 @@
 #   CC=clang                  clang (and clang++)
 #   OPT=-O1                   the optimisation (always -g3)
 #   WEB=1                     the browser's (build/gameweb/: rv.js, rv.wasm; Emscripten, ASYNCIFY)
+#   TESTS=1                   the test build's aids in, as RVT.EXE has them (RV_TESTS: the demos, the benchmarks, the
+#                             self-tests; build/game32-tests)
 # 32-bit only: the archive's records and the far pointers (seg:off, the host pointer's halves) are 32-bit layouts.
 # Needs the DOS build's data (./build.sh), gcc-multilib and g++-multilib, libsdl2-dev:i386; WEB=1 the Emscripten SDK.
 set -e
@@ -55,6 +57,12 @@ else
     EXE=$OUT/rv
     LINKG=-g
 fi
+TESTF=""
+if [ -n "${TESTS:-}" ]; then
+    OUT=$OUT-tests
+    EXE=$OUT/$(basename "$EXE")
+    TESTF=-DRV_TESTS
+fi
 mkdir -p "$OUT/obj" "$OUT/stubs"
 [ -f build/dos/RV.DAT ] || { echo "no build/dos/RV.DAT: ./build.sh first"; exit 1; }
 
@@ -72,7 +80,7 @@ COMMON="-std=gnu99 -g3 -funsigned-char -fno-strict-aliasing -U_FORTIFY_SOURCE -D
         -include host/rvhost.h -Ihost/dos -Isrc -Ihost"
 WARN="-Wall -Wno-unused-parameter -Wno-sign-compare -Wno-unused-result -Wno-format -Wno-unused-but-set-variable
       -Wno-pointer-sign -Wno-char-subscripts"
-CFLAGS="$ARCHF $OPT $COMMON $WARN $SANF"
+CFLAGS="$ARCHF $OPT $COMMON $WARN $SANF $TESTF"
 rm -f "$OUT"/obj/*.o
 for c in $ENGINE; do
     extra=""

@@ -356,6 +356,19 @@ void hle_mouse_button(int b, int down)
     g_mbuttons = down ? g_mbuttons | 1 << b : g_mbuttons & ~(1 << b);
 }
 
+/* a touch's press: counted (a click, int 33h function 5), never held: in flight the held button is the guns, and
+ * a finger on the picture is there to steer (the touch controls' Fire is the trigger) */
+void hle_mouse_tap(int b)
+{
+    if (b < 0 || b > 1)
+        return;
+    g_mpress[b]++;
+    g_mpress_x[b] = g_mx;
+    g_mpress_y[b] = g_my;
+}
+
+int hle_mouse_state(int *x, int *y) { *x = g_mx; *y = g_my; return g_mbuttons; }
+
 static void int33(union REGS *r)
 {
     int b;

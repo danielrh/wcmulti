@@ -412,8 +412,12 @@ long bolts_selftest(void)
     if (!bad) {
         void __far *mem = _fmalloc(sizeof(LzFlameLook) + 16);
         if (mem) {
+#ifdef RV_HOST                          /* (a flat address: 16-aligned, as the paragraph is) */
+            LzFlameLook __far *lk = (LzFlameLook __far *)(((uintptr_t)mem + 15) & ~(uintptr_t)15);
+#else
             unsigned long lin = ((unsigned long)FP_SEG(mem) << 4) + FP_OFF(mem) + 15;
             LzFlameLook __far *lk = (LzFlameLook __far *)MK_FP((unsigned)(lin >> 4), 0);
+#endif
             for (k = 0; k < 256; k++) {
                 lk->lut[k] = (unsigned char)((k & 15) > 12 ? 0 : (k * 37 + 11) & 255);
                 lk->ramp_a[k] = (unsigned char)k;

@@ -2158,7 +2158,10 @@ enough to want a half-size source set (spec §8).
 
 `host/game.sh` builds the whole game, `src/` as RV.EXE has it, for a 32-bit
 host (`build/game32/rv`: gcc `-m32`, UBSan) or, with `WEB=1`, for the browser
-(`build/gameweb/rv.js`, `rv.wasm`: Emscripten, ASYNCIFY). No emulator runs
+(`build/gameweb/rv.js`, `rv.wasm`: Emscripten, ASYNCIFY). `TESTS=1` builds it
+as RVT.EXE is built, with the demos, benchmarks and self-tests
+(`build/game32-tests/rv`). Either one runs the DOS tests' scripts:
+`rv --data DIR /script FILE`. No emulator runs
 it. https://fireflyk64.github.io/rv/ is this build (`host/web/site.sh` puts
 the page together, `host/web/deploy.sh` publishes it with rvsim at `rv/sim/`).
 It is one player: the multiplayer layer lives in DOSBox, so flying with
@@ -2218,7 +2221,17 @@ others stays on the DOSBox page (`dosbox/?retrovega`).
   - the flight's two-word edges (the low word as `int16_t`).
 
   RV.EXE's code is unchanged by these: every module's disassembly was compared
-  before and after.
+  before and after. The fixed block's stand-in, `rv_dgroup` (host/fixed.c),
+  sits on a 64 KB boundary, so a near pointer's DOS idiom works as it is: a
+  pointer's low 16 bits are its DGROUP offset (rocks.c's `currentField`).
+- **The width audit** (`tests/host/width-audit.sh`) finds such places.
+  `tools/width16.py` rewrites the sources with their own `int` and `unsigned`
+  16 bits and every cast to them checked. Built with clang's
+  `-fsanitize=implicit-integer-truncation`, the game then runs the walk, a
+  whole campaign and the test build's scenes, and each place that stores,
+  passes, returns or casts a value too wide for 16 bits is reported once.
+  Each is a candidate: there DOS wraps and the native build does not. The
+  audit build itself is not DOS: its unsigned arithmetic is a signed int's.
 - **The same pictures:** `tests/host/shotdiff.py` compares two runs'
   screenshots pixel by pixel. For `tests/walk.txt` run by RV.EXE in DOSBox and
   by `build/game32/rv /script`, they are the same except where something moves
@@ -2228,14 +2241,26 @@ others stays on the DOSBox page (`dosbox/?retrovega`).
   - the bunk's saves kept in IndexedDB after each save and put back at the next visit;
   - the ships' sets made as a flight asks (`web/rvsets.js`, the DOSBox page's too);
   - the touch controls (`web/touch.js`, shared too);
-  - Caps Lock is the game's Esc.
+  - Caps Lock is the game's Esc;
+  - a finger is a click, never the held button: in flight the held button is
+    the guns, and a finger on the picture steers (Fire is the trigger).
 
   `host/web/game-check.mjs` plays it in headless Chrome: the base, a save, the
   briefing, a flight, the debrief, and the saves after a reload. With
   `PHONE=1` it does all of that by taps on a phone's screen, with the Keys
   button's typing and Fire.
-- **A bug found on the way, DOS's too:** `rv_rotate_row2` writes one pixel
-  past its span when the span is odd (the twin does what the asm does).
+- **Bugs found on the way, DOS's too:**
+  - **Fixed: a campaign that stopped at layer 2.** A flight's first picture
+    used the previous flight's plan, whose set indices a flight with fewer
+    types has not loaded. RV.EXE stopped at `ships_set` (`i < g_nsets`) in
+    mission L2m1_m2 of `tests/campaign.txt`. Now the flight plans before its
+    first picture; RV.EXE and the native build play the campaign to its
+    ending.
+  - **Fixed: the radar's far contacts.** Their vector's squares overflowed a
+    `long`, so the angle off the nose came out wrong. The vector is now halved
+    until the sum fits; the way is all the radar wants.
+  - **Not fixed:** `rv_rotate_row2` writes one pixel past its span when the
+    span is odd. The twin does what the assembly does.
 
 ## Bounds
 

@@ -17,6 +17,8 @@ extern int hle_fb_changed;              /* set when a move or the DAC changed wh
 void hle_key(int scan, int down);       /* a key by its set 1 scan code; 0x100 | code for an E0 (grey) key */
 void hle_mouse_at(int x, int y);        /* the pointer at screen pixel x, y (the mickeys follow the moves) */
 void hle_mouse_button(int b, int down); /* 0 left, 1 right */
+void hle_mouse_tap(int b);              /* a touch: a press counted, the button never held */
+int hle_mouse_state(int *x, int *y);    /* the driver's pointer; its buttons returned */
 void hle_pump(void);                    /* the timer's and the keyboard's interrupts that are due, delivered */
 void hle_init(void);
 void hle_frame_done(void);              /* the flight drew a frame (rvFrameDone): shown */

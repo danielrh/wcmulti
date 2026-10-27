@@ -7,7 +7,8 @@
 /* DGROUP: the fixed block at 0 .. 0x7FFF as on DOS, then room for the near vectors rv_where hands out */
 #define NEAR_RING 0x8000
 #define NEAR_RING_N 64
-uint8_t rv_dgroup[0x10000] __attribute__((aligned(16)));
+uint8_t rv_dgroup[0x10000] __attribute__((aligned(65536)));   /* (on a 64 KB boundary: a pointer's low 16 bits are its
+                                           DGROUP offset, as a near pointer is on DOS: `(unsigned short)(unsigned)p`) */
 
 /* do_damage's `where` (world.h's RV_WHERE): a vector in the fixed block is its offset there, as on DOS; any other is
  * copied into DGROUP past the fixed block (a ring of them) and that copy's offset given: read it, never write it */

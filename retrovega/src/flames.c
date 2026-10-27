@@ -77,7 +77,7 @@ static struct {                         /* this frame's flames */
     ShipView v;                         /* frame 0's rows (and the size and nozzle both frames share) */
     unsigned long at_b;                 /* frame 1's */
     short x, y;
-    unsigned seed;                      /* which rows from which */
+    unsigned short seed;                /* which rows from which (16 bits: it wraps as on DOS) */
     unsigned char flags;
     short way, len16;                   /* its baked tail's way on screen (16384ths), its length x16 (the test's) */
 } __far g_fl[FLAME_MAX];

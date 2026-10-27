@@ -571,7 +571,7 @@ static void collide_demo_step(void)
     static const char __far s_hit[] = "collide: frame %u round %d: a hit %ld km deep, the push %ld,%ld,%ld km";
     int r = g_demo_frame / CD_FRAMES, t = g_demo_frame % CD_FRAMES, i;
     LfVec push;
-    long depth;
+    int32_t depth;
     if (r >= CD_ROUNDS) {
         missionStatus = 1;              /* landed */
         return;
@@ -721,7 +721,7 @@ static void ft_sheet(void)
     flames_frame();
     for (c = 0; c < 8; c++) {
         RvVec3 f = *(const RvVec3 *)&cam.front, r = *(const RvVec3 *)&cam.right, u = *(const RvVec3 *)&cam.up;
-        long km = c < 4 ? 5000 : 3000, ox, oy, tx, ty;
+        long km = c < 4 ? 5000 : 3000; int32_t ox, oy, tx, ty;
         int dx = 80 + 160 * (c % 4) - SCR_W / 2, dy = g_cam_cy - (c < 4 ? 100 : 290), nb, nh, ex = c >= 6, a;
         set[c] = ships_find(types[c]);
         if (set[c] < 0)
@@ -824,7 +824,7 @@ static void flame_test(void)
                     LfPlace p, p0;
                     FlameSet fs;
                     int path, dv, dr, pp, nb, nh, lnb, lnh, k;
-                    long tx, ty, ox, oy, oz;
+                    int32_t tx, ty, ox, oy, oz;
                     ships_draw_as(set, ex, o & 1 ? 2 : 1, &rel, &cam, &ship, sc, 0, 0, 0, SCR_W, 0, 0, 0);
                     path = ships_last_drawn(&dv, &dr);
                     pp = ships_drawn(set, ex, &rel, &cam, &ship, sc, &p, &nb, &nh);
@@ -1498,6 +1498,11 @@ static void gather(void)
         x = vec_dot(&d, &gOrientationRightVector[0]) / 256;
         y = vec_dot(&d, &gOrientationUpVector[0]) / 256;
         z = vec_dot(&d, &gOrientationFrontVector[0]) / 256;
+        while (labs(x) > 16383 || labs(y) > 16383 || labs(z) > 16383) {
+            x /= 2;                     /* (the way is all that is wanted: halved till the squares' sum fits a long) */
+            y /= 2;
+            z /= 2;
+        }
         len = (long)lf_sqrt((unsigned long)(x * x + y * y + z * z));
         if (!len)
             continue;
@@ -2404,6 +2409,8 @@ void __far __cdecl flight_startup(void)
     in_steer(0);
     in_warp(SCR_W / 2, cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2);
     gather();
+    plan_draws();                       /* (this flight's ships for its first picture: the last flight's plan named
+                                           its sets, which a flight with fewer types has not loaded) */
     vid_fade(0);
     vid_dirty(0, SCR_H);
     cockpit_dirty(&g_st);

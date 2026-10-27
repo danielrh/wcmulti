@@ -169,6 +169,8 @@ static void release_all(void)
 #ifdef __EMSCRIPTEN__
 /* the page's own keys (its touch controls): a PC scan code (0x100 | code: a grey key) down or up */
 EMSCRIPTEN_KEEPALIVE void rv_page_key(int pc, int down) { hle_key(pc, down); }
+/* (for the page's tests) the mouse driver's buttons (bits 0, 1), its x at bit 8 and y at bit 20 */
+EMSCRIPTEN_KEEPALIVE int rv_page_mouse(void) { int x, y, b = hle_mouse_state(&x, &y); return b | x << 8 | y << 20; }
 #endif
 
 void plat_events(void)
@@ -190,6 +192,11 @@ void plat_events(void)
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:
             hle_mouse_at(e.button.x, e.button.y);
+            if (e.button.which == SDL_TOUCH_MOUSEID) {      /* (a finger: a click, never the held button) */
+                if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT)
+                    hle_mouse_tap(0);
+                break;
+            }
             hle_mouse_button(e.button.button == SDL_BUTTON_LEFT ? 0 : e.button.button == SDL_BUTTON_RIGHT ? 1 : -1,
                              e.type == SDL_MOUSEBUTTONDOWN);
             break;

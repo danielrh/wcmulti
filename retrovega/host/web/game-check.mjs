@@ -119,6 +119,22 @@ try {
   await sleep(4000);
   await shot("flight");
   if (phone) {
+    // a finger dragged across the view steers (the pointer follows it) and never holds the button (the guns)
+    const cdp = await context.newCDPSession(page);
+    const at = (gx, gy) => ({ x: box.x + gx * box.w / 640, y: box.y + gy * box.h / 400 });
+    const touch = (type, p) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: p ? [{ ...p, id: 1 }] : [] });
+    await touch("touchStart", at(320, 110));
+    let held = 0, xs = [];
+    for (let k = 1; k <= 12; k++) {
+      await touch("touchMove", at(320 + k * 15, 110 + k * 4));
+      await sleep(80);
+      const m = await page.evaluate(() => window.RetroVegaPage.module()._rv_page_mouse());
+      held |= m & 3;
+      xs.push((m >> 8) & 0xFFF);
+    }
+    await shot("flight-drag");
+    await touch("touchEnd");
+    ok(!held && xs[xs.length - 1] > xs[0] + 100, `a finger steers without the button held (x ${xs[0]} .. ${xs[xs.length - 1]}, buttons ${held})`);
     // Fire: Space held while the button is (the page's keys into the game, watched)
     await page.evaluate(() => {
       const M = window.RetroVegaPage.module(), f = M._rv_page_key;
