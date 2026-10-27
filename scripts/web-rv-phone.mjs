@@ -1,9 +1,12 @@
 // RetroVega on a phone, emulated: a Pixel 7's screen and touch, and no Pointer Lock (phones have none), every input
 // a tap.  From fireflyk64.github.io/rv/ (or any page URL): one player, Join, Fly, then the base by taps alone: the
-// welcome, the bunk menu (its close box; a bunk, SAVE, SAVE: "Bunk 1"), the quarters' door, the lounge's hatch, the
-// bar's hatch to the briefing, the deck.  A screenshot of each step (SHOT_DIR/phone-NN-name.png) and the engine's log.
+// welcome, the bunk menu (its close box; a bunk, SAVE, SAVE: "Bunk 1"; another, SAVE, the Keys button and a name
+// typed as a phone's keyboard types (input events, no key codes), Enter; the Esc button; a tap outside), the quarters'
+// door, the lounge's hatch, the bar's hatch to the briefing, the deck, and the Fire button (web/touch.js).  A
+// screenshot of each step (SHOT_DIR/phone-NN-name.png) and the engine's log.
 //   PLAYWRIGHT_DIR=... SHOT_DIR=... node scripts/web-rv-phone.mjs PAGE_URL
-// LOCK=1 keeps Pointer Lock (a desktop browser's touch screen).  Prints "PHONE OK" when every step showed.
+// LOCK=1 keeps Pointer Lock (a desktop browser's touch screen); NOFS=1 takes the Fullscreen API away (an iPhone, which
+// has it for videos only: the touch controls are then a row under the picture).  Prints "PHONE OK" when every step showed.
 import { createRequire } from "node:module";
 import path from "node:path";
 import fs from "node:fs";
@@ -23,6 +26,8 @@ try {
   const context = await browser.newContext({ ...devices["Pixel 7"] });
   if (!process.env.LOCK)
     await context.addInitScript(() => { Element.prototype.requestPointerLock = undefined; });
+  if (process.env.NOFS)
+    await context.addInitScript(() => { Element.prototype.requestFullscreen = undefined; Element.prototype.webkitRequestFullscreen = undefined; });
   const page = await context.newPage();
   page.on("console", (m) => logs.push(m.text()));
   page.on("pageerror", (e) => logs.push("PAGE ERROR: " + e.message));
@@ -75,6 +80,23 @@ try {
   t = await waitLog(/saved bunk 1 'Bunk 1'/, 5000);
   ok(/saved bunk 1 'Bunk 1'/.test(t), "saved to bunk 1 by taps alone");
   await shot("bunk-saved");
+  ok(await page.isVisible("#touchKeys"), "the touch controls show");
+  await shot("controls", true);
+  await tap(300, 118);                // bunk 2
+  await tap(125, 323);                // SAVE (S): the name
+  await page.locator("#touchKeys").tap();
+  await sleep(500);
+  ok(await page.evaluate(() => document.activeElement && document.activeElement.id === "touchType"), "Keys: the keyboard's field has the focus");
+  await page.keyboard.insertText("Cal Brody");   // (as a phone's keyboard: input events, no key codes)
+  await sleep(1500);
+  await shot("bunk-typing");
+  await page.keyboard.press("Enter");
+  t = await waitLog(/saved bunk 2 'Cal Brody'/, 6000);
+  ok(/saved bunk 2 'Cal Brody'/.test(t), "typed a name with the Keys button: bunk 2 'Cal Brody'");
+  await page.locator("#touchKeys").tap();        // (the keyboard away)
+  await shot("bunk-typed");
+  await page.locator("#touchEsc").tap();         // Esc: back to the list
+  await sleep(800);
   await tap(600, 380);                // outside the panel: closed
   await shot("bunk-out");
   // (each room is known by its music's cue in the log: the roomEntered stub logs only its first call)
@@ -97,6 +119,16 @@ try {
   ok(/LAUNCH\.MID/.test(t), "after the briefing: the deck");
   await sleep(2500);
   await shot("deck");
+  // Fire: Space held while the button is (the emulator's key queue, watched)
+  await page.evaluate(() => {
+    const M = window.DOSBox, f = M._wc_web_key;
+    window.__keys = [];
+    M._wc_web_key = (k, d) => { window.__keys.push([k, d]); return f(k, d); };
+  });
+  await page.locator("#touchFire").tap();
+  await sleep(500);
+  const keys = await page.evaluate(() => window.__keys);
+  ok(keys.length === 2 && keys[0][1] === 1 && keys[1][1] === 0 && keys[0][0] === keys[1][0], `Fire: a key down and up (${JSON.stringify(keys)})`);
   fs.writeFileSync(path.join(shotDir, "phone-RVLOG.TXT"), await rvlog());
 } finally {
   fs.writeFileSync(path.join(shotDir, "phone-console.log"), logs.join("\n") + "\n");

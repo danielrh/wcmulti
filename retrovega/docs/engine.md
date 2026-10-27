@@ -194,6 +194,17 @@ it already reads.
   input.c counts the presses between two polls (int 33h function 5), as a
   tap can be down and up again between them. `scripts/web-rv-phone.mjs`
   walks the base on an emulated phone by taps alone.
+- **The touch controls** (web/touch.js, on a screen with touch while a game
+  runs): **Keys** raises the device's own keyboard (a hidden field: what it
+  types goes to the game as key presses through the emulator's queue,
+  wc_web_key; a phone keyboard's composing and correcting is followed by the
+  field's value, as backspaces and letters), **Esc** is the game's Esc, and
+  **Fire** holds Space. A row under the picture, or its corners in full
+  screen (the page puts the canvas's wrapper, #screen, in full screen so they
+  come along). For RetroVega the layer had never taken the page's keys at
+  all (its hooks have no periodic call): the page's input now asks for the
+  hook check, which drains the keys and buttons (wcnet_hooks.cpp,
+  web_keys_and_buttons). The phone test types a bunk's name with Keys.
 - **Files:** a bunk's save is `BUNK01.SAV` .. `BUNK08.SAV`; the player
   names it (24 characters), or leaves it empty for "Bunk N" (the name
   prompt says so: a phone cannot type).

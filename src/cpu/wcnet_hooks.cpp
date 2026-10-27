@@ -1669,6 +1669,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_key(int kbd, int pressed) {
     g_webKeys[g_webKeyHead].key = (Bit8u)kbd;
     g_webKeys[g_webKeyHead].pressed = pressed ? 1 : 0;
     g_webKeyHead = next;
+    wc_net_countdown = 0;       // (taken at the next instruction: RetroVega's hooks have no periodic call)
 }
 // The pointer as fractions (0..1) of the mouse driver's range.
 extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_pointer(double fx, double fy) {
@@ -1689,6 +1690,7 @@ extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_mouse_button(int button, int pressed
         return;
     }
     if (pressed) g_webButtonsWanted |= 1u << button; else g_webButtonsWanted &= ~(1u << button);
+    wc_net_countdown = 0;
 }
 // The pad as the game's own joystick (web/gamepad.js, a "built in" choice):
 // 1 puts stick A on the game port, 0 takes it off, a negative value only
@@ -1740,14 +1742,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE double wc_web_link(int what) {
 extern "C" EMSCRIPTEN_KEEPALIVE int wc_web_in_flight() {
     return wc::in_flight() ? 1 : 0;
 }
-static void web_input_tick() {
+// the page's keys and mouse buttons, into DOSBox's keyboard and mouse driver: every game's (RetroVega's too)
+static void web_keys_and_buttons() {
     while (g_webKeyTail != g_webKeyHead) {
         KEYBOARD_AddKey((KBD_KEYS)g_webKeys[g_webKeyTail].key, g_webKeys[g_webKeyTail].pressed != 0);
         g_webKeyTail = (g_webKeyTail + 1) % kWebKeyQueue;
-    }
-    if (g_webPointerWanted) {
-        g_webPointerWanted = false;
-        wc::set_pointer(g_webPointerX, g_webPointerY);
     }
     for (unsigned b = 0; b < 3; b++) {
         unsigned bit = 1u << b;
@@ -1755,6 +1754,13 @@ static void web_input_tick() {
         if (!(g_webButtonsWanted & bit) && (g_webButtonsDown & bit)) Mouse_ButtonReleased((Bit8u)b);
     }
     g_webButtonsDown = g_webButtonsWanted;
+}
+static void web_input_tick() {
+    web_keys_and_buttons();
+    if (g_webPointerWanted) {
+        g_webPointerWanted = false;
+        wc::set_pointer(g_webPointerX, g_webPointerY);
+    }
     if (g_webJoyWanted >= 0) {
         wc::joystick_on(g_webJoyWanted != 0);
         g_webJoyWanted = -1;
@@ -1786,9 +1792,11 @@ static void web_input_tick() {
 static bool g_escTapWanted = false;
 extern "C" EMSCRIPTEN_KEEPALIVE void wc_web_tap_escape() {
     g_escTapWanted = true;
+    wc_net_countdown = 0;
 }
+static bool g_escHeld = false;
 static void escape_tap() {
-    static bool held = false;
+    bool &held = g_escHeld;
     static double releaseAt = 0;
     double now = PIC_FullIndex();
     if (held) {
@@ -1987,7 +1995,15 @@ static void rv_check_hooks() {
     if (scripted) {
         key_script();
     }
+#ifdef __EMSCRIPTEN__
+    // the page's keys (a phone's keyboard, the touch controls, a gamepad's buttons), mouse buttons and Esc tap: the
+    // page's calls ask for this check (wc_net_countdown 0), and a held Esc keeps it coming until its release
+    web_keys_and_buttons();
+    escape_tap();
+    wc_net_countdown = scripted || g_escHeld ? 999 : 0x7fffffff;
+#else
     wc_net_countdown = scripted ? 999 : 0x7fffffff;
+#endif
     if (SegValue(cs) != g_loadSeg) {
         return;
     }

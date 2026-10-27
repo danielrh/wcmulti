@@ -196,8 +196,24 @@
   #stage { display: flex; flex-wrap: wrap; gap: 10px; }
   /* (640 x 400 whatever the game's mode, and narrower on a narrow screen: the
      emulator maps the pointer by the canvas's size on the page.) */
-  #canvas { flex: none; width: min(640px, 100%); height: auto; aspect-ratio: 8 / 5; background: black; image-rendering: pixelated; outline: 1px solid var(--line); }
-  #canvas:fullscreen { width: 100vw; height: 100vh; aspect-ratio: auto; object-fit: contain; outline: none; }
+  #screen { position: relative; flex: none; width: min(640px, 100%); }
+  #canvas { display: block; width: 100%; height: auto; aspect-ratio: 8 / 5; background: black; image-rendering: pixelated; outline: 1px solid var(--line); }
+  /* (Full screen is #screen's, so the touch controls come along: the picture letterboxed in it, as the emulator
+     expects when it places a finger) */
+  #screen:fullscreen { width: 100vw; height: 100vh; background: black; }
+  #screen:fullscreen #canvas { width: 100%; height: 100%; aspect-ratio: auto; object-fit: contain; outline: none; }
+  /* a touch screen's controls: a row under the picture; in full screen, its corners (the black bars, mostly) */
+  #touch { display: flex; gap: 8px; margin-top: 8px; }
+  #touch[hidden] { display: none; }
+  #touch button { min-width: 64px; min-height: 44px; padding: 8px 12px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #touchFire { margin-left: auto; min-width: 96px; }
+  #touch button.on { background: var(--green); color: #031a0c; border-color: var(--green); }
+  #touchType { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }
+  #screen:fullscreen #touch { position: absolute; inset: 0; margin: 0; pointer-events: none; }
+  #screen:fullscreen #touch button { position: absolute; pointer-events: auto; opacity: .85; }
+  #screen:fullscreen #touchKeys { top: 10px; right: 10px; }
+  #screen:fullscreen #touchEsc { top: 10px; left: 10px; }
+  #screen:fullscreen #touchFire { bottom: 10px; right: 10px; min-height: 64px; }
   #log { flex: 1 1 300px; min-height: 160px; max-height: 402px; overflow: auto; padding: 6px 8px; background: #010403; border: 1px solid var(--line2);
     color: #6fd398; font: 11px/1.35 var(--mono); white-space: pre-wrap; word-break: break-all; }
   #perf { min-height: 16px; margin-top: 5px; color: var(--muted); font-size: 11px; }
@@ -359,13 +375,23 @@
       <span id="status">Load the game files and join a room first.</span>
     </div>
     <div id="stage">
-      <canvas id="canvas" width="640" height="400" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+      <div id="screen">
+        <canvas id="canvas" width="640" height="400" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+        <!-- a touch screen's controls (web/touch.js): the device's keyboard, the game's Esc, the trigger -->
+        <div id="touch" hidden>
+          <button type="button" class="secondary" id="touchKeys" title="The keyboard: what you type goes to the game">Keys</button>
+          <button type="button" class="secondary" id="touchEsc" title="The game's Esc">Esc</button>
+          <button type="button" id="touchFire" title="Hold to fire (Space)">Fire</button>
+          <input id="touchType" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+                 enterkeyhint="enter" aria-label="Type to the game">
+        </div>
+      </div>
       <div id="log"></div>
     </div>
     <div id="perf" title="Measured in flight, every two seconds"></div>
     <div id="under">
       <button type="button" class="secondary" id="copyLog" title="The log on the right, for a problem report">Copy log</button>
-      <p class="hint">Click the screen to give it the keyboard. <kbd>Caps Lock</kbd> is the game's <kbd>Esc</kbd> (it skips cutscenes), because the browser keeps <kbd>Esc</kbd> for leaving full screen; in Chrome and Edge a short tap of <kbd>Esc</kbd> also reaches the game in full screen, and holding it leaves. Press <kbd>0</kbd> to type a chat message to the other pilots, <kbd>Enter</kbd> sends it; in space <kbd>Enter</kbd> fires missiles. With voice on push to talk, hold <kbd>`</kbd> (or the left stick's button on a controller) to speak. <kbd>Ctrl</kbd>+<kbd>F10</kbd> releases the mouse.</p>
+      <p class="hint">Click the screen to give it the keyboard. <kbd>Caps Lock</kbd> is the game's <kbd>Esc</kbd> (it skips cutscenes), because the browser keeps <kbd>Esc</kbd> for leaving full screen; in Chrome and Edge a short tap of <kbd>Esc</kbd> also reaches the game in full screen, and holding it leaves. Press <kbd>0</kbd> to type a chat message to the other pilots, <kbd>Enter</kbd> sends it; in space <kbd>Enter</kbd> fires missiles. With voice on push to talk, hold <kbd>`</kbd> (or the left stick's button on a controller) to speak. <kbd>Ctrl</kbd>+<kbd>F10</kbd> releases the mouse. On a touch screen a tap is a click, and <b>Keys</b> (your device's keyboard: what you type goes to the game), <b>Esc</b> and <b>Fire</b> (hold it) are under the picture, or in its corners in full screen.</p>
     </div>
     <details id="help">
       <summary>How a mission goes, and the second player's seat</summary>

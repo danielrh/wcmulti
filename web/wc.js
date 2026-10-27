@@ -13,6 +13,7 @@
 // protocol never produces, so the transport filters them out.
 import { P2PGame } from "./p2p-client.js";
 import { initControls } from "./gamepad.js";
+import { initTouch } from "./touch.js";
 import { initVoice } from "./voice.js";
 import { loadSo3 } from "./so3.js";
 import { readZip, extractInstaller, looksLikeInstaller, identifyGame, installFiles,
@@ -1546,13 +1547,15 @@ $("fly").addEventListener("click", () => {
   void start(true);
 });
 $("fullscreen").addEventListener("click", () => goFullscreen());
+// (#screen, the canvas and the touch controls: they come along into full screen)
+const screenEl = $("screen");
 function goFullscreen() {
-  const req = canvas.requestFullscreen || canvas.webkitRequestFullscreen;
+  const req = screenEl.requestFullscreen || screenEl.webkitRequestFullscreen;
   if (!req) return;
   // Where the browser can (Chrome, Edge), ask for Esc in full screen: a tap
   // then goes to the game and only holding it leaves full screen.
   if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(["Escape"]).catch(() => { /* not allowed here */ });
-  Promise.resolve(req.call(canvas)).catch(() => { /* needs a click: the button stays */ });
+  Promise.resolve(req.call(screenEl)).catch(() => { /* needs a click: the button stays */ });
   canvas.focus();
 }
 document.addEventListener("fullscreenchange", () => {
@@ -1567,7 +1570,7 @@ document.addEventListener("fullscreenchange", () => {
 let capsDownAt = -1e9;
 function capsLockAsEscape(e) {
   if (e.code !== "CapsLock" || !running) return;
-  if (document.activeElement !== canvas && document.fullscreenElement !== canvas) return;
+  if (document.activeElement !== canvas && document.fullscreenElement !== screenEl) return;
   e.preventDefault();
   e.stopImmediatePropagation();
   const tap = window.DOSBox && window.DOSBox._wc_web_tap_escape;
@@ -1735,7 +1738,8 @@ async function start(fromGesture) {
     setInterval(keepSaves, 4000);
     setInterval(showPerformance, 1000);
     for (const ev of ["pagehide", "visibilitychange"]) window.addEventListener(ev, keepSaves);
-    $("fullscreen").hidden = false;
+    $("fullscreen").hidden = !(screenEl.requestFullscreen || screenEl.webkitRequestFullscreen);   // (an iPhone has none)
+    touch.show(true);
     if (fromGesture) goFullscreen();
     status(together
       ? `Room ${cfg.code}. "Copy link" (step 2) gives friends the way in.`
@@ -1847,6 +1851,9 @@ const voice = initVoice({
 });
 window.__wcVoiceLinks = voice.links;  // (for the page tests)
 window.__wcVoiceReport = voice.report;
+
+// a touch screen's KEYS (the device's keyboard), ESC and FIRE (web/touch.js)
+const touch = initTouch({ module: () => (running && window.DOSBox) || null, log });
 
 const controls = initControls({
   module: () => (running && window.DOSBox) || null,
