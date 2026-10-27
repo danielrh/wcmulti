@@ -339,16 +339,21 @@ void in_poll(Input *in)
         g_slack = 0;
     }
     if (g_mouse) {
-        int buttons;
+        int buttons, pressed;
         r.x.ax = 3;
         int86(0x33, &r, &r);
         buttons = r.x.bx & 1;
+        /* the left button's presses since the last poll: a tap on a touch screen can be down and up again between
+         * two polls (the emulator gets both at once), and the button's state alone never shows it */
+        r.x.ax = 5; r.x.bx = 0;
+        int86(0x33, &r, &r);
+        pressed = r.x.bx != 0;
         if (g_keyboard) {
             /* pinned: count the motion, keep the driver where the pointer is */
             r.x.ax = 0x0B;
             int86(0x33, &r, &r);
             g_slack += abs((short)r.x.cx) + abs((short)r.x.dx);
-            if (g_slack > KEYBOARD_SLACK || (buttons && !g_buttons)) {
+            if (g_slack > KEYBOARD_SLACK || pressed || (buttons && !g_buttons)) {
                 g_keyboard = 0;
             } else {
                 r.x.ax = 4; r.x.cx = g_x; r.x.dx = g_y;
@@ -365,7 +370,7 @@ void in_poll(Input *in)
             r.x.ax = 0x0B;
             int86(0x33, &r, &r);     /* drain the motion counters */
         }
-        if (buttons && !g_buttons)
+        if (pressed || (buttons && !g_buttons))
             in->clicked = 1;
         g_buttons = buttons;
     }

@@ -2367,6 +2367,38 @@ static void HandleMouseMotion(SDL_MouseMotionEvent * motion) {
 #ifdef DISABLE_MOUSE
     return;
 #endif
+#if SDL_VERSION_ATLEAST(2,0,0)
+	/* A touch (SDL makes mouse events of a finger's): the pointer goes where the finger is, locked or not.  A
+	 * phone has no pointer lock, and without it the clicks only asked for one and the motion was dropped: the
+	 * games could not be worked by touch (RetroVega's bunk menu, 2026-10-26) */
+	if (motion->which == SDL_TOUCH_MOUSEID) {
+		float fx = (float)(motion->x-sdl.clip.x)/(sdl.clip.w-1), fy = (float)(motion->y-sdl.clip.y)/(sdl.clip.h-1);
+#ifdef EMSCRIPTEN
+		/* SDL measures a finger over the whole canvas; in full screen the page shows the picture letterboxed in it
+		 * (object-fit: contain), so the finger is taken over the picture: its share of the canvas's width
+		 * (pillarboxed, given negative) or of its height (letterboxed) */
+		double share = EM_ASM_DOUBLE({
+			var c = Module['canvas'];
+			if (!c || !c.width || !c.height) return 1;
+			var b = c.getBoundingClientRect();
+			if (!b.width || !b.height) return 1;
+			var a = c.width / c.height;     /* (no commas: they would split the macro's argument) */
+			var e = b.width / b.height;
+			return e > a ? -(a / e) : e / a;
+		});
+		if (share < 0 && share > -0.999)
+			fx = (fx - (1 + (float)share) / 2) / (float)-share;
+		else if (share > 0 && share < 0.999)
+			fy = (fy - (1 - (float)share) / 2) / (float)share;
+		fx = fx < 0 ? 0 : fx > 1 ? 1 : fx;
+		fy = fy < 0 ? 0 : fy > 1 ? 1 : fy;
+#endif
+		Mouse_CursorMoved((float)motion->xrel*sdl.mouse.sensitivity/100.0f,
+						  (float)motion->yrel*sdl.mouse.sensitivity/100.0f,
+						  fx, fy, false);
+		return;
+	}
+#endif
 	if (sdl.mouse.locked || !sdl.mouse.autoenable)
 		Mouse_CursorMoved((float)motion->xrel*sdl.mouse.sensitivity/100.0f,
 						  (float)motion->yrel*sdl.mouse.sensitivity/100.0f,
@@ -2381,7 +2413,11 @@ static void HandleMouseButton(SDL_MouseButtonEvent * button) {
 #endif
 	switch (button->state) {
 	case SDL_PRESSED:
+#if SDL_VERSION_ATLEAST(2,0,0)
+		if (sdl.mouse.requestlock && !sdl.mouse.locked && button->which != SDL_TOUCH_MOUSEID) {   /* (a tap clicks) */
+#else
 		if (sdl.mouse.requestlock && !sdl.mouse.locked) {
+#endif
 			GFX_CaptureMouse();
 			// Dont pass klick to mouse handler
 			break;

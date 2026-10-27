@@ -187,6 +187,13 @@ it already reads.
   the top right, and a click outside the panel closes it: a phone, with no
   keys, works it all (the user's report, 2026-10-26: stuck in it on a
   phone). `tests/bunk-touch.txt` works it by clicks alone.
+- **Touch, below the game:** the emulator puts the pointer where a finger
+  is and lets a tap click (src/gui/sdlmain.cpp: SDL's mouse events made of
+  touches, absolute, never a request for Pointer Lock, which phones lack;
+  in full screen the finger is measured over the letterboxed picture), and
+  input.c counts the presses between two polls (int 33h function 5), as a
+  tap can be down and up again between them. `scripts/web-rv-phone.mjs`
+  walks the base on an emulated phone by taps alone.
 - **Files:** a bunk's save is `BUNK01.SAV` .. `BUNK08.SAV`; the player
   names it (24 characters), or leaves it empty for "Bunk N" (the name
   prompt says so: a phone cannot type).
