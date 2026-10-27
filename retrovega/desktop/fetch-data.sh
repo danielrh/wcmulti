@@ -1,7 +1,7 @@
 #!/bin/bash
-# desktop/fetch-data.sh DIR: the game's data files from the published site (fireflyk64.github.io/rv, the deploy of
-# commit 47fae9d5), each download checked against the SHA-256 below before anything is unpacked: a different file
-# is refused.  For a machine without the DOS build (../build.sh); then
+# desktop/fetch-data.sh DIR: the game's data files from the published site (fireflyk64.github.io/rv), each download
+# checked against the SHA-256 below before anything is unpacked: a different file is refused.  The site's files are
+# made reproducibly (host/web/site.sh, tools/artweb.py): these hashes hold until the data itself changes.  For a machine without the DOS build (../build.sh); then
 #   make data DATA=<the game's directory> FROM=DIR
 # which adds the ships' sprite sets, made here from art/ships.  This is the only step that uses the network, and
 # it only downloads: nothing fetched is run.  SITE=url fetches from another copy of the site (same hashes).
@@ -9,8 +9,8 @@ set -euo pipefail
 [ $# = 1 ] || { echo "usage: desktop/fetch-data.sh DIR"; exit 2; }
 dir=$1
 site=${SITE:-https://fireflyk64.github.io/rv}
-GAME_SHA256=7ede30c0d4c0b5633f82f7c147ef997ef22c981d67761c2e804cbec9d2950e28    # game.tar.gz
-ROCKS_SHA256=510fe74fda6da50ef19b02127d3474bf2e91ff0289944f4a1ea8ac39c8d5c222   # art/ROCKS.DAT.gz
+GAME_SHA256=b4d4eae15d1494dfb3c3dedffe08a6bad6b1339b7e628613a148062ec6fc034b    # game.tar.gz
+ROCKS_SHA256=c2e51d50e103fd745bae8dfbe666eefce5d2837a6438a427cd66516745bb8762   # art/ROCKS.DAT.gz
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL --proto =https -o "$tmp/game.tar.gz" "$site/game.tar.gz"

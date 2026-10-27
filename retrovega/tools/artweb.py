@@ -21,7 +21,9 @@ ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 def gz(src, dst):
     if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src):
         return
-    with open(src, 'rb') as f, gzip.open(dst + '.part', 'wb', compresslevel=9) as g:
+    # (no name or time stamp in the gzip header: the same file, the same bytes)
+    with open(src, 'rb') as f, open(dst + '.part', 'wb') as raw, \
+            gzip.GzipFile(filename='', mode='wb', compresslevel=9, fileobj=raw, mtime=0) as g:
         shutil.copyfileobj(f, g)
     os.replace(dst + '.part', dst)
 

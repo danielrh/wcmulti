@@ -14,7 +14,10 @@ REV=$(git rev-parse --short HEAD)$(git diff --quiet HEAD -- src host tools data 
 sed "s/@REV@/$REV/" host/web/game.html > "$OUT/index.html"
 cp host/web/game.js build/gameweb/rv.js build/gameweb/rv.wasm "$OUT/"
 for f in rvsets.js rvsprites.js rvsprites-worker.js touch.js; do cp "../web/$f" "$OUT/"; done
-(cd build/dos && tar --format=ustar -czf "$PWD/../../$OUT/game.tar.gz.part" \
-    RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT RVOPL.BNK *.MID) && mv "$OUT/game.tar.gz.part" "$OUT/game.tar.gz"
+# (reproducible: the names sorted, the dates and owners fixed, gzip without its time stamp: the same data, the same
+# bytes, so desktop/fetch-data.sh's pinned SHA-256 holds until the data itself changes)
+(cd build/dos && tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=a+r,u+w \
+    -cf - RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT RVOPL.BNK *.MID) | gzip -9 -n > "$OUT/game.tar.gz.part" \
+    && mv "$OUT/game.tar.gz.part" "$OUT/game.tar.gz"
 python3 tools/artweb.py --out "$OUT/art" --build "$REV" > /dev/null
 echo "built $OUT ($REV): $(du -sh "$OUT" | cut -f1)"
