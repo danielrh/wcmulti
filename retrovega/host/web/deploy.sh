@@ -28,7 +28,7 @@ python3 -m http.server -d $W --bind 127.0.0.1 $PORT > /dev/null 2>&1 &
 SERVER=$!
 python3 -m http.server -d $G --bind 127.0.0.1 $GPORT > /dev/null 2>&1 &
 GSERVER=$!
-trap 'kill $SERVER $GSERVER 2> /dev/null' EXIT
+trap 'kill $SERVER $GSERVER 2> /dev/null || true' EXIT
 sleep 1
 $RUN node host/web/check.mjs http://127.0.0.1:$PORT/ | tee build/hostweb-check.log
 grep -q "RVSIM WEB OK" build/hostweb-check.log || { echo "LOCAL CHECK FAILED (rvsim)"; exit 1; }
