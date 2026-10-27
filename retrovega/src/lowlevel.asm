@@ -699,15 +699,17 @@ _rv_blit_row_rev:
 ; void rv_rotate_row2(const unsigned char far *dense, int w, int h, const LfRot *r,
 ;                     int y, int xs, int xe, unsigned char far *out)
 ; rv_rotate_row at half the horizontal detail: every other output column is
-; sampled and written twice (a 2 x 1 block), so a row costs half.  xs is
-; made even by the caller; the span is still [xs, xe).
+; sampled and written twice (a 2 x 1 block), so a row costs half.  Only
+; [xs, xe) is written: an odd span's last column is its own sample, once (the
+; span is clipped already: a pixel past it would be outside the cockpit's
+; opening, or past the band).
         global _rv_rotate_row2
 _rv_rotate_row2:
         push bp
         mov bp,sp
         push si
         push di
-        sub sp,8                    ; [bp-12] du * 2, [bp-8] dv * 2
+        sub sp,10                   ; [bp-12] du * 2, [bp-8] dv * 2, [bp-14] n
         mov si,[bp+14]              ; r
         mov eax,[si+16]
         add eax,eax
@@ -732,12 +734,13 @@ _rv_rotate_row2:
         mov cx,[bp+20]
         sub cx,[bp+18]              ; n = xe - xs
         jle .done
-        inc cx
-        shr cx,1                    ; pairs
+        mov [bp-14],cx
+        shr cx,1                    ; whole pairs
         mov gs,[bp+8]               ; dense
         mov es,[bp+24]
         mov bx,[bp+22]
         add bx,[bp+18]              ; out + xs
+        jcxz .odd                   ; (n = 1: no pair, only the one column)
 .loop:
         mov edx,edi
         shr edx,16                  ; v
@@ -758,8 +761,23 @@ _rv_rotate_row2:
         add bx,2
         dec cx
         jnz .loop
+.odd:
+        test byte [bp-14],1         ; an odd n: xe - 1, sampled there and written once
+        jz .done
+        mov edx,edi
+        shr edx,16
+        imul dx,[bp+10]
+        mov eax,esi
+        shr eax,16
+        add dx,ax
+        add dx,[bp+6]
+        movzx edx,dx
+        mov al,[gs:edx]
+        test al,al
+        jz .done
+        mov [es:bx],al
 .done:
-        add sp,8
+        add sp,10
         pop di
         pop si
         pop bp

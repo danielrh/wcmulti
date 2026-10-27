@@ -2259,8 +2259,13 @@ others stays on the DOSBox page (`dosbox/?retrovega`).
   - **Fixed: the radar's far contacts.** Their vector's squares overflowed a
     `long`, so the angle off the nose came out wrong. The vector is now halved
     until the sum fits; the way is all the radar wants.
-  - **Not fixed:** `rv_rotate_row2` writes one pixel past its span when the
-    span is odd. The twin does what the assembly does.
+  - **Fixed: a pixel past the span.** `rv_rotate_row2`, the half-detail turned
+    row, wrote an odd span's last sample twice: one column past it. The span
+    is clipped already, so that pixel went outside the cockpit's opening, or
+    one byte past the band buffer onto the dense slab after it in upper
+    memory. Now an odd span's last column is written once, in the assembly
+    and its twin. `RVT.EXE /twins` also checks that nothing outside the span
+    changes; the old code fails that at once.
 
 ## Bounds
 

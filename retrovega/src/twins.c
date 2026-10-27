@@ -366,10 +366,15 @@ void c_rotate_row2(const unsigned char LZ_FAR *dense, int w, int h, const LfRot 
     (void)h;
     if ((int16_t)xe <= (int16_t)xs)
         return;
-    for (n = (uint16_t)((uint16_t)(xe - xs) + 1) >> 1; n; n--, u += du, v += dv, o += 2) {
+    for (n = (uint16_t)(xe - xs) >> 1; n; n--, u += du, v += dv, o += 2) {
         unsigned char p = SRC(dense, w, u, v);
         if (p)
             o[0] = o[1] = p;
+    }
+    if ((uint16_t)(xe - xs) & 1) {      /* (an odd span: xe - 1, once: never past the span) */
+        unsigned char p = SRC(dense, w, u, v);
+        if (p)
+            o[0] = p;
     }
 }
 
@@ -580,6 +585,16 @@ static void tw_fill(unsigned char LZ_FAR *a, unsigned char LZ_FAR *b, unsigned n
         a[i] = b[i] = (unsigned char)(i * 7 + 3);
 }
 
+/* nothing written in a's n bytes from base outside the columns [x0, x1) (they keep tw_fill's pattern) */
+static int tw_kept(const unsigned char LZ_FAR *a, unsigned base, unsigned n, int x0, int x1)
+{
+    unsigned i;
+    for (i = 0; i < n; i++)
+        if (((int)i < x0 || (int)i >= x1) && a[base + i] != (unsigned char)((base + i) * 7 + 3))
+            return 0;
+    return 1;
+}
+
 /* the buffers: two bands (the twin's, the asm's) and room for each test's things */
 static unsigned char LZ_FAR *g_bc, LZ_FAR *g_ba, LZ_FAR *g_mem;
 static short LZ_FAR *g_ext;             /* an opening of uneven extents, every row */
@@ -669,7 +684,7 @@ static void make_picture(unsigned char LZ_FAR *d, int w, int h, int noise)
 static void test_turned(void)
 {
     static const char LZ_FAR n_rot[] = "rotate_row", LZ_FAR n_row2[] = "rotate_row2", LZ_FAR n_edges[] = "rotate_edges",
-        LZ_FAR n_drawn[] = "turn_drawn", LZ_FAR n_drop[] = "turn_dropped";
+        LZ_FAR n_drawn[] = "turn_drawn", LZ_FAR n_drop[] = "turn_dropped", LZ_FAR n_row2_past[] = "rotate_row2 past its span";
     static uint32_t LZ_FAR sums[5];
     static long LZ_FAR cases[5];
     unsigned char LZ_FAR *dense = g_mem, LZ_FAR *above = g_mem + 8192, LZ_FAR *ac = g_bc + SCR_W + 16,
@@ -726,6 +741,11 @@ static void test_turned(void)
                     rv_rotate_row2(dense, w, h, &r, y, xs, xe, g_ba + 320);
                 }
                 if (_fmemcmp(g_bc, g_ba, SCR_W) && tw_differ(n_row2, img, y, lo, hi, xs))
+                    return;
+                /* (only its span written, by both: an odd one's last column too) */
+                if ((!tw_kept(g_bc, 0, 320, lo, lo < hi ? hi : lo) || !tw_kept(g_ba, 0, 320, lo, lo < hi ? hi : lo)
+                     || !tw_kept(g_bc, 320, 320, xs, xs < xe ? xe : xs) || !tw_kept(g_ba, 320, 320, xs, xs < xe ? xe : xs))
+                    && tw_differ(n_row2_past, img, y, lo, hi, xe))
                     return;
                 g_sum = sums[2], sum_mem(g_bc, SCR_W), sums[2] = g_sum, cases[2]++;
             }
