@@ -18,10 +18,6 @@
 #include "balls.h"
 #include "host.h"
 
-/* DGROUP: the fixed block at 0 .. 0x7FFF as on DOS, then room for the near vectors rv_where hands out */
-#define NEAR_RING 0x8000
-#define NEAR_RING_N 64
-uint8_t rv_dgroup[0x10000] __attribute__((aligned(16)));
 uint8_t host_screen[HOST_H * HOST_W];
 unsigned char rv_filebuf[1024];
 ShipSystems g_sys;
@@ -296,20 +292,6 @@ int16_t flight_ent_box(int16_t slot, const RvCamera *cam, EntBox *o)
     o->y1 = o->sy + o->half;
     o->visible = o->x1 > cam->vx0 && o->x0 < cam->vx1 && o->y1 > cam->vy0 && o->y0 < cam->vy1;
     return 1;
-}
-
-/* do_damage's `where` (world.h's RV_WHERE): a vector in the fixed block is its offset there, as on DOS; any other is
- * copied into DGROUP past the fixed block (a ring of them) and that copy's offset given: read it, never write it */
-uint16_t rv_where(const RvVec3 *v)
-{
-    static int16_t next;
-    RvVec3 *at;
-    if ((const uint8_t *)v >= rv_dgroup && (const uint8_t *)v + sizeof *v <= rv_dgroup + RV_FIXED_BYTES)
-        return (uint16_t)((const uint8_t *)v - rv_dgroup);
-    at = (RvVec3 *)(rv_dgroup + NEAR_RING + next * sizeof(RvVec3));
-    next = (int16_t)((next + 1) % NEAR_RING_N);
-    *at = *v;
-    return (uint16_t)((uint8_t *)at - rv_dgroup);
 }
 
 /* --- the thunks: a trace, and the rules the layer needs (docs/logic.md "The multiplayer rules") --- */

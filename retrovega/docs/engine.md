@@ -2154,6 +2154,89 @@ enough to want a half-size source set (spec §8).
   the engine with save-under.
 - **Mouse driver:** DOSBox's int 33h. Nothing to ship.
 
+## The native build: the game without DOS
+
+`host/game.sh` builds the whole game, `src/` as RV.EXE has it, for a 32-bit
+host (`build/game32/rv`: gcc `-m32`, UBSan) or, with `WEB=1`, for the browser
+(`build/gameweb/rv.js`, `rv.wasm`: Emscripten, ASYNCIFY). No emulator runs
+it. https://fireflyk64.github.io/rv/ is this build (`host/web/site.sh` puts
+the page together, `host/web/deploy.sh` publishes it with rvsim at `rv/sim/`).
+It is one player: the multiplayer layer lives in DOSBox, so flying with
+others stays on the DOSBox page (`dosbox/?retrovega`).
+
+- **DOS answered on the host:** `host/dos/` has the headers the game includes
+  (`dos.h`, `i86.h`, `conio.h`, `io.h`, `malloc.h`), and `host/hle.c` answers
+  what they declare, as far as the game uses it:
+  - int 10h: VESA mode 100h and its 64 KB bank window;
+  - int 16h: the enhanced keystroke calls, from a BIOS buffer that int 9 fills;
+  - int 21h: the upper memory blocks (DOSBox's 128 KB), the largest free block (288 KB less what the far heap holds), DOS's list of lists for the memory walk;
+  - int 2Fh and the XMS driver: one 63,424 KB arena, as the page's DOSBox gives;
+  - int 33h: the mouse, presses counted between polls;
+  - the ports: the DAC, the retrace, the OPL3 (its status faked for the detection), the PIT's rate, the keyboard's data.
+
+  A far pointer is the host's own pointer (the build is 32-bit): FP_SEG and
+  FP_OFF are its two halves, so xms.c's moves carry host addresses; MK_FP of a
+  segment the game knows (40h, A000h, the UMBs, DOS's lists) gives the memory
+  it means.
+- **Interrupts:** the timer's (int 8, at the rate the game sets on the PIT:
+  240 a second with the music) and the keyboard's (int 9) are delivered on the
+  host clock where the game lets them:
+  - at `_enable`;
+  - at `rv_halt` (its sti/hlt), which waits for the next one;
+  - wherever it reads the BIOS clock or asks the mouse or keys.
+
+  The game's own handlers (music.c's `isr`, input.c's `key_isr`) run as they
+  are and chain to hle.c's BIOS ones.
+- **The screen:** the bank window's moves land in a 640×400 frame, shown
+  through the DAC's palette with SDL2. It is shown at `rv_halt` (at most 60
+  times a second), at each flight frame (`rvFrameDone`) and at a retrace wait.
+  In the browser those are also where the page gets its turns. A game busy
+  for long still gives the page one every 40 ms at its frames and polls.
+- **The music:** each OPL3 register write is stamped with the time its
+  interrupt was due. `host/opl3.cpp` plays them through ymfm's YMF262 at that
+  time on the audio's own clock, 50 ms (in the browser 100 ms) behind the
+  host's. So the notes keep the music clock's time to the sample, though the
+  interrupts come in bursts.
+  ymfm (`host/ymfm/`, Aaron Giles) is BSD 3-Clause. The user's ruling
+  (2026-10-26) is that what ships in the game is BSD-compatible and the dev
+  tools may be GPL, so `tools/oplrender` keeps DOSBox's dbopl.
+- **The assembly:** its place is taken by its C twins (`src/twins.c`, one a
+  routine, the asm's own parameters; `host/asm_twins.c` makes each `rv_x` a
+  call to its `c_x`).
+  - **The proof:** `RVT.EXE /twins` checks every twin against its assembly on
+    seeded random inputs in DOSBox. `tests/host/twins_test.sh` runs the same
+    test on the host and requires DOSBox's sums, so the twins compute DOS's
+    answers with a 32-bit `int` too.
+  - **The flight loop's skeleton:** `src/rvflight.inc` is in
+    `host/flightloop.c`, the same calls in the same order without the sites
+    only the layer hooks.
+- **Sixteen bits against 32:** `int` and `unsigned` are 16 bits on DOS and 32
+  on the host. The two agree wherever a value fits in 16 bits, and differ
+  where DOS wraps one. Fixed so far:
+  - the music interrupt's count of PIT ticks, which advances the BIOS clock (`unsigned short`);
+  - the 16-bit hashes and generators: the chalk's grain, the hand's wobble, the flames' noise, the comm faces' looks, the ships' dither;
+  - the flight's two-word edges (the low word as `int16_t`).
+
+  RV.EXE's code is unchanged by these: every module's disassembly was compared
+  before and after.
+- **The same pictures:** `tests/host/shotdiff.py` compares two runs'
+  screenshots pixel by pixel. For `tests/walk.txt` run by RV.EXE in DOSBox and
+  by `build/game32/rv /script`, they are the same except where something moves
+  with the clock: a line typing out, a lamp's blink, the comm link's flicker.
+- **The page** (`host/web/game.html`, `game.js`):
+  - the game's files from `game.tar.gz`;
+  - the bunk's saves kept in IndexedDB after each save and put back at the next visit;
+  - the ships' sets made as a flight asks (`web/rvsets.js`, the DOSBox page's too);
+  - the touch controls (`web/touch.js`, shared too);
+  - Caps Lock is the game's Esc.
+
+  `host/web/game-check.mjs` plays it in headless Chrome: the base, a save, the
+  briefing, a flight, the debrief, and the saves after a reload. With
+  `PHONE=1` it does all of that by taps on a phone's screen, with the Keys
+  button's typing and Fire.
+- **A bug found on the way, DOS's too:** `rv_rotate_row2` writes one pixel
+  past its span when the span is odd (the twin does what the asm does).
+
 ## Bounds
 
 - **Fixed arrays:** every table is a fixed-size array with its count:

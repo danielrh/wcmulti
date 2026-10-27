@@ -39,6 +39,7 @@ extern int g_score_test, g_bench_wanted, g_record, g_capital, g_zoom, g_sky;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
     g_ball_demo, g_missile_demo, g_sky_demo, g_boxes, g_collide_demo, g_hull_demo, g_hull_type, g_flame_test,
     g_comm_demo, g_test_ship;
+long twins_selftest(void);              /* (twins.c: RVT.EXE /twins) */
 #endif
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -55,11 +56,11 @@ static void dos_free(unsigned long *total, unsigned long *largest)
     segread(&sr);
     r.h.ah = 0x52;
     intdosx(&r, &r, &sr);
-    seg = *(unsigned __far *)MK_FP(sr.es, r.x.bx - 2);
+    seg = *(unsigned short __far *)MK_FP(sr.es, r.x.bx - 2);
     while (seg < 0xA000) {
         unsigned char __far *mcb = MK_FP(seg, 0);
-        unsigned owner = *(unsigned __far *)(mcb + 1);
-        unsigned size = *(unsigned __far *)(mcb + 3);
+        unsigned owner = *(unsigned short __far *)(mcb + 1);
+        unsigned size = *(unsigned short __far *)(mcb + 3);
         if (owner == 0) {
             *total += size;
             if (size > *largest)
@@ -230,6 +231,8 @@ int main(int argc, char **argv)
             g_score_test = i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '9' ? atoi(argv[++i]) : 1;
         else if (!strcmp(argv[i], "/sky"))              /* tests: three ship views painted on the sky, to roll and turn round */
             g_sky = 1;
+        else if (!strcmp(argv[i], "/twins"))            /* tests: the asm's C twins against it (twins.c), then out */
+            exit(twins_selftest() < 0 ? 4 : 0);
 #endif
     }
     if (!xms_init(32768UL, 0x7FFFFFFFUL)) {

@@ -214,7 +214,7 @@ def c_header(consts, sections, items, funcs, sites):
     p()
     p('typedef struct { int32_t x, y, z; } RvVec3;   /* 256 = 1 km, or 1.0 for orientations */')
     p()
-    p('/* where the fixed block is: DS:0000 on DOS; the host harness\'s DGROUP stand-in, rv_dgroup (host/host.c) */')
+    p('/* where the fixed block is: DS:0000 on DOS; the host\'s DGROUP stand-in, rv_dgroup (host/fixed.c) */')
     p('#ifdef RV_HOST')
     p('extern uint8_t rv_dgroup[];')
     p('#define RV_AT(t, off) ((t)(rv_dgroup + (off)))')

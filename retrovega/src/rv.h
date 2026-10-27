@@ -38,6 +38,8 @@ int xms_get(XmsBlock b, unsigned long off, void __far *dst, unsigned long n);
 int xms_copy_conv(void __far *dst, const void __far *src, unsigned long n); /* host-speed copy */
 void xms_where(XmsBlock b, unsigned *handle, unsigned long *off);   /* a block's handle and offset, for moves of one's
                                            own (rocks.asm moves a rock's rows straight into the band) */
+int xms_get_at(unsigned handle, unsigned long off, void __far *dst, unsigned long n);   /* n bytes (even) from an
+                                           absolute offset in a handle's memory, xms_where's (twins.c: rocks.asm's move) */
 void xms_shutdown(void);
 
 /* the screen (video.c): VESA 100h, 640x400x256, drawn a run of dirty rows

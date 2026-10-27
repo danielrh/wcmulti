@@ -12,7 +12,7 @@
 // travel as reliable messages tagged with a 4-byte prefix that the game
 // protocol never produces, so the transport filters them out.
 import { P2PGame } from "./p2p-client.js";
-import { initControls } from "./gamepad.js";
+import { initControls, KEY } from "./gamepad.js";
 import { initTouch } from "./touch.js";
 import { initVoice } from "./voice.js";
 import { loadSo3 } from "./so3.js";
@@ -20,7 +20,7 @@ import { readZip, extractInstaller, looksLikeInstaller, identifyGame, installFil
          saveGame, loadGames, forgetGame, totalSize, gameById, gameByTag, programsIn, knownBuild, GAMES } from "./gamefiles.js";
 import { newRoomCode, retagRoomCode, normalizeCode, roomTag, GAME_TAGS, MAX_CHARS } from "./chatfilter.js";
 import { initHall, OTHER_SERVER, serverDown } from "./hall.js";
-import { makeSet } from "./rvsprites.js";
+import { createSetProvider, readTarGz } from "./rvsets.js";
 
 const $ = (id) => document.getElementById(id);
 const logEl = $("log");
@@ -382,173 +382,8 @@ async function handleFile(file) {
 
 // --- RetroVega's ship sets, fetched when a flight asks for them ---
 //
-// The ships' views (SHIPnn.RV, 1-9 MB each at 6 degrees) are not in the
-// game's tarball.  When a set a flight needs is not among the game's files,
-// the engine writes the flight's list into RVWANT.TXT ("want GEN SHIP02.RVH
-// ...", retrovega/src/ships.c ships_want: at the briefing, so the fetching
-// starts while it is read, and again at the launch, where it waits) and the
-// page, polling that file, fetches each missing type's views from the site
-// (rv/SHIPnn.RV.gz, listed in rv/ships.json), makes the set in a worker
-// (web/rvsprites.js: the same bytes as the C tool's) and writes it among the
-// game's files; sets the flight does not need are removed.  The browser's
-// Cache API keeps the views by their hash and the made sets by hash, recipe
-// and build, so a second flight with the same types downloads and makes
-// nothing; without it (an http page, a private window) everything still
-// works, fetched each time.
-const RV_ART_CACHE = "rv-art", RV_SET_CACHE = "rv-sets-";
-const RV_RECIPE = { RVH: [0, 0, 0, 1, 2], RVS: [0, 4, 9] };   // build.sh's: the block mode's ladder; the sharp sets (?res=1)
-let rvManifest = null, rvWantGen = null, rvWantBusy = null, rvWorker = null, rvWorkerNext = 1;
-const rvWorkerJobs = new Map();
-
-const rvShipLabel = (key) => { const s = rvManifest && rvManifest.ships[key]; return s && s.name ? `the ${s.name}` : key; };
-async function rvCache(name) { try { return window.caches ? await caches.open(name) : null; } catch (e) { return null; } }
-
-async function rvLoadManifest() {
-  if (rvManifest) return rvManifest;
-  const res = await fetch("rv/ships.json", { cache: "no-cache" });
-  if (!res.ok) throw new Error(`rv/ships.json: ${res.status} ${res.statusText}`);
-  rvManifest = await res.json();
-  // the made sets of other builds go (their keys carry the build); the views, by hash, stay
-  try { for (const k of await caches.keys()) if (k.startsWith(RV_SET_CACHE) && k !== RV_SET_CACHE + rvManifest.build) await caches.delete(k); } catch (e) { /* no cache */ }
-  return rvManifest;
-}
-
-// a type's views: the cache, by their hash, else the site
-async function rvViews(key) {
-  const info = rvManifest.ships[key];
-  const cache = await rvCache(RV_ART_CACHE), req = `/rv-art/${info.sha1}`;
-  if (cache) { const hit = await cache.match(req); if (hit) return new Uint8Array(await hit.arrayBuffer()); }
-  status(`Fetching ${rvShipLabel(key)}'s views (${mb(info.bytes)})…`);
-  const t0 = performance.now();
-  const res = await fetch(info.file);
-  if (!res.ok) throw new Error(`${info.file}: ${res.status} ${res.statusText}`);
-  const data = new Uint8Array(await new Response(res.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
-  if (data.length !== info.bytes) throw new Error(`${info.file}: ${data.length} bytes, the site's list says ${info.bytes}`);
-  log(`fetched ${rvShipLabel(key)}'s views (${mb(data.length)}) in ${Math.round(performance.now() - t0)} ms`);
-  if (cache) try { await cache.put(req, new Response(data)); } catch (e) { log(`could not keep ${key}'s views: ${e.message}`); }
-  return data;
-}
-
-// a set made in the worker (the page keeps drawing and the game's music plays on); the caller falls back to here
-function rvMakeSet(rv, args) {
-  return new Promise((resolve, reject) => {
-    if (!rvWorker) {
-      rvWorker = new Worker(new URL("./rvsprites-worker.js", import.meta.url), { type: "module" });
-      rvWorker.onmessage = (e) => {
-        const job = rvWorkerJobs.get(e.data.id);
-        if (!job) return;
-        rvWorkerJobs.delete(e.data.id);
-        if (e.data.error) job.reject(new Error(e.data.error)); else job.resolve(e.data.set);
-      };
-      rvWorker.onerror = (e) => {
-        for (const job of rvWorkerJobs.values()) job.reject(new Error(e.message || "the sprite worker failed"));
-        rvWorkerJobs.clear();
-        rvWorker = null;
-      };
-    }
-    const id = rvWorkerNext++;
-    rvWorkerJobs.set(id, { resolve, reject });
-    rvWorker.postMessage({ id, rv, args });   // (a copy of the views: the cache keeps the original)
-  });
-}
-
-// a file of the game's a flight asks for as it is (an asteroid field's ROCKS.DAT: rv/NAME.gz, rv/ships.json's
-// files), written among the game's files: the cache's, by its hash, else the site's
-async function rvProvideFile(FS, name) {
-  const info = rvManifest.files[name];
-  const cache = await rvCache(RV_ART_CACHE), req = `/rv-art/${info.sha1}`;
-  let data = null;
-  if (cache) { const hit = await cache.match(req); if (hit) data = new Uint8Array(await hit.arrayBuffer()); }
-  if (!data) {
-    status(`Fetching ${name} (${mb(info.bytes)})…`);
-    const t0 = performance.now();
-    const res = await fetch(info.file);
-    if (!res.ok) throw new Error(`${info.file}: ${res.status} ${res.statusText}`);
-    data = new Uint8Array(await new Response(res.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
-    if (data.length !== info.bytes) throw new Error(`${info.file}: ${data.length} bytes, the site's list says ${info.bytes}`);
-    log(`fetched ${name} (${mb(data.length)}) in ${Math.round(performance.now() - t0)} ms`);
-    if (cache) try { await cache.put(req, new Response(data)); } catch (e) { log(`could not keep ${name}: ${e.message}`); }
-  }
-  FS.writeFile(`${GAME_ROOT}/${name}`, data);
-}
-
-// one set, written among the game's files: the cache's, else made from the views
-async function rvProvideOne(FS, name) {
-  if (rvManifest.files && rvManifest.files[name]) return rvProvideFile(FS, name);
-  const m = /^(SHIP[0-9A-F]{2})\.(RVH|RVS)$/.exec(name);
-  if (!m) throw new Error(`${name}: not a set file`);
-  const key = m[1], ext = m[2], info = rvManifest.ships[key];
-  if (!info) throw new Error(`${key}: no such ship on this site`);
-  const sets = await rvCache(RV_SET_CACHE + rvManifest.build), req = `/rv-set/${info.sha1}/${ext}`;
-  let set = null;
-  if (sets) { const hit = await sets.match(req); if (hit) set = new Uint8Array(await hit.arrayBuffer()); }
-  if (!set) {
-    const rv = await rvViews(key);
-    status(`Making ${rvShipLabel(key)}'s sprite set…`);
-    const t0 = performance.now();
-    try { set = await rvMakeSet(rv, RV_RECIPE[ext]); }
-    catch (e) { log(`the sprite worker: ${e.message}; making ${name} on the page`); set = makeSet(rv, ...RV_RECIPE[ext]); }
-    log(`made ${name} (${mb(set.length)}) in ${Math.round(performance.now() - t0)} ms`);
-    if (sets) try { await sets.put(req, new Response(set)); } catch (e) { log(`could not keep ${name}: ${e.message}`); }
-  }
-  FS.writeFile(`${GAME_ROOT}/${name}`, set);
-}
-
-// the flight's list served: the sets it needs made and written, the rest removed
-async function rvProvide(FS, names) {
-  const t0 = performance.now();
-  let made = 0;
-  try {
-    await rvLoadManifest();
-    for (const f of FS.readdir(GAME_ROOT))
-      if (/^SHIP[0-9A-F]{2}\.(RVH|RVS)$/.test(f) && !names.includes(f)) { try { FS.unlink(`${GAME_ROOT}/${f}`); } catch (e) { /* in use */ } }
-    for (const name of names) {
-      let have = false;
-      try { FS.stat(`${GAME_ROOT}/${name}`); have = true; } catch (e) { /* not yet */ }
-      if (have) continue;
-      await rvProvideOne(FS, name);
-      made++;
-    }
-    status(made ? `${made} ship set${made > 1 ? "s" : ""} ready in ${((performance.now() - t0) / 1000).toFixed(1)} s` : "The ships' sets are in");
-    log(`ship sets: ${names.join(" ")} (${made} made) in ${Math.round(performance.now() - t0)} ms`);
-  } catch (e) {
-    log(`ship sets: ${e.message}`);
-    status(`Could not get the ships' sets: ${e.message}`);
-  }
-}
-
-// every 300 ms while RetroVega runs: a new list in RVWANT.TXT is served (a newer one after the current)
-function rvWantPoll() {
-  const FS = liveFS();
-  if (!FS || rvWantBusy) return;
-  let text;
-  try { text = new TextDecoder().decode(FS.readFile(`${GAME_ROOT}/RVWANT.TXT`)); } catch (e) { return; }
-  const m = /^want (\d+)((?: \S+)*)/.exec(text);
-  if (!m || m[1] === rvWantGen) return;
-  rvWantGen = m[1];
-  rvWantBusy = rvProvide(FS, m[2].trim().split(/\s+/).filter(Boolean)).finally(() => { rvWantBusy = null; });
-}
-
-async function readTarGz(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`cannot fetch ${url}: ${res.status} ${res.statusText}`);
-  const stream = res.body.pipeThrough(new DecompressionStream("gzip"));
-  const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
-  const files = [];
-  const text = (off, len) => { let end = off; while (end < off + len && bytes[end] !== 0) end++; return new TextDecoder("latin1").decode(bytes.subarray(off, end)); };
-  let off = 0;
-  while (off + 512 <= bytes.length) {
-    if (bytes[off] === 0) break;
-    const name = text(off, 100);
-    const size = parseInt(text(off + 124, 12).trim() || "0", 8);
-    const typeflag = bytes[off + 156];
-    const prefix = text(off + 345, 155);
-    off += 512;
-    if (typeflag === 0 || typeflag === 0x30) files.push({ path: (prefix ? prefix + "/" : "") + name, data: bytes.slice(off, off + size) });
-    off += Math.ceil(size / 512) * 512;
-  }
-  return files;
-}
+// RetroVega's ship sets and asteroid rocks, fetched and made when the game asks (RVWANT.TXT: web/rvsets.js)
+const rvSets = createSetProvider({ base: "rv/", root: GAME_ROOT, status, log });
 
 // The buttons that change the game files: off while a file is being read
 // and once the game runs.
@@ -1692,7 +1527,7 @@ async function start(fromGesture) {
     log(`installed ${source.files.length} files of ${source.game.title} under ${GAME_ROOT}`);
     // RetroVega's sprite sets (SHIPnn.RVH, retrovega/docs/engine.md "Flight")
     // are not installed here: a flight asks for the types it needs and the
-    // page fetches their views and makes the sets then (rvWantPoll, below).
+    // page fetches their views and makes the sets then (rvSets.poll, below).
     // A program the page makes from the game (Special Operations 3): its
     // files come sealed from the site and open with the player's own copy.
     if (gameInfo() && gameInfo().addon === "so3") {
@@ -1732,8 +1567,8 @@ async function start(fromGesture) {
     if (conf) { Module.FS.writeFile("/game.conf", conf); args.unshift("-conf", "/game.conf"); }
     Module.callMain([...args, "-c", cmd]);
     if (gameInfo() && gameInfo().id === "rv") {
-      rvLoadManifest().catch((e) => log(`rv/ships.json: ${e.message}`));
-      setInterval(rvWantPoll, 300);
+      rvSets.loadManifest().catch((e) => log(`rv/ships.json: ${e.message}`));
+      setInterval(() => rvSets.poll(liveFS()), 300);
     }
     setInterval(keepSaves, 4000);
     setInterval(showPerformance, 1000);
@@ -1853,7 +1688,12 @@ window.__wcVoiceLinks = voice.links;  // (for the page tests)
 window.__wcVoiceReport = voice.report;
 
 // a touch screen's KEYS (the device's keyboard), ESC and FIRE (web/touch.js)
-const touch = initTouch({ module: () => (running && window.DOSBox) || null, log });
+const touch = initTouch({ log, send: (name, down) => {
+  const M = (running && window.DOSBox) || null;
+  if (!M || !M._wc_web_key) return false;
+  M._wc_web_key(KEY[name], down);
+  return true;
+} });
 
 const controls = initControls({
   module: () => (running && window.DOSBox) || null,

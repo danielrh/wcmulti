@@ -53,6 +53,10 @@ typedef long long lz_wide;
 #endif
 static long muldiv(long a, long b, long c) { return (long)((lz_wide)a * b / c); }
 
+/* v << n for a v that may be negative: the bits the CPU's shl makes (C leaves a negative one's shift undefined, and
+ * the host's sanitizer says so) */
+#define SHL(v, n) ((long)((unsigned long)(long)(v) << (n)))
+
 void lz_camera(LzCam LZ_FAR *c, long px, long py, long pz, const long *front, const long *right, const long *up,
                int cx, int cy, int focal, long radius16, long zmin_km, long zmax_km, int rmax16, int line16,
                int y0, int y1)
@@ -85,14 +89,14 @@ void lz_line_of(int ax, int ay, int bx, int by, LzLine LZ_FAR *out)
     long dx = (long)bx - ax, dy = (long)by - ay;
     out->y0 = (short)(ay >> 4);
     out->y1 = (short)((by >> 4) + 1);
-    out->ax = ((long)ax << 12) + 0x7FFF;
-    out->bx = ((long)bx << 12) + 0x7FFF;
+    out->ax = SHL(ax, 12) + 0x7FFF;
+    out->bx = SHL(bx, 12) + 0x7FFF;
     if (out->y1 - out->y0 == 1) {
         out->m = dx >= 0 ? 0 : -1;
         out->x1 = out->bx;
     } else {
-        long e = ((long)(out->y0 + 1) << 4) - ay;   /* 1 .. 16: from a to the row's bottom edge */
-        out->m = (dx << 16) / dy;
+        long e = SHL(out->y0 + 1, 4) - ay;   /* 1 .. 16: from a to the row's bottom edge */
+        out->m = SHL(dx, 16) / dy;
         out->x1 = out->ax + muldiv(dx * e, 4096, dy);
     }
 }
@@ -279,7 +283,7 @@ static void pass_of(const LzFat LZ_FAR *f, long len, int sh, int r, int colour, 
     {
         /* the tangent points' rows, from the ends' (off = r dx / len): rounded so the straight stretch is
          * only used between them, never past (on a nearly level bolt a sixteenth there is pixels of x) */
-        lz_wide num = (lz_wide)r * dx << sh;
+        lz_wide num = (lz_wide)((unsigned long long)((lz_wide)r * dx) << sh);
         long fo = (long)(num / len), co = fo;
         if ((lz_wide)fo * len > num) fo--;           /* floor */
         if ((lz_wide)co * len < num) co++;           /* ceil */
@@ -290,9 +294,9 @@ static void pass_of(const LzFat LZ_FAR *f, long len, int sh, int r, int colour, 
     }
     /* the body: the middle line's x at a row, less / plus the half width a row cuts (r len / dy), 16.16 px */
     p->hw = muldiv((long)r * len, 4096L >> sh, dy);
-    p->m = (dx << 16) / dy;
+    p->m = SHL(dx, 16) / dy;
     yc = p->top * 16 + 8;
-    p->c0 = ((long)f->ax << 12) + muldiv(((long)yc - f->ay) * dx, 4096, dy);
+    p->c0 = SHL(f->ax, 12) + muldiv(((long)yc - f->ay) * dx, 4096, dy);
 }
 
 int lz_fat_setup(const LzFat LZ_FAR *f, const LzStyle *st, LzPass LZ_FAR *pass, LzLine LZ_FAR *core, int *core_line)
@@ -391,21 +395,21 @@ static void pass_span(const LzPass LZ_FAR *p, int y, long c, int *xs, int *xe)
     long L, R, hw = p->hw;
     if (yc < p->la) {
         d = yc - p->ay;
-        L = (long)(p->ax - lz_sqrt16[root_index(p->r2, d)]) << 12;
+        L = SHL(p->ax - lz_sqrt16[root_index(p->r2, d)], 12);
     } else if (yc < p->lb) {
         L = c - hw;
     } else {
         d = yc - p->by;
-        L = (long)(p->bx - lz_sqrt16[root_index(p->r2, d)]) << 12;
+        L = SHL(p->bx - lz_sqrt16[root_index(p->r2, d)], 12);
     }
     if (yc < p->ra) {
         d = yc - p->ay;
-        R = (long)(p->ax + lz_sqrt16[root_index(p->r2, d)]) << 12;
+        R = SHL(p->ax + lz_sqrt16[root_index(p->r2, d)], 12);
     } else if (yc < p->rb) {
         R = c + hw;
     } else {
         d = yc - p->by;
-        R = (long)(p->bx + lz_sqrt16[root_index(p->r2, d)]) << 12;
+        R = SHL(p->bx + lz_sqrt16[root_index(p->r2, d)], 12);
     }
     *xs = (int)((L + 0x7FFF) >> 16);
     *xe = (int)((R + 0x8000) >> 16);

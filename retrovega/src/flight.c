@@ -695,10 +695,10 @@ static long ft_miss(int w, long x, long y, int len16)
 }
 
 /* the way the tail of a picture of view v (lattice nb, nh) turned by roll points on screen, 16384 = 1.0 */
-static void ft_tail(int v, int roll, int nb, int nh, long *x, long *y)
+static void ft_tail(int v, int roll, int nb, int nh, int32_t *x, int32_t *y)
 {
     LfViewRot rot;
-    long z;
+    int32_t z;
     lf_view_rot(v, nb, nh, &rot);
     lf_sprite_point(&rot, roll, 0, 0, -16384, x, y, &z);
 }

@@ -205,8 +205,8 @@ void lz_balls_draw(const LzBallOut LZ_FAR *o, int n, unsigned char LZ_FAR *band,
 void lz_flame_draw(const LzPass LZ_FAR *p, const LzFlame LZ_FAR *f, const LzFlameLook LZ_FAR *lk, unsigned char LZ_FAR *band,
                    int band_y0, int y0, int y1, const short LZ_FAR *ext, int ext_y0, int ext_rows);
 
-#ifdef __WATCOMC__
-/* lasers.asm: the same, fast */
+#if defined(__WATCOMC__) || defined(RV_HOST)
+/* lasers.asm: the same, fast (on the host their C twins: twins.c, host/asm_twins.c) */
 int __far __cdecl rv_bolts_place(const LzBolt __far *b, int n, const LzCam __far *cam, LzLine __far *lines,
                                  int maxlines, LzFat __far *fats, int maxfats, int __far *nfats);
 void __far __cdecl rv_lines_draw(const LzLine __far *l, int n, int colour, unsigned char __far *band, int band_y0,

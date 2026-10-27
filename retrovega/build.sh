@@ -89,6 +89,8 @@ mkdir -p "$OUT/t"
 for c in $TESTED; do
     wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/$c.obj" "src/$c.c"
 done
+# and the asm's C twins (twins.c: the host build draws with them), checked against it (RVT.EXE /twins)
+wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/twins.obj" src/twins.c
 # RVHOOK first (image paragraph 0), the C code, then DGROUP last as Watcom's
 # startup needs it, with the fixed block (RVFIXED) ahead of Watcom's _NULL so
 # it starts at DS:0000 (docs/engine.md).
@@ -110,6 +112,6 @@ link() {
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
 link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
-link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do
+link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" file "$OUT/t/twins.obj" $(for c in $ENGINE; do
     case " $TESTED " in *" $c "*) printf ' file %s/t/%s.obj' "$OUT" "$c";; *) printf ' file %s/%s.obj' "$OUT" "$c";; esac; done)
 echo "built $OUT/RV.EXE, $OUT/RVT.EXE (the test build) and $OUT/HELLO.EXE"

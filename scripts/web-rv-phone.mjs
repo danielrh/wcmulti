@@ -1,5 +1,5 @@
 // RetroVega on a phone, emulated: a Pixel 7's screen and touch, and no Pointer Lock (phones have none), every input
-// a tap.  From fireflyk64.github.io/rv/ (or any page URL): one player, Join, Fly, then the base by taps alone: the
+// a tap.  From fireflyk64.github.io/dosbox/?retrovega (or any page URL): one player, Join, Fly, then the base by taps alone: the
 // welcome, the bunk menu (its close box; a bunk, SAVE, SAVE: "Bunk 1"; another, SAVE, the Keys button and a name
 // typed as a phone's keyboard types (input events, no key codes), Enter; the Esc button; a tap outside), the quarters'
 // door, the lounge's hatch, the bar's hatch to the briefing, the deck, and the Fire button (web/touch.js).  A
@@ -40,7 +40,7 @@ try {
   await page.goto(pageUrl);
   await page.waitForFunction(() => document.getElementById("sourceStatus") && document.getElementById("sourceStatus").dataset.state === "ready",
     null, { timeout: 90000 });
-  ok(/\/dosbox\/\?retrovega/.test(page.url()), `the address leads to the game (${page.url()})`);
+  ok(/[?&]retrovega/.test(page.url()), `the page offers RetroVega (${page.url()})`);
   await shot("page", true);
   await page.locator("#seats").fill("1");
   await page.locator("#join").tap();

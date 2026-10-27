@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RetroVega</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<style>
+  /* The DOSBox page's cockpit look (web/index.html): green on black, amber for what matters, flat colours only:
+   * what the browser paints around the picture is time the game does not get. */
+  :root {
+    color-scheme: dark;
+    --bg: #03060a; --line: #1b5a3a; --line2: #123f29; --dark: #020705;
+    --green: #5ef38c; --green2: #2fae62; --amber: #ffcf40; --amber2: #b98a12; --red: #ff5b4d;
+    --text: #cfe9d9; --muted: #7aa58b;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", "Roboto Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--mono); }
+  main { max-width: 1300px; margin: 0 auto; padding: 8px 16px 24px; }
+  [hidden] { display: none !important; }
+  #top { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 4px 2px 8px; margin-bottom: 10px; border-bottom: 1px solid var(--line2); }
+  #top h1 { margin: 0; color: var(--amber); font: italic 800 22px/1 Eurostile, "Bank Gothic", "Segoe UI", system-ui, sans-serif; letter-spacing: .22em; text-transform: uppercase; }
+  #top .sub { color: var(--muted); font-size: 10.5px; letter-spacing: .18em; text-transform: uppercase; }
+  #top .acts { margin-left: auto; margin-right: 54px; display: flex; align-items: center; gap: 10px; }
+  #top::before, #top::after { content: ""; position: absolute; bottom: 9px; height: 7px; }
+  #top::before { right: 26px; width: 8px; background: var(--red); }
+  #top::after { right: 2px; width: 20px; border-left: 8px solid var(--amber); border-right: 8px solid var(--green); }
+  .panel { position: relative; padding: 8px 12px 10px; border: 1px solid var(--line2); background: #06110c; }
+  .panel::before, .panel::after { content: ""; position: absolute; width: 12px; height: 12px; pointer-events: none; }
+  .panel::before { top: -1px; left: -1px; border-top: 2px solid var(--green); border-left: 2px solid var(--green); }
+  .panel::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--green); border-right: 2px solid var(--green); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 26px; margin-bottom: 7px; }
+  h2 { margin: 0; font: 700 11px/1.2 var(--mono); letter-spacing: .2em; text-transform: uppercase; color: var(--green); }
+  .head .acts { display: flex; gap: 6px; margin-left: auto; }
+  button { padding: 7px 12px; border: 1px solid var(--amber2); background: #f0b92c; color: #1c1300; cursor: pointer;
+    font: 700 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+    clip-path: polygon(7px 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%, 0 7px); }
+  button:hover:not(:disabled) { background: #ffd765; }
+  button.secondary { background: #0a2015; color: var(--green); border-color: var(--green2); }
+  button.secondary:hover:not(:disabled) { background: #113a23; color: #c9ffdc; }
+  button:disabled { background: #0a120e; color: #41614f; border-color: #1c3327; cursor: default; }
+  kbd { padding: 0 4px; background: #0b2417; border: 1px solid var(--line); color: var(--green); font: 11px var(--mono); }
+  a { color: var(--green); }
+  .hint { margin: 6px 0 0; color: var(--muted); font: 11.5px/1.45 system-ui, sans-serif; }
+  #status { margin: 6px 0 0; color: var(--amber); min-height: 1.45em; }
+  /* the picture: 640 x 400 at 1.6, as wide as there is room for; the canvas is always exactly the picture's box
+   * (never letterboxed inside its element: SDL reads the pointer by the element's size) */
+  #screen { position: relative; width: min(1280px, 100%); }
+  #canvas { display: block; width: 100%; aspect-ratio: 1.6; background: #000; outline: none; image-rendering: pixelated; touch-action: none; }
+  #screen:fullscreen { width: 100vw; height: 100vh; background: #000; display: grid; place-items: center; }
+  #screen:fullscreen #canvas { width: min(100vw, 160vh); height: min(62.5vw, 100vh); aspect-ratio: auto; }
+  #cover { position: absolute; inset: 0; display: grid; place-items: center; background: #000c; }
+  #cover button { padding: 14px 30px; font-size: 14px; }
+  /* a touch screen's controls (web/touch.js): a row under the picture; in full screen, its corners */
+  #touch { display: flex; gap: 8px; margin-top: 8px; }
+  #touch button { min-width: 64px; min-height: 44px; padding: 8px 12px; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #touchFire { margin-left: auto; min-width: 96px; }
+  #touch button.on { background: var(--green); color: #031a0c; border-color: var(--green); }
+  #touchType { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }
+  #screen:fullscreen #touch { position: absolute; inset: 0; margin: 0; pointer-events: none; }
+  #screen:fullscreen #touch button { position: absolute; pointer-events: auto; opacity: .85; }
+  #screen:fullscreen #touchKeys { top: 10px; right: 10px; }
+  #screen:fullscreen #touchEsc { top: 10px; left: 10px; }
+  #screen:fullscreen #touchFire { bottom: 10px; right: 10px; min-height: 64px; }
+  #log { max-height: 260px; overflow: auto; margin: 6px 0 0; padding: 6px; background: var(--dark); border: 1px solid var(--line2); color: var(--muted); font-size: 11px; white-space: pre-wrap; }
+  details summary { cursor: pointer; color: var(--muted); font-size: 11px; margin-top: 8px; }
+  @media (max-width: 600px) { main { padding: 6px 8px 16px; } #top .acts { margin-right: 40px; } }
+</style>
+</head>
+<body>
+<main>
+  <div id="top">
+    <h1>RetroVega</h1>
+    <span class="sub">The game compiled for your browser · build @REV@</span>
+  </div>
+  <div class="panel">
+    <div class="head">
+      <h2>Flight deck</h2>
+      <div class="acts">
+        <button type="button" class="secondary" id="full" disabled>Full screen</button>
+        <button type="button" class="secondary" id="sound" disabled>Sound off</button>
+      </div>
+    </div>
+    <div id="screen">
+      <canvas id="canvas" width="640" height="400" tabindex="0" oncontextmenu="event.preventDefault()"></canvas>
+      <div id="cover"><button type="button" id="fly" disabled>Loading…</button></div>
+      <!-- a touch screen's controls (web/touch.js): the device's keyboard, the game's Esc, the trigger -->
+      <div id="touch" hidden>
+        <button type="button" class="secondary" id="touchKeys" title="The keyboard: what you type goes to the game">Keys</button>
+        <button type="button" class="secondary" id="touchEsc" title="The game's Esc">Esc</button>
+        <button type="button" id="touchFire" title="Hold to fire (Space)">Fire</button>
+        <input id="touchType" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+               enterkeyhint="done" aria-label="Type to the game">
+      </div>
+    </div>
+    <p id="status"></p>
+    <p class="hint">The mouse is the pointer: click to walk the base, and in flight it steers. <kbd>Space</kbd> fires,
+      <kbd>Tab</kbd> moves between the things you can use, the arrows steer the pointer. <kbd>Caps Lock</kbd> is the
+      game's <kbd>Esc</kbd>, because the browser keeps <kbd>Esc</kbd> for leaving full screen. Your bunk's saves stay in
+      this browser. On a touch screen a tap is a click, and <b>Keys</b> (your device's keyboard), <b>Esc</b> and
+      <b>Fire</b> are under the picture, or in its corners in full screen.</p>
+    <p class="hint">This is RetroVega itself, built for the web: no emulator. To fly it with other pilots, use the
+      <a href="../dosbox/?retrovega">DOSBox page</a> (the multiplayer layer lives there); the game's logic alone runs in
+      <a href="sim/">rvsim</a>.</p>
+    <details><summary>The game's log</summary><pre id="log"></pre></details>
+  </div>
+</main>
+<script src="rv.js"></script>
+<script type="module" src="game.js"></script>
+</body>
+</html>

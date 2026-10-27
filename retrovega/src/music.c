@@ -113,7 +113,7 @@ static volatile unsigned long g_song_ticks;
 static volatile int g_level = 0, g_target = 0, g_step = 1;   /* master fade, 0..1024 */
 static volatile unsigned g_resend;
 static unsigned char g_vol[16];
-static unsigned g_chain;
+static unsigned short g_chain;           /* (16 bits: it wraps at 65536 PIT counts, the BIOS tick) */
 static volatile unsigned long g_bytes;
 static int g_installed;
 

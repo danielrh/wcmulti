@@ -82,7 +82,7 @@ static struct {                         /* this frame's flames */
     short way, len16;                   /* its baked tail's way on screen (16384ths), its length x16 (the test's) */
 } __far g_fl[FLAME_MAX];
 static int g_nf, k_ok;
-static unsigned g_frame, g_rand = 1;
+static unsigned g_frame; static unsigned short g_rand = 1;   /* (16 bits: it wraps as on DOS) */
 
 /* the flight palette's entry nearest an sRGB colour (6-bit; below the cockpits' own colours, so the same in
  * every cockpit) */
@@ -105,14 +105,19 @@ static unsigned char nearest(const unsigned char __far *pal, int r, int g, int b
 static int looks(const unsigned char __far *pal)
 {
     unsigned long lin;
-    unsigned seed = 12345;
+    unsigned short seed = 12345;        /* (16 bits: the generator wraps as on DOS) */
     int k, t;
     if (!g_look_mem)
         g_look_mem = _fmalloc(2 * sizeof(LzFlameLook) + 16);
     if (!g_look_mem)
         return 0;
+#ifdef RV_HOST                          /* (a flat address: 16-aligned, as the paragraph is) */
+    (void)lin;
+    g_look = (LzFlameLook __far *)(((uintptr_t)g_look_mem + 15) & ~(uintptr_t)15);
+#else
     lin = ((unsigned long)FP_SEG(g_look_mem) << 4) + FP_OFF(g_look_mem) + 15;
     g_look = (LzFlameLook __far *)MK_FP((unsigned)(lin >> 4), 0);
+#endif
     for (k = 0; k < 2; k++) {
         unsigned char a[9], b[9];
         LzFlameLook __far *lk = &g_look[k];
@@ -358,7 +363,7 @@ void flames_frame(void)
  * frame of noise at random), its nozzle on screen x16 (x16, y16), its tail's way on screen (tx, ty: any scale to
  * 2^16, the finer the better) and length (x16), its root's radius x16, its look (1 the afterburner's), a number of
  * its own for its noise: 0 when none fits */
-static int add_one(long x16, long y16, long tx, long ty, long len16, int r16, int look, unsigned id)
+static int add_one(long x16, long y16, long tx, long ty, long len16, int r16, int look, unsigned short id)
 {
     BakedFlame b[BK_FRAMES];
     long atx = tx < 0 ? -tx : tx, aty = ty < 0 ? -ty : ty, l;
@@ -430,7 +435,8 @@ void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int
     lf_view_rot(p->view, nb, nh, &rot);
     for (k = 0; k < t->nengines && k < RV_ENGINES && g_nf < FLAME_MAX; k++) {
         const signed char __far *e = t->engine[k];
-        long ox, oy, oz, tx, ty, tz, len, len16;
+        int32_t ox, oy, oz, tx, ty, tz;     /* (lf_sprite_point's: a long on DOS) */
+        long len, len16;
         int r16 = (int)((unsigned char)e[3] * half16 / 1024);
         len = (long)(unsigned char)e[3] * FLAME_LEN;
         if (len < FLAME_LEN_MIN)
@@ -450,7 +456,7 @@ void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int
     out->n = (unsigned char)(g_nf - out->first);
 }
 
-void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned id, FlameSet __far *out)
+void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned short id, FlameSet __far *out)
 {
     out->first = (unsigned char)g_nf;
     out->front = 0;

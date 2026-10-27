@@ -52,7 +52,7 @@ void flames_add(const RvShipType __far *t, const LfPlace *p, int nb, int nh, int
 /* a flame of its own (a missile's): its nozzle on screen and its tail's way and length there (x16), its root's
  * radius (x16), the afterburner's look or not, a number of its own (its noise's); *out as flames_add's (its
  * `front` the caller's to set) */
-void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned id, FlameSet __far *out);
+void flames_add_at(long x16, long y16, long tx16, long ty16, int r16, int burn, unsigned short id, FlameSet __far *out);
 
 /* the frame's flame k (a FlameSet's first + i): the way its baked flame's tail points on screen (16384ths of a turn
  * from the right, clockwise: y down) and its length (x16); 0 when it is end on (no way shows).  And a way as a

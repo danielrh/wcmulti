@@ -1,6 +1,7 @@
 /* rvhost.h: the DOS words the shared sources use, for gcc and clang (host/build.sh puts it ahead of every file with
  * -include).  The shared sources are the game's own (src/), built unchanged: what is DOS in them reads as plain C
- * here, and rvhooks.h puts the fixed block in rv_dgroup (host.c) because RV_HOST is defined. */
+ * here, and rvhooks.h puts the fixed block in rv_dgroup (fixed.c) because RV_HOST is defined.  The native build (host/game.sh,
+ * RV_HOST_GAME) also has the far heap counted and the Watcom formats (%Fs: a far string) taken as the host's. */
 #ifndef RVHOST_H
 #define RVHOST_H
 
@@ -19,12 +20,30 @@
 #define _fmemcpy memcpy
 #define _fmemmove memmove
 #define _fmemcmp memcmp
+#ifdef RV_HOST_GAME
+#define _fmalloc hle_fmalloc            /* (counted: DOS's largest free block shrinks as the far heap grows, hle.c) */
+#define _ffree hle_ffree
+void *hle_fmalloc(size_t n);
+void hle_ffree(void *p);
+#else
 #define _fmalloc malloc
 #define _ffree free
+#endif
 #define _fstrlen strlen
 #define _fstrcpy strcpy
 #define _fstrncpy strncpy
 #define _fstrcmp strcmp
 #define _fstrchr strchr
+
+#ifdef RV_HOST_GAME
+/* Watcom's printf takes F and N before a conversion (a far, a near pointer: "%Fs"); the host's would read %F as a
+ * double.  The game's formats go through these, which drop them (fmt.c) */
+#include <stdio.h>
+#include <stdarg.h>
+int rv_host_sprintf(char *s, const char *fmt, ...);
+int rv_host_vfprintf(FILE *f, const char *fmt, va_list ap);
+#define sprintf rv_host_sprintf
+#define vfprintf rv_host_vfprintf
+#endif
 
 #endif

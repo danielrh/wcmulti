@@ -20,7 +20,8 @@ Confederation against the Aera, with the Rlaan meddling.
   - the rules the multiplayer layer needs kept;
   - memory and time budgets, asteroid-field combat;
   - what the engine still lacks;
-  - the sized types (`src/rvtypes.h`) and the host harness, rvsim (`host/`): the logic built for 32- or 64-bit Linux, under gdb, rr, valgrind and the sanitizers, with the multiplayer rules checked, and for a browser at https://fireflyk64.github.io/rv/sim/ (https://fireflyk64.github.io/rv/ is the game itself).
+  - the sized types (`src/rvtypes.h`) and the host harness, rvsim (`host/`): the logic built for 32- or 64-bit Linux, under gdb, rr, valgrind and the sanitizers, with the multiplayer rules checked, and for a browser at https://fireflyk64.github.io/rv/sim/.
+- The native build (`host/game.sh`, [docs/engine.md](docs/engine.md) "The native build"): the whole game compiled for a 32-bit host or the browser, no emulator, DOS's services answered by `host/hle.c` and the assembly replaced by its tested C twins: https://fireflyk64.github.io/rv/ is this build.
 - [docs/places.md](docs/places.md): the rooms built for the game by `tools/places.py` (data/places.json):
   - **Bar and lounge:** pilots a mission seats at the tables, turning to the player when pointed at, and Tally polishing.
   - **Briefing:** the XO talking in lip sync, then the pilots rising.

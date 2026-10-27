@@ -4,13 +4,11 @@
 // #screen in full screen, so they come along).
 //
 // The keyboard is a hidden text field in #screen: focusing it is what makes a phone show its keyboard.  What it
-// types reaches the game as key presses through the emulator's queue (wc_web_key, DOSBox's KBD_* codes: gamepad.js's
-// KEY).  Phone keyboards compose words and correct them, and say little in their key events (Android's are mostly
+// types reaches the game as key presses through the page's send(name, down), by gamepad.js's KEY names (the
+// emulator's queue, wc_web_key, on the DOSBox page; the PC's scan codes on RetroVega's own).  Phone keyboards compose words and correct them, and say little in their key events (Android's are mostly
 // "Unidentified"), so the field's value is followed instead: each change is sent as the backspaces and the letters
 // that turn what was typed into what is there now.  Enter, Esc, Tab and the arrows come as key events and are sent as
 // they are; none of the field's key events reach the emulator's own listener (it would type them twice).
-import { KEY } from "./gamepad.js";
-
 // A character as the key that types it on a US keyboard, and whether Shift is held for it.
 const SHIFTED = { "!": "1", "@": "2", "#": "3", "$": "4", "%": "5", "^": "6", "&": "7", "*": "8", "(": "9", ")": "0",
                   "_": "minus", "+": "equals", "?": "slash", ":": "semicolon", '"': "quote", "<": "comma",
@@ -27,7 +25,8 @@ function keyOf(ch) {
 const NAMED = { Enter: "enter", Escape: "esc", Tab: "tab", ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up",
                 ArrowDown: "down", Delete: "delete" };
 
-export function initTouch({ module, log }) {
+// send(name, down): a key by its KEY name to the game, false when no game takes keys (what is waiting is dropped)
+export function initTouch({ send: sendKey, log }) {
   const bar = document.getElementById("touch");
   const field = document.getElementById("touchType");
   const keysBtn = document.getElementById("touchKeys");
@@ -37,17 +36,15 @@ export function initTouch({ module, log }) {
   const queue = [];
   let pumping = false;
   function pump() {
-    const M = module();
-    if (!M || !M._wc_web_key) { queue.length = 0; pumping = false; return; }
     for (let i = 0; i < 6 && queue.length; i++) {
-      const [code, down] = queue.shift();
-      M._wc_web_key(code, down);
+      const [name, down] = queue.shift();
+      if (sendKey(name, down) === false) { queue.length = 0; break; }
     }
     if (queue.length) setTimeout(pump, 30);
     else pumping = false;
   }
   function send(name, down) {
-    queue.push([KEY[name], down ? 1 : 0]);
+    queue.push([name, down ? 1 : 0]);
     if (!pumping) { pumping = true; pump(); }
   }
   function tap(name, shift) {

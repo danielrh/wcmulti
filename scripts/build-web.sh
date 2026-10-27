@@ -179,7 +179,7 @@ say "assembling $OUT"
 mkdir -p "$OUT"
 cp "$BUILD/src/dosbox.js" "$BUILD/src/dosbox.wasm" "$OUT/"
 cp "$TS/dist/index.js" "$OUT/p2p-client.js"
-cp "$ROOT/web/index.html" "$ROOT/web/wc.js" "$ROOT/web/gamefiles.js" "$ROOT/web/gamepad.js" "$ROOT/web/touch.js" "$ROOT/web/voice.js" "$ROOT/web/hall.js" "$ROOT/web/chatfilter.js" "$ROOT/web/inno-worker.js" "$ROOT/web/so3.js" "$ROOT/web/rvsprites.js" "$ROOT/web/rvsprites-worker.js" "$OUT/"
+cp "$ROOT/web/index.html" "$ROOT/web/wc.js" "$ROOT/web/gamefiles.js" "$ROOT/web/gamepad.js" "$ROOT/web/touch.js" "$ROOT/web/voice.js" "$ROOT/web/hall.js" "$ROOT/web/chatfilter.js" "$ROOT/web/inno-worker.js" "$ROOT/web/so3.js" "$ROOT/web/rvsprites.js" "$ROOT/web/rvsprites-worker.js" "$ROOT/web/rvsets.js" "$OUT/"
 # Special Operations 3's sealed package (so3/README.md), as the page fetches it
 mkdir -p "$OUT/so3" && cp "$ROOT/web/so3/so3.json" "$ROOT/web/so3/so3.enc" "$OUT/so3/"
 if [ -f "$DEPS/inno-build/innoextract.js" ]; then
@@ -197,34 +197,9 @@ if [ -z "${SKIP_RETROVEGA:-}" ]; then
         RV.EXE RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT RVOPL.BNK *.MID)
     # the ships' views (SHIPnn.RV, 1-9 MB each at 6 degrees) and the asteroid fields' rocks (ROCKS.DAT, 6 MB):
     # not in the tarball but beside it, gzipped, fetched by the page for the types a flight needs (and the rocks
-    # when it has a field) when the game asks (RVWANT.TXT; web/wc.js rvWant),
-    # with a manifest of what is there (the build, each file's size and hash: the page's cache keys)
-    mkdir -p "$OUT/rv"
-    for f in "$ROOT"/retrovega/art/ships/SHIP*.RV "$ROOT"/retrovega/build/dos/ROCKS.DAT; do
-        g="$OUT/rv/$(basename "$f").gz"
-        [ "$g" -nt "$f" ] || gzip -9 -c "$f" > "$g"
-    done
-    python3 - "$ROOT" "$OUT/rv" "$(git -C "$ROOT" rev-parse --short HEAD)" <<'PYEOF2'
-import csv, hashlib, json, os, sys
-root, out, build = sys.argv[1:4]
-names = {r['type'].lower(): r['name'] for r in csv.DictReader(open(os.path.join(root, 'retrovega/data/ships.csv')))}
-ships = {}
-for f in sorted(os.listdir(os.path.join(root, 'retrovega/art/ships'))):
-    if not f.startswith('SHIP') or not f.endswith('.RV'):
-        continue
-    data = open(os.path.join(root, 'retrovega/art/ships', f), 'rb').read()
-    key = f[:-3]
-    ships[key] = {'file': 'rv/' + f + '.gz', 'bytes': len(data), 'sha1': hashlib.sha1(data).hexdigest(),
-                  'name': names.get('0x' + key[4:6].lower(), key)}
-# the game's files a flight asks for as they are: an asteroid field's rocks (ROCKS.DAT, tools/rocks.py)
-files = {}
-for f in ['ROCKS.DAT']:
-    data = open(os.path.join(root, 'retrovega/build/dos', f), 'rb').read()
-    files[f] = {'file': 'rv/' + f + '.gz', 'bytes': len(data), 'sha1': hashlib.sha1(data).hexdigest()}
-json.dump({'build': build, 'ships': ships, 'files': files}, open(os.path.join(out, 'ships.json'), 'w'), indent=1)
-print('rv/ships.json: %d ships, %.1f MB of views (%.1f MB gzipped)' % (len(ships), sum(s['bytes'] for s in ships.values()) / 1e6,
-      sum(os.path.getsize(os.path.join(out, s['file'][3:])) for s in ships.values()) / 1e6))
-PYEOF2
+    # when it has a field) when the game asks (RVWANT.TXT; web/rvsets.js),
+    # with a manifest of what is there (retrovega/tools/artweb.py)
+    python3 "$ROOT/retrovega/tools/artweb.py" --out "$OUT/rv" --build "$(git -C "$ROOT" rev-parse --short HEAD)"
 fi
 
 if [ -d "$WCDIR" ]; then

@@ -629,9 +629,9 @@ turn those options on; the log is under the view.
 
 `host/web/deploy.sh "what changed"` builds it, puts it at
 https://fireflyk64.github.io/rv/sim/ (the Pages repository's `rv/sim/`), and
-checks the live page with `host/web/check.mjs` (Playwright). It also puts
-`web/rv/index.html` at `rv/`: RetroVega's short address, which sends the
-visitor to the game in the DOSBox page (`dosbox/?retrovega`).
+checks the live page with `host/web/check.mjs` (Playwright). It also puts the
+whole game, built for the browser, at `rv/` itself (engine.md, "The native
+build").
 
 ### The self-test
 

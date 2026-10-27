@@ -181,9 +181,9 @@ static int tally_order(int *order)
 }
 
 /* the hand's wobble: -range .. range, the same for the same seed and step */
-static int wobble(unsigned seed, int k, int range)
+static int wobble(unsigned short seed, int k, int range)
 {
-    unsigned h = seed * 0x9E37u + (unsigned)k * 0x85EBu;
+    unsigned short h = seed * 0x9E37u + (unsigned)k * 0x85EBu;   /* (a 16-bit hash, as on DOS) */
     h ^= h >> 7;
     h *= 0x2C1Bu;
     h ^= h >> 9;

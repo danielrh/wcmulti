@@ -899,7 +899,7 @@ void ships_blit_mix(const ShipView __far *fa, unsigned long at_b, unsigned seed,
             r1 = rb;
         dst = vid_row(flip ? top + (h - 1 - r0) : top + r0);
         for (r = r0; r < r1; r++, dst += flip ? -SCR_W : SCR_W) {
-            int ry = flip ? top + (h - 1 - r) : top + r, ca = xa, cb = xb, b = ((unsigned)(r + seed) * 40503U >> 9) & 1;
+            int ry = flip ? top + (h - 1 - r) : top + r, ca = xa, cb = xb, b = ((unsigned short)((unsigned)(r + seed) * 40503U) >> 9) & 1;
             const unsigned char __far *src = b ? db + (unsigned)(tb[r - r0] - tb[0]) : da + (unsigned)(ta[r - r0] - ta[0]);
             if (!row_clip(ry, &ca, &cb, ext, ext_y0, ext_rows))
                 continue;
@@ -1192,11 +1192,11 @@ static void turn_rows(int w, int h, int ox, int oy_, int x, int y, int scale256,
             ed = rv_turn_dropped(g_dense, w, h, &r, oy - top, xs, xe, pl, pr, row, vid_row(oy - 1) + left);
         else if (detail >= 4) {
             ed = rv_rotate_edges(g_dense, w, h, &r, oy - top, xs, xe);
-            if ((int)ed < (int)(ed >> 16))
-                rv_rotate_row2(g_dense, w, h, &r, oy - top, (int)ed, (int)(ed >> 16), row);
+            if ((int16_t)ed < (int)(ed >> 16))  /* (the low word: ax, the first column) */
+                rv_rotate_row2(g_dense, w, h, &r, oy - top, (int16_t)ed, (int)(ed >> 16), row);
         } else
             ed = rv_turn_drawn(g_dense, w, h, &r, oy - top, xs, xe, row);
-        pl = (int)ed;
+        pl = (int16_t)ed;
         pr = (int)(ed >> 16);
     }
 }

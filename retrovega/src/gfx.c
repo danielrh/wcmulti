@@ -397,7 +397,7 @@ static void plot(int x, int y, unsigned char c, int y0, int y1)
  * broad stroke's middle is pressed harder */
 static void chalk_dot(int x, int y, int c3, int core, int y0, int y1)
 {
-    unsigned h;
+    unsigned short h;                   /* (a 16-bit hash: it wraps as on DOS) */
     if (x < 0 || x >= SCR_W || y < y0 || y >= y1 || y < 0 || y >= SCR_H)
         return;
     h = (unsigned)x * 0x9E37u ^ (unsigned)y * 0x85EBu;

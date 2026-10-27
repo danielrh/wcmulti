@@ -50,7 +50,7 @@ static struct {
     int mouth;                          /* shown: 0 at rest, else its mouth patch (1 .. v.nmouth) */
     unsigned long t0, until, eyes_at, next_look;
     int look;                           /* the eye animation: 0 none, 1 a blink, 4 / 5 a glance left / right */
-    unsigned rnd;
+    unsigned short rnd;                 /* (16 bits: the generator wraps as on DOS) */
     int callsign_w;                     /* its width in the font, pixels (0: none) */
     unsigned char ink, shadow, bg[2];
 } __far g_c;

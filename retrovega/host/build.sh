@@ -115,6 +115,7 @@ for c in $SHARED; do
     $CC $CFLAGS -c -o "$OUT/obj/$c.o" "src/$c.c"
 done
 $CC $CFLAGS -c -o "$OUT/obj/host.o" host/host.c
+$CC $CFLAGS -c -o "$OUT/obj/fixed.o" host/fixed.c
 $CC $CFLAGS $SDLF -c -o "$OUT/obj/sim.o" host/sim.c
 $CC $CFLAGS -c -o "$OUT/obj/thunks.o" "$OUT/thunks.c"
 # the thunks' default bodies, a library: the linker takes one only where logic.c has no _impl (as on DOS)

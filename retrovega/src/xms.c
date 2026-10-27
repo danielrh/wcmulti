@@ -10,6 +10,9 @@
 #include <dos.h>
 #include <i86.h>
 #include "rv.h"
+#ifdef RV_HOST
+int hle_xms_move(const void *record);   /* (host/hle.c) */
+#endif
 
 void (__far *rv_xms_entry)(void);
 
@@ -113,10 +116,15 @@ static int move(void)
     RvRegs x;
     if (g_move.length & 1)
         g_move.length++;
+#ifdef RV_HOST                          /* (the record by its address: DS:SI is DGROUP's on DOS) */
+    (void)x;
+    return hle_xms_move(&g_move);
+#else
     x.eax = 0x0B00; x.ebx = x.ecx = x.edx = 0;
     x.si = FP_OFF((void __far *)&g_move);
     rv_xms(&x);
     return (x.eax & 0xffff) == 1;
+#endif
 }
 
 static void check(XmsBlock b, unsigned long off, unsigned long n)
@@ -173,6 +181,18 @@ int xms_copy_conv(void __far *dst, const void __far *src, unsigned long n)
     g_move.length = n;
     g_move.src_handle = 0;
     g_move.src_off = ((unsigned long)FP_SEG(src) << 16) | FP_OFF(src);
+    g_move.dst_handle = 0;
+    g_move.dst_off = ((unsigned long)FP_SEG(dst) << 16) | FP_OFF(dst);
+    return move();
+}
+
+/* n bytes from an absolute offset in a handle's memory (a block's, from xms_where) to conventional memory: the move
+ * rocks.asm makes for a big rock's row, for its C twin (twins.c).  n even: the driver's move is rounded up */
+int xms_get_at(unsigned handle, unsigned long off, void __far *dst, unsigned long n)
+{
+    g_move.length = n;
+    g_move.src_handle = (unsigned short)handle;
+    g_move.src_off = off;
     g_move.dst_handle = 0;
     g_move.dst_off = ((unsigned long)FP_SEG(dst) << 16) | FP_OFF(dst);
     return move();
