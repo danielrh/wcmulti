@@ -1,7 +1,8 @@
 #!/bin/bash
 # desktop/fetch-data.sh DIR: the game's data files from the published site (fireflyk64.github.io/rv), each download
 # checked against the SHA-256 below before anything is unpacked: a different file is refused.  The site's files are
-# made reproducibly (host/web/site.sh, tools/artweb.py): these hashes hold until the data itself changes.  For a machine without the DOS build (../build.sh); then
+# made reproducibly (host/web/site.sh, tools/artweb.py): these hashes hold until the data itself changes.  For a
+# machine without the DOS build (../build.sh); then
 #   make data DATA=<the game's directory> FROM=DIR
 # which adds the ships' sprite sets, made here from art/ships.  This is the only step that uses the network, and
 # it only downloads: nothing fetched is run.  SITE=url fetches from another copy of the site (same hashes).
