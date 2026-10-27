@@ -7,5 +7,8 @@
 #ifndef O_BINARY
 #define O_BINARY 0
 #endif
+#ifdef RV_HOST_GAME
+#define open rv_host_open               /* (the game's files: fsguard.c) */
+#endif
 
 #endif

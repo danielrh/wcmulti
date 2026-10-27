@@ -1,0 +1,11 @@
+_llseek
+brk
+clock_nanosleep
+close
+exit_group
+mmap2
+munmap
+openat
+read
+statx
+write

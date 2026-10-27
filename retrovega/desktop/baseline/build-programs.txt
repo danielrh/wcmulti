@@ -1,0 +1,10 @@
+/usr/bin/cc
+/usr/bin/g++
+/usr/bin/ld
+/usr/bin/make
+/usr/bin/mkdir
+/usr/bin/pkg-config
+/usr/bin/x86_64-linux-gnu-as
+/usr/libexec/gcc/x86_64-linux-gnu/15/cc1
+/usr/libexec/gcc/x86_64-linux-gnu/15/cc1plus
+/usr/libexec/gcc/x86_64-linux-gnu/15/collect2

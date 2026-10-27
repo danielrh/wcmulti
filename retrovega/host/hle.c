@@ -644,9 +644,11 @@ unsigned inp(unsigned port)
 
 /* --- files, the heap --- */
 
+int rv_host_open(const char *name, int flags, ...);
+
 unsigned _dos_open(const char *path, unsigned mode, int *fd)
 {
-    *fd = open(path, O_RDONLY);
+    *fd = rv_host_open(path, O_RDONLY);    /* (fsguard.c: a plain name in the game's directory) */
     (void)mode;
     return *fd < 0 ? 2 : 0;
 }

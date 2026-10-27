@@ -73,7 +73,7 @@ rm -f "$OUT"/stubs/*.c
 python3 tools/rvabi.py --stubs "$OUT/stubs"
 
 # the game's modules (build.sh's list), as Watcom builds them: char unsigned, no type-based aliasing; the DOS words
-# (host/rvhost.h, host/dos/: dos.h, i86.h, conio.h, io.h, malloc.h); main as rv_main (play.c's main calls it)
+# (host/rvhost.h, host/dos/: dos.h, i86.h, conio.h, io.h, malloc.h); main.c's main is rv_main there (play.c's calls it)
 ENGINE=$(sed -n 's/^ENGINE="\(.*\)"$/\1/p' build.sh)
 [ -n "$ENGINE" ] || { echo "build.sh's ENGINE list not found"; exit 1; }
 COMMON="-std=gnu99 -g3 -funsigned-char -fno-strict-aliasing -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DRV_HOST_GAME
@@ -83,12 +83,10 @@ WARN="-Wall -Wno-unused-parameter -Wno-sign-compare -Wno-unused-result -Wno-form
 CFLAGS="$ARCHF $OPT $COMMON $WARN $SANF $TESTF"
 rm -f "$OUT"/obj/*.o
 for c in $ENGINE; do
-    extra=""
-    [ "$c" = main ] && extra="-Dmain=rv_main"
-    $CC $CFLAGS $extra -c -o "$OUT/obj/$c.o" "src/$c.c" &
+    $CC $CFLAGS -c -o "$OUT/obj/$c.o" "src/$c.c" &
 done
 wait
-for c in hle fixed flightloop asm_twins; do
+for c in hle fixed flightloop asm_twins fsguard; do
     $CC $CFLAGS -c -o "$OUT/obj/h_$c.o" "host/$c.c"
 done
 $CC $CFLAGS -c -o "$OUT/obj/twins.o" src/twins.c

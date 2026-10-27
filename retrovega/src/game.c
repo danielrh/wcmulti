@@ -140,7 +140,8 @@ static void room_overlay(int y0, int y1);
 
 static void message(const char *text)
 {
-    strncpy(g_msg, text, sizeof g_msg - 1);
+    if (text != g_msg)                  /* (a message made in g_msg itself is there already: no copy onto itself) */
+        strncpy(g_msg, text, sizeof g_msg - 1);
     g_back_mode = g_mode;
     g_mode = MODE_MESSAGE;
     g_scene.overlay = message_overlay;

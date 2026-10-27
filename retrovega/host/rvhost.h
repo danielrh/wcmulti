@@ -44,6 +44,10 @@ int rv_host_sprintf(char *s, const char *fmt, ...);
 int rv_host_vfprintf(FILE *f, const char *fmt, va_list ap);
 #define sprintf rv_host_sprintf
 #define vfprintf rv_host_vfprintf
+/* the game's files: plain DOS names in its own directory, nothing else (fsguard.c) */
+FILE *rv_host_fopen(const char *name, const char *mode);
+int rv_host_open(const char *name, int flags, ...);
+#define fopen rv_host_fopen
 #endif
 
 #endif

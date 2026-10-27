@@ -32,12 +32,10 @@ SAN="-fsanitize=implicit-integer-truncation -fsanitize-recover=all"
 CFLAGS="-m32 -O1 -g -std=gnu99 -funsigned-char -fno-strict-aliasing -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -DRV_HOST_GAME -DRV_TESTS
         -include host/rvhost.h -I$OUT/host/dos -I$OUT/src -I$OUT/host -Ihost -w $SAN"
 for c in $ENGINE; do
-    extra=""
-    [ "$c" = main ] && extra="-Dmain=rv_main"
-    $CC $CFLAGS $extra -c -o "$OUT/obj/$c.o" "$OUT/src/$c.c" &
+    $CC $CFLAGS -c -o "$OUT/obj/$c.o" "$OUT/src/$c.c" &
 done
 wait
-for c in hle fixed flightloop asm_twins; do $CC $CFLAGS -c -o "$OUT/obj/h_$c.o" "$OUT/host/$c.c"; done
+for c in hle fixed flightloop asm_twins fsguard; do $CC $CFLAGS -c -o "$OUT/obj/h_$c.o" "$OUT/host/$c.c"; done
 $CC $CFLAGS -c -o "$OUT/obj/twins.o" "$OUT/src/twins.c"
 $CC $CFLAGS $($PC --cflags sdl2) -c -o "$OUT/obj/h_play.o" host/play.c   # (the front end as it is: SDL's callbacks take ints)
 $CC -m32 -O1 -c -o "$OUT/obj/h_fmt.o" host/fmt.c

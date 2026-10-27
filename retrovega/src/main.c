@@ -112,6 +112,9 @@ static void names(void)
     }
 }
 
+#ifdef RV_HOST                          /* (on the host the front end has the program's main, and calls this) */
+#define main rv_main
+#endif
 int main(int argc, char **argv)
 {
     int i, ok;

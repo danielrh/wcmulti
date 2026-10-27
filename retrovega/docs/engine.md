@@ -2167,6 +2167,14 @@ the page together, `host/web/deploy.sh` publishes it with rvsim at `rv/sim/`).
 It is one player: the multiplayer layer lives in DOSBox, so flying with
 others stays on the DOSBox page (`dosbox/?retrovega`).
 
+For a Linux desktop, `desktop/` builds the same game as two sandboxed
+programs: `rv-core`, the game with a seccomp filter and only its own
+directory, and `rv`, its window and sound. Its plain Makefile, the bubblewrap
+policies and `desktop/audit.sh` let you audit the build and the game's system
+calls and writes against a recorded baseline (desktop/README.md). Every game
+file open goes through `host/fsguard.c` in all the native builds: plain DOS
+names in the game's own directory, and nothing else.
+
 - **DOS answered on the host:** `host/dos/` has the headers the game includes
   (`dos.h`, `i86.h`, `conio.h`, `io.h`, `malloc.h`), and `host/hle.c` answers
   what they declare, as far as the game uses it:
