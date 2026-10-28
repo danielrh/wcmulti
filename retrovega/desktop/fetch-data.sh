@@ -10,7 +10,7 @@ set -euo pipefail
 [ $# = 1 ] || { echo "usage: desktop/fetch-data.sh DIR"; exit 2; }
 dir=$1
 site=${SITE:-https://fireflyk64.github.io/rv}
-GAME_SHA256=b4d4eae15d1494dfb3c3dedffe08a6bad6b1339b7e628613a148062ec6fc034b    # game.tar.gz
+GAME_SHA256=6d6afcdd0868b2ae9e5f1c4bca80b5e30143b09870438d12e08d85164c8afcf4    # game.tar.gz
 ROCKS_SHA256=c2e51d50e103fd745bae8dfbe666eefce5d2837a6438a427cd66516745bb8762   # art/ROCKS.DAT.gz
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
