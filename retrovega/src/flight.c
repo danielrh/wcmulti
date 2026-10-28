@@ -2647,7 +2647,11 @@ void __far __cdecl flight_music(void)
 
 void __far __cdecl flight_autopilot(void)
 {
-    rv_log("flight: autopilot (nothing to fly to yet)");
+    static const char __far s_went[] = "flight: autopilot: on to nav %u", __far s_not[] = "flight: autopilot: not now";
+    if (logic_autopilot())
+        rv_logf(s_went, currentNavPoint);
+    else
+        rv_logf(s_not);
 }
 
 void __far __cdecl autoAnimation_c(unsigned short camShipType, unsigned short camMode, unsigned short duration)

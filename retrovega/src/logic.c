@@ -143,6 +143,14 @@ void logic_end(void)
 {
 }
 
+/* the autopilot key (A), between two steps: with no enemy near, the player (and the wing) taken on to the next nav
+ * point, as the old games cut to the arrival; 1 when it went, 0 when it may not.  (On a multiplayer client the layer
+ * steps over the key's call: the host's autopilot moves everyone) */
+int16_t logic_autopilot(void)
+{
+    return 0;
+}
+
 /* --- the thunks' bodies (abi/rvabi.def, spec 5; docs/logic.md has each one's contract) --- */
 
 /* (src, dst, qty, where): a hit of qty on the ship in slot dst at the place `where` (a near RvVec3, positions):

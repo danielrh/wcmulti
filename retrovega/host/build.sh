@@ -1,7 +1,8 @@
 #!/bin/sh
 # rvsim: a RetroVega flight with the game's logic and nothing else, on the host or in a browser (docs/logic.md,
 # "The host harness").  The logic and the modules it shares are src/'s, unchanged; host/ has the rest.
-#   host/build.sh             build/host32/rvsim: 32-bit (int 32, long 32), UBSan, the SDL2 window
+#   host/build.sh             build/host32/rvsim: 32-bit (int 32, long 32), UBSan, the SDL2 window; and beside it
+#                             playtest, the play tests (tests/play/playtest.c, docs/gameplay.md)
 #   ARCH=64                   64-bit (long 64: what code written with long, not int32_t, does there)
 #   SAN=ubsan|asan|none       the checks built in: UBSan (the default); ASan with UBSan; none (for valgrind)
 #   CC=clang                  clang, which adds its implicit-truncation check: a value that does not fit the
@@ -57,7 +58,8 @@ EOF
 LOGIC=${LOGIC:-src/logic.c}
 SHARED="world shots collide lightfield hud campaign"
 COMMON="-std=gnu99 -g3 -funsigned-char -fno-strict-aliasing -include host/rvhost.h -Isrc -Ihost -I$OUT"
-WARN="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers -Wno-unused-result"
+WARN="-Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wno-missing-field-initializers -Wno-unused-result
+      -Wdeclaration-after-statement"     # (C89's rule: Watcom refuses a declaration after a statement)
 
 AR=ar
 EXE="$OUT/rvsim"
@@ -125,10 +127,16 @@ for c in "$OUT"/stubs/*.c; do
 done
 $AR rcs "$OUT/libstubs.a" "$OUT"/stubs/*.o
 $CC $ARCHF $OPT $SANF $LINKG -o "$EXE" "$OUT"/obj/*.o "$OUT/libstubs.a" $SDLL -lm
+if [ -z "${WEB:-}" ]; then
+    # the play tests (tests/play/playtest.c, docs/gameplay.md): the same objects but rvsim's own, and the tests' main
+    $CC $CFLAGS -DPLAYTEST_MAIN -c -o "$OUT/playtest.o" tests/play/playtest.c
+    $CC $ARCHF $OPT $SANF $LINKG -o "$OUT/playtest" $(ls "$OUT"/obj/*.o | grep -v '/sim\.o$') "$OUT/playtest.o" \
+        "$OUT/libstubs.a" $SDLL -lm
+fi
 if [ -n "${WEB:-}" ]; then
     REV=$(git rev-parse --short HEAD)$(git diff --quiet HEAD -- src host tools || echo M)
     sed "s/@REV@/$REV/" host/web/index.html > "$OUT/index.html"
     echo "built $OUT/index.html (with rvsim.js, .wasm, .data: serve the directory)"
 else
-    echo "built $EXE"
+    echo "built $EXE and $OUT/playtest"
 fi

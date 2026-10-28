@@ -340,6 +340,13 @@ def compile_all():
         if len(navs) > LIMITS['NAVS']:
             raise Fail('%s: %d nav points, at most %d' % (w, len(navs), LIMITS['NAVS']))
         nav_ids = {0} | {int(f[0]) for _w, f in m['nav']}
+        listed = [int(f[0]) for _w, f in m['nav']]
+        if any(not 1 <= i <= 15 for i in listed) or len(set(listed)) != len(listed):
+            raise Fail('%s: nav points are numbered 1..15, each once (navPointTable has a record a number; 0 is the '
+                       'launch point)' % w)
+        for where, f in m['nav']:
+            if any(not -32768 <= int(v) <= 32767 for v in f[1:4]):
+                raise Fail('%s: a nav point is at most 32,767 km out on each axis (an int16 of km)' % where)
         shipr, wingman = [], None
         for where, f in m['ship']:
             opts = dict(o.split('=', 1) for o in f[3:])

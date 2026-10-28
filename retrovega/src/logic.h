@@ -23,5 +23,7 @@ void logic_start(const RvMission __far *m);   /* the flight begins: its ships in
 void logic_frame(void);                 /* one step (frameCounter is already one more) */
 void logic_hud(void);                   /* a band of the view is drawn: draw over it with hud.h's calls */
 void logic_end(void);                   /* the flight is over (missionStatus says how) */
+int16_t logic_autopilot(void);          /* the A key, between steps: 1 when it flew the player on (to the next nav
+                                           point), 0 when it may not (enemies near, nowhere to go) */
 
 #endif

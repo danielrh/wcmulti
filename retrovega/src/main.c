@@ -40,6 +40,7 @@ extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flam
     g_ball_demo, g_missile_demo, g_sky_demo, g_boxes, g_collide_demo, g_hull_demo, g_hull_type, g_flame_test,
     g_comm_demo, g_test_ship;
 long twins_selftest(void);              /* (twins.c: RVT.EXE /twins) */
+int16_t playtest_run(const char *only);  /* (tests/play/playtest.c: RVT.EXE /playtest) */
 #endif
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -118,6 +119,10 @@ static void names(void)
 int main(int argc, char **argv)
 {
     int i, ok;
+#if defined(RV_TESTS) && !defined(RV_HOST)
+    static const char __far s_playtest[] = "/playtest";
+    const char *playtest = 0;
+#endif
     rvHello();
 #ifdef RV_TESTS
     rv_log("RVT.EXE: the test build (the demos, the benchmarks and the self-tests are in)");
@@ -236,6 +241,11 @@ int main(int argc, char **argv)
             g_sky = 1;
         else if (!strcmp(argv[i], "/twins"))            /* tests: the asm's C twins against it (twins.c), then out */
             exit(twins_selftest() < 0 ? 4 : 0);
+#ifndef RV_HOST
+        else if (!_fstrcmp(argv[i], s_playtest))        /* tests: the play tests (tests/play/playtest.c), then out;
+                                                           a list of them may follow (M2,M3.1) */
+            playtest = i + 1 < argc && argv[i + 1][0] != '/' ? argv[++i] : "";
+#endif
 #endif
     }
     if (!xms_init(32768UL, 0x7FFFFFFFUL)) {
@@ -252,6 +262,14 @@ int main(int argc, char **argv)
         balls_reserve();                /* the balls' sprites (resident) */
         sky_reserve();                  /* the sky's far things (resident) */
         collide_reserve();              /* the ships' silhouettes (resident) */
+#if defined(RV_TESTS) && !defined(RV_HOST)
+        if (playtest) {                 /* (the play tests need the game's data, not its screens) */
+            ok = playtest_run(playtest);
+            music_shutdown();
+            xms_shutdown();
+            return ok ? 5 : 0;
+        }
+#endif
         ok = dat_open("RV.DAT");
     }
     if (!ok) {

@@ -32,6 +32,8 @@ int16_t shots_flight_start(int16_t own_pools);   /* none in flight; room made fo
 void shots_flight_end(void);
 
 int16_t shots_count(void);
+uint16_t shots_added(void);             /* shots added since the flight began (shot_add's count: the play tests count
+                                           a ship's fire by it) */
 Shot __far *shot(int16_t i);            /* 0 .. shots_count()-1 */
 /* a shot of a weapon (its look, damage and life from data/weapons.csv: the life its range at its speed) from pos
  * (positions) at vel (positions a step): its index, or -1 when SHOTS_MAX are flying.  The rest is the caller's to

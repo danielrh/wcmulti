@@ -17,6 +17,12 @@ steering and throttle, the stand-in AI, and the first cut of the damage
 model. `git show 65bc2a7b:retrovega/src/flight.c` has them, in `ship_physics`
 and `do_damage_impl`.
 
+[docs/gameplay.md](gameplay.md) is the road map to go with this reference: the
+order to write the play in, nine milestones from the flight model to the
+mission; the memory map; where victory and loss are kept; the mission format;
+and the play tests (`tests/play/`), which fail now and pass as each piece is
+written, on the host and in DOSBox.
+
 This guide covers:
 
 - the frame: where your code runs and what runs around it;
@@ -34,7 +40,8 @@ This guide covers:
 
 | file | what | whose |
 |---|---|---|
-| `src/logic.c`, `src/logic.h` | the main loop, the HUD hook, the thunk bodies, `g_pilot` (the controls) | **yours** |
+| `src/logic.c`, `src/logic.h` | the main loop, the HUD hook, the autopilot, the thunk bodies, `g_pilot` (the controls) | **yours** |
+| `tests/play/` | the play tests: what the logic has to do, a check at a time, on the host and in RVT.EXE (docs/gameplay.md) | tests, yours to change |
 | `src/world.c`, `src/world.h` | names for the slot arrays' values; vector, orientation and slot helpers; spawning; the gameplay random stream | helpers |
 | `src/shots.c`, `src/shots.h` | the gunfire list: add, move, hit test, the do_damage stand-in, and the drawing | helpers |
 | `src/hud.c`, `src/hud.h` | drawing over the view, clipped to the canopy opening | helpers |
@@ -62,6 +69,10 @@ side in `flight.c`. Each time round it runs these, in this order:
 | `gather` | the cockpit's state from the slots: shields, armour, speed, radar contacts, target, lamps (`systems_tick` keeps `g_sys`) | flight.c |
 | `scene_draw` | the picture, a band of rows at a time: sky, stars, far shots, rocks, ships, near shots, missiles, then **`logic_hud()`**, then the cockpit | flight.c |
 | `rvFrameDone`, the wait | the frame is flipped; it then waits out the rest of 1/`LOGIC_HZ` s (30 a second) | flight.c |
+
+`logic_autopilot()` runs between two frames when the A key is pressed (the
+autopilot site, which the layer steps over on a client): it returns 1 when it
+took the player on to the next nav point.
 
 `logic_start(m)` runs once, while the flight loads. It runs before the
 ships' art is read, so the types it spawns are the types that get loaded.
@@ -423,7 +434,7 @@ let that work without rewriting your logic:
 
 **Memory:**
 
-- **DGROUP, the near data segment, has 3.2 KB free (of 64).** Every string literal in C lands there, even in `__far` code.
+- **DGROUP, the near data segment, has 3.3 KB free (of 64) in RV.EXE, and 544 bytes in RVT.EXE.** Every string literal in C lands there, even in `__far` code.
   - Use `static const char __far s_x[] = "...";` with `rv_logf(s_x, ...)`, as logic.c does.
   - Watcom binds `__far` to one declarator: write it before each name.
   - New tables and arrays: `__far`. Below about 200 bytes free, RV.EXE cannot open its files.
@@ -448,6 +459,9 @@ let that work without rewriting your logic:
 - C89: declarations before statements.
 - `near` and `far` are keywords: don't name variables that.
 - `-ox` once miscompiled an `if (s == 0) ... else` in the physics. When C behaves impossibly, read `wdis` output.
+- A fixed-block address with a constant index passed as a **far** pointer gets segment 0, not DS:
+  `_fmemcpy(&v, &gPositionVector[0], 12)` reads the interrupt table. Near calls (`memcpy`, the helpers) and a
+  variable index are safe (docs/gameplay.md, "Watcom and DOS traps").
 - `build.sh` does not stop on a C error: check `RV.EXE`'s time after a build.
 
 ## Asteroid fields
@@ -481,7 +495,7 @@ The scan for this guide, most needed first:
 6. **The layer's RV.EXE support:** its column of offsets, the flight sites and the replication. Today it only logs.
 7. **Mission flow:**
    - nav points carry no hazards or waves into the flight (the placeholder spawns the whole mission at once);
-   - the autopilot is a stub;
+   - the autopilot is the logic's to write (`logic_autopilot`);
    - landing is only the C key's call to the carrier;
    - ejection only sets `missionStatus`.
 8. **Text on the MFDs from the logic**, such as a weapon or missile display: no call yet.
@@ -579,7 +593,8 @@ steps a second. `--help` lists the options:
 - `--strict`: abort at the first broken rule, so a debugger stops there.
 
 Keys: arrows steer, Q and E roll, Space or the left button fires, Enter fires
-a missile, Tab is the afterburner, `+` `-` F S set the throttle, M (or the
+a missile, Tab is the afterburner, `+` `-` F S set the throttle, A the
+autopilot (`logic_autopilot`, recorded with the controls), M (or the
 right button held) steers by the mouse, P pauses, N steps once while paused,
 Esc ends.
 
@@ -643,6 +658,9 @@ build").
 
 ## Testing
 
+- **The play tests**, `tests/play/playtest.sh` (docs/gameplay.md, "The play tests"): 61 checks of the play, by
+  milestone, on the host in a second; `--dos` runs them in RVT.EXE under DOSBox too and compares each test's world
+  with the host's.
 - `tests/run.sh SCRIPT [switches]` plays a script headless in DOSBox. The log is `build/dos/RVLOG.TXT`, the screenshots `build/dos/*.BMP`.
   - `/flight N` ends the flight after N seconds.
   - Switches other than the game's own (`/zoom`, `/ship`, `/boxes`, ...) run the test build, `RVT.EXE`.

@@ -32,7 +32,8 @@ static int g_base;                          /* the ship the player lives on: 0 t
 static int change_base(int base);
 static void mission_load_assets(void);
 static void mission_free_assets(void);
-int g_winrate = 80;                         /* percent: a launch's chance, until there is flight */
+int g_winrate = -1;                         /* percent: a launch's chance of a win (/winrate N, a test's: the roll then
+                                               decides, whatever the flight did); -1 not given: 80, the stand-in */
 
 /* the speech in progress: shapes, when it began, the text */
 #define MAX_STEPS 1600
@@ -730,14 +731,19 @@ static void customize(void)
 
 static void launch(void)
 {
+    int won;
     mission_load_assets();
     missionStarting();
     g_scene.label[0] = 0;
     /* the mission's score, in the fixed block where the layer reads it and carries it to the other players
-     * (MissionEnd, as in WC1): nonzero won.  Until combat scores a mission it is the roll, made before the flight
-     * so the way home's music knows it (score.c) */
-    victoryPoints = (int)(rnd() % 100) < g_winrate;
+     * (MissionEnd, as in WC1): nonzero won.  The roll is the stand-in, made before the flight so the way home's
+     * music knows it (score.c); the game's logic scores the mission over it (logic_start, docs/gameplay.md).  A
+     * test's /winrate puts the roll back after the flight, so a script can steer the campaign whatever was flown */
+    won = (int)(rnd() % 100) < (g_winrate < 0 ? 80 : g_winrate);
+    victoryPoints = won;
     flight_fly(&g_m);
+    if (g_winrate >= 0)
+        victoryPoints = won;
     missionVictoryCalc();                           /* the layer's moment: a wingman's score becomes the host's */
     g_won = victoryPoints != 0;
     missionEnded();

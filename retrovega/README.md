@@ -15,6 +15,12 @@ Confederation against the Aera, with the Rlaan meddling.
 - [docs/people.md](docs/people.md): the cast (data/people.csv: names, callsigns, birthplaces, backgrounds, looks). Their portraits come from the image-synthesis prompts in [docs/portrait-prompts.md](docs/portrait-prompts.md); mouth frames are driven by the letters of their lines (`tools/lipsync.py`), plus blinks. `tools/portraits.py` lines the generated frames up into talking faces (art/people/faces/); [docs/people.png](docs/people.png) is the cast sheet.
 - [docs/location-prompts.md](docs/location-prompts.md): image-synthesis prompts for the carrier's rooms (bar, bunks and locker, briefing, launch deck and canopy, debrief); the cast is placed in them as busts behind counters, tables and lecterns.
 - [docs/engine.md](docs/engine.md): the DOS game's engine design for its first slice (rooms, campaign, briefings, save and load), the toolchain (Open Watcom 2, NASM, `build.sh`), 32 MB of XMS, and how it stays compatible with the multiplayer layer's trampolines. `src/rvhooks.h` lists every place the layer can hook.
+- [docs/gameplay.md](docs/gameplay.md): the implementation guide for writing the play by hand, like the space combat of the early nineties. It covers:
+  - nine milestones, from the flight model through guns, damage, deaths, the AI, collisions and missiles to the mission;
+  - every function to fill in, and where the game calls it;
+  - the memory map: each ship's state and the mission's tables, and where victory and loss are kept;
+  - the mission format.
+  - The play tests (`tests/play/`), which fail now and pass as each piece is written, check it on the host under gdb and the sanitizers, and in DOSBox, where each test's world must equal the host's.
 - [docs/logic.md](docs/logic.md): the guide to the game's logic in flight (`src/logic.c`, written by hand). It covers:
   - the main loop's steps, and the helpers for the world, shots, collisions and the HUD;
   - the rules the multiplayer layer needs kept;

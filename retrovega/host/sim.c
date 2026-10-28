@@ -44,7 +44,7 @@ static const char k_usage[] =
     "  --data DIR       where RVGAME.DAT and SHAPES.DAT are (default: beside rvsim)\n"
     "  --shot FILE      at the end, the picture as a PPM file\n"
     "  --scale N        the window's size, N x 640 x 480 (default 2)\n"
-    "keys: arrows steer, Q E roll, Space fires, Enter a missile, Tab afterburner, + - F S the throttle,\n"
+    "keys: arrows steer, Q E roll, Space fires, Enter a missile, Tab afterburner, + - F S the throttle, A autopilot,\n"
     "      M mouse steering on/off (or hold the right button), P pause, N a step while paused, Esc ends\n";
 
 static struct {
@@ -60,13 +60,15 @@ static uint16_t g_mission;
 static uint32_t g_seed;                 /* randomSeed as the flight began (the recording's) */
 static FILE *g_rec, *g_play;
 static uint32_t g_steps;
+static uint8_t g_autopilot;             /* the autopilot key this step (A): logic_autopilot before the step */
 static int g_over;
 #ifdef HOST_SDL
 static int g_paused, g_step_once, g_mouse_steer;
 #endif
 
 /* --- the controls' recording: "RVSIMIN1", the mission, the ship, the seed, then 8 bytes a step: the PilotInput's
- * six and the throttle (setSpeed[0] as the controls left it: the engine's keys set it, not the logic) --- */
+ * six (the missile byte's bit 1 the autopilot key) and the throttle (setSpeed[0] as the controls left it: the
+ * engine's keys set it, not the logic) --- */
 
 static const char k_magic[8] = { 'R', 'V', 'S', 'I', 'M', 'I', 'N', '1' };
 
@@ -92,7 +94,7 @@ static void record_step(void)
     fputc((uint8_t)g_pilot.steer_y, g_rec);
     fputc((uint8_t)g_pilot.roll, g_rec);
     fputc(g_pilot.guns, g_rec);
-    fputc(g_pilot.missile, g_rec);
+    fputc(g_pilot.missile | g_autopilot << 1, g_rec);
     fputc(g_pilot.afterburner, g_rec);
     put16(g_rec, (uint16_t)setSpeed[0]);
 }
@@ -107,7 +109,8 @@ static int16_t replay_step(void)
     g_pilot.steer_y = (int8_t)b[1];
     g_pilot.roll = (int8_t)b[2];
     g_pilot.guns = b[3];
-    g_pilot.missile = b[4];
+    g_pilot.missile = b[4] & 1;
+    g_autopilot = (uint8_t)(b[4] >> 1 & 1);
     g_pilot.afterburner = b[5];
     setSpeed[0] = speed;
     return 1;
@@ -151,7 +154,7 @@ static SDL_Window *g_win;
 static SDL_Renderer *g_ren;
 static SDL_Texture *g_tex;
 static uint32_t g_rgb[256];
-static int g_mx = HOST_W / 2, g_my = HOST_H / 2, g_missile_key, g_right;
+static int g_mx = HOST_W / 2, g_my = HOST_H / 2, g_missile_key, g_right, g_autopilot_key;
 static int16_t g_throttle_step;         /* a tap of + or -: a tenth of the top speed, as the game's */
 
 static int window_open(void)
@@ -202,6 +205,8 @@ static void controls(void)
     g_pilot.guns = (uint8_t)(k[SDL_SCANCODE_SPACE] || (buttons & SDL_BUTTON(SDL_BUTTON_LEFT)));
     g_pilot.missile = (uint8_t)g_missile_key;
     g_missile_key = 0;
+    g_autopilot = (uint8_t)g_autopilot_key;
+    g_autopilot_key = 0;
     g_pilot.afterburner = (uint8_t)(k[SDL_SCANCODE_TAB] != 0);
     if (g_throttle_step > 0)
         setSpeed[0] += top / 10;
@@ -232,6 +237,7 @@ static void events(void)
             switch (e.key.keysym.sym) {
             case SDLK_ESCAPE: missionStatus = 5; break;   /* (the game's exit) */
             case SDLK_RETURN: case SDLK_KP_ENTER: g_missile_key = 1; break;
+            case SDLK_a: g_autopilot_key = 1; break;
             case SDLK_PLUS: case SDLK_EQUALS: case SDLK_KP_PLUS: g_throttle_step = 1; break;
             case SDLK_MINUS: case SDLK_KP_MINUS: g_throttle_step = -1; break;
             case SDLK_f: if (slot_type(0)) setSpeed[0] = slot_type(0)->max_kps; break;
@@ -562,6 +568,7 @@ static int step(void)
             const RvShipType *t = slot_type(0);
             uint32_t top = t ? t->max_kps : 500;
             memset(&g_pilot, 0, sizeof g_pilot);
+            g_autopilot = 0;
             if (setSpeed[0] > top)
                 setSpeed[0] = top;
         }
@@ -571,6 +578,8 @@ static int step(void)
     g_sys.burning = g_pilot.afterburner;
     g_steps++;
     host_ticks = g_steps * 91 / 150;    /* (18.2 ticks a second at 30 steps) */
+    if (g_autopilot)                    /* (RV.EXE runs the key's call between steps too: flight_autopilot) */
+        logic_autopilot();
     frameCounter = (uint16_t)(frameCounter + 1);   /* (it wraps, as on DOS: the cast says so to clang's check) */
     logic_frame();
     host_check_world();

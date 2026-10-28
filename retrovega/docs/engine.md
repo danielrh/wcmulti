@@ -456,6 +456,9 @@ roll. It is made at launch into `victoryPoints` (nonzero won), the word
 the layer reads and carries to the other players as WC1's mission score,
 so the way home's music knows it (music.md); `missionVictoryCalc` at the
 end is the layer's moment to put the host's in, and the debrief follows it.
+The game's logic scores the mission over the roll (`logic_start` and on,
+docs/gameplay.md "Victory and loss"); `/winrate N` puts the roll back after
+the flight, so a test script still steers the campaign.
 
 ### The loop and its sites
 

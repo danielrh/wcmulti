@@ -90,11 +90,16 @@ void rv_fail(const char *file, int line, const char *what, long value, long limi
 #pragma GCC diagnostic ignored "-Wformat-overflow"   /* (gcc 15 with UBSan and _FORTIFY_SOURCE sees a null format
                                            in vfprintf below that no caller passes) */
 #endif
+char host_last_rule[256];
+
 void host_rule(const char *fmt, ...)
 {
     va_list ap;
     FILE *f = host_log ? host_log : stderr;
     host_rules_broken++;
+    va_start(ap, fmt);
+    vsnprintf(host_last_rule, sizeof host_last_rule, fmt, ap);
+    va_end(ap);
     fprintf(f, "%6u  RULE: ", (unsigned)frameCounter);
     va_start(ap, fmt);
     vfprintf(f, fmt, ap);
@@ -308,6 +313,39 @@ static uint8_t g_before[RV_FIXED_BYTES], g_alt[RV_FIXED_BYTES];
 static struct { uint16_t shots; int16_t alt; uint16_t alt_ret; } g_call[16];
 static int16_t g_depth, g_in_check;
 
+/* the thunks' calls counted (the play tests' questions: was the AI asked through its thunk, was a death ended
+ * through despawn): by thunk, by its first and second argument's value (a slot; RV_SLOTS: any other value) */
+#define HOST_FNS 64
+static uint32_t g_count[HOST_FNS][2][RV_SLOTS + 1], g_count_all[HOST_FNS];
+uint32_t host_bolt_hits[RV_SLOTS];
+
+void host_counts_reset(void)
+{
+    memset(g_count, 0, sizeof g_count);
+    memset(g_count_all, 0, sizeof g_count_all);
+    memset(host_bolt_hits, 0, sizeof host_bolt_hits);
+}
+
+uint32_t host_calls(uint16_t fn, int16_t arg, int16_t value)
+{
+    uint16_t i = (uint16_t)((fn - RV_FN_rvHello) / 5);
+    if (i >= HOST_FNS)
+        return 0;
+    if (arg < 0)
+        return g_count_all[i];
+    return g_count[i][arg & 1][value >= 0 && value < RV_SLOTS ? value : RV_SLOTS];
+}
+
+static void count_call(uint16_t fn, int16_t nargs, const uint16_t *a)
+{
+    uint16_t i = (uint16_t)((fn - RV_FN_rvHello) / 5), k;
+    if (i >= HOST_FNS)
+        return;
+    g_count_all[i]++;
+    for (k = 0; k < 2 && k < (uint16_t)nargs; k++)
+        g_count[i][k][a[k] < RV_SLOTS ? a[k] : RV_SLOTS]++;
+}
+
 static int16_t dying(const uint8_t *fixed, uint16_t s)
 {
     return ((const uint16_t *)(fixed + ((uint8_t *)shipAiState - rv_dgroup)))[s] == 9;
@@ -332,6 +370,7 @@ void host_thunk_enter(uint16_t fn, const char *name, int16_t nargs, const uint16
     g_call[d].shots = (uint16_t)shots_count();
     if (g_in_check)
         return;
+    count_call(fn, nargs, a);
     if (fn == RV_FN_do_damage) {
         uint16_t src = a[0], dst = a[1];
         if (!RV_SLOT_OK(dst))
@@ -343,6 +382,8 @@ void host_thunk_enter(uint16_t fn, const char *name, int16_t nargs, const uint16
                 if (!slot_is_ship(parentShipForShip[src]))
                     host_rule("do_damage: src %u is a bolt whose parent (%u) is no ship: the layer finds the shooter "
                               "there", src, parentShipForShip[src]);
+                else if (RV_SLOT_OK(dst) && parentShipForShip[src] != dst)
+                    host_bolt_hits[parentShipForShip[src]]++;
             } else if (!slot_is_ship(src) && maybeEntityType[src] != ET_MISSILE
                        && !(src >= RV_SLOTS - 10 && src < RV_CAMERA_SLOT))
                 host_rule("do_damage: src %u (type %u) is no bolt, ship, missile or field hazard", src,

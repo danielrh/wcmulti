@@ -16,6 +16,12 @@ extern int host_strict;                 /* --strict: a broken rule stops the run
 extern uint32_t host_ticks;             /* the BIOS clock (18.2 a second), counted from the steps: the same each run */
 extern uint32_t host_rules_broken;
 
+extern char host_last_rule[];           /* the last RULE line's text */
+extern uint32_t host_bolt_hits[];       /* do_damage calls whose src was a bolt of this slot's (a hit by its gunfire) */
+void host_counts_reset(void);           /* the thunk call counts below, and host_bolt_hits, back to 0 */
+/* calls of thunk fn (RV_FN_*) since the reset: all of them (arg -1), or those whose argument arg (0 or 1) was value */
+uint32_t host_calls(uint16_t fn, int16_t arg, int16_t value);
+
 void host_rule(const char *fmt, ...) __attribute__((format(printf, 1, 2)));   /* a rule the layer needs broken: logged with the step (--strict: abort) */
 void host_check_world(void);            /* after a step: the slot table's invariants */
 uint32_t host_hash(void);               /* FNV-1a of the fixed block and the shot list: equal runs, equal hashes */

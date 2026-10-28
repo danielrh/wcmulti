@@ -128,8 +128,12 @@ void camp_mission(uint16_t i, RvMission __far *out)
 
 /* the mission's ships into the tables the layer already reads (spec 4.4):
  * missionShipTable records of 0x2a bytes (+0 type, +2 side, +4 leader,
- * +6 behaviour, +8 nav point, +10 position x y z in km, +16 pilot), and
- * the nav points' records of 0x4d bytes (+0 id, +2 position). */
+ * +6 behaviour, +8 nav point, +10 position x y z in km off the nav point,
+ * +16 pilot), and the nav points' records of 0x4d bytes, record n for nav n
+ * (outerSpawnShipEntity takes a nav's number as its record), nav 0 the launch
+ * point at the origin: +0 id, +2 position x y z in km, and at +0x39 the ten
+ * mission ships there (0xFFFF none).  A group's ships side by side, 1,500 km
+ * apart (a fighter is some 900 km across). */
 void camp_load_units(const RvMission __far *m)
 {
     uint8_t *ships = missionShipTable, *navs = navPointTable;
@@ -137,8 +141,12 @@ void camp_load_units(const RvMission __far *m)
     memset(ships, 0, missionShipTable_SIZE * 64);
     memset(navs, 0, navPointTable_SIZE * 16);
     RV_ASSERT(m->nnav <= RV_NAVS && m->nship <= RV_SHIPS);
+    for (i = 0; i < 16; i++)
+        memset(navs + navPointTable_SIZE * i + 0x39, 0xFF, 20);
     for (i = 0; i < m->nnav; i++) {
-        uint8_t *rec = navs + navPointTable_SIZE * i;
+        uint8_t *rec;
+        RV_CHECK(m->nav[i].id, 16);
+        rec = navs + navPointTable_SIZE * m->nav[i].id;
         rec[0] = m->nav[i].id;
         *(int16_t *)(rec + 2) = m->nav[i].x;
         *(int16_t *)(rec + 4) = m->nav[i].y;
@@ -149,13 +157,19 @@ void camp_load_units(const RvMission __far *m)
         for (k = 0; k < s->count && n < 64; k++, n++) {
             uint8_t *rec = ships + missionShipTable_SIZE * n;
             uint16_t type = s->type == RV_SHIP_PLAYER || s->type == RV_SHIP_WINGMAN ? g_camp.player_ship : s->type;
+            uint16_t *at = (uint16_t *)(navs + navPointTable_SIZE * (s->nav & 15) + 0x39);
+            uint16_t j;
             *(uint16_t *)(rec + 0) = type;
             *(uint16_t *)(rec + 2) = s->side;
             *(uint16_t *)(rec + 4) = s->type == RV_SHIP_PLAYER ? 0xFFFF : 0;
             *(uint16_t *)(rec + 6) = s->type == RV_SHIP_PLAYER ? 6 : s->type == RV_SHIP_WINGMAN ? 4 : 0;
             *(uint16_t *)(rec + 8) = s->nav;
-            *(int16_t *)(rec + 10) = (int16_t)(k * 2);
+            *(int16_t *)(rec + 10) = (int16_t)(k * 1500);
             rec[16] = s->pilot;
+            for (j = 0; j < 10 && at[j] != 0xFFFF; j++)
+                ;
+            if (j < 10)
+                at[j] = n;
         }
     }
     playerMissionShip = 0;

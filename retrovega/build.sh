@@ -2,7 +2,8 @@
 # Build RV.EXE (and the M0 check, HELLO.EXE) with Open Watcom 2 and NASM.
 #   ./build.sh            -> build/dos/RV.EXE, RV.DAT, RVGAME.DAT, HELLO.EXE (DEBUG=1: unoptimised, -d2;
 #                            RV_COMMS=face: the comm faces without breathing gear, their mouths speaking;
-#                            CODE=1: the code and RVGAME.DAT only, everything else as the last build left it)
+#                            CODE=1: the code and RVGAME.DAT only, everything else as the last build left it;
+#                            LOGIC=path: that file in src/logic.c's place)
 # The toolchain lives in ~/opt/watcom (docs/engine.md); WATCOM overrides it.
 set -e
 cd "$(dirname "$0")"
@@ -79,18 +80,23 @@ if [ -f build/rvdat/SHIP20.RV ]; then
 fi
 fi
 ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls rocks missiles sky collide flames comms panel cockpit world shots hud logic flight game main"
+LOGIC=${LOGIC:-src/logic.c}           # (LOGIC=path: another logic.c in its place, an experiment's; the play tests' check)
 for c in $ENGINE hello; do
-    wcc $CFLAGS -fo="$OUT/$c.obj" "src/$c.c"
+    if [ "$c" = logic ]; then src=$LOGIC; else src=src/$c.c; fi
+    wcc $CFLAGS -fo="$OUT/$c.obj" "$src"
 done
 # the test build, RVT.EXE (docs/engine.md, "The test build"): the modules with test code (the demos, the
 # benchmarks, the self-tests, under RV_TESTS) compiled again with it on; RV.EXE, the game's, goes without
 TESTED=$(cd src && grep -l 'RV_TESTS' $(for c in $ENGINE; do printf '%s.c ' "$c"; done) | sed 's/\.c$//' | tr '\n' ' ')
 mkdir -p "$OUT/t"
 for c in $TESTED; do
-    wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/$c.obj" "src/$c.c"
+    if [ "$c" = logic ]; then src=$LOGIC; else src=src/$c.c; fi
+    wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/$c.obj" "$src"
 done
 # and the asm's C twins (twins.c: the host build draws with them), checked against it (RVT.EXE /twins)
 wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/twins.obj" src/twins.c
+# and the play tests (tests/play/playtest.c: RVT.EXE /playtest, docs/gameplay.md)
+wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/playtest.obj" tests/play/playtest.c
 # RVHOOK first (image paragraph 0), the C code, then DGROUP last as Watcom's
 # startup needs it, with the fixed block (RVFIXED) ahead of Watcom's _NULL so
 # it starts at DS:0000 (docs/engine.md).
@@ -112,6 +118,7 @@ link() {
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
 link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
-link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" file "$OUT/t/twins.obj" $(for c in $ENGINE; do
+link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" file "$OUT/t/twins.obj" \
+    file "$OUT/t/playtest.obj" $(for c in $ENGINE; do
     case " $TESTED " in *" $c "*) printf ' file %s/t/%s.obj' "$OUT" "$c";; *) printf ' file %s/%s.obj' "$OUT" "$c";; esac; done)
 echo "built $OUT/RV.EXE, $OUT/RVT.EXE (the test build) and $OUT/HELLO.EXE"

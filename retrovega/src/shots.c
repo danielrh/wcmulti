@@ -51,6 +51,8 @@ void shots_flight_end(void)
 
 int16_t shots_count(void) { return g_n; }
 
+uint16_t shots_added(void) { return g_added; }
+
 Shot __far *shot(int16_t i)
 {
     RV_CHECK(i, g_n);

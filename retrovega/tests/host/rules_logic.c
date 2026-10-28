@@ -73,3 +73,4 @@ uint16_t __far __cdecl do_damage_impl(uint16_t src, uint16_t dst, uint16_t qty, 
 
 void logic_hud(void) {}
 void logic_end(void) {}
+int16_t logic_autopilot(void) { return 0; }
