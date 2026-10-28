@@ -74,7 +74,8 @@ code, so the record and the code it describes stay together.
 **On your machine.** The program list, the imports and the hashes depend on your compiler and libraries, so a
 different distribution shows differences on first use. Read them once, then record your own baseline from the
 version you reviewed. The core's system calls hardly vary between glibc versions; `syscalls.h` already allows
-both forms where they differ, such as `statx` and `fstat64`.
+both forms where they differ, such as `statx` and `fstat64`. `--record` refuses a part that went wrong (a failed
+build, a game that didn't run to its end); `git checkout baseline/` brings back the checked-in record.
 
 ## What this guarantees, and what it doesn't
 

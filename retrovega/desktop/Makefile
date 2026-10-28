@@ -97,13 +97,17 @@ $(OUT)/rv-sandbox-test: sandboxtest.c $(OUT)/core/seccomp.o
 $(OUT)/rvsprites: $(SPRITES_SRC) | $(OUT)
 	$(CC) -std=gnu99 -O2 -Wno-unused-result -I../src -o $@ $(SPRITES_SRC)
 
-$(OUT) $(OUT)/core $(OUT)/front:
+$(OUT):
 	mkdir -p $@
+# (a plain mkdir, the whole path in one call: GNU's mkdir -p walks down from / a directory at a time by relative
+# names, which the audit's trace could not place; audit.sh makes $(OUT) itself)
+$(OUT)/core $(OUT)/front: | $(OUT)
+	mkdir $@
 
 # the game's files: the data the DOS build makes (or fetch-data.sh fetched), and the ships' sets made here (the
 # sharp sets, SHIPnn.RVS, and the block mode's, SHIPnn.RVH: ../build.sh's recipes)
 FROM ?= ../build/dos
-DATA_FILES = RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT ROCKS.DAT RVOPL.BNK
+DATA_FILES = RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT EXPLODE.DAT SFX.DAT ROCKS.DAT RVOPL.BNK
 data: $(OUT)/rvsprites
 	@test -n "$(DATA)" || { echo "make data DATA=dir (where the game's files go)"; exit 1; }
 	mkdir -p $(DATA)

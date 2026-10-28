@@ -40,6 +40,10 @@ good() { printf 'ok       %s\n' "$*"; }
 against() {   # NAME FILE (the list now) [--record]
     local name=$1 now=$2 base=$BASE/$1 added gone
     if [ "${3:-}" = --record ]; then
+        if [ $fail != 0 ]; then
+            bad "$name: not recorded (this part went wrong above; a baseline is made from a good run)"
+            return
+        fi
         cp "$now" "$base"
         good "$name: recorded ($(wc -l < "$base") lines)"
         return
@@ -110,7 +114,7 @@ audit_build() {
     fi
     (cd "$out" && sha256sum rv rv-core rvsprites) > "$LOGS/build-sha256.now"
     if [ "$rec" = --record ]; then
-        cp "$LOGS/build-sha256.now" "$BASE/build-sha256.txt"
+        [ $fail != 0 ] || cp "$LOGS/build-sha256.now" "$BASE/build-sha256.txt"
     elif [ -f "$BASE/build-sha256.txt" ] && ! cmp -s "$BASE/build-sha256.txt" "$LOGS/build-sha256.now"; then
         say "note     the programs' bytes differ from the recorded build's (expected when the compiler or its"
         say "         libraries differ from the recording machine's; on the same machine and source, a difference)"
@@ -126,6 +130,11 @@ audit_static() {
     local rec=${1:-} p never
     say "== the library functions each program calls (dynamic imports)"
     for p in rv-core rv; do
+        if [ ! -f "$BIN/$p" ]; then
+            bad "no $BIN/$p (audit.sh build first)"
+            : > "$LOGS/imports-$p.now"
+            continue
+        fi
         nm -D --undefined-only "$BIN/$p" | awk '{print $NF}' | sed 's/@.*//' | sort -u > "$LOGS/imports-$p.now"
         against "imports-$p.txt" "$LOGS/imports-$p.now" $rec
     done
