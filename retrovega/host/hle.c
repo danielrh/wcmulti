@@ -572,6 +572,45 @@ void intr(int n, union REGPACK *r)
     r->x.flags = intr16(r) ? INTR_ZF : 0;
 }
 
+/* --- the sound effects (src/sfx.c): as much mixed as the host's clock has run, a little ahead; the host plays it
+ * a fixed lag later, as it plays the OPL3 --- */
+
+static uint64_t g_pcm_t0, g_pcm_made;
+static uint16_t g_pcm_rate;
+static int g_pcm_on;
+
+uint16_t hle_pcm_due(uint16_t rate);
+void hle_pcm_put(const uint8_t *s, uint16_t n);
+void hle_pcm_stop(void);
+
+uint16_t hle_pcm_due(uint16_t rate)
+{
+    uint64_t now = plat_now_us(), want;
+    if (!g_pcm_on || rate != g_pcm_rate) {
+        g_pcm_on = 1;
+        g_pcm_rate = rate;
+        g_pcm_t0 = now;
+        g_pcm_made = 0;
+    }
+    want = (now - g_pcm_t0) * rate / 1000000 + rate / 25;   /* (40 ms ahead: the lag covers it) */
+    if (want <= g_pcm_made)
+        return 0;
+    if (want - g_pcm_made > (uint64_t)rate / 4)   /* (a stall: skipped, not caught up) */
+        g_pcm_made = want - rate / 25;
+    return (uint16_t)(want - g_pcm_made);
+}
+
+void hle_pcm_put(const uint8_t *s, uint16_t n)
+{
+    plat_pcm(g_pcm_t0 + g_pcm_made * 1000000 / g_pcm_rate, g_pcm_rate, s, n);
+    g_pcm_made += n;
+}
+
+void hle_pcm_stop(void)
+{
+    g_pcm_on = 0;
+}
+
 /* --- the ports --- */
 
 static uint8_t g_opl_addr_lo, g_opl_status;
@@ -644,7 +683,6 @@ unsigned inp(unsigned port)
 
 /* --- files, the heap --- */
 
-int rv_host_open(const char *name, int flags, ...);
 
 unsigned _dos_open(const char *path, unsigned mode, int *fd)
 {

@@ -21,6 +21,7 @@ mkdir -p "$OUT/src" "$OUT/host/dos" "$OUT/obj" "$OUT/stubs"
 python3 tools/rvabi.py --c-header > src/rvhooks.h
 for f in src/*.c src/*.h host/*.c host/*.h host/dos/*.h; do
     case "$f" in host/fmt.c|host/play.c|host/rvhost.h|host/width16.h|host/twins_test.c|host/host.c|host/sim.c) continue ;; esac
+    case "$f" in host/fsguard.c|host/pcm.c|host/pcm.h) cp "$f" "$OUT/$f"; continue ;; esac   # (the host's own, as they are)
     python3 tools/width16.py "$f" > "$OUT/$f"
 done
 python3 tools/rvabi.py --host-thunks > "$OUT/thunks.c"
@@ -35,7 +36,7 @@ for c in $ENGINE; do
     $CC $CFLAGS -c -o "$OUT/obj/$c.o" "$OUT/src/$c.c" &
 done
 wait
-for c in hle fixed flightloop asm_twins fsguard; do $CC $CFLAGS -c -o "$OUT/obj/h_$c.o" "$OUT/host/$c.c"; done
+for c in hle fixed flightloop asm_twins fsguard pcm; do $CC $CFLAGS -c -o "$OUT/obj/h_$c.o" "$OUT/host/$c.c"; done
 $CC $CFLAGS -c -o "$OUT/obj/twins.o" "$OUT/src/twins.c"
 $CC $CFLAGS $($PC --cflags sdl2) -c -o "$OUT/obj/h_play.o" host/play.c   # (the front end as it is: SDL's callbacks take ints)
 $CC -m32 -O1 -c -o "$OUT/obj/h_fmt.o" host/fmt.c

@@ -86,6 +86,22 @@ void plat_opl_write(uint64_t at_us, uint16_t reg, uint8_t val)
         flush_opl();
 }
 
+void plat_pcm(uint64_t at_us, uint16_t rate, const uint8_t *s, uint16_t n)
+{
+    uint8_t m[sizeof(RvpPcm) + RVP_PCM_MAX];
+    RvpPcm h;
+    if (g_out < 0 || n > RVP_PCM_MAX)
+        return;
+    memset(&h, 0, sizeof h);
+    h.at_us = at_us;
+    h.rate = rate;
+    h.n = n;
+    memcpy(m, &h, sizeof h);
+    memcpy(m + sizeof h, s, n);
+    flush_opl();                        /* (in order with the music's) */
+    put(RVP_PCM, m, (uint32_t)(sizeof h + n));
+}
+
 void plat_sleep_us(uint32_t us)
 {
     struct timespec t;

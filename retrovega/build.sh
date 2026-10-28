@@ -79,7 +79,13 @@ if [ -f build/rvdat/SHIP20.RV ]; then
     [ "$h" -nt build/rvdat/SHIP20.RV ] && [ "$h" -nt tools/rvsprites.c ] || build/host/rvsprites build/rvdat/SHIP20.RV "$h" 0 0 0 1 4 > /dev/null
 fi
 fi
-ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls rocks missiles sky collide flames comms panel cockpit world shots hud logic flight game main"
+# the explosions' heat cels and the flight's sound effects (tools/explode.py, tools/sfx.py: seconds), when they
+# change; made with CODE=1 too (the code reads them)
+[ "$OUT/EXPLODE.DAT" -nt tools/explode.py ] \
+    || ~/.venvs/retrovega-art/bin/python -P tools/explode.py --out "$OUT/EXPLODE.DAT" > /dev/null
+[ "$OUT/SFX.DAT" -nt tools/sfx.py ] && [ "$OUT/SFX.DAT" -nt data/sounds.csv ] \
+    || ~/.venvs/retrovega-art/bin/python -P tools/sfx.py --out "$OUT/SFX.DAT" > /dev/null
+ENGINE="util xms video dat gfx input room lipsync opl music score campaign lightfield ships lasers bolts balls rocks missiles sky collide flames comms panel cockpit world shots hud explode sfx fx logic flight game main"
 LOGIC=${LOGIC:-src/logic.c}           # (LOGIC=path: another logic.c in its place, an experiment's; the play tests' check)
 for c in $ENGINE hello; do
     if [ "$c" = logic ]; then src=$LOGIC; else src=src/$c.c; fi
@@ -91,12 +97,16 @@ TESTED=$(cd src && grep -l 'RV_TESTS' $(for c in $ENGINE; do printf '%s.c ' "$c"
 mkdir -p "$OUT/t"
 for c in $TESTED; do
     if [ "$c" = logic ]; then src=$LOGIC; else src=src/$c.c; fi
-    wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/$c.obj" "$src"
+    wcc $CFLAGS -dRV_TESTS -dRV_NO_TWINS -fo="$OUT/t/$c.obj" "$src"   # (the twins are RVP.EXE's)
 done
-# and the asm's C twins (twins.c: the host build draws with them), checked against it (RVT.EXE /twins)
+# and the asm's C twins (twins.c: the host build draws with them), checked against it (RVP.EXE /twins)
 wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/twins.obj" src/twins.c
-# and the play tests (tests/play/playtest.c: RVT.EXE /playtest, docs/gameplay.md)
-wcc $CFLAGS -dRV_TESTS -fo="$OUT/t/playtest.obj" tests/play/playtest.c
+# the self-tests' build, RVP.EXE: RV.EXE with the play tests (tests/play/playtest.c: RVP.EXE /playtest,
+# docs/gameplay.md) and the asm's C twins (src/twins.c: RVP.EXE /twins), and main's switches for them; nothing
+# else (in RVT.EXE they took 62 KB its flights need: both exit before any flight)
+mkdir -p "$OUT/p"
+wcc $CFLAGS -dRV_PLAYTEST -fo="$OUT/p/main.obj" src/main.c
+wcc $CFLAGS -fo="$OUT/p/playtest.obj" tests/play/playtest.c
 # RVHOOK first (image paragraph 0), the C code, then DGROUP last as Watcom's
 # startup needs it, with the fixed block (RVFIXED) ahead of Watcom's _NULL so
 # it starts at DS:0000 (docs/engine.md).
@@ -118,7 +128,10 @@ link() {
 }
 link HELLO.EXE file "$OUT/lowlevel.obj" file "$OUT/util.obj" file "$OUT/xms.obj" file "$OUT/hello.obj"
 link RV.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do printf ' file %s/%s.obj' "$OUT" "$c"; done)
-link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" file "$OUT/t/twins.obj" \
-    file "$OUT/t/playtest.obj" $(for c in $ENGINE; do
+link RVP.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" file "$OUT/p/playtest.obj" \
+    file "$OUT/t/twins.obj" \
+    $(for c in $ENGINE; do
+    case "$c" in main) printf ' file %s/p/main.obj' "$OUT";; *) printf ' file %s/%s.obj' "$OUT" "$c";; esac; done)
+link RVT.EXE file "$OUT/lowlevel.obj" file "$OUT/lasers_a.obj" file "$OUT/rocks_a.obj" $(for c in $ENGINE; do
     case " $TESTED " in *" $c "*) printf ' file %s/t/%s.obj' "$OUT" "$c";; *) printf ' file %s/%s.obj' "$OUT" "$c";; esac; done)
-echo "built $OUT/RV.EXE, $OUT/RVT.EXE (the test build) and $OUT/HELLO.EXE"
+echo "built $OUT/RV.EXE, $OUT/RVT.EXE (the test build), $OUT/RVP.EXE (the self-tests) and $OUT/HELLO.EXE"

@@ -21,6 +21,7 @@ Confederation against the Aera, with the Rlaan meddling.
   - the memory map: each ship's state and the mission's tables, and where victory and loss are kept;
   - the mission format.
   - The play tests (`tests/play/`), which fail now and pass as each piece is written, check it on the host under gdb and the sanitizers, and in DOSBox, where each test's world must equal the host's.
+- Explosions and sound effects ([docs/engine.md](docs/engine.md), "Explosions and sound effects"): a central blast from eight 48 x 48 cels of heat, cooled, grown and dissolved a little every frame (`tools/explode.py`), and 27 synthesized sounds on the Sound Blaster (`tools/sfx.py`, `data/sounds.csv`); both started by themselves from what happens in the world (`src/fx.c`).
 - [docs/logic.md](docs/logic.md): the guide to the game's logic in flight (`src/logic.c`, written by hand). It covers:
   - the main loop's steps, and the helpers for the world, shots, collisions and the HUD;
   - the rules the multiplayer layer needs kept;

@@ -1,0 +1,23 @@
+# the explosions and the sound effects: the rooms, the launch, then the boom demo watched (run with /boomdemo /flight N); no steering, so DOS and the native build see the same frames
+wait 10
+click
+wait 3
+move 593 200
+click
+wait 8
+move 431 170
+click
+wait 8
+move 145 152
+click
+wait 6
+key esc
+wait 2
+key esc
+wait 2
+key esc
+wait 8
+move 478 176
+click
+wait 20
+wait 400

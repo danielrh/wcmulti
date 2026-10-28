@@ -17,6 +17,7 @@
 #include "rvhooks.h"
 #include "hle.h"
 #include "opl3.h"
+#include "pcm.h"
 #include "pcscan.h"
 
 int rv_main(int argc, char **argv);
@@ -151,10 +152,37 @@ void plat_events(void)
 
 void plat_opl_write(uint64_t at_us, uint16_t reg, uint8_t val) { opl3_write(at_us, reg, val); }
 
+static double g_audio_rate;
+static uint32_t g_lag_us;
+
+#undef fopen
+static FILE *rv_host_fopen_any(const char *path, const char *mode) { return fopen(path, mode); }
+#define fopen rv_host_fopen
+
+void plat_pcm(uint64_t at_us, uint16_t rate, const uint8_t *s, uint16_t n)
+{
+    static FILE *dump;
+    static int tried;
+    if (!tried++ && getenv("RV_PCM_DUMP"))   /* (a test aid: the effects' stream as it came, unsigned 8-bit; the
+                                           host's own file, so not through fsguard's fopen, which is the game's) */
+        dump = rv_host_fopen_any(getenv("RV_PCM_DUMP"), "wb");
+    if (dump) {
+        fwrite(s, 1, n, dump);
+        fflush(dump);
+    }
+    if (g_audio)
+        SDL_LockAudioDevice(g_audio);
+    pcm_put(at_us, rate, s, n);
+    if (g_audio)
+        SDL_UnlockAudioDevice(g_audio);
+}
+
 static void audio_cb(void *user, Uint8 *stream, int len)
 {
+    uint64_t now = plat_now_us();
     (void)user;
-    opl3_render((int16_t *)stream, len / 4, plat_now_us());
+    opl3_render((int16_t *)stream, len / 4, now);
+    pcm_mix((int16_t *)stream, len / 4, g_audio_rate, (double)now - g_lag_us);   /* (the effects at the music's lag) */
     if (g_mute)
         memset(stream, 0, (size_t)len);
 }
@@ -227,10 +255,12 @@ int main(int argc, char **argv)
         fprintf(stderr, "rv: no screen (%s): running without one\n", SDL_GetError());
     SDL_ShowCursor(SDL_DISABLE);        /* (the game draws its own pointer) */
 #ifdef __EMSCRIPTEN__
-    rate = opl3_init(100000);
+    g_lag_us = 100000;
 #else
-    rate = opl3_init(50000);
+    g_lag_us = 50000;
 #endif
+    rate = opl3_init(g_lag_us);
+    g_audio_rate = rate;
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         memset(&want, 0, sizeof want);
         want.freq = (int)(rate + 0.5);

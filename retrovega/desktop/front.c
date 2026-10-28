@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <SDL.h>
 #include "opl3.h"
+#include "pcm.h"
 #include "pcscan.h"
 #include "proto.h"
 
@@ -219,6 +220,16 @@ static int from_core(void)
                 memcpy(&o, p + i * sizeof o, sizeof o);
                 opl3_write(o.at_us, o.reg, o.val);
             }
+        } else if (h.type == RVP_PCM && h.len >= sizeof(RvpPcm) && h.len <= sizeof(RvpPcm) + RVP_PCM_MAX) {
+            RvpPcm a;
+            memcpy(&a, p, sizeof a);
+            if (a.n == h.len - sizeof a && a.rate >= 8000 && a.rate <= 48000) {   /* (its own length, a sane rate) */
+                if (g_audio)
+                    SDL_LockAudioDevice(g_audio);
+                pcm_put(a.at_us, a.rate, p + sizeof a, a.n);
+                if (g_audio)
+                    SDL_UnlockAudioDevice(g_audio);
+            }
         } else if (h.type == RVP_WROTE && h.len > 0 && h.len <= 12) {
             if (plain_name(p, h.len))           /* (only a plain DOS name to the terminal: never what else it sent) */
                 printf("rv: the game wrote %.*s\n", (int)h.len, (const char *)p);
@@ -241,10 +252,14 @@ static int from_core(void)
     return open;
 }
 
+static double g_audio_rate;
+
 static void audio_cb(void *user, Uint8 *stream, int len)
 {
+    uint64_t now = now_us();
     (void)user;
-    opl3_render((int16_t *)stream, len / 4, now_us());
+    opl3_render((int16_t *)stream, len / 4, now);
+    pcm_mix((int16_t *)stream, len / 4, g_audio_rate, (double)now - 50000);   /* (the effects at the music's lag) */
     if (g_mute)
         memset(stream, 0, (size_t)len);
 }
@@ -296,6 +311,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "rv: no screen (%s): running without one\n", SDL_GetError());
     SDL_ShowCursor(SDL_DISABLE);        /* (the game draws its own pointer) */
     rate = opl3_init(50000);
+    g_audio_rate = rate;
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         memset(&want, 0, sizeof want);
         want.freq = (int)(rate + 0.5);

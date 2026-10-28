@@ -41,7 +41,7 @@ This guide covers:
 | file | what | whose |
 |---|---|---|
 | `src/logic.c`, `src/logic.h` | the main loop, the HUD hook, the autopilot, the thunk bodies, `g_pilot` (the controls) | **yours** |
-| `tests/play/` | the play tests: what the logic has to do, a check at a time, on the host and in RVT.EXE (docs/gameplay.md) | tests, yours to change |
+| `tests/play/` | the play tests: what the logic has to do, a check at a time, on the host and in RVP.EXE (docs/gameplay.md) | tests, yours to change |
 | `src/world.c`, `src/world.h` | names for the slot arrays' values; vector, orientation and slot helpers; spawning; the gameplay random stream | helpers |
 | `src/shots.c`, `src/shots.h` | the gunfire list: add, move, hit test, the do_damage stand-in, and the drawing | helpers |
 | `src/hud.c`, `src/hud.h` | drawing over the view, clipped to the canopy opening | helpers |
@@ -434,7 +434,7 @@ let that work without rewriting your logic:
 
 **Memory:**
 
-- **DGROUP, the near data segment, has 3.3 KB free (of 64) in RV.EXE, and 544 bytes in RVT.EXE.** Every string literal in C lands there, even in `__far` code.
+- **DGROUP, the near data segment, has 3.2 KB free (of 64) in RV.EXE, and 608 bytes in RVT.EXE, the test build.** Every string literal in C lands there, even in `__far` code.
   - Use `static const char __far s_x[] = "...";` with `rv_logf(s_x, ...)`, as logic.c does.
   - Watcom binds `__far` to one declarator: write it before each name.
   - New tables and arrays: `__far`. Below about 200 bytes free, RV.EXE cannot open its files.
@@ -484,12 +484,11 @@ What combat in a field still needs (none of it exists yet):
 
 The scan for this guide, most needed first:
 
-1. **Explosions and debris.** There is no art and no call: a dying ship has nothing to show. It needs:
-   - an explosion set (pre-rendered fireball frames into XMS, as BALLS.DAT is);
-   - an `explosion_add(where, size)` drawn with the ships;
-   - debris (could be the rocks' small sprites).
-2. **Sound effects.** There is no digital audio at all: no guns, no hits, no explosions. Music is OPL only. Spec §8 planned 8-bit Sound Blaster effects from XMS.
-3. **Shots against rocks, and the AI's rock query** (above).
+1. **Shots against rocks, and the AI's rock query** (above).
+2. *(Done 2026-10-28: explosions and sound effects come by themselves from the world: a ship at `shipAiState` 9
+   explodes, a shot sounds its weapon, a hit throws sparks, a missile launches and bursts. engine.md, "Explosions and
+   sound effects"; keep a dying ship's 9 to a step's end.)*
+3. *(see 2)*
 4. **Capital ship art.** Only the Vigilance exists, as a test aid (`/capital`). The roster's other capital ships have no sprites, and turrets have no aiming code.
 5. **Ship slots beyond 9:** rvabi.def plus the layer's phase 2.
 6. **The layer's RV.EXE support:** its column of offsets, the flight sites and the replication. Today it only logs.
@@ -659,7 +658,7 @@ build").
 ## Testing
 
 - **The play tests**, `tests/play/playtest.sh` (docs/gameplay.md, "The play tests"): 61 checks of the play, by
-  milestone, on the host in a second; `--dos` runs them in RVT.EXE under DOSBox too and compares each test's world
+  milestone, on the host in a second; `--dos` runs them in RVP.EXE under DOSBox too and compares each test's world
   with the host's.
 - `tests/run.sh SCRIPT [switches]` plays a script headless in DOSBox. The log is `build/dos/RVLOG.TXT`, the screenshots `build/dos/*.BMP`.
   - `/flight N` ends the flight after N seconds.

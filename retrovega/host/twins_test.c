@@ -1,4 +1,4 @@
-/* twins_test.c: RVT.EXE /twins's self-test (src/twins.c) on the host, where rv_x is its C twin (asm_twins.c): every
+/* twins_test.c: RVP.EXE /twins's self-test (src/twins.c) on the host, where rv_x is its C twin (asm_twins.c): every
  * comparison agrees by construction, and what counts is the sums it logs, which tests/host/twins_test.sh compares
  * with the DOS run's.  The few things it needs of the game are here: the log (to stdout) and a megabyte of "XMS". */
 #include <stdio.h>

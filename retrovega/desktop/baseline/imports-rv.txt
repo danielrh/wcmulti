@@ -5,6 +5,7 @@ SDL_CreateWindow
 SDL_GetError
 SDL_Init
 SDL_InitSubSystem
+SDL_LockAudioDevice
 SDL_LockTexture
 SDL_OpenAudioDevice
 SDL_PauseAudioDevice
@@ -16,6 +17,7 @@ SDL_RenderPresent
 SDL_RenderSetLogicalSize
 SDL_SetHint
 SDL_ShowCursor
+SDL_UnlockAudioDevice
 SDL_UnlockTexture
 _ITM_deregisterTMCloneTable
 _ITM_registerTMCloneTable

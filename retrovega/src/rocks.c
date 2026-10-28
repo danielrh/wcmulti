@@ -464,7 +464,9 @@ static void field_enter(int i, int filled, const LfBasis *cam)
     {
         static int __far checked;
         if (!checked++) {
+#ifndef RV_NO_TWINS                     /* (DOS's RVT.EXE has no twins: RVP.EXE /twins checks the place there) */
             rocks_selftest();
+#endif
             rocks_time();
         }
     }
@@ -957,6 +959,7 @@ out:
     if (ext) _ffree(ext);
 }
 
+#ifndef RV_NO_TWINS
 long rocks_selftest(void)
 {
     static const char __far s_mem[] = "rocks: no memory for the self-test",
@@ -1031,4 +1034,5 @@ out:
     return bad ? bad : TN;
 #undef TN
 }
+#endif /* RV_NO_TWINS */
 #endif /* RV_TESTS */

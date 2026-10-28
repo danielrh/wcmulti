@@ -11,6 +11,7 @@ enum {
     RVP_PALETTE = 'P',                  /* 768 bytes: the DAC's 256 colours, 6 bits a component */
     RVP_FRAME = 'F',                    /* 256000 bytes: the screen, 640 x 400, a palette index a pixel */
     RVP_OPL = 'O',                      /* RvpOpl records: the OPL3's register writes, each with its time */
+    RVP_PCM = 'A',                      /* an RvpPcm and its n samples: the sound effects' mix (8-bit) */
     RVP_WROTE = 'W',                    /* a file's name: the game opened it to write (the first time) */
     RVP_END = 'E',                      /* 4 bytes: the game's exit status; nothing follows */
     /* the front end's, to the core */
@@ -20,6 +21,8 @@ enum {
 
 typedef struct { uint8_t type, pad[3]; uint32_t len; } RvpHead;
 typedef struct { uint64_t at_us; uint16_t reg; uint8_t val, pad[5]; } RvpOpl;   /* at_us: CLOCK_MONOTONIC */
+typedef struct { uint64_t at_us; uint16_t rate, n; uint8_t pad[4]; } RvpPcm;   /* the first sample due at at_us */
+#define RVP_PCM_MAX 4096                /* samples in one */
 typedef struct { uint16_t scan; uint8_t down, pad; } RvpKey;   /* scan: the PC's set 1 code (0x100 | it: E0) */
 typedef struct { int16_t x, y; uint8_t kind, button, down, pad; } RvpMouse;   /* kind: RVPM_* */
 enum { RVPM_MOVE, RVPM_BUTTON, RVPM_TAP };   /* a tap: a finger's press, counted as a click, never held */
@@ -31,6 +34,7 @@ enum { RVPM_MOVE, RVPM_BUTTON, RVPM_TAP };   /* a tap: a finger's press, counted
 _Static_assert(sizeof(RvpHead) == 8, "RvpHead");
 _Static_assert(sizeof(RvpOpl) == 16, "RvpOpl");
 _Static_assert(sizeof(RvpKey) == 4, "RvpKey");
+_Static_assert(sizeof(RvpPcm) == 16, "RvpPcm");
 _Static_assert(sizeof(RvpMouse) == 8, "RvpMouse");
 
 #endif

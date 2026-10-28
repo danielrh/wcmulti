@@ -86,7 +86,7 @@ for c in $ENGINE; do
     $CC $CFLAGS -c -o "$OUT/obj/$c.o" "src/$c.c" &
 done
 wait
-for c in hle fixed flightloop asm_twins fsguard; do
+for c in hle fixed flightloop asm_twins fsguard pcm; do
     $CC $CFLAGS -c -o "$OUT/obj/h_$c.o" "host/$c.c"
 done
 $CC $CFLAGS -c -o "$OUT/obj/twins.o" src/twins.c

@@ -34,8 +34,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 4                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
-                                        # and each type's loadout
+VERSION = 5                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
+                                        # and each type's loadout; 5: each weapon's sound (data/sounds.csv)
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
           'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
@@ -103,7 +103,11 @@ WEAPON = [('char', 'code[RV_CODE]', '%ds' % TEXT['CODE']), ('char', 'name[RV_WNA
           ('unsigned char', 'type', 'B'), ('unsigned char', 'kind', 'B'), ('unsigned char', 'look', 'B'),
           ('unsigned char', 'lock', 'B'), ('unsigned short', 'damage', 'H'), ('unsigned short', 'speed_kps', 'H'),
           ('unsigned short', 'range_km', 'H'), ('unsigned char', 'refire', 'B'), ('unsigned char', 'energy', 'B'),
-          ('unsigned char', 'lock_tenths', 'B'), ('unsigned char', 'pad', 'B')]
+          ('unsigned char', 'lock_tenths', 'B'), ('unsigned char', 'sfx', 'B')]
+# the flight's sounds (data/sounds.csv: tools/sfx.py makes them, SFX.DAT): a weapon's (its sfx column) and the
+# effects' (src/fx.c) by name; RV_SFX_NONE none
+SOUNDS = [r['name'] for r in csv.DictReader(open(os.path.join(DATA, 'sounds.csv')))]
+SFX_NONE = 0xFF
 WEAPON_KINDS = ['gun', 'turret', 'missile', 'torpedo', 'rocket', 'mine', 'special']
 WEAPON_LOOKS = ['bolt', 'slug', 'plasma', 'fire', 'star', 'beam', 'missile', 'none']   # slug .. star: BALL_* + 1
 WEAPON_LOCKS = ['none', 'heat', 'image', 'auto', 'proximity']   # (an empty cell: none)
@@ -196,12 +200,15 @@ def compile_weapons():
         if r['kind'] not in WEAPON_KINDS or r['look'] not in WEAPON_LOOKS or (r['lock'] or 'none') not in WEAPON_LOCKS:
             raise Fail('%s: kind %r, look %r or lock %r unknown' % (where, r['kind'], r['look'], r['lock']))
         t = int(r['type'], 16)
+        if r['sfx'] and r['sfx'] not in SOUNDS:
+            raise Fail('%s: no sound %r in sounds.csv' % (where, r['sfx']))
         weapons[r['code']] = (t, r['kind'])
         out.append(struct.pack(fmt(WEAPON), text(r['code'], TEXT['CODE'], where), text(r['name'], TEXT['WNAME'], where),
                                t, WEAPON_KINDS.index(r['kind']), WEAPON_LOOKS.index(r['look']),
                                WEAPON_LOCKS.index(r['lock'] or 'none'), int(r['damage']), int(r['speed_kps']),
                                int(round(float(r['range_km']) * 1000)), int(r['refire_frames'] or 0),
-                               int(r['energy'] or 0), int(round(float(r['lock_s'] or 0) * 10)), 0))
+                               int(r['energy'] or 0), int(round(float(r['lock_s'] or 0) * 10)),
+                               SOUNDS.index(r['sfx']) if r['sfx'] else SFX_NONE))
     return weapons, out
 
 
@@ -496,6 +503,10 @@ def header_text(sizes):
     for k, v in ROLES.items():
         out.append('#define RV_ROLE_%s %d' % (k.upper(), v))
     out.append('#define RV_SHIPTYPE_FLAG_PLAYER %d' % SHIPTYPE_FLAG_PLAYER)
+    for i, k in enumerate(SOUNDS):
+        out.append('#define RV_SFX_%s %d' % (k.upper(), i))
+    out.append('#define RV_SFX_COUNT %d' % len(SOUNDS))
+    out.append('#define RV_SFX_NONE 0x%02X' % SFX_NONE)
     for names, prefix in ((WEAPON_KINDS, 'RV_WK_'), (WEAPON_LOOKS, 'RV_LOOK_'), (WEAPON_LOCKS, 'RV_LOCK_')):
         for i, k in enumerate(names):
             out.append('#define %s%s %d' % (prefix, k.upper(), i))

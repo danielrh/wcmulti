@@ -29,7 +29,8 @@ CORE_SRC = \
     ../src/lipsync.c ../src/opl.c ../src/music.c ../src/score.c ../src/campaign.c ../src/lightfield.c \
     ../src/ships.c ../src/lasers.c ../src/bolts.c ../src/balls.c ../src/rocks.c ../src/missiles.c ../src/sky.c \
     ../src/collide.c ../src/flames.c ../src/comms.c ../src/panel.c ../src/cockpit.c ../src/world.c \
-    ../src/shots.c ../src/hud.c ../src/logic.c ../src/flight.c ../src/game.c ../src/main.c ../src/twins.c \
+    ../src/shots.c ../src/hud.c ../src/explode.c ../src/sfx.c ../src/fx.c ../src/logic.c ../src/flight.c \
+    ../src/game.c ../src/main.c ../src/twins.c \
     ../host/hle.c ../host/fixed.c ../host/flightloop.c ../host/asm_twins.c ../host/fsguard.c \
     gen/thunks.c gen/stubs.c core.c seccomp.c
 
@@ -48,7 +49,7 @@ CORE_OBJ = $(patsubst %.c,$(OUT)/core/%.o,$(notdir $(CORE_SRC))) $(OUT)/core/fmt
 
 # --- rv: the window, the sound, the input ---
 
-FRONT_SRC = front.c
+FRONT_SRC = front.c ../host/pcm.c
 FRONT_CXX_SRC = ../host/opl3.cpp ../host/ymfm/ymfm_opl.cpp ../host/ymfm/ymfm_adpcm.cpp ../host/ymfm/ymfm_pcm.cpp
 SDL_CFLAGS := $(shell pkg-config --cflags sdl2)
 SDL_LIBS := $(shell pkg-config --libs sdl2)
@@ -56,7 +57,7 @@ FRONT_CFLAGS = -std=gnu99 -O2 -g -fstack-protector-strong -fPIE -D_FORTIFY_SOURC
     -ffile-prefix-map=$(ROOT)=retrovega -Wall -Wextra -Wno-unused-parameter $(SDL_CFLAGS)
 FRONT_CXXFLAGS = -std=c++14 -O2 -g -fstack-protector-strong -fPIE -I../host -ffile-prefix-map=$(ROOT)=retrovega -w
 FRONT_LDFLAGS = -pie -Wl,-z,relro,-z,now,-z,noexecstack
-FRONT_OBJ = $(OUT)/front/front.o $(patsubst %.cpp,$(OUT)/front/%.o,$(notdir $(FRONT_CXX_SRC)))
+FRONT_OBJ = $(OUT)/front/front.o $(OUT)/front/pcm.o $(patsubst %.cpp,$(OUT)/front/%.o,$(notdir $(FRONT_CXX_SRC)))
 
 # --- rvsprites: the ships' sets (the same tool and arguments as ../build.sh) ---
 
@@ -85,6 +86,8 @@ $(OUT)/rv: $(FRONT_OBJ)
 
 $(OUT)/front/front.o: front.c proto.h | $(OUT)/front
 	$(CC) $(FRONT_CFLAGS) -c -o $@ front.c
+$(OUT)/front/pcm.o: ../host/pcm.c ../host/pcm.h | $(OUT)/front
+	$(CC) $(FRONT_CFLAGS) -c -o $@ ../host/pcm.c
 $(OUT)/front/%.o: ../host/%.cpp | $(OUT)/front
 	$(CXX) $(FRONT_CXXFLAGS) -c -o $@ $<
 $(OUT)/front/%.o: ../host/ymfm/%.cpp | $(OUT)/front
@@ -107,7 +110,7 @@ $(OUT)/core $(OUT)/front: | $(OUT)
 # the game's files: the data the DOS build makes (or fetch-data.sh fetched), and the ships' sets made here (the
 # sharp sets, SHIPnn.RVS, and the block mode's, SHIPnn.RVH: ../build.sh's recipes)
 FROM ?= ../build/dos
-DATA_FILES = RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT ROCKS.DAT RVOPL.BNK
+DATA_FILES = RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT EXPLODE.DAT SFX.DAT ROCKS.DAT RVOPL.BNK
 data: $(OUT)/rvsprites
 	@test -n "$(DATA)" || { echo "make data DATA=dir (where the game's files go)"; exit 1; }
 	mkdir -p $(DATA)

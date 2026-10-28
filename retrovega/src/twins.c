@@ -522,7 +522,7 @@ int c_stars_place(const short LZ_FAR *stars, int n, const long LZ_FAR *basis, in
 }
 
 #ifdef RV_TESTS
-/* --- RVT.EXE /twins: every twin against its asm --- */
+/* --- RVP.EXE /twins: every twin against its asm --- */
 
 #define TW_ROWS 40                      /* the bands' */
 #define TW_BOLTS 320

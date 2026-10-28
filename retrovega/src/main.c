@@ -30,17 +30,22 @@
 #include "rocks.h"
 #include "sky.h"
 #include "collide.h"
+#include "explode.h"
+#include "sfx.h"
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_flight_timed, g_can_quit, g_res, g_field;
 extern long g_onfly_px;
+#ifdef RV_PLAYTEST                      /* the self-tests' build, RVP.EXE */
+int16_t playtest_run(const char *only);  /* (tests/play/playtest.c: RVP.EXE /playtest) */
+long twins_selftest(void);              /* (twins.c: RVP.EXE /twins) */
+#endif
 #ifdef RV_TESTS                         /* the test build's aids (flight.c, score.c) */
 extern int g_score_test, g_bench_wanted, g_record, g_capital, g_zoom, g_sky;
 extern int g_lasers, g_near_bolts, g_far_ships, g_big_ships, g_bolt_demo, g_flames_demo, g_balls, g_near_balls,
     g_ball_demo, g_missile_demo, g_sky_demo, g_boxes, g_collide_demo, g_hull_demo, g_hull_type, g_flame_test,
     g_comm_demo, g_test_ship;
-long twins_selftest(void);              /* (twins.c: RVT.EXE /twins) */
-int16_t playtest_run(const char *only);  /* (tests/play/playtest.c: RVT.EXE /playtest) */
+extern int __far g_boom_demo;
 #endif
 
 void __far __cdecl rvHello_impl(void) { rv_log("rvHello: DS is ready"); }
@@ -119,7 +124,7 @@ static void names(void)
 int main(int argc, char **argv)
 {
     int i, ok;
-#if defined(RV_TESTS) && !defined(RV_HOST)
+#ifdef RV_PLAYTEST
     static const char __far s_playtest[] = "/playtest";
     const char *playtest = 0;
 #endif
@@ -239,13 +244,15 @@ int main(int argc, char **argv)
             g_score_test = i + 1 < argc && argv[i + 1][0] >= '1' && argv[i + 1][0] <= '9' ? atoi(argv[++i]) : 1;
         else if (!strcmp(argv[i], "/sky"))              /* tests: three ship views painted on the sky, to roll and turn round */
             g_sky = 1;
-        else if (!strcmp(argv[i], "/twins"))            /* tests: the asm's C twins against it (twins.c), then out */
-            exit(twins_selftest() < 0 ? 4 : 0);
-#ifndef RV_HOST
-        else if (!_fstrcmp(argv[i], s_playtest))        /* tests: the play tests (tests/play/playtest.c), then out;
-                                                           a list of them may follow (M2,M3.1) */
-            playtest = i + 1 < argc && argv[i + 1][0] != '/' ? argv[++i] : "";
+        else if (!strcmp(argv[i], "/boomdemo"))         /* tests: ships blown up in turn: the explosions, the sounds */
+            g_boom_demo = 1;
 #endif
+#ifdef RV_PLAYTEST
+        else if (!strcmp(argv[i], "/twins"))            /* RVP.EXE: the asm's C twins against it (twins.c), then out */
+            exit(twins_selftest() < 0 ? 4 : 0);
+        else if (!_fstrcmp(argv[i], s_playtest))        /* RVP.EXE: the play tests (tests/play/playtest.c), then
+                                                           out; a list of them may follow (M2,M3.1) */
+            playtest = i + 1 < argc && argv[i + 1][0] != '/' ? argv[++i] : "";
 #endif
     }
     if (!xms_init(32768UL, 0x7FFFFFFFUL)) {
@@ -262,7 +269,9 @@ int main(int argc, char **argv)
         balls_reserve();                /* the balls' sprites (resident) */
         sky_reserve();                  /* the sky's far things (resident) */
         collide_reserve();              /* the ships' silhouettes (resident) */
-#if defined(RV_TESTS) && !defined(RV_HOST)
+        explode_reserve();              /* the explosions' cels and the sound effects (resident) */
+        sfx_reserve();
+#ifdef RV_PLAYTEST
         if (playtest) {                 /* (the play tests need the game's data, not its screens) */
             ok = playtest_run(playtest);
             music_shutdown();

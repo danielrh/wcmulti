@@ -1,9 +1,9 @@
 #!/bin/sh
-# The asm's C twins (src/twins.c) on the host against the DOS build.  RVT.EXE /twins (in DOSBox) checks every twin
+# The asm's C twins (src/twins.c) on the host against the DOS build.  RVP.EXE /twins (in DOSBox) checks every twin
 # against its asm on seeded random inputs and logs a sum of each one's outputs; the same self-test built for the
 # host as host/build.sh builds the game's code (32-bit, UBSan; rv_x is c_x there: host/asm_twins.c) must log the
 # same sums.  Then the twins compute with int 32 bits what the asm computes on DOS.  Prints TWINS OK.
-#   tests/host/twins_test.sh     NOBUILD=1: RVT.EXE as the last build left it; CC=clang (and its truncation check)
+#   tests/host/twins_test.sh     NOBUILD=1: RVP.EXE as the last build left it; CC=clang (and its truncation check)
 # 32-bit, as the host builds the game (gcc -m32, Emscripten's wasm32): ARCH=64 builds too, but there lasers.c's longs
 # are 64 bits (its sums are not DOS's) and the structs' padding fails the self-test's comparisons.
 set -e

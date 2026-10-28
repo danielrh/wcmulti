@@ -7,7 +7,7 @@
  * The same file is built twice:
  *   - on the host into build/host32/playtest (host/build.sh, with the rvsim harness and PLAYTEST_MAIN), where gdb,
  *     rr, valgrind and the sanitizers work and the multiplayer layer's rules are checked at every thunk (host.c);
- *   - into the test build RVT.EXE (build.sh), run in DOSBox as RVT.EXE /playtest [IDS], its lines in RVLOG.TXT.
+ *   - into RVP.EXE (build.sh: RV.EXE with the tests), run in DOSBox as RVP.EXE /playtest [IDS], its lines in RVLOG.TXT.
  * Each test ends with a hash of the world: the slot arrays, the mission tables and the shots.  The DOS build must
  * reach the host's world test by test (tests/play/playtest.sh --dos compares them): a difference is a computation
  * that comes out otherwise with DOS's 16-bit int (docs/logic.md, "Sized types").
@@ -17,8 +17,8 @@
  * logic_frame, and the world looked at.  Only the logic's public face is used: the thunks, logic_start,
  * logic_frame, logic_end, logic_hud, g_pilot, g_sys and the fixed block.
  *
- * Written for both compilers: C89 (declarations first), the sized types, and nothing in DGROUP (RVT.EXE has 512
- * bytes of it free): every string a `static const char __far`, every table and variable __far.  The messages'
+ * Written for both compilers: C89 (declarations first), the sized types, and nothing in DGROUP (RVP.EXE, RV.EXE and the tests, has
+ * 3 KB of it free): every string a `static const char __far`, every table and variable __far.  The messages'
  * numbers are int32_t, printed by ln_f's %d. */
 #include <string.h>
 #include <stdio.h>

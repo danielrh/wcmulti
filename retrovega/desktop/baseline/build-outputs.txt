@@ -8,12 +8,14 @@ core/collide.o
 core/comms.o
 core/core.o
 core/dat.o
+core/explode.o
 core/fixed.o
 core/flames.o
 core/flight.o
 core/flightloop.o
 core/fmt.o
 core/fsguard.o
+core/fx.o
 core/game.o
 core/gfx.o
 core/hle.o
@@ -33,6 +35,7 @@ core/room.o
 core/sandboxtest.o
 core/score.o
 core/seccomp.o
+core/sfx.o
 core/ships.o
 core/shots.o
 core/sky.o
@@ -46,6 +49,7 @@ core/xms.o
 front
 front/front.o
 front/opl3.o
+front/pcm.o
 front/ymfm_adpcm.o
 front/ymfm_opl.o
 front/ymfm_pcm.o

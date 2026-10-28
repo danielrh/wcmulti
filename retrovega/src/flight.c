@@ -39,6 +39,9 @@
 #include "shots.h"
 #include "hud.h"
 #include "logic.h"
+#include "explode.h"
+#include "sfx.h"
+#include "fx.h"
 
 int g_flight_seconds = 20;              /* the benchmark flight's length (RV.EXE /flight N) */
 int g_flight_timed = 0;                 /* /flight N given: the flight lands by itself after N seconds (the tests);
@@ -56,6 +59,51 @@ static const struct { int v; LfVec dir; int scale; } g_sky_sprites[3] = {
     { 10, { 0, 1500, 4096 }, 256 }, { 1, { -3000, 900, 2500 }, 192 }, { 18, { 3500, -600, 2200 }, 128 }
 };
 int g_zoom = 0;                         /* RV.EXE /zoom: one ship ahead, rolling, swinging in and out (a test aid) */
+#ifdef RV_TESTS
+int __far g_boom_demo = 0;              /* RV.EXE /boomdemo: three ships ahead blown up in turn, guns and hits (fx.c's
+                                           check: the explosions and the sounds) */
+static int __far g_boom_type;
+static const short __far k_boom_at[3][3] = { { 0, 0, 1500 }, { -1300, 350, 4000 }, { 2600, -700, 9000 } };
+
+static void boom_spawn(int s)
+{
+    ship_spawn(s, g_boom_type, SIDE_AERA, CTL_FROZEN, 256L * k_boom_at[s - 1][0], 256L * k_boom_at[s - 1][1],
+               256L * k_boom_at[s - 1][2], 512 + 40 * s);
+    setSpeed[s] = speedLo[s] = 0;
+}
+
+/* the boom demo's step: a ship dies every 50 steps (shipAiState 9, as the logic would have it: fx.c does the rest)
+ * and comes back 39 steps later; the player's guns and the ships' sound now and then, hits thrown on them, and a
+ * missile's burst */
+static void boom_demo_step(void)
+{
+    int s = 1 + (int)((frameCounter / 50) % 3), k;
+    if (frameCounter % 50 == 10 && slot_is_ship(s) && shipAiState[s] != 9)
+        shipAiState[s] = 9;
+    for (k = 1; k <= 3; k++)
+        if (frameCounter % 50 == 49 && shipAiState[k] == 9)
+            boom_spawn(k);
+    if (frameCounter % 12 == 0 && GUN_COUNT(0))
+        fx_shot(0, GUN_TYPE(0, 0));
+    if (frameCounter % 17 == 5 && slot_is_ship(s) && GUN_COUNT(s))
+        fx_shot(s, GUN_TYPE(s, 0));
+    if (frameCounter % 23 == 7) {
+        k = 1 + (int)((frameCounter / 23) % 3);
+        if (slot_is_ship(k) && shipAiState[k] != 9) {
+            RvVec3 w = gPositionVector[k];
+            w.x += 256L * 150;
+            fx_hit(k, &w, 0);
+        }
+    }
+    if (frameCounter % 70 == 35) {
+        RvVec3 at, vel;
+        at.x = 256L * 900; at.y = -256L * 250; at.z = 256L * 2600;
+        vel.x = vel.y = vel.z = 0;
+        explode_add(&at, &vel, 260, BOOM_MISSILE, 0, (uint16_t)frameCounter);
+        sfx_play(RV_SFX_BOOM_SMALL, 200, 256);
+    }
+}
+#endif
 int g_lasers = 0;                       /* RV.EXE /lasers N: the laser benchmark with N far bolts (-1: as many as hold
                                            30 fps), two big ships near drawn exactly, small ones far, the near bolts */
 int g_near_bolts = 12;                  /* RV.EXE /near N: the bolts kept near the camera in it */
@@ -352,7 +400,7 @@ static void plan_draws(void)
     basis_of(0, &cam);
     for (s = 1; s <= RV_MAX_SHIP_SLOT && g_nplan < PLAN_MAX; s++) {
         int set;
-        if (maybeEntityType[s] != 0xC && maybeEntityType[s] != 0xD)
+        if ((maybeEntityType[s] != 0xC && maybeEntityType[s] != 0xD) || fx_hidden(s))
             continue;
         set = ships_find(gInstanceShipTypes[s]);
         if (set < 0)
@@ -1106,6 +1154,7 @@ static void draw_world(int y0, int y1)
     shots_draw_far(y0, y1, ext, ey0, rows);   /* the far shots: lines and a pixel or a few */
     rocks_draw_small(y0, y1, ext, ey0, rows);   /* the far rocks: a few pixels each */
     rocks_draw_begin();
+    explode_draw_begin();
     if (g_bl_cap)                       /* the far balls: a pixel or a few */
         balls_draw_far(y0, y1, ext, ey0, rows);
     if (g_sky && g_set_enemy >= 0) {
@@ -1122,6 +1171,7 @@ static void draw_world(int y0, int y1)
         rel_of(s, &rel);
         basis_of(s, &ship);
         rocks_draw_to(g_plan[i].depth, y0, y1, ext, ey0, rows);   /* the big rocks behind it */
+        explode_draw_to(g_plan[i].depth, y0, y1, ext, ey0, rows);   /* and the explosions */
         t0 = clock240();
         if (!g_plan[i].fl.front)        /* flames pointing away: behind the hull */
             flames_draw(&g_plan[i].fl, y0, y1, ext, ey0, rows);
@@ -1149,6 +1199,7 @@ static void draw_world(int y0, int y1)
         }
     }
     rocks_draw_rest(y0, y1, ext, ey0, rows);   /* the big rocks before every ship */
+    explode_draw_rest(y0, y1, ext, ey0, rows);   /* and the explosions */
     if (g_lasers)                       /* the near bolts last: nearest of all */
         bolts_draw_near(y0, y1, ext, ey0, rows);
     if (g_bl_cap)
@@ -2280,6 +2331,18 @@ void __far __cdecl flight_startup(void)
         ships_load(0x02);
         n = 2;
     }
+#ifdef RV_TESTS
+    if (g_boom_demo) {
+        /* a test aid: three ships ahead at 1,500, 4,000 and 9,000 km, standing (boom_demo_step blows them up) */
+        memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
+        g_boom_type = enemy_type;
+        for (i = 1; i <= 3; i++)
+            boom_spawn(i);
+        setSpeed[0] = speedLo[0] = 0;
+        ships_load(enemy_type);
+        n = 4;
+    }
+#endif
     if (g_hull_demo && g_hull_type >= 0)
         enemy_type = g_hull_type;       /* (/hulltype: its ship) */
 #ifdef RV_TESTS
@@ -2349,6 +2412,10 @@ void __far __cdecl flight_startup(void)
     g_cam_cy = cockpit_record() ? (cockpit_record()->open_y0 + cockpit_record()->open_y1) / 2 : SCR_H / 2;
     ships_set_camera(SCR_W / 2, g_cam_cy, 400);
     shots_flight_start(!g_lasers);      /* (the laser benchmark and its demos keep the bolts' and balls' pools) */
+    explode_flight_start();             /* the effects: explosions, sounds, and what starts them (fx.c) */
+    fx_flight_start();
+    shots_on_add = fx_shot;
+    shots_on_hit = fx_hit;
 #ifdef RV_TESTS
     if (g_set_enemy >= 0) {
         /* the benchmark's sprite: the biggest of the type's band views at the sets' first resident step (84 %) */
@@ -2432,6 +2499,7 @@ void __far __cdecl flight_startup(void)
     missiles_init();
     sky_clear();
     rocks_flight_start();
+    sfx_flight_start();                 /* (last: the card plays from now) */
     if (g_field > 0)                    /* (centred where the player starts: big enough to fly in for minutes) */
         rocks_field_add(RV_FIELD_ASTEROID, gPositionVector[0].x, gPositionVector[0].y, gPositionVector[0].z, 200000L,
                         g_field);
@@ -2538,6 +2606,12 @@ void __far __cdecl flight_frame(void)
     comms_tick();
     sim_step();
 #ifdef RV_TESTS
+    if (g_boom_demo)
+        boom_demo_step();
+#endif
+    fx_frame();                         /* what the step did: explosions and sounds started */
+    explode_frame();
+#ifdef RV_TESTS
     if (g_sky_demo)
         sky_demo_step();
     if (g_collide_demo)
@@ -2581,6 +2655,7 @@ void __far __cdecl flight_frame(void)
         basis_of(0, &cam);
         shots_place((const LfVec *)&gPositionVector[0], &cam, SCR_W / 2, g_cam_cy, 400, c ? c->open_y0 : 0,
                     c ? c->open_y1 : SCR_H);
+        explode_place((const LfVec *)&gPositionVector[0], &cam, SCR_W / 2, g_cam_cy, 400);
     }
     /* the rate over the last FPS_WINDOW frames */
     dt = now - g_frame_t[k];
@@ -2642,6 +2717,7 @@ void __far __cdecl flight_frame(void)
 void __far __cdecl flight_music(void)
 {
     music_poll();
+    sfx_poll();
     score_tick(g_landing != 0);
 }
 
@@ -2728,6 +2804,10 @@ int flight_fly(const RvMission __far *m)
     ships_draw_log();
     rocks_report();
     logic_end();
+    sfx_flight_end();
+    shots_on_add = 0;
+    shots_on_hit = 0;
+    explode_flight_end();
     shots_flight_end();
     rocks_flight_end();
     comms_flight_end();

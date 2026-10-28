@@ -792,6 +792,16 @@ the benchmark as before. Not gated, since each is a few hundred bytes: the
 music log (`/midilog`'s recorder in music.c), score.c's clock test, the
 flames scene's spawning and the carrier's.
 
+**The self-tests' build, RVP.EXE** (since 2026-10-28): RV.EXE with the play
+tests (`/playtest`, tests/play/playtest.c, docs/gameplay.md) and the asm's
+C twins (`/twins`, src/twins.c), both of which run and exit before any
+flight. In RVT.EXE they had taken 62 KB its flights needed: its largest
+free block when the shots' pools are made had fallen to 36 KB, under the
+48 KB kept for an asteroid field, and the test scenes drew no bolts. RVT.EXE
+is built with `-dRV_NO_TWINS` (rocks.c's in-flight check of the rocks'
+placing against its twin moves to `/twins`). `tests/run.sh` takes RVP.EXE
+for `/playtest` and `/twins`.
+
 ### The lightfield: one function draws a ship
 
 `ships_draw(set, rel, cam, ship, scale, ...)` is the draw the rest of the
@@ -1705,6 +1715,95 @@ The module's state and its log formats are far (`rv_logf` takes a far
 format): DGROUP is nearly full (Watcom's `__far` binds to one declarator:
 each in a list needs its own).
 
+### Explosions and sound effects
+
+The user's brief (2026-10-28): the explosion compact and simple, lo-fi pixel
+art at 640x400, its own rather than the old games' (whose few cels, held for
+frames and scaled between, were clever but looked odd); the good burst fades
+as it reaches its edge rather than vanishing or shrinking back. On the
+first drafts: puffs "looked like pimples", too much personality to repeat;
+a central blast going out in every direction instead; then "lose energy
+from the middle first" so it spreads. And synthetic blaster sounds for the
+guns, retro but not Game Boy: good retro.
+
+**What starts them (fx.c).** Nothing in the logic: like the music, fx.c only
+watches the world, once a step after the logic.
+
+| it sees | it starts |
+|---|---|
+| a ship's `shipAiState` turning 9 | an explosion where it is, drifting with it (a capital ship: six bursts over its hull, then the biggest); the death's sound by distance; its sprite hidden two steps later (the flash covers it) |
+| a slot becoming `ET_MISSILE` | the launch's sound (its weapon's, `gInstanceShipTypes` if that is a weapon, else the missile's) |
+| a missile slot ending | a missile's burst where it last was, and its sound |
+| `shot_add` (shots.c's hook) | the gun's own sound (weapons.csv's `sfx`), one a volley, by distance; the player's own at a fixed level |
+| `shot_hit` finding a hit (the hook) | sparks where it struck; the player hit: the shield sound while shields are left, else the hull's; another ship: a pop (always heard when the player fired) |
+
+A death must keep its 9 to the end of a step (the slot may be cleared any
+time after): fx.c looks between steps. The pictures and the sounds take
+their own random stream, never `game_rand`, and are each machine's own.
+
+**The explosion (explode.c, tools/explode.py, EXPLODE.DAT, 37 KB in XMS).**
+The art is heat, not colour: eight cels of 48 x 48 (0 clear .. 255 white
+hot), two variants, drawn by the tool as a central blast: a white core and
+rays of fire streaking out every way (spiky noise round the circle, radial
+streaks), the core burning out and a front from the middle out to the rays'
+tips leaving the spent fire behind it, so the energy rides outward as a
+ring. The game reads the tool's timeline (40 entries, read at age x 40 /
+life): the cel, its growth (eased out), its cooling (heat x gain picks the
+colour from a ramp: smoke browns, the embers, the fire ramp 128..143 to
+white) and its dissolve (a threshold climbing through the heat, dithered
+by a 4 x 4 ordered pattern in the cel's pixels, slow until the last third).
+So the cels change eight times, but every frame the ball grows, cools and
+thins; the middle clears first and the ring goes last, at the full size.
+Per frame and explosion: a table from heat to colour (256 entries), then
+each screen row's cel row made colours (turned one of eight ways) and
+scaled into the band by `rv_scale_row`, the ships' own (its C twin on the
+host: DOS and the native build draw the same frames, checked to the pixel
+on the boom demo's view). Over it at the screen's pixels: a flash (a white
+core and a four-pointed glint, three frames), sparks (pixels with a streak,
+cooling white to red), debris (hull-grey chunks, their size flickering for
+a tumble). Kinds: a fighter (40 steps), a capital ship's last (75), a
+missile's burst (26), a hit (9: the flash and sparks only). Sixteen at once;
+drawn far to near between the ships (`explode_draw_to` before each, as the
+big rocks are). Memory in flight: a cache of four cels and a column map,
+11 KB, conventional (the upper memory is the dense slab's and the band
+buffer's).
+
+**The sounds (sfx.c, tools/sfx.py, data/sounds.csv, SFX.DAT, 324 KB in
+XMS).** 27 sounds synthesized as analog patches: band-limited saws and
+pulses, FM pairs, noise; a resonant state-variable filter swept by an
+envelope; pitch envelopes; a little saturation; a short echo; then 22,050
+Hz, 8 bits with a triangular dither. The Terrans' guns saws and kinetic
+hits, the Aera's FM bells, the Rlaan's breathy formant noise and drones;
+launches, bursts, three explosions, the player's shield and hull hits, a
+distant pop. Each weapon names its sound in weapons.csv (`sfx`,
+`RvWeapon.sfx`; rvdata.py writes `RV_SFX_*`). The mixer: eight voices (a
+volume, a pitch in 256ths: each shot a little off its own), the quietest
+giving way, three of one sound at most; each frame every voice's next
+stretch fetched from XMS and summed, clipped to 8 bits.
+
+On DOS a Sound Blaster (2.0 or later, from BLASTER: DOSBox's SB16 at 220h,
+IRQ 7, DMA 1) plays it from a 4 KB ring by auto-initialising 8-bit DMA
+(DSP 1Ch; the rate by 41h, or a time constant before the SB16); its
+interrupts are only acknowledged. Each frame `sfx_poll` (from the music's
+hook) reads where the DMA is, mixes 81 ms ahead of it and silences what the
+card has played, so a stall plays silence, not stale sound. The native
+build mixes what the host's clock asks (hle.c) and hands it to the front
+end stamped with its time (`plat_pcm`; the desktop's rv over the pipe as
+`RVP_PCM`), whose audio adds it under the OPL3 at the music's lag
+(host/pcm.c). `RV_PCM_DUMP=file` makes the native player write the stream.
+
+**Costs.** Code 12 KB and data 5 KB resident (RV.EXE starts with 269 KB
+of conventional memory free, from 287); in flight the explosions' 11 KB
+and the DMA ring's 8 KB. DGROUP: 32 bytes.
+
+**Testing.** `tests/run.sh tests/boom.txt /boomdemo /flight 8` (RVT.EXE):
+three ships ahead at 1,500, 4,000 and 9,000 km blown up in turn by setting
+`shipAiState` 9 (as the logic will), guns and hits now and then, a
+missile's burst; `/record N` for the frames. Its log says which card the
+sound found and how many samples it mixed. `tools/explode.py --preview DIR`
+draws the explosion as the game does (sheets and a GIF), `tools/sfx.py
+--wav DIR` writes each sound.
+
 ### Missiles
 
 The user's brief (2026-10-21): missiles drawn with the bolts' code as far
@@ -1869,8 +1968,8 @@ left + 1 and length) and then the runs' pixels, one after another.
   off that point by up to 4,000 km across and up at random: most fly close
   by, now and then one comes straight in.
 - *Once a frame* every rock goes through the camera (`rv_rocks_place`, its
-  C reference `lz_rocks_place`, checked to the bit by RVT.EXE when its
-  first field is entered): one that has left the sphere (the player flew on
+  C reference `lz_rocks_place`, checked to the bit by `RVP.EXE /twins`,
+  and by the native test build when its first field is entered): one that has left the sphere (the player flew on
   past it) goes to a reap list and is put back on the sphere's far side,
   cosine-weighted about the way the player looks (as an endless field's
   rocks would come in), inside the field or not at all; one within reach
@@ -2217,7 +2316,7 @@ names in the game's own directory, and nothing else.
 - **The assembly:** its place is taken by its C twins (`src/twins.c`, one a
   routine, the asm's own parameters; `host/asm_twins.c` makes each `rv_x` a
   call to its `c_x`).
-  - **The proof:** `RVT.EXE /twins` checks every twin against its assembly on
+  - **The proof:** `RVP.EXE /twins` checks every twin against its assembly on
     seeded random inputs in DOSBox. `tests/host/twins_test.sh` runs the same
     test on the host and requires DOSBox's sums, so the twins compute DOS's
     answers with a 32-bit `int` too.
@@ -2275,7 +2374,7 @@ names in the game's own directory, and nothing else.
     is clipped already, so that pixel went outside the cockpit's opening, or
     one byte past the band buffer onto the dense slab after it in upper
     memory. Now an odd span's last column is written once, in the assembly
-    and its twin. `RVT.EXE /twins` also checks that nothing outside the span
+    and its twin. `RVP.EXE /twins` also checks that nothing outside the span
     changes; the old code fails that at once.
 
 ## Bounds

@@ -17,7 +17,7 @@ for f in rvsets.js rvsprites.js rvsprites-worker.js touch.js; do cp "../web/$f" 
 # (reproducible: the names sorted, the dates and owners fixed, gzip without its time stamp: the same data, the same
 # bytes, so desktop/fetch-data.sh's pinned SHA-256 holds until the data itself changes)
 (cd build/dos && tar --format=ustar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=a+r,u+w \
-    -cf - RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT RVOPL.BNK *.MID) | gzip -9 -n > "$OUT/game.tar.gz.part" \
+    -cf - RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT EXPLODE.DAT SFX.DAT RVOPL.BNK *.MID) | gzip -9 -n > "$OUT/game.tar.gz.part" \
     && mv "$OUT/game.tar.gz.part" "$OUT/game.tar.gz"
 python3 tools/artweb.py --out "$OUT/art" --build "$REV" > /dev/null
 echo "built $OUT ($REV): $(du -sh "$OUT" | cut -f1)"

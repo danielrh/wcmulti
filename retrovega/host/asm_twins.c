@@ -1,5 +1,5 @@
 /* asm_twins.c: the host's lowlevel.asm, lasers.asm and rocks.asm: each rv_x is its C twin, c_x (src/twins.c), which
- * RVT.EXE /twins checks against the asm, and tests/host/twins_test.sh shows computes the same on the host as on DOS. */
+ * RVP.EXE /twins checks against the asm, and tests/host/twins_test.sh shows computes the same on the host as on DOS. */
 #include "rv.h"
 #include "twins.h"
 

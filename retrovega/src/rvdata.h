@@ -5,7 +5,7 @@
 #include "rvtypes.h"
 
 #define RVGAME_MAGIC "RVGAME"
-#define RVGAME_VERSION 4
+#define RVGAME_VERSION 5
 
 #define RV_PILOTS 16
 #define RV_NODES 32
@@ -87,6 +87,35 @@
 #define RV_ROLE_XO 3
 #define RV_ROLE_TECH 4
 #define RV_SHIPTYPE_FLAG_PLAYER 1
+#define RV_SFX_LASER 0
+#define RV_SFX_LASER_T 1
+#define RV_SFX_PARTICLE 2
+#define RV_SFX_PARTICLE_T 3
+#define RV_SFX_ION 4
+#define RV_SFX_DISRUPTOR 5
+#define RV_SFX_MASSDRIVER 6
+#define RV_SFX_PHOTON2 7
+#define RV_SFX_PHOTON3 8
+#define RV_SFX_PENETRATOR 9
+#define RV_SFX_KTEK 10
+#define RV_SFX_KBEAM 11
+#define RV_SFX_CRIPPLER 12
+#define RV_SFX_THUMPER 13
+#define RV_SFX_LBEAM 14
+#define RV_SFX_GAUSS 15
+#define RV_SFX_ICEPICK 16
+#define RV_SFX_LAUNCH 17
+#define RV_SFX_TORPEDO 18
+#define RV_SFX_ROCKET 19
+#define RV_SFX_MINE 20
+#define RV_SFX_BOOM_SMALL 21
+#define RV_SFX_BOOM_SHIP 22
+#define RV_SFX_BOOM_CAPITAL 23
+#define RV_SFX_HIT_SHIELD 24
+#define RV_SFX_HIT_HULL 25
+#define RV_SFX_HIT_FAR 26
+#define RV_SFX_COUNT 27
+#define RV_SFX_NONE 0xFF
 #define RV_WK_GUN 0
 #define RV_WK_TURRET 1
 #define RV_WK_MISSILE 2
@@ -244,7 +273,7 @@ typedef struct {
     uint8_t refire;
     uint8_t energy;
     uint8_t lock_tenths;
-    uint8_t pad;
+    uint8_t sfx;
 } RvWeapon;
 #pragma pack()
 

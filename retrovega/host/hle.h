@@ -32,6 +32,8 @@ void plat_events(void);                 /* SDL's events into hle_key, hle_mouse_
 void plat_present(void);                /* hle_fb through hle_dac to the window */
 void plat_sleep_us(uint32_t us);        /* the host idles (the browser runs its own work: a yield) */
 void plat_opl_write(uint64_t at_us, uint16_t reg, uint8_t val);   /* an OPL3 register, as of the clock's at_us */
+void plat_pcm(uint64_t at_us, uint16_t rate, const uint8_t *s, uint16_t n);   /* the sound effects' mix: n 8-bit
+                                           samples at rate, the first due at at_us (sfx.c through hle.c) */
 void plat_saved(void);                  /* the game wrote a save (the page keeps it) */
 
 #endif

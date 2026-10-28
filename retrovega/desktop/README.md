@@ -6,7 +6,7 @@ checks what the build and the game actually do against a record made from a vers
 | Program | What it is | What it can reach |
 | --- | --- | --- |
 | `rv-core` | The whole game: `src/` as RV.EXE has it, `host/hle.c` in DOS's place, and the assembly's C twins. 32-bit, linked against the C library only. | Its own directory and two pipes. Nothing else. |
-| `rv` | Its window, sound and input: SDL2, and ymfm's OPL3 (BSD, `host/ymfm`). About 400 lines of our own. | The display's socket and the sound server's. No files that outlive it. |
+| `rv` | Its window, sound and input: SDL2, ymfm's OPL3 (BSD, `host/ymfm`), and the sound effects the core mixes (`host/pcm.c`). About 450 lines of our own. | The display's socket and the sound server's. No files that outlive it. |
 
 All of the game runs in `rv-core`: every rule, every data file it reads, every save. That's why it gets the
 tightest box. `rv` never opens a game file; it shows what the core sends and passes the keys and the mouse back.

@@ -24,7 +24,7 @@ The same `src/logic.c` builds three ways, and the play tests run on two of them.
 | 2. debug a test | `OPT=-O0 SDL=0 host/build.sh`, then `gdb --args build/host32-nosdl/playtest M1.4` | gdb at your code. `break step_motion`, `print gPositionVector[0]`, `print SHIELD(1, 0)` work (the build has the macros) |
 | 3. fly it on the host | `host/build.sh && build/host32/rvsim` | your logic in a window, the ships as wire boxes; `--record` and `--replay` a flight; rr and valgrind on a replay (logic.md, "The host harness") |
 | 4. the whole game on the host | `host/game.sh`, then `build/game32/rv --data build/game32/run` | the real game, sprites, cockpit and sound, compiled natively with UBSan: gdb on the full game |
-| 5. test in DOS | `tests/play/playtest.sh --dos` | the same tests in `RVT.EXE` under DOSBox, and each test's world compared with the host's |
+| 5. test in DOS | `tests/play/playtest.sh --dos` | the same tests in `RVP.EXE` (RV.EXE with the tests) under DOSBox, and each test's world compared with the host's |
 | 6. find where DOS differs | `tests/play/playtest.sh --steps M5.3` | the first step, and the arrays, where the 16-bit build parts from the host's |
 | 7. play it in DOS | `CODE=1 ./build.sh && tests/play.sh` | RV.EXE in a DOSBox window |
 
@@ -191,6 +191,10 @@ What to write:
   - `despawn(s)`, or `delayedDespawn(killer, s)` at the kill, whose body ends it later;
   - `despawn_impl` is its explosion and debris (none in the engine yet), then `ship_clear(s)`.
 - **The player's death:** after its explosion, `missionStatus = 4`. The flight loop ends at the next check.
+- **The explosion and its sound come by themselves** (engine.md, "Explosions and sound effects"): the engine sees
+  the 9 after the step and starts them, hiding the ship's sprite two steps later. Keep the 9 in the slot to the
+  end of at least one step, or it is never seen; how long you keep the slot after that is yours (the explosion
+  goes on without it). Shots, hits and missiles sound and spark by themselves too.
 - **A dying ship** neither thinks nor fires.
 - **`logic_end`**: a dead player's mission is lost (`victoryPoints` 0).
 
@@ -407,8 +411,8 @@ empties it. A ship may appear in a slot without your code spawning it: the layer
 Anything the arrays don't hold goes in `logic.c` as `static` arrays: the turns your minds decide, an AI's
 mode, a missile's life, the nav points visited.
 
-- **Make them `__far`:** `static int16_t __far g_turn[RV_MAX_SHIP_SLOT + 1][3];`. RV.EXE's DGROUP has 3.3 KB free,
-  RVT.EXE's 544 bytes.
+- **Make them `__far`:** `static int16_t __far g_turn[RV_MAX_SHIP_SLOT + 1][3];`. RV.EXE's DGROUP has 3.2 KB free,
+  RVT.EXE's (the test build's) 608 bytes.
 - **Reset them all in `logic_start`.** The play tests begin each scene there.
 - **Rebuild from the arrays each step what can be.** The layer writes positions, orientations and health between
   steps (logic.md, "The rules").
@@ -555,7 +559,7 @@ hand.
 **Host-only tests.** M5.1, M5.5, M9.1 and M9.2 ask the harness things the DOS build can't tell: which thunks were
 called, what is on the screen. In DOS they show as SKIP.
 
-**In DOS**, `RVT.EXE /playtest [IDS]` runs the same tests, its lines in `RVLOG.TXT`. `--dos` does the build and
+**In DOS**, `RVP.EXE /playtest [IDS]` runs the same tests, its lines in `RVLOG.TXT`. `--dos` does the build and
 the run, and then compares each test's hash with the host's:
 
 ```
@@ -573,7 +577,7 @@ From there, read your code for what touches those arrays at that moment, against
 - Each test says in its message what it checks and why.
 
 The file is written in the same C as the game (C89, the sized types, every string and table `__far`), because it
-builds into RVT.EXE.
+builds into RVP.EXE.
 
 **How I checked them.** I wrote a quick logic of my own in the style of the old games, as a throwaway, and kept it
 out of the repository so the writing stays yours. With it:
@@ -611,7 +615,6 @@ The build or the tests catch most of these; the last three you have to watch for
 
 For play like the old games', beyond your logic (logic.md, "What the engine still lacks", has the full list):
 
-- explosions, debris and sound effects: a death has nothing to show or sound yet;
 - what follows a death or an ejection (above);
 - a landing that needs the carrier;
 - text from the logic on the cockpit's displays;

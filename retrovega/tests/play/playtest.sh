@@ -2,13 +2,13 @@
 # The play tests (tests/play/playtest.c, docs/gameplay.md): what src/logic.c has to do, a check at a time.
 #   tests/play/playtest.sh [IDS]         the host's: host/build.sh (SDL=0), then build/host32-nosdl/playtest, where
 #                                        gdb, rr, valgrind and the sanitizers work
-#   tests/play/playtest.sh --dos [IDS]   and then the DOS build's in DOSBox (CODE=1 ./build.sh, RVT.EXE /playtest),
+#   tests/play/playtest.sh --dos [IDS]   and then the DOS build's in DOSBox (CODE=1 ./build.sh, RVP.EXE /playtest),
 #                                        each test's world hash held against the host's: a difference is the logic
 #                                        computing otherwise with DOS's 16-bit int (docs/logic.md, "Sized types")
 #   tests/play/playtest.sh --steps ID    one test on both, the world's parts hashed after every step: the first step
 #                                        where the DOS build parts from the host's, and in which arrays
 # IDS: M2 runs M2.*, M2.3 that one.  ARCH, SAN, CC and LOGIC go to host/build.sh (LOGIC to build.sh too); DOSBOX
-# to tests/run.sh (a stock DOSBox runs RVT.EXE).  The outputs: build/playtest-host.txt, build/playtest-dos.txt.
+# to tests/run.sh (a stock DOSBox runs RVP.EXE).  The outputs: build/playtest-host.txt, build/playtest-dos.txt.
 # Exit 0 only when every test passes and, with --dos, every hash matches.
 set -e
 cd "$(dirname "$0")/../.."
@@ -35,7 +35,7 @@ status=0
 
 if [ -z "$steps" ]; then
     echo
-    echo "the DOS build (RVT.EXE /playtest in DOSBox):"
+    echo "the DOS build (RVP.EXE /playtest in DOSBox):"
 fi
 CODE=1 ./build.sh > build/playtest-dos-build.log 2>&1 || { cat build/playtest-dos-build.log; exit 2; }
 if grep -q 'Error!' build/playtest-dos-build.log; then   # (build.sh does not stop on a C error)
@@ -45,7 +45,7 @@ fi
 NOBUILD=1 CYCLES=${CYCLES:-max} TIMEOUT=${TIMEOUT:-900} tests/run.sh tests/walk.txt /playtest $(echo "$@" | tr ' ' ',') \
     > /dev/null 2>&1 || true
 tr -d '\r' < build/dos/RVLOG.TXT | grep '^playtest:' > build/playtest-dos.txt || true
-[ -s build/playtest-dos.txt ] || { echo "RVT.EXE wrote no play test lines (build/dos/RVLOG.TXT)"; exit 2; }
+[ -s build/playtest-dos.txt ] || { echo "RVP.EXE wrote no play test lines (build/dos/RVLOG.TXT)"; exit 2; }
 if [ -n "$steps" ]; then
     # the first step whose world differs, and the parts that do
     grep ' step ' build/playtest-host.txt > build/playtest-host.steps || true
@@ -61,7 +61,7 @@ if [ -n "$steps" ]; then
         END { if (!found) print "every step the same" }' && exit 0 || exit 1
 fi
 cat build/playtest-dos.txt
-grep -q '^playtest: [0-9]* of [0-9]* pass' build/playtest-dos.txt || { echo "RVT.EXE did not finish the tests"; exit 2; }
+grep -q '^playtest: [0-9]* of [0-9]* pass' build/playtest-dos.txt || { echo "RVP.EXE did not finish the tests"; exit 2; }
 grep -q '^playtest: FAIL' build/playtest-dos.txt && status=1
 # each test's world, DOS's against the host's
 echo

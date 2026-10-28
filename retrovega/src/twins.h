@@ -1,6 +1,6 @@
 /* twins.h: the assembly's C twins (twins.c).  c_x does what lowlevel.asm's, lasers.asm's or rocks.asm's rv_x does,
  * to the bit, with the same parameters: the host build draws with them (host/asm_twins.c: each rv_x calls its c_x),
- * and the test build checks them against the asm (RVT.EXE /twins). */
+ * and the self-tests' build checks them against the asm (RVP.EXE /twins). */
 #ifndef TWINS_H
 #define TWINS_H
 
@@ -74,7 +74,7 @@ int __far __cdecl rv_stars_place(const short __far *stars, int n, const long __f
 #endif
 
 #ifdef RV_TESTS
-long twins_selftest(void);              /* RVT.EXE /twins: every twin against its asm; < 0 on a mismatch */
+long twins_selftest(void);              /* RVP.EXE /twins: every twin against its asm; < 0 on a mismatch */
 #endif
 
 #endif
