@@ -111,10 +111,14 @@ EMSCRIPTEN_KEEPALIVE void rv_page_key(int pc, int down) { hle_key(pc, down); }
 EMSCRIPTEN_KEEPALIVE int rv_page_mouse(void) { int x, y, b = hle_mouse_state(&x, &y); return b | x << 8 | y << 20; }
 #endif
 
+static int g_nomouse;                   /* /nomouse: the pointer the desktop's (a debugger beside the window) */
+
 void plat_events(void)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
+        if (g_nomouse && (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP))
+            continue;
         switch (e.type) {
         case SDL_QUIT:
             exit(0);
@@ -226,8 +230,32 @@ int main(int argc, char **argv)
             scale = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--mute"))
             g_mute = 1;
-        else if (gargc < 63)
+        else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-h")) {
+            printf("usage: rv [--data DIR] [--scale N] [--mute] [the game's switches]\n"
+                   "  --data DIR   the game's files (default: run beside this program, as host/game.sh makes it)\n"
+                   "  --scale N    the window N times 640 x 400 (2)\n"
+                   "  --mute       no sound\n"
+                   "the game's switches (RV.EXE's):\n"
+                   "  /fly [N]     straight to a flight: the campaign's next mission, or RVGAME.DAT's mission N\n"
+                   "  /nomouse     the keys only: the window lets the pointer go (a debugger beside it)\n"
+                   "  /script F    a test script (a plain name in the data directory); /flight S: land after S s\n"
+                   "  /winrate P   a mission's outcome rolled at P%% after the flight\n");
+            return 0;
+        } else if (gargc < 63) {
+            if (!strcmp(argv[i], "/nomouse"))
+                g_nomouse = 1;          /* (the game's switch: the front end lets the pointer go too) */
             gargv[gargc++] = argv[i];
+        }
+    }
+    if (!data) {                        /* beside the program: run/, where host/game.sh links the game's files */
+        static char dir[1024];
+        const char *slash = strrchr(argv[0], '/');
+        if (slash && (size_t)(slash - argv[0]) + 5 < sizeof dir) {
+            memcpy(dir, argv[0], (size_t)(slash - argv[0]));
+            strcpy(dir + (slash - argv[0]), "/run");
+            if (!access(dir, F_OK))
+                data = dir;
+        }
     }
     if (data && chdir(data)) {
         perror(data);
@@ -253,7 +281,8 @@ int main(int argc, char **argv)
     }
     if (!g_tex)
         fprintf(stderr, "rv: no screen (%s): running without one\n", SDL_GetError());
-    SDL_ShowCursor(SDL_DISABLE);        /* (the game draws its own pointer) */
+    SDL_ShowCursor(g_nomouse ? SDL_ENABLE : SDL_DISABLE);   /* (the game draws its own pointer; /nomouse: the
+                                           desktop's shows over the window) */
 #ifdef __EMSCRIPTEN__
     g_lag_us = 100000;
 #else

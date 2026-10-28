@@ -785,7 +785,7 @@ variables in both builds (never set in the game's), so the flight's code
 reads the same either way and a dead branch costs a compare, not a warning.
 `tests/run.sh` runs RV.EXE unless a test switch is given (anything but
 `/script`, `/flight`, `/winrate`, `/res`, `/onfly`, `/skyrows`, `/mpu`,
-`/nomusic`, `/noquit`), then RVT.EXE; `EXE=` picks one regardless. The log's
+`/nomusic`, `/noquit`, `/fly`, `/nomouse`), then RVT.EXE; `EXE=` picks one regardless. The log's
 first line says `RVT.EXE: the test build` when it is. The game's flight log
 ends `flight: over with status N after F frames`; the test build's adds
 the benchmark as before. Not gated, since each is a few hundred bytes: the

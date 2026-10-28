@@ -32,6 +32,7 @@ static int g_base;                          /* the ship the player lives on: 0 t
 static int change_base(int base);
 static void mission_load_assets(void);
 static void mission_free_assets(void);
+int __far g_fly = -2;                   /* /fly [N]: -2 not asked; -1 the campaign's next mission; N that mission */
 int g_winrate = -1;                         /* percent: a launch's chance of a win (/winrate N, a test's: the roll then
                                                decides, whatever the flight did); -1 not given: 80, the stand-in */
 
@@ -1139,6 +1140,23 @@ static void hot_action(const SceneAction *a)
     }
 }
 
+/* /fly N: the campaign put where mission N is (its node and place in it), so the debriefing scores that one */
+static void fly_mission(int n)
+{
+    static const char __far s_none[] = "game: /fly %d: no node has that mission";
+    unsigned i, k;
+    for (i = 0; i < g_nnodes; i++)
+        for (k = 0; k < RV_MISSIONS_PER_NODE; k++)
+            if (g_nodes[i].missions[k] == (unsigned)n) {
+                g_camp.node = (unsigned char)i;
+                g_camp.mission = (unsigned char)k;
+                campaignNode(g_camp.node, g_camp.mission);
+                next_mission();
+                return;
+            }
+    rv_logf(s_none, n);
+}
+
 int game_run(void)
 {
     Input in;
@@ -1147,9 +1165,16 @@ int game_run(void)
     setup_load();
     camp_new();
     next_mission();
-    enter_room(RV_R_QUARTERS);
-    message("Wildcard, welcome aboard the TCS Vigilance. Your bunk keeps your saves. "
-            "The briefing room is through the hatch in the bar.");
+    if (g_fly > -2) {                   /* /fly: the rooms skipped, straight out of the launch tube; after the flight
+                                           the debriefing and the base as ever */
+        if (g_fly >= 0)
+            fly_mission(g_fly);
+        launch();
+    } else {
+        enter_room(RV_R_QUARTERS);
+        message("Wildcard, welcome aboard the TCS Vigilance. Your bunk keeps your saves. "
+                "The briefing room is through the hatch in the bar.");
+    }
     while (g_mode != MODE_QUIT) {
         rv_halt();                      /* once a music tick at most (1/240 s): the host idles between */
         g_now = ticks();

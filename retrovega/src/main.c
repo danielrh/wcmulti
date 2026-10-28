@@ -35,6 +35,7 @@
 
 char __far g_people_names[16][28];         /* (far: DGROUP is full) */
 extern int g_winrate, g_flight_seconds, g_flight_timed, g_can_quit, g_res, g_field;
+extern int __far g_fly;                 /* (game.c) /fly [N]: straight to a flight */
 extern long g_onfly_px;
 #ifdef RV_PLAYTEST                      /* the self-tests' build, RVP.EXE */
 int16_t playtest_run(const char *only);  /* (tests/play/playtest.c: RVP.EXE /playtest) */
@@ -229,7 +230,14 @@ int main(int argc, char **argv)
 #endif
     }
     for (i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "/mpu"))
+        static const char __far s_nomouse[] = "/nomouse", __far s_fly[] = "/fly";
+        if (!_fstrcmp(argv[i], s_nomouse))          /* the keys only: the mouse driver left alone (the native build's
+                                                       window lets the pointer go, for a debugger beside it) */
+            in_nomouse();
+        else if (!_fstrcmp(argv[i], s_fly))         /* straight to a flight, the rooms skipped: the campaign's next
+                                                       mission, or mission N of RVGAME.DAT (/fly N) */
+            g_fly = i + 1 < argc && argv[i + 1][0] >= '0' && argv[i + 1][0] <= '9' ? atoi(argv[++i]) : -1;
+        else if (!strcmp(argv[i], "/mpu"))
             music_device(MUSIC_MPU401);
         else if (!strcmp(argv[i], "/nomusic"))
             music_device(MUSIC_OFF);

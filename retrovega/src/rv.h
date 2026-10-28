@@ -106,6 +106,7 @@ enum { KEY_NONE, KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_ENTER, KEY_ESC, KEY_
        KEY_CHAR };
 typedef struct { int x, y, clicked, key, ch, moved, keyboard; } Input;
 int in_init(void);
+void in_nomouse(void);                  /* (before in_init) the keys only: /nomouse */
 void in_poll(Input *in);
 void in_warp(int x, int y);
 void in_steer(int on);                 /* the arrows steer the pointer (on unless a menu takes them) */

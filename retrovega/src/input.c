@@ -80,21 +80,31 @@ static void in_shutdown(void)
     }
 }
 
+static int __far g_no_mouse;             /* /nomouse: the keys only, the mouse driver left alone */
+
+void in_nomouse(void)
+{
+    g_no_mouse = 1;
+}
+
 int in_init(void)
 {
     union REGS r;
     g_old9 = _dos_getvect(9);
     _dos_setvect(9, key_isr);
     atexit(in_shutdown);
-    r.x.ax = 0;
-    int86(0x33, &r, &r);
-    g_mouse = r.x.ax == 0xFFFF;
+    g_mouse = 0;
+    if (!g_no_mouse) {
+        r.x.ax = 0;
+        int86(0x33, &r, &r);
+        g_mouse = r.x.ax == 0xFFFF;
+    }
     if (g_mouse) {
         r.x.ax = 7; r.x.cx = 0; r.x.dx = SCR_W - 1; int86(0x33, &r, &r);
         r.x.ax = 8; r.x.cx = 0; r.x.dx = SCR_H - 1; int86(0x33, &r, &r);
         in_warp(SCR_W / 2, SCR_H / 2);
     }
-    rv_log("input: mouse %s", g_mouse ? "found" : "missing");
+    rv_log("input: mouse %s", g_mouse ? "found" : g_no_mouse ? "not used (/nomouse)" : "missing");
     return 1;
 }
 

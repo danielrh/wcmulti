@@ -3,7 +3,7 @@
 # (NAME.BMP) and RVLOG.TXT land in build/dos.
 #   tests/run.sh [script [RV.EXE options]]     default tests/walk.txt
 # The game's RV.EXE runs unless a test switch is given (anything but /script,
-# /flight, /winrate, /res, /onfly, /skyrows, /field, /rockxms, /mpu, /nomusic, /noquit): then
+# /flight, /winrate, /res, /onfly, /skyrows, /field, /rockxms, /mpu, /nomusic, /noquit, /fly, /nomouse): then
 # RVT.EXE, the test build with the demos, benchmarks and self-tests in (/playtest, /twins: RVP.EXE, the self-tests' build).
 # EXE=RVT.EXE (or RV.EXE) picks one regardless.
 # NOBUILD=1 skips the build; CYCLES=N runs at N cycles (the page runs 50000); TIMEOUT=S (300).
@@ -21,7 +21,7 @@ exe=${EXE:-RV.EXE}
 if [ -z "$EXE" ]; then
     for a in "$@"; do
         case "$a" in
-            /script|/flight|/winrate|/res|/onfly|/skyrows|/field|/rockxms|/mpu|/nomusic|/noquit) ;;
+            /script|/flight|/winrate|/res|/onfly|/skyrows|/field|/rockxms|/mpu|/nomusic|/noquit|/fly|/nomouse) ;;
             /playtest|/twins) exe=RVP.EXE; break;;
             /*) exe=RVT.EXE;;
         esac

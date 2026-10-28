@@ -23,7 +23,7 @@ The same `src/logic.c` builds three ways, and the play tests run on two of them.
 | 1. test on the host | `tests/play/playtest.sh M1` | the tests of milestone 1 in a second, on Linux: UBSan on, the layer's rules checked at every call |
 | 2. debug a test | `OPT=-O0 SDL=0 host/build.sh`, then `gdb --args build/host32-nosdl/playtest M1.4` | gdb at your code. `break step_motion`, `print gPositionVector[0]`, `print SHIELD(1, 0)` work (the build has the macros) |
 | 3. fly it on the host | `host/build.sh && build/host32/rvsim` | your logic in a window, the ships as wire boxes; `--record` and `--replay` a flight; rr and valgrind on a replay (logic.md, "The host harness") |
-| 4. the whole game on the host | `host/game.sh`, then `build/game32/rv --data build/game32/run` | the real game, sprites, cockpit and sound, compiled natively with UBSan: gdb on the full game |
+| 4. the whole game on the host | `host/game.sh`, then `build/game32/rv /fly /nomouse` | the real game, sprites, cockpit and sound, compiled natively with UBSan: gdb on the full game. `/fly` starts in space (`/fly N`: RVGAME.DAT's mission N); `/nomouse` plays by the keys and leaves the pointer free for the debugger; `--help` lists the rest |
 | 5. test in DOS | `tests/play/playtest.sh --dos` | the same tests in `RVP.EXE` (RV.EXE with the tests) under DOSBox, and each test's world compared with the host's |
 | 6. find where DOS differs | `tests/play/playtest.sh --steps M5.3` | the first step, and the arrays, where the 16-bit build parts from the host's |
 | 7. play it in DOS | `CODE=1 ./build.sh && tests/play.sh` | RV.EXE in a DOSBox window |

@@ -111,7 +111,7 @@ if [ -z "${WEB:-}" ]; then
     for f in build/dos/*.DAT build/dos/*.MID build/dos/*.BNK build/dos/SHIP*.RV build/dos/SHIP*.RVS build/dos/SHIP*.RVH; do
         [ -e "$f" ] && ln -sf "$PWD/$f" "$OUT/run/"
     done
-    echo "built $EXE (run: $EXE --data $OUT/run)"
+    echo "built $EXE (run: $EXE, its files in $OUT/run; $EXE --help)"
 else
     echo "built $EXE"
 fi
