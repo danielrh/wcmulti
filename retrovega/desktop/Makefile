@@ -107,7 +107,7 @@ $(OUT)/core $(OUT)/front: | $(OUT)
 # the game's files: the data the DOS build makes (or fetch-data.sh fetched), and the ships' sets made here (the
 # sharp sets, SHIPnn.RVS, and the block mode's, SHIPnn.RVH: ../build.sh's recipes)
 FROM ?= ../build/dos
-DATA_FILES = RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT EXPLODE.DAT SFX.DAT ROCKS.DAT RVOPL.BNK
+DATA_FILES = RV.DAT RVGAME.DAT BALLS.DAT SKY.DAT SHAPES.DAT ROCKS.DAT RVOPL.BNK
 data: $(OUT)/rvsprites
 	@test -n "$(DATA)" || { echo "make data DATA=dir (where the game's files go)"; exit 1; }
 	mkdir -p $(DATA)
