@@ -19,6 +19,7 @@ Makefile.in
 # End of template. Additional autoconf and automake files follow.
 
 Makefile
+!retrovega/desktop/Makefile
 /config.guess
 /config.h
 /config.h.in
