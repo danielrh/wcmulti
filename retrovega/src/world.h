@@ -18,13 +18,24 @@ enum { ET_NONE = 0, ET_NAV = 2, ET_NAVICON = 3, ET_DUST = 4, ET_EXPLOSION = 5, E
 enum { CTL_AI, CTL_PLAYER, CTL_PUPPET, CTL_SCRIPT, CTL_FROZEN };
 /* commAnimInfo: the side */
 enum { SIDE_TERRAN, SIDE_AERA, SIDE_RLAAN };
-
-#define KM INT32_C(256)                 /* positions a km */
-#define ONE 256                         /* 1.0 in an orientation vector */
+#define RV_PI 3.141592653589793238462643383279
+typedef char rv_sar_check[(INT32_C(-1) >> 1) == -1 ? 1 : -1];   /* >> on a negative number shifts in its sign
+                                           (implementation-defined in C; wcc, gcc and clang do): TO_KM, FIX_MUL and
+                                           vec_turn rely on it.  A compiler that shifts in zeros fails here */
+#define KM_SHIFT 8                      /* KM as a shift */
+#define KM (INT32_C(1) << KM_SHIFT)     /* positions a km */
+#define TO_KM(p) ((p) >> KM_SHIFT)      /* positions as km: a shift, where / KM is a runtime divide on DOS.  Rounds
+                                           down (-0.5 km to -1) where / rounds toward zero */
+#define ONE_SHIFT 8                     /* ONE as a shift */
+#define ONE (1 << ONE_SHIFT)            /* 1.0 in an orientation vector */
+#define FIX_MUL(a, d) (((int32_t)(a) * (d)) >> ONE_SHIFT) /* a times d, one of them in ONEs (an orientation
+                                           vector's component): a shift, where / ONE is a runtime divide on DOS.
+                                           Rounds down (-0.5 to -1) where / rounds toward zero */
 #define TURN 1024                       /* a whole turn in lf_sin / lf_cos / lf_atan2's angles */
 #define KPS_HZ 20                       /* the step rate a kps is converted at: a kps is KM / KPS_HZ = 12.8 positions a
                                            step (spec 6.1).  The flight steps LOGIC_HZ times a second (logic.h): while
                                            the two differ everything moves LOGIC_HZ / KPS_HZ times its nominal speed */
+#define NUM_SHIP_SLOTS (RV_MAX_SHIP_SLOT + 1) /* The number of active ship slots, including 0 and RV_MAX_SHIP_SLOT. */
 #define KPS_STEP(kps) ((int32_t)(kps) * KM / KPS_HZ)   /* a speed in kps as positions a step */
 
 /* a slot's shield words (k: 0 front, 1 rear) and armour words (k: 0 front, 1 rear, 2 left, 3 right) */
@@ -47,7 +58,12 @@ void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b);   /* (a x b) / 25
 void vec_turn(RvVec3 *a, RvVec3 *b, int16_t t);   /* a and b turned by t (TURN a whole turn) in their plane:
                                            a' = a cos + b sin, b' = b cos - a sin.  (front, right): a yaw to the
                                            right; (front, up): a pitch up; (right, up): a roll to the left */
-
+inline RvVec3 vec3(int32_t x, int32_t y, int32_t z)
+{
+    RvVec3 v;
+    v.x = x; v.y = y; v.z = z;
+    return v;
+}
 /* do_damage's `where`: a near pointer to an RvVec3 (on DOS its offset in DGROUP; the host harness maps one).  Pass
  * RV_WHERE(&v) for a vector of yours (a local: the stack is in DGROUP), and read the one do_damage_impl was given
  * through RV_WHERE_VEC(where) (only read it: on the host it can be a copy) */

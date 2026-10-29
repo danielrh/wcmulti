@@ -14,6 +14,15 @@ mkdir -p "$OUT"
 python3 tools/rvabi.py --c-header > src/rvhooks.h
 python3 tools/rvabi.py --asm > src/rvhook.asm
 python3 tools/rvdata.py --out "$OUT/RVGAME.DAT" --header src/rvdata.h
+# the art tools' venv (tools/art-requirements.txt), made with uv on the system python when missing; packages no newer
+# than 30 days (UV_EXCLUDE_NEWER overrides), so a release has had time to be caught if it was bad
+VENV=$HOME/.venvs/retrovega-art
+if [ -z "${CODE:-}" ] && [ ! -x "$VENV/bin/python" ]; then
+    command -v uv > /dev/null || { echo "no uv: https://docs.astral.sh/uv/ (it makes $VENV)"; exit 1; }
+    uv venv --python python3 "$VENV"
+    uv pip install --python "$VENV/bin/python" --exclude-newer "${UV_EXCLUDE_NEWER:-30 days}" \
+        -r tools/art-requirements.txt
+fi
 if [ -z "${CODE:-}" ]; then
 python3 tools/midi.py --out "$OUT" > /dev/null
 python3 tools/oplbank.py --out "$OUT/RVOPL.BNK" > /dev/null
@@ -44,19 +53,19 @@ COMMS=build/comms-$RV_COMMS
     && [ build/panels/.made -nt tools/legs.py ] && [ build/panels/.made -nt data/legs.json ] \
     && [ -z "$(find art/cockpits -newer build/panels/.made -print -quit)" ] \
     || { python3 -W ignore tools/panels.py --out build/panels > /dev/null && touch build/panels/.made; }
-~/.venvs/retrovega-art/bin/python -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h --comms $COMMS \
+"$VENV/bin/python" -P tools/rvpack.py --out "$OUT/RV.DAT" --header src/rvasset.h --comms $COMMS \
     --panels build/panels
 # the balls' sprites (the spherical projectiles: every kind, frame and diameter)
 [ "$OUT/BALLS.DAT" -nt tools/balls.py ] && [ "$OUT/BALLS.DAT" -nt data/palette.json ] \
-    || ~/.venvs/retrovega-art/bin/python -P tools/balls.py --out "$OUT/BALLS.DAT" --preview docs/balls.png > /dev/null
+    || "$VENV/bin/python" -P tools/balls.py --out "$OUT/BALLS.DAT" --preview docs/balls.png > /dev/null
 # the asteroid fields' rocks (every kind, tumble frame and size: ~30 s; tools/rocks.py), when it changes
 [ "$OUT/ROCKS.DAT" -nt tools/rocks.py ] && [ "$OUT/ROCKS.DAT" -nt data/palette.json ] \
-    || ~/.venvs/retrovega-art/bin/python -P tools/rocks.py --out "$OUT/ROCKS.DAT" --preview docs/rocks.png > /dev/null
+    || "$VENV/bin/python" -P tools/rocks.py --out "$OUT/ROCKS.DAT" --preview docs/rocks.png > /dev/null
 # the ships' silhouettes (tools/hitboxes.py made them from the meshes; the build has no Vega Strike assets)
 cp data/shapes.dat "$OUT/SHAPES.DAT"
 # the sky's far things (nebulae, galaxies, planets: every turn of each)
 [ "$OUT/SKY.DAT" -nt tools/sky.py ] && [ "$OUT/SKY.DAT" -nt data/palette.json ] \
-    || ~/.venvs/retrovega-art/bin/python -P tools/sky.py --out "$OUT/SKY.DAT" --preview docs/sky.png > /dev/null
+    || "$VENV/bin/python" -P tools/sky.py --out "$OUT/SKY.DAT" --preview docs/sky.png > /dev/null
 # the fighters' views (tools/pack.py, copied into art/ships): beside RV.EXE, and
 # their pre-rendered sets (tools/rvsprites.c, the host build of lightfield.c)
 cp art/ships/SHIP*.RV "$OUT/" 2>/dev/null || true

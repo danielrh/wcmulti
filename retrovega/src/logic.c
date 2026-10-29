@@ -87,11 +87,58 @@ static void step_fire(void)
 {
 }
 
+
+int32_t vec_len(const RvVec3 *a) {
+    return lf_sqrt((uint32_t)(a->x * a->x + a->y * a->y + a->z * a->z));
+}
+
+static int32_t reduce_slide(int16_t ship_index)
+{
+    int32_t target_speed = speedLo[ship_index];
+    const RvVec3 *front = &gOrientationFrontVector[ship_index];
+    int32_t step = KPS_STEP(target_speed);
+    RvVec3 target = vec3(
+        FIX_MUL(front->x, step),
+        FIX_MUL(front->y, step),
+        FIX_MUL(front->z, step));
+    RvVec3 *velocity = &gVelocityVector[ship_index];
+    RvVec3 delta = vec3(
+        target.x - velocity->x,
+        target.y - velocity->y,
+        target.z - velocity->z);
+    int32_t delta_len = vec_len(&delta);
+    int32_t a = slot_type(ship_index)->yaw_dps * KPS_STEP(slot_type(ship_index)->cruise_kps) / (int32_t)((float)(KPS_HZ)* 180.0 / RV_PI);
+    if (delta_len <= a) {
+        *velocity = target;
+    } else {
+        velocity->x += delta.x * a / delta_len;
+        velocity->y += delta.y * a / delta_len;
+        velocity->z += delta.z * a / delta_len;
+    }
+    return target_speed;
+}
+
 /* 4. every ship flies its step: its turn applied to its orientation (vec_turn, then ship_orthonormalise), its speed
  * toward setSpeed, gVelocityVector (positions a step: KPS_STEP), the velocity added to gPositionVector.  A puppet
  * only coasts (position += velocity) */
 static void step_motion(void)
 {
+    int16_t ship_index;
+    for (ship_index = 0; ship_index < NUM_SHIP_SLOTS; ship_index +=1){
+        if (!slot_is_ship(ship_index) || rvController[ship_index] == CTL_FROZEN) {
+            continue;
+        }
+        if (rvController[ship_index] != CTL_PUPPET) {
+            reduce_slide(ship_index);
+        }
+        {
+            const RvVec3 *velocity = &gVelocityVector[ship_index];
+            RvVec3 *position = &gPositionVector[ship_index];
+            position->x += velocity->x;
+            position->y += velocity->y;
+            position->z += velocity->z;
+        }
+    }
 }
 
 /* 5. the shots fly (shots_move) and hit (shot_hit: the ship and the place; do_damage through its thunk with

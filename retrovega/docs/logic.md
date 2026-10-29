@@ -528,7 +528,7 @@ The scan for this guide, most needed first:
 3. Install Open Watcom 2:
    - download `ow-snapshot.tar.xz` from the "Current-build" release of https://github.com/open-watcom/open-watcom-v2/releases (this one is the 2026-10-01 snapshot);
    - `mkdir -p ~/opt/watcom && tar -xJf ow-snapshot.tar.xz -C ~/opt/watcom`. `build.sh` uses `~/opt/watcom/binl64`; set `WATCOM=` for another place.
-4. Make the art tools' venv: `python3 -m venv ~/.venvs/retrovega-art && ~/.venvs/retrovega-art/bin/pip install numpy pillow scipy moderngl`.
+4. The art tools' venv (`~/.venvs/retrovega-art`) is made by `build.sh` when it is missing, with [uv](https://docs.astral.sh/uv/) (install it first) from `tools/art-requirements.txt`, taking only package releases at least 30 days old (`UV_EXCLUDE_NEWER` changes that).
 5. Build: `cd retrovega && ./build.sh`.
    - The first build takes several minutes: it renders the balls, the rocks and the sky, makes the comm faces and the panels, packs `RV.DAT` and pre-renders the ships' sets.
    - Later builds redo only what changed, except `RV.DAT` and the code: `CODE=1` skips `RV.DAT` while only code has changed.

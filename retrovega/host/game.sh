@@ -8,11 +8,13 @@
 #   SAN=ubsan|asan|none       the checks built in (the default UBSan)
 #   CC=clang                  clang (and clang++)
 #   OPT=-O1                   the optimisation (always -g3)
+#   DEPS=1                    no 32-bit SDL2 installed: unpack libsdl2-dev:i386 into ~/.local/sdl2-i386 (host/sdl32.sh)
 #   WEB=1                     the browser's (build/gameweb/: rv.js, rv.wasm; Emscripten, ASYNCIFY)
 #   TESTS=1                   the test build's aids in, as RVT.EXE has them (RV_TESTS: the demos, the benchmarks, the
 #                             self-tests; build/game32-tests)
 # 32-bit only: the archive's records and the far pointers (seg:off, the host pointer's halves) are 32-bit layouts.
-# Needs the DOS build's data (./build.sh), gcc-multilib and g++-multilib, libsdl2-dev:i386; WEB=1 the Emscripten SDK.
+# Needs the DOS build's data (./build.sh), gcc-multilib and g++-multilib, libsdl2-dev:i386 (DEPS=1 fetches it without
+# installing it: host/sdl32.sh); WEB=1 the Emscripten SDK.
 set -e
 cd "$(dirname "$0")/.."
 SAN=${SAN:-ubsan}
@@ -51,7 +53,7 @@ else
         asan) SANF="-fsanitize=address,undefined -fno-sanitize=alignment -fno-omit-frame-pointer" ;;
         none) SANF="" ;;
     esac
-    PC="env PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib32/pkgconfig pkg-config"
+    . host/sdl32.sh
     SDLF=$($PC --cflags sdl2)
     SDLL=$($PC --libs sdl2)
     EXE=$OUT/rv
