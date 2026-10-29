@@ -142,6 +142,9 @@ spare near vector for `do_damage`'s `where`).
   - `lf_atan2(y, x)` returns 0..1023. Keep its arguments under 2^16: halve them until they are.
 - **Speeds:** `KPS_STEP(kps)` is positions a step: kps × 256 / `KPS_HZ`.
 - **Turn rates:** degrees a second × `TURN` / 360 / `KPS_HZ` × steer / 9 is a step's turn. The first flight's `turn_step` does exactly this.
+  - `TURN_STEP(dps, steer)` (world.h) gives it in 1/256ths of a unit (`TURN_FRAC_SHIFT`) with a multiply and a shift. Carry the fraction from step to step: the slowest ships turn under a unit a step.
+  - It is approximate: 18 of the 4,864 rates and steers come out 1/256 of a unit off the exact quotient, the same on every machine. Its comment in world.h says what changing it takes, and how to make it exact.
+- **Dividing by a constant:** a 32-bit `/` is a runtime call on DOS (`__I4D`). `QCONST(num, den, q)` makes num / den a fixed-point constant at compile time, and `QMUL(x, k, q)` multiplies by it, rounded. Keep a plain `/` where the exact quotient matters.
 - **`KPS_HZ` (20) against `LOGIC_HZ` (30): a decision for you.**
   - The spec converts a kps at 20 steps a second; the flight steps 30 times a second. Everything therefore moves and turns 1.5 times its nominal rate. The first flight did too, and its feel (rocks, dodging) was tuned at that.
   - Set `KPS_HZ` to `LOGIC_HZ` in world.h if you want kps to mean km a second.

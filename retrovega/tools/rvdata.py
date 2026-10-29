@@ -248,6 +248,10 @@ def compile_all():
     cockpit_keys = list(json.load(open(os.path.join(DATA, 'cockpits.json')))['ships'])
     if len(ships_csv) > LIMITS['SHIPTYPES']:
         raise Fail('ships.csv: %d types, at most %d' % (len(ships_csv), LIMITS['SHIPTYPES']))
+    nums = [int(r['type'], 16) for r in ships_csv]
+    if len(set(nums)) != len(nums) or max(nums) >= LIMITS['SHIPTYPES']:
+        raise Fail('ships.csv: type numbers must be unique and below 0x%02X (the game looks a type up by its number)'
+                   % LIMITS['SHIPTYPES'])
     weapons, out_weapons = compile_weapons()
     out_types = []
     engines_csv = {r['key']: r for r in load_csv('engines.csv')}

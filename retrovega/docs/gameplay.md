@@ -82,7 +82,8 @@ What to write:
 - **`step_minds`**: for the player (`CTL_PLAYER`), a turn for this step from `g_pilot`:
   - `steer_x` -9..9 yaws (+ right), `steer_y` pitches (+ up), `roll` rolls (+ lifts the right wing);
   - a step's turn is `dps × TURN × steer / (360 × KPS_HZ × 9)`, with the type's `yaw_dps`, `pitch_dps` and
-    `roll_dps`;
+    `roll_dps`. `TURN_STEP(dps, steer)` (world.h) gives it in 1/256ths of a unit without a divide: carry the
+    fraction from step to step, or ships under 7 dps never turn;
   - keep it in a per-slot array of your own; the AI fills the same array (M5).
 - **`step_motion`**, for each ship slot:
   - **The turn:** `vec_turn(front, right, yaw)`, `vec_turn(front, up, pitch)`, `vec_turn(right, up, roll)`, then

@@ -215,6 +215,33 @@ static void step_speed(int16_t ship_index, uint16_t phase)
     speedLo[ship_index] = v;
 }
 
+static void step_turn(int16_t ship_index,
+                      int8_t steer_x,
+                      int8_t steer_y,
+                      int8_t roll)
+{
+    if (steer_x || steer_y || roll) {
+        const RvShipType __far *t = slot_type(ship_index);
+        if (steer_x) {
+            vec_turn(&gOrientationFrontVector[ship_index],
+                     &gOrientationRightVector[ship_index],
+                     steer_x * t->yaw_dps);
+        }
+        if (steer_y) {
+            vec_turn(&gOrientationFrontVector[ship_index],
+                     &gOrientationUpVector[ship_index],
+                     steer_y * t->pitch_dps);
+        }
+        if (roll) {
+            vec_turn(&gOrientationRightVector[ship_index],
+                     &gOrientationUpVector[ship_index],
+                     roll * t->roll_dps);
+        }
+        ship_orthonormalise(ship_index);
+    }
+}
+  
+
 /* 4. every ship flies its step: its turn applied to its orientation (vec_turn, then ship_orthonormalise), its speed
  * toward setSpeed, gVelocityVector (positions a step: KPS_STEP), the velocity added to gPositionVector.  A puppet
  * only coasts (position += velocity) */
@@ -223,11 +250,16 @@ static void step_motion(void)
     uint16_t phase = frameCounter % KPS_HZ;
     int16_t ship_index;
     for (ship_index = 0; ship_index < NUM_SHIP_SLOTS; ship_index +=1){
-        step_speed(ship_index, phase);
         if (!slot_is_ship(ship_index) || rvController[ship_index] == CTL_FROZEN) {
             continue;
         }
         if (rvController[ship_index] != CTL_PUPPET) {
+            if (ship_index == 0) {
+                step_turn(ship_index, g_pilot.steer_x, g_pilot.steer_y, g_pilot.roll);
+            } else {
+                // step_turn(ship_index, mind[something].steer_x, mind[something].steer_y, mind[something].roll);
+            }
+            step_speed(ship_index, phase);
             reduce_slide(ship_index);
         }
         {

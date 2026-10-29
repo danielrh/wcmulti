@@ -38,6 +38,63 @@ typedef char rv_sar_check[(INT32_C(-1) >> 1) == -1 ? 1 : -1];   /* >> on a negat
 #define NUM_SHIP_SLOTS (RV_MAX_SHIP_SLOT + 1) /* The number of active ship slots, including 0 and RV_MAX_SHIP_SLOT. */
 #define KPS_STEP(kps) ((int32_t)(kps) * KM / KPS_HZ)   /* a speed in kps as positions a step */
 
+/* fixed-point constants: dividing by a constant without a runtime divide (on DOS a 32-bit / is a library call,
+ * __I4D; a 32-bit * is one too, __I4M, but cheaper).  QCONST(num, den, q) is num / den with q fraction bits,
+ * rounded, worked out by the compiler: integer constants only (the double is there because num << q can pass 32
+ * bits; a variable in it would bring floating point into the DOS build), and QCONST_CHECK fails the build on
+ * anything else.  QMUL(x, k, q) is x times such a constant, rounded to the nearest (a half up), q >= 1: |x| times
+ * k must stay under 2^31.  Approximate: TURN_STEP says what that costs and how to be exact instead */
+#ifdef __GNUC__
+#define QCONST_ONE(x) (__builtin_constant_p(x) ? 1 : -1)   /* (gcc and clang fold 0 x a variable to 0: ask them) */
+#else
+#define QCONST_ONE(x) (1 + 0 * (x))     /* (wcc: a variable makes it no integer constant, so no width) */
+#endif
+/* 0, but a bit-field's width must be an integer constant (in every C: an array's size need not be in C99, where a
+ * variable makes it a VLA), so a struct with QCONST_ONE of each argument as one fails the build when any isn't */
+#define QCONST_CHECK(num, den, q) \
+    ((int32_t)(0 * sizeof(struct { char qconst_; unsigned : QCONST_ONE(num); unsigned : QCONST_ONE(den); \
+                                   unsigned : QCONST_ONE(q); })))
+#define QCONST(num, den, q) (QCONST_CHECK(num, den, q) + (int32_t)((double)(num) * (INT32_C(1) << (q)) / (den) + 0.5))
+#define QMUL(x, k, q) (((int32_t)(x) * (k) + (INT32_C(1) << ((q) - 1))) >> (q))
+
+/* a step's turn.  A ship turns dps x steer / 9 degrees a second at a steer of -9..9 (the stick's scale, as the
+ * layer reads it in steerInput, spec 4), a step's share at KPS_HZ: dps x TURN x steer / (360 x KPS_HZ x 9) TURN
+ * units.  That is under a unit a step for the slowest ships (4 dps: 0.57), so a turn is kept in 1/256ths of a unit
+ * and the fraction carried from step to step (logic.c) */
+#define TURN_FRAC_SHIFT 8               /* a step's turn in 1 << this parts of a TURN unit */
+#define TURN_STEP_DIV (360L * KPS_HZ * 9)   /* the formula's divisor: 64,800 */
+#define TURN_STEP_Q 16                  /* TURN_STEP_K's fraction bits (16: QMUL's >> is a word move on DOS) */
+#define TURN_STEP_K QCONST((int32_t)TURN << TURN_FRAC_SHIFT, TURN_STEP_DIV, TURN_STEP_Q)   /* 4.0454 in Q16: 265,121 */
+/* the turn a step for a rate of dps (0..255, ships.csv) at a steer (-9..9), in 1/256ths of a TURN unit: dps x steer
+ * (a 16-bit multiply) times TURN_STEP_K, then a shift; no divide.
+ *
+ * Its error: against the exact dps x steer x TURN x 256 / TURN_STEP_DIV rounded to the nearest, 18 of the 4,864
+ * (dps, steer) pairs come out 1 off (1/256 of a unit, 0.0014 degrees), none more: TURN_STEP_K is 4.0454254 for
+ * 4.0454321.  It is the same on every machine (integer maths only), so the host and DOS agree and recordings replay;
+ * the carried fraction swallows the difference.
+ *
+ * To change it:
+ *   - TURN, KPS_HZ or TURN_FRAC_SHIFT: TURN_STEP_K follows by itself.  rv_turn_step_check (below) fails the build
+ *     when 255 x 9 x TURN_STEP_K could pass 2^31 (a finer TURN_FRAC_SHIFT or a smaller KPS_HZ, say): lower
+ *     TURN_STEP_Q until it fits, at some accuracy (Q12: 65 of the 4,864 pairs 1 off), and below 16 QMUL's >> is a
+ *     shift loop on DOS.
+ *   - Exact (every pair the rounded quotient): no 32-bit constant can do it.  The quotient's fractions are multiples
+ *     of 1/2,025 (TURN x 256 / TURN_STEP_DIV is 8,192 / 2,025), so telling a half from its neighbours over x up to
+ *     2,295 needs some 23 fraction bits, a product of about 2^36, and 16-bit C reaches only the low 32 bits of a
+ *     product (Granlund and Montgomery's and Robison's exact methods want the high half).  The exact way that fits
+ *     is the plain divide, one runtime call more a turn (n is at most 2,295 x 262,144, under 2^31; / rounds toward
+ *     zero, so the half goes away from it):
+ *         n = (int32_t)dps * steer * ((int32_t)TURN << TURN_FRAC_SHIFT);
+ *         turn = (n + (n < 0 ? -TURN_STEP_DIV / 2 : TURN_STEP_DIV / 2)) / TURN_STEP_DIV;
+ *     or a 32 x 32 -> 64 multiply (the 386's imul through #pragma aux on DOS, an int64_t twin on the host).
+ *   - Either way the turns change a little, and every turning ship's path with them.  The host and DOS change
+ *     together (the play tests' --dos hashes still match), but recordings made before (rvsim --replay) no longer
+ *     fly the same */
+#define TURN_STEP(dps, steer) QMUL((int16_t)(dps) * (int16_t)(steer), TURN_STEP_K, TURN_STEP_Q)
+/* (a bound on TURN_STEP_K in integers, as an array's size needs: the ceiling of TURN x 256 / TURN_STEP_DIV, << Q) */
+typedef char rv_turn_step_check[((TURN * (INT32_C(1) << TURN_FRAC_SHIFT) + TURN_STEP_DIV - 1) / TURN_STEP_DIV
+                                 << TURN_STEP_Q) <= INT32_C(0x7FFFFFFF) / (255 * 9) ? 1 : -1];
+
 /* a slot's shield words (k: 0 front, 1 rear) and armour words (k: 0 front, 1 rear, 2 left, 3 right) */
 #define SHIELD(s, k) (((uint16_t *)curShield)[(s) * 2 + (k)])
 #define SHIELD_MAX(s, k) (((uint16_t *)shieldMax)[(s) * 2 + (k)])
