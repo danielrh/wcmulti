@@ -36,6 +36,7 @@ void logic_start(const RvMission __far *m)
     static const char __far s_spawn[] = "logic: slot %d type %02X spawned at bearing %d, %ld km: %ld,%ld";
     int16_t i, k, j = 0, n = 1;
     _fmemset(&g_pilot, 0, sizeof g_pilot);
+    _fmemset(systemDamage, 0, systemDamage_SIZE);   /* the player's systems whole (flight.c clears only the cockpit's) */
     ship_spawn(0, g_camp.player_ship, SIDE_TERRAN, CTL_PLAYER, 0, 0, 0, 0);
     shipStateByte[0] = 8;               /* (a human) */
     for (i = 0; i < m->nship; i++) {
@@ -92,8 +93,16 @@ int32_t vec_len(const RvVec3 *a) {
     return lf_sqrt((uint32_t)(a->x * a->x + a->y * a->y + a->z * a->z));
 }
 
+/* systemDamage's bytes (the player's ship only: one set, 0 whole .. 4 wrecked) */
+enum { SYS_ABSORBERS };                 /* the acceleration absorbers: hurt, the slide comes on at slide_dmg_kps */
+#define CP_FLIGHT_CONTROLS 15           /* the absorbers' rvCockpitDamage bit (tools/cockpits.py BITS): an overlay every
+                                           cockpit kit has, and no panel goes dark with it */
+
 static int32_t reduce_slide(int16_t ship_index)
 {
+    const RvShipType __far *t = slot_type(ship_index);
+    /* the speed above which a full-rate turn slides (ships.csv) */
+    int32_t slide = ship_index == 0 && systemDamage[SYS_ABSORBERS] ? t->slide_dmg_kps : t->slide_kps;
     int32_t target_speed = speedLo[ship_index];
     const RvVec3 *front = &gOrientationFrontVector[ship_index];
     int32_t step = KPS_STEP(target_speed);
@@ -107,7 +116,9 @@ static int32_t reduce_slide(int16_t ship_index)
         target.y - velocity->y,
         target.z - velocity->z);
     int32_t delta_len = vec_len(&delta);
-    int32_t a = slot_type(ship_index)->yaw_dps * KPS_STEP(slot_type(ship_index)->cruise_kps) / (int32_t)((float)(KPS_HZ)* 180.0 / RV_PI);
+    /* at full rate the nose turns yaw_dps / KPS_HZ degrees a step: at the slide speed that moves the velocity it asks
+     * for by `a` a step, the most it can follow.  (The float part is all constants: it folds to 1146) */
+    int32_t a = KPS_STEP(slide) * t->yaw_dps / (int32_t)(KPS_HZ * 180.0 / RV_PI + 0.5);
     if (delta_len <= a) {
         *velocity = target;
     } else {

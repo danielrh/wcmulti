@@ -34,7 +34,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 4                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
+VERSION = 5                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons;
+                                        # 5: their slide speeds
                                         # and each type's loadout
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
           'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
@@ -72,7 +73,9 @@ SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME
             ('unsigned char', 'type', 'B'), ('unsigned char', 'side', 'B'), ('unsigned char', 'flags', 'B'),
             ('unsigned char', 'cockpit', 'B'),
             ('unsigned short', 'cruise_kps', 'H'), ('unsigned short', 'max_kps', 'H'), ('unsigned short', 'ab_kps', 'H'),
-            ('unsigned short', 'accel', 'H'), ('unsigned char', 'yaw_dps', 'B'), ('unsigned char', 'pitch_dps', 'B'),
+            ('unsigned short', 'accel', 'H'), ('unsigned short', 'slide_kps', 'H'),
+            ('unsigned short', 'slide_dmg_kps', 'H'), ('unsigned char', 'yaw_dps', 'B'),
+            ('unsigned char', 'pitch_dps', 'B'),
             ('unsigned char', 'roll_dps', 'B'), ('unsigned char', 'guns', 'B'),
             ('unsigned short', 'shield_f', 'H'), ('unsigned short', 'shield_r', 'H'),
             ('unsigned short', 'armor_f', 'H'), ('unsigned short', 'armor_r', 'H'), ('unsigned short', 'armor_l', 'H'),
@@ -272,12 +275,15 @@ def compile_all():
         for k in ('yaw_dps', 'pitch_dps', 'roll_dps'):
             if n(k) > 255:
                 raise Fail('ships.csv %s: %s %d does not fit a byte' % (r['key'], k, n(k)))
+        # the speed above which a full-rate turn slides, and that with the acceleration absorbers damaged; blank:
+        # its top speed (it slides on the afterburner only), and its cruise
+        slide, slide_dmg = n('slide_kps') or n('max_kps'), n('slide_dmg_kps') or n('cruise_kps')
         out_types.append(struct.pack(fmt(SHIPTYPE), text(r['key'], TEXT['KEY'], 'ships.csv'),
                                      text(r['name'], TEXT['NAME'], 'ships.csv'), int(r['type'], 16), n('side'),
                                      SHIPTYPE_FLAG_PLAYER if r['key'] in cockpit_keys else 0,
                                      cockpit_keys.index(r['key']) if r['key'] in cockpit_keys else 0xFF,
-                                     n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), n('yaw_dps'),
-                                     n('pitch_dps'), n('roll_dps'), guns, n('shield_f'), n('shield_r'),
+                                     n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), slide, slide_dmg,
+                                     n('yaw_dps'), n('pitch_dps'), n('roll_dps'), guns, n('shield_f'), n('shield_r'),
                                      n('armor_f'), n('armor_r'), n('armor_l'), n('armor_rt'), n('hull'),
                                      n('lod0_px'), rounds, nengines, 0, *eng, *hit, core, nvitals, *vit, loadout))
     talk_ok = {frozenset((r['a'], r['b'])): r['talk'] == 'yes' for r in load_csv('relations.csv')}
