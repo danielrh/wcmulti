@@ -129,13 +129,38 @@ static int32_t reduce_slide(int16_t ship_index)
     return target_speed;
 }
 
+
+static void step_speed(int16_t ship_index, uint16_t phase)
+{
+    uint16_t v = (uint16_t)speedLo[ship_index];
+    const RvShipType __far *t = slot_type(ship_index);
+    uint16_t desired_speed = t->max_kps;
+    if (rvAfterburner[ship_index] && t->ab_kps) {
+        desired_speed = t->ab_kps;
+    } else if (setSpeed[ship_index] < t->max_kps) {
+        desired_speed = setSpeed[ship_index];
+    }
+    {
+        uint16_t dv = t->accel / KPS_HZ + (phase < t->accel % KPS_HZ);
+
+        if (v < desired_speed) {
+            v = desired_speed - v > dv ? v + dv : desired_speed;
+        } else {
+            v = v - desired_speed > dv ? v - dv : desired_speed;
+        }
+    }
+    speedLo[ship_index] = v;
+}
+
 /* 4. every ship flies its step: its turn applied to its orientation (vec_turn, then ship_orthonormalise), its speed
  * toward setSpeed, gVelocityVector (positions a step: KPS_STEP), the velocity added to gPositionVector.  A puppet
  * only coasts (position += velocity) */
 static void step_motion(void)
 {
+    uint16_t phase = frameCounter % KPS_HZ;
     int16_t ship_index;
     for (ship_index = 0; ship_index < NUM_SHIP_SLOTS; ship_index +=1){
+        step_speed(ship_index, phase);
         if (!slot_is_ship(ship_index) || rvController[ship_index] == CTL_FROZEN) {
             continue;
         }
