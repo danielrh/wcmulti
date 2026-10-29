@@ -68,10 +68,31 @@ void logic_start(const RvMission __far *m)
 
 /* --- a step: the main loop's body --- */
 
+#define SHIELD_FULL_SHIFT 8             /* a shield comes back from nothing in 1 << this steps (256: 8.5 s at LOGIC_HZ),
+                                           whatever its size (2 points to 900) */
+
+/* the points a store of `most` gains this step to fill in 1 << SHIELD_FULL_SHIFT steps, spread evenly over them:
+ * phase (the step's place among them) takes its share, and the shares add up to `most` */
+static uint16_t refill(uint16_t most, uint16_t phase)
+{
+    return (uint16_t)(((uint32_t)(phase + 1) * most >> SHIELD_FULL_SHIFT) - ((uint32_t)phase * most >> SHIELD_FULL_SHIFT));
+}
+
 /* 1. what runs down or builds up by itself: the guns' cooldowns (GUN_STATE), gun energy (gunEnergy), the shields
- * coming back (SHIELD toward SHIELD_MAX), the afterburner's fuel */
+ * coming back (SHIELD toward SHIELD_MAX), the afterburner's fuel.  (The guns' are M2's.)  The armour doesn't come
+ * back in flight; a dying ship's shields stay down; a puppet's are the layer's */
 static void step_timers(void)
 {
+    uint16_t phase = frameCounter & ((1 << SHIELD_FULL_SHIFT) - 1);
+    int16_t s, k;
+    for (s = 0; s < NUM_SHIP_SLOTS; s++) {
+        if (!slot_is_ship(s) || shipAiState[s] == 9 || rvController[s] == CTL_PUPPET)
+            continue;
+        for (k = 0; k < 2; k++) {
+            uint16_t most = SHIELD_MAX(s, k), up = refill(most, phase);
+            SHIELD(s, k) = SHIELD(s, k) + up < most ? SHIELD(s, k) + up : most;
+        }
+    }
 }
 
 /* 2. each ship's mind, by its rvController: CTL_PLAYER flies by g_pilot; CTL_AI thinks through the aiFighterThink
@@ -93,10 +114,15 @@ int32_t vec_len(const RvVec3 *a) {
     return lf_sqrt((uint32_t)(a->x * a->x + a->y * a->y + a->z * a->z));
 }
 
-/* systemDamage's bytes (the player's ship only: one set, 0 whole .. 4 wrecked) */
-enum { SYS_ABSORBERS };                 /* the acceleration absorbers: hurt, the slide comes on at slide_dmg_kps */
-#define CP_FLIGHT_CONTROLS 15           /* the absorbers' rvCockpitDamage bit (tools/cockpits.py BITS): an overlay every
-                                           cockpit kit has, and no panel goes dark with it */
+/* the player's systems: systemDamage's bytes (one set, the player's ship's: 0 whole .. SYS_WRECKED), each shown hurt
+ * by a cockpit overlay (its rvCockpitDamage bit, tools/cockpits.py BITS).  A hit through to the hull may hurt one
+ * (do_damage_impl) */
+enum { SYS_ABSORBERS,                   /* the acceleration absorbers: hurt, the slide comes on at slide_dmg_kps */
+       SYS_COUNT };
+#define SYS_WRECKED 4                   /* systemDamage's most */
+#define CP_FLIGHT_CONTROLS 15           /* the absorbers' overlay: every cockpit kit has it, and no panel goes dark
+                                           with it */
+static const uint8_t __far k_sys_overlay[SYS_COUNT] = { CP_FLIGHT_CONTROLS };
 
 static int32_t reduce_slide(int16_t ship_index)
 {
@@ -178,9 +204,17 @@ static void step_motion(void)
 }
 
 /* 5. the shots fly (shots_move) and hit (shot_hit: the ship and the place; do_damage through its thunk with
- * shot_source(i) as the source; shot_remove) */
+ * shot_source(i) as the source; shot_remove).  Backwards: a removed shot's index goes to the last one */
 static void step_shots(void)
 {
+    int16_t i, slot;
+    RvVec3 where;
+    shots_move();
+    for (i = shots_count() - 1; i >= 0; i--)
+        if (shot_hit(i, &slot, &where)) {
+            (void)do_damage((uint16_t)shot_source(i), (uint16_t)slot, shot(i)->damage, RV_WHERE(&where));
+            shot_remove(i);
+        }
 }
 
 /* 6. missiles (ship slots of ET_MISSILE: they steer like ships, home on missileTarget, burst by a proximity test) */
@@ -240,13 +274,62 @@ int16_t logic_autopilot(void)
  * returns what it did, 0 nothing.  The player takes none while playerCanBeDamaged is 0.  Everything that hurts goes
  * through here (shots, rocks: rocks.c calls it, rams), and the layer replays a hit on the other machines with src a
  * bolt of the shooter's, the shooter's ship or 0xFFFF: what it does must not depend on src */
+/* a store (a shield, an armour) takes what it can of a hit, down to 0: what's left over */
+static uint16_t spend(uint16_t *store, uint16_t qty)
+{
+    uint16_t took = *store < qty ? *store : qty;
+    *store = (uint16_t)(*store - took);
+    return (uint16_t)(qty - took);
+}
+
+/* a hit of `left` through to the player's hull (of `hull` in all) hurts a system with odds left / hull: which one,
+ * and whether, from game_rand (the layer re-seeds it to replay a hit).  A point of its systemDamage, and its overlay */
+static void hurt_system(uint16_t left, uint16_t hull)
+{
+    uint16_t k;
+    if (game_rand() % hull >= left)
+        return;
+    k = game_rand() % SYS_COUNT;
+    if (systemDamage[k] < SYS_WRECKED)
+        systemDamage[k]++;
+    rvCockpitDamage |= 1UL << k_sys_overlay[k];
+}
+
 uint16_t __far __cdecl do_damage_impl(uint16_t src, uint16_t dst, uint16_t qty, uint16_t where)
 {
-    (void)src;
-    (void)dst;
-    (void)qty;
-    (void)where;
-    return 0;
+    const RvShipType __far *t;
+    const RvVec3 *w;
+    RvVec3 d;
+    int32_t f, r;
+    int16_t sh, ar;
+    uint16_t left;
+    (void)src;                          /* (blame and effects only: the amount must not depend on it) */
+    if (!slot_is_ship((int16_t)dst) || !qty || (dst == 0 && !playerCanBeDamaged) || (rvFlags[dst] & 1)
+        || shipAiState[dst] == 9 || (t = slot_type((int16_t)dst)) == 0)
+        return 0;
+    /* which side: the hit's place from the ship's middle, in km (in positions the products overflow), along its
+     * front and its right.  Front or rear picks the shield; the larger of along and across, the armour */
+    w = RV_WHERE_VEC(where);
+    d = vec3(TO_KM(w->x - gPositionVector[dst].x), TO_KM(w->y - gPositionVector[dst].y),
+             TO_KM(w->z - gPositionVector[dst].z));
+    f = vec_dot(&d, &gOrientationFrontVector[dst]);
+    r = vec_dot(&d, &gOrientationRightVector[dst]);
+    sh = f >= 0 ? 0 : 1;
+    ar = labs(f) >= labs(r) ? sh : r >= 0 ? 3 : 2;
+    /* that shield, then that armour, then the hull: its end is the ship's (shipAiState 9, the layer's sign of a
+     * death; step_deaths takes it from there) */
+    left = spend(&ARMOR(dst, ar), spend(&SHIELD(dst, sh), qty));
+    if (left) {
+        if (damagePoints[dst] >= t->hull || left >= t->hull - damagePoints[dst]) {
+            damagePoints[dst] = t->hull;
+            shipAiState[dst] = 9;
+        } else {
+            damagePoints[dst] = (uint16_t)(damagePoints[dst] + left);
+        }
+        if (dst == 0 && t->hull)
+            hurt_system(left, t->hull);
+    }
+    return qty;
 }
 
 /* (ship, gun): gun record `gun` of the ship fires: a gun or a turret puts a shot in the world (shot_add, from its
