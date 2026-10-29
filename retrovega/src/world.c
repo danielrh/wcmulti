@@ -133,6 +133,7 @@ void ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32
     rvAfterburner[s] = 0;
     gMaybeShipRadius[s] = (uint16_t)(collide_half(s) / 256);   /* (km: the half box) */
     rvFlags[s] = 0;
+    logic_prepare_spawn(s);
 }
 
 void ship_clear(int16_t s)

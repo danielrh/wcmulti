@@ -809,6 +809,322 @@ static void t_frozen(void)
     REQUIRE(pt_km_to(1, 2000, 0, 8000) == 0, e_move, pt_km_to(1, 2000, 0, 8000), 0, 0);
 }
 
+/* --- the turns, more closely: step by step (a turn measured only over many steps can wrap round a whole turn and
+ * look right), both ways, there and back, slow, about the ship's own axes, two at once, held still, while flying, and
+ * after a slot's ship is replaced --- */
+
+/* the player's type's rate for axis k (0 yaw, 1 pitch, 2 roll), degrees a second */
+static int16_t pt_dps(int16_t k)
+{
+    const RvShipType __far *t = slot_type(0);
+    return k == 0 ? t->yaw_dps : k == 1 ? t->pitch_dps : t->roll_dps;
+}
+
+/* the player's controls: a steer of v on axis k alone */
+static void pt_steer(int16_t k, int16_t v)
+{
+    g_pilot.steer_x = (int8_t)(k == 0 ? v : 0);
+    g_pilot.steer_y = (int8_t)(k == 1 ? v : 0);
+    g_pilot.roll = (int8_t)(k == 2 ? v : 0);
+}
+
+/* how far axis k's turn has taken the player's frame from (f, r, u), 1024 a turn: a yaw moves the nose toward the
+ * right, a pitch the nose toward up, a roll the right wing toward up */
+static int16_t pt_axis_angle(int16_t k, const RvVec3 *f, const RvVec3 *r, const RvVec3 *u)
+{
+    return k == 0 ? pt_angle(&gOrientationFrontVector[0], f, r)
+                  : k == 1 ? pt_angle(&gOrientationFrontVector[0], f, u) : pt_angle(&gOrientationRightVector[0], r, u);
+}
+
+/* got within TURN_SLACK percent of want, either way round */
+static int16_t pt_rate_ok(int32_t got, int32_t want)
+{
+    if (want < 0) {
+        got = -got;
+        want = -want;
+    }
+    return want > 0 && got * 100 >= want * (100 - TURN_SLACK) && got * 100 <= want * (100 + TURN_SLACK);
+}
+
+/* the largest change of any component of the player's frame from (f, r, u), in 256ths */
+static int32_t pt_frame_moved(const RvVec3 *f, const RvVec3 *r, const RvVec3 *u)
+{
+    const RvVec3 *v[3], *w[3];
+    int32_t d, most = 0;
+    int16_t i;
+    v[0] = &gOrientationFrontVector[0];
+    v[1] = &gOrientationRightVector[0];
+    v[2] = &gOrientationUpVector[0];
+    w[0] = f;
+    w[1] = r;
+    w[2] = u;
+    for (i = 0; i < 3; i++) {
+        d = abs32(v[i]->x - w[i]->x);
+        most = d > most ? d : most;
+        d = abs32(v[i]->y - w[i]->y);
+        most = d > most ? d : most;
+        d = abs32(v[i]->z - w[i]->z);
+        most = d > most ? d : most;
+    }
+    return most;
+}
+
+static const char __far e_step[] = "a step of a full turn (axis %d: 0 yaw, 1 pitch, 2 roll) turned %d (1024 a turn) "
+    "where a step's share is %d: none backwards, none twice its share (TURN_STEP gives 256ths of a unit)";
+
+/* a full steer on axis k (dir 1 or -1) for n steps from wherever the player's frame is, each step's turn checked: the
+ * right way and at most twice a step's share (so a turn wrapped round, or 256 times too big, shows); the steps' sum
+ * (1024 a turn) in *sum.  0 when a step failed */
+static int16_t pt_turn_steps(int16_t k, int16_t dir, int16_t n, int32_t *sum)
+{
+    RvVec3 f, r, u;
+    int32_t share = pt_turn_of(1, pt_dps(k), 9);
+    int16_t i, a;
+    pt_steer(k, (int16_t)(9 * dir));
+    *sum = 0;
+    for (i = 0; i < n; i++) {
+        f = gOrientationFrontVector[0];
+        r = gOrientationRightVector[0];
+        u = gOrientationUpVector[0];
+        if (!pt_step())
+            return 0;
+        a = pt_axis_angle(k, &f, &r, &u);
+        if (a * dir < 0 || a * dir > 2 * share + 2) {
+            pt_fail(e_step, k, a, share * dir);
+            return 0;
+        }
+        *sum += a;
+    }
+    return 1;
+}
+
+/* M1.12 */
+static void t_turn_steps(void)
+{
+    static const char __far e_sum[] = "a second of a full turn (axis %d: 0 yaw, 1 pitch, 2 roll) turned %d (1024 a turn) "
+        "step by step: %d expected";
+    int16_t k;
+    int32_t sum, want;
+    for (k = 0; k < 3; k++) {
+        pt_alone(PT_PLAYER);
+        if (!pt_turn_steps(k, 1, SEC, &sum))
+            return;
+        want = pt_turn_of(SEC, pt_dps(k), 9);
+        REQUIRE(pt_rate_ok(sum, want), e_sum, k, sum, want);
+    }
+}
+
+/* M1.13 */
+static void t_turn_back(void)
+{
+    static const char __far e_back[] = "a second of a steer of -9 (axis %d: 0 yaw, 1 pitch, 2 roll) turned %d (1024 a "
+        "turn): %d expected, the other way as fast";
+    int16_t k;
+    int32_t sum, want;
+    for (k = 0; k < 3; k++) {
+        pt_alone(PT_PLAYER);
+        if (!pt_turn_steps(k, -1, SEC, &sum))
+            return;
+        want = -pt_turn_of(SEC, pt_dps(k), 9);
+        REQUIRE(pt_rate_ok(sum, want), e_back, k, sum, want);
+    }
+}
+
+/* M1.14 */
+static void t_there_and_back(void)
+{
+    static const char __far e_off[] = "a second of a full turn (axis %d: 0 yaw, 1 pitch, 2 roll) and a second back left "
+        "it %d off where it began (1024 a turn): within %d expected";
+    RvVec3 f, r, u;
+    int16_t k, off;
+    int32_t sum;
+    for (k = 0; k < 3; k++) {
+        pt_alone(PT_PLAYER);
+        f = gOrientationFrontVector[0];
+        r = gOrientationRightVector[0];
+        u = gOrientationUpVector[0];
+        if (!pt_turn_steps(k, 1, SEC, &sum) || !pt_turn_steps(k, -1, SEC, &sum))
+            return;
+        off = pt_axis_angle(k, &f, &r, &u);
+        REQUIRE(abs32(off) <= 3, e_off, k, off, 3);
+    }
+}
+
+/* M1.15 */
+static void t_slow_turns(void)
+{
+    static const char __far e_cap[] = "a capital ship (yaw %d degrees a second: under a unit a step) turned %d in 2 s "
+        "(1024 a turn): %d expected (carry the fraction from step to step)";
+    static const char __far e_one[] = "a steer of 1 turned it %d in 2 s (1024 a turn): %d expected, a ninth of a full "
+        "steer (the fraction carried)";
+    RvVec3 f, r, u;
+    int16_t got;
+    int32_t want;
+    pt_alone(PT_CAPSHIP);
+    f = gOrientationFrontVector[0];
+    r = gOrientationRightVector[0];
+    u = gOrientationUpVector[0];
+    pt_steer(0, 9);
+    if (!pt_steps(2 * SEC))
+        return;
+    got = pt_axis_angle(0, &f, &r, &u);
+    want = pt_turn_of(2 * SEC, slot_type(0)->yaw_dps, 9);
+    REQUIRE(pt_rate_ok(got, want), e_cap, slot_type(0)->yaw_dps, got, want);
+    pt_alone(PT_PLAYER);
+    f = gOrientationFrontVector[0];
+    r = gOrientationRightVector[0];
+    u = gOrientationUpVector[0];
+    pt_steer(0, 1);
+    if (!pt_steps(2 * SEC))
+        return;
+    got = pt_axis_angle(0, &f, &r, &u);
+    want = pt_turn_of(2 * SEC, slot_type(0)->yaw_dps, 1);
+    REQUIRE(pt_rate_ok(got, want), e_one, got, want, 0);
+}
+
+/* M1.16 */
+static void t_body_axes(void)
+{
+    static const char __far e_axes[] = "rolled a quarter turn (right wing up), a full %d-axis turn (0 yaw, 1 pitch) took "
+        "the nose %d toward the ship's own way and %d across it (1024 a turn): turns go about the ship's own axes";
+    RvVec3 f, r, u;
+    int16_t k, along, across;
+    for (k = 0; k < 2; k++) {
+        pt_alone(PT_PLAYER);
+        /* (a quarter turn of roll: the right wing to the sky, up to the left; the nose as it was) */
+        gOrientationRightVector[0].x = 0;
+        gOrientationRightVector[0].y = ONE;
+        gOrientationRightVector[0].z = 0;
+        gOrientationUpVector[0].x = -ONE;
+        gOrientationUpVector[0].y = 0;
+        gOrientationUpVector[0].z = 0;
+        f = gOrientationFrontVector[0];
+        r = gOrientationRightVector[0];
+        u = gOrientationUpVector[0];
+        pt_steer(k, 9);
+        if (!pt_steps(10))
+            return;
+        along = k == 0 ? pt_angle(&gOrientationFrontVector[0], &f, &r) : pt_angle(&gOrientationFrontVector[0], &f, &u);
+        across = k == 0 ? pt_angle(&gOrientationFrontVector[0], &f, &u) : pt_angle(&gOrientationFrontVector[0], &f, &r);
+        REQUIRE(pt_rate_ok(along, pt_turn_of(10, pt_dps(k), 9)) && abs32(across) <= 8, e_axes, k, along, across);
+    }
+}
+
+/* M1.17 */
+static void t_two_axes(void)
+{
+    static const char __far e_two[] = "yaw and pitch together for 5 steps took the nose %d toward its right and %d toward "
+        "its up (1024 a turn): about %d each expected (each axis at its own rate)";
+    RvVec3 f, r, u;
+    int16_t yaw, pitch;
+    int32_t want_yaw, want_pitch;
+    pt_alone(PT_PLAYER);
+    f = gOrientationFrontVector[0];
+    r = gOrientationRightVector[0];
+    u = gOrientationUpVector[0];
+    g_pilot.steer_x = 9;
+    g_pilot.steer_y = 9;
+    if (!pt_steps(5))
+        return;
+    yaw = pt_angle(&gOrientationFrontVector[0], &f, &r);
+    pitch = pt_angle(&gOrientationFrontVector[0], &f, &u);
+    want_yaw = pt_turn_of(5, pt_dps(0), 9);
+    want_pitch = pt_turn_of(5, pt_dps(1), 9);
+    REQUIRE(pt_rate_ok(yaw, want_yaw) && pt_rate_ok(pitch, want_pitch), e_two, yaw, pitch, want_yaw);
+}
+
+/* M1.18 */
+static void t_steady(void)
+{
+    static const char __far e_drift[] = "with the controls centred after a turn, %d steps on its frame had moved %d/256 "
+        "(its largest change): it holds still, within %d";
+    RvVec3 f, r, u;
+    int16_t i;
+    int32_t moved;
+    pt_alone(PT_PLAYER);
+    pt_speed(0, slot_type(0)->cruise_kps);
+    g_pilot.steer_x = 9;
+    g_pilot.steer_y = -5;
+    g_pilot.roll = 7;
+    if (!pt_steps(10))
+        return;
+    pt_steer(0, 0);
+    if (!pt_step())                     /* (a step for a turn decided before the controls came back) */
+        return;
+    f = gOrientationFrontVector[0];
+    r = gOrientationRightVector[0];
+    u = gOrientationUpVector[0];
+    for (i = 0; i < 20 * SEC; i++) {
+        if (!pt_step())
+            return;
+        moved = pt_frame_moved(&f, &r, &u);
+        REQUIRE(moved <= 2, e_drift, i + 1, moved, 2);
+    }
+}
+
+/* M1.19 */
+static void t_turn_flight(void)
+{
+    static const char __far e_way[] = "turning hard at cruise, step %d's move was %d/256 along the nose (the cosine): at "
+        "least %d expected below the top speed, within 14 degrees (a slide, if any, is past it)";
+    RvVec3 p0, d;
+    int16_t i;
+    int32_t len, c;
+    pt_alone(PT_PLAYER);
+    pt_speed(0, slot_type(0)->cruise_kps);
+    g_pilot.steer_x = 9;
+    g_pilot.steer_y = 9;
+    for (i = 0; i < 2 * SEC; i++) {
+        p0 = gPositionVector[0];
+        if (!pt_step())
+            return;
+        d.x = gPositionVector[0].x - p0.x;
+        d.y = gPositionVector[0].y - p0.y;
+        d.z = gPositionVector[0].z - p0.z;
+        len = pt_len(d.x, d.y, d.z);
+        c = len ? vec_dot(&d, &gOrientationFrontVector[0]) / len : 0;
+        REQUIRE(c >= 248, e_way, i + 1, c, 248);
+    }
+}
+
+/* M1.20 */
+static void t_respawn(void)
+{
+    static const char __far e_same[] = "a ship spawned into slot 0 turned otherwise (its frame %d/256 off, step %d) than "
+        "one spawned into a fresh slot: reset what you keep for a slot (its turn's fraction) when a ship is spawned in";
+    RvVec3 f[10], r[10], u[10];
+    int16_t pass, i;
+    int32_t moved;
+    for (pass = 0; pass < 2; pass++) {
+        pt_alone(PT_PLAYER);
+        if (pass == 1) {
+            /* (the slot's last ship turned a step on every axis: its fractions left behind) */
+            g_pilot.steer_x = 9;
+            g_pilot.steer_y = 7;
+            g_pilot.roll = -5;
+            if (!pt_step())
+                return;
+        }
+        ship_spawn(0, PT_PLAYER, SIDE_TERRAN, CTL_PLAYER, 0, 0, 0, 0);   /* (as the layer puts one in: spawn 6) */
+        shipStateByte[0] = 8;
+        g_pilot.steer_x = 9;
+        g_pilot.steer_y = 9;
+        g_pilot.roll = 9;
+        for (i = 0; i < 10; i++) {
+            if (!pt_step())
+                return;
+            if (pass == 0) {
+                f[i] = gOrientationFrontVector[0];
+                r[i] = gOrientationRightVector[0];
+                u[i] = gOrientationUpVector[0];
+            } else {
+                moved = pt_frame_moved(&f[i], &r[i], &u[i]);
+                REQUIRE(moved == 0, e_same, moved, i + 1, 0);
+            }
+        }
+    }
+}
+
 /* ======================================================================================================== */
 /* M2: guns (step_fire, fireGunFromShip, maybe_fire_all_guns, step_timers, step_shots) */
 
@@ -2134,6 +2450,23 @@ static const char __far n_m1_8[] = "M1.8 aerobatics (step_motion): 20 s of every
 static const char __far n_m1_9[] = "M1.9 afterburner (step_motion): past max_kps toward ab_kps while lit, back after";
 static const char __far n_m1_10[] = "M1.10 puppet (step_minds, step_motion): CTL_PUPPET only coasts";
 static const char __far n_m1_11[] = "M1.11 frozen (step_minds, step_motion): CTL_FROZEN stays put";
+static const char __far n_m1_12[] = "M1.12 turn-steps (step_minds, step_motion): every step of a full yaw, pitch and roll "
+    "turns its share, none backwards or twice it";
+static const char __far n_m1_13[] = "M1.13 turn-back (step_minds, step_motion): a steer of -9 turns each axis the other "
+    "way, as fast";
+static const char __far n_m1_14[] = "M1.14 there-and-back (step_motion): a second of each turn and a second back leaves "
+    "the frame where it began";
+static const char __far n_m1_15[] = "M1.15 slow-turns (step_minds, step_motion): under a unit a step (a capital ship, a "
+    "steer of 1) still turns at its rate";
+static const char __far n_m1_16[] = "M1.16 body-axes (step_motion): rolled a quarter turn, yaw and pitch turn about the "
+    "ship's own axes";
+static const char __far n_m1_17[] = "M1.17 two-axes (step_motion): yaw and pitch at once each turn at their own rate";
+static const char __far n_m1_18[] = "M1.18 steady (step_motion): centred controls hold the frame still for 20 s after a "
+    "turn";
+static const char __far n_m1_19[] = "M1.19 turn-flight (step_motion): turning hard below the top speed, it flies where it "
+    "points";
+static const char __far n_m1_20[] = "M1.20 respawn (step_motion): a ship spawned into a used slot turns as one in a fresh "
+    "slot";
 static const char __far n_m2_1[] = "M2.1 fire-call (fireGunFromShip): one shot from the gun's mount, along the nose, "
     "at the weapon's speed";
 static const char __far n_m2_2[] = "M2.2 never-refuses (fireGunFromShip): it fires with no energy and cooling";
@@ -2196,6 +2529,9 @@ static const PtTest __far k_tests[] = {
     { n_m1_1, t_coast, 0 }, { n_m1_2, t_throttle, 0 }, { n_m1_3, t_top_speed, 0 }, { n_m1_4, t_yaw, 0 },
     { n_m1_5, t_pitch, 0 }, { n_m1_6, t_roll, 0 }, { n_m1_7, t_steer_steps, 0 }, { n_m1_8, t_aerobatics, 0 },
     { n_m1_9, t_afterburner, 0 }, { n_m1_10, t_puppet, 0 }, { n_m1_11, t_frozen, 0 },
+    { n_m1_12, t_turn_steps, 0 }, { n_m1_13, t_turn_back, 0 }, { n_m1_14, t_there_and_back, 0 },
+    { n_m1_15, t_slow_turns, 0 }, { n_m1_16, t_body_axes, 0 }, { n_m1_17, t_two_axes, 0 }, { n_m1_18, t_steady, 0 },
+    { n_m1_19, t_turn_flight, 0 }, { n_m1_20, t_respawn, 0 },
     { n_m2_1, t_fire_call, 0 }, { n_m2_2, t_never_refuses, 0 }, { n_m2_3, t_cooldown, 0 }, { n_m2_4, t_energy, 0 },
     { n_m2_5, t_trigger, 0 }, { n_m2_6, t_safety, 0 }, { n_m2_7, t_broken_gun, 0 }, { n_m2_8, t_all_guns, 0 },
     { n_m2_9, t_range, 0 },

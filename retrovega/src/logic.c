@@ -26,6 +26,11 @@
 PilotInput __far g_pilot;
 static int16_t __far g_turn_frac[NUM_SHIP_SLOTS][3];
 
+void logic_prepare_spawn(int16_t ship_index)
+{
+    _fmemset(&g_turn_frac[ship_index][0], 0, sizeof(g_turn_frac[0]));
+}
+
 /* the HUD's marks, worked out once a step (hud_marks, the step's end) and drawn band by band (logic_hud, some four
  * times a frame: it only draws).  arm 0: none yet */
 static struct {
