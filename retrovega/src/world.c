@@ -8,6 +8,7 @@
 #include "lightfield.h"
 #include "collide.h"
 #include "world.h"
+#include "logic.h"
 
 int32_t vec_dot(const RvVec3 *a, const RvVec3 *b) { return a->x * b->x + a->y * b->y + a->z * b->z; }
 
@@ -28,12 +29,17 @@ void vec_cross(RvVec3 *out, const RvVec3 *a, const RvVec3 *b)
     out->z = (a->x * b->y - a->y * b->x) / 256;
 }
 
+/* rounded to the nearest (the + 8192: half of lf_sin's 16384), not down: a turn of a unit or two moves a 256-long
+ * vector by only a component or two, so rounding down lost a third of a slow ship's turn, and turned every step a
+ * little the same way (a turn and the same turn back ended 4 degrees off) */
 void vec_turn(RvVec3 *a, RvVec3 *b, int16_t t)
 {
     int32_t c = lf_cos(t), s = lf_sin(t);
     RvVec3 na, nb;
-    na.x = (a->x * c + b->x * s) >> 14; na.y = (a->y * c + b->y * s) >> 14; na.z = (a->z * c + b->z * s) >> 14;
-    nb.x = (b->x * c - a->x * s) >> 14; nb.y = (b->y * c - a->y * s) >> 14; nb.z = (b->z * c - a->z * s) >> 14;
+    na.x = (a->x * c + b->x * s + 8192) >> 14; na.y = (a->y * c + b->y * s + 8192) >> 14;
+    na.z = (a->z * c + b->z * s + 8192) >> 14;
+    nb.x = (b->x * c - a->x * s + 8192) >> 14; nb.y = (b->y * c - a->y * s + 8192) >> 14;
+    nb.z = (b->z * c - a->z * s + 8192) >> 14;
     *a = na;
     *b = nb;
 }
@@ -98,10 +104,15 @@ void ship_guns(int16_t s)
         gunTable[s * gunTable_SIZE] = 0;
 }
 
-void ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32_t x, int32_t y, int32_t z, int16_t yaw)
+int16_t ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32_t x, int32_t y, int32_t z,
+                   int16_t yaw)
 {
+    static const char __far s_refused[] = "world: ship_spawn into slot %d refused: the ship slots are 0..%d";
     const RvShipType __far *t = ship_type(type);
-    RV_CHECK(s, RV_SLOTS);
+    if (s < 0 || s > RV_MAX_SHIP_SLOT) {   /* (the rest of the slots are temporaries: no ship goes there) */
+        rv_logf(s_refused, s, RV_MAX_SHIP_SLOT);
+        return -1;
+    }
     maybeEntityType[s] = t && t->type >= 0x20 ? ET_CAPSHIP : ET_SHIP;
     gInstanceShipTypes[s] = (uint16_t)type;
     commAnimInfo[s] = (uint16_t)side;
@@ -134,6 +145,7 @@ void ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32
     gMaybeShipRadius[s] = (uint16_t)(collide_half(s) / 256);   /* (km: the half box) */
     rvFlags[s] = 0;
     logic_prepare_spawn(s);
+    return s;
 }
 
 void ship_clear(int16_t s)

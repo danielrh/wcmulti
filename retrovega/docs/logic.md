@@ -90,9 +90,9 @@ array one element per slot.
 | slots | hold |
 |---|---|
 | 0 | the player (the camera and the cockpit are slot 0's) |
-| 1 .. `RV_MAX_SHIP_SLOT` (9) | ships, capital ships, missiles |
-| 10 = `SHOT_PROXY_SLOT` | the shots' stand-in bolt for `do_damage` (below) |
-| 11 .. 117 | temporaries, all free: keep them so (see the rules) |
+| 1 .. `RV_MAX_SHIP_SLOT` (31) | ships, capital ships, missiles (`ship_spawn` refuses any slot past them, returning -1) |
+| 32 = `SHOT_PROXY_SLOT` | the shots' stand-in bolt for `do_damage` (below) |
+| 33 .. 117 | temporaries, all free: keep them so (see the rules) |
 | 124 down to 118 | the asteroid and mine fields' hazard slots, one a field (rocks.c) |
 | 125 | the camera; 127 the scratch vector |
 
@@ -159,7 +159,7 @@ spare near vector for `do_damage`'s `where`).
 |---|---|
 | `vec_dot`, `vec_norm`, `vec_cross`, `vec_turn` | vector maths on `RvVec3` (`vec_turn(&front, &right, t)` yaws right; `(&front, &up)` pitches up; `(&right, &up)` lifts the right wing) |
 | `ship_orthonormalise(s)`, `ship_face(s, yaw, pitch)` | square a ship's frame; set it facing a way, level |
-| `slot_is_ship(s)`, `slot_type(s)` | a ship or capital ship in 0..9; its type's numbers (speeds, turn rates, shields, armour, hull, `hit[]` box, `loadout`) |
+| `slot_is_ship(s)`, `slot_type(s)` | a ship or capital ship in 0..31; its type's numbers (speeds, turn rates, shields, armour, hull, `hit[]` box, `loadout`) |
 | `ship_rel(from, s, &v)` | where s is as `from` sees it: right, up, ahead, in km (an AI's eyes) |
 | `player_km(s)` | km from the player, roughly |
 | `ship_spawn(s, type, side, controller, x, y, z, yaw)` | a ship into slot s: its type's speeds, shields, armour and gun table (`ship_guns`); everything else reset |
@@ -312,8 +312,8 @@ source slot to learn who fired:
 - anything else is ramming or a hazard;
 - between two human pilots, a ship slot as the source would even be taken for a harmless wing bump.
 
-So `shot_source` writes `SHOT_PROXY_SLOT` (slot 10) as a bolt of the shot's
-owner, weapon and damage, and returns 10. It stays valid until the next
+So `shot_source` writes `SHOT_PROXY_SLOT` (slot 32) as a bolt of the shot's
+owner, weapon and damage, and returns 32. It stays valid until the next
 `shots_move()`. One slot is enough, because the layer reads it inside the
 `do_damage` call.
 

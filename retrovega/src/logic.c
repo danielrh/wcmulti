@@ -28,6 +28,8 @@ static int16_t __far g_turn_frac[NUM_SHIP_SLOTS][3];
 
 void logic_prepare_spawn(int16_t ship_index)
 {
+    if (ship_index < 0 || ship_index >= NUM_SHIP_SLOTS)   /* (only ship slots keep a turn: nothing to forget) */
+        return;
     _fmemset(&g_turn_frac[ship_index][0], 0, sizeof(g_turn_frac[0]));
 }
 
@@ -225,10 +227,14 @@ static void step_speed(int16_t ship_index, uint16_t phase)
 
 static int16_t turn_units(int16_t ship_index, int16_t axis, int32_t amount)
 {
-    int32_t acc = g_turn_frac[ship_index][axis] + amount;
+    int32_t acc;
+    int16_t whole_part;
+    RV_CHECK(ship_index, NUM_SHIP_SLOTS);   /* (a ship slot always: step_motion's loop; rv_fail if not) */
+    RV_CHECK(axis, 3);
+    acc = g_turn_frac[ship_index][axis] + amount;
     /* Note that the implementation-defined behavior of >> on negatives is
        divide due to rv_sar_check. */
-    int16_t whole_part = (int16_t)(acc >> TURN_FRAC_SHIFT);
+    whole_part = (int16_t)(acc >> TURN_FRAC_SHIFT);
     g_turn_frac[ship_index][axis] = (int16_t)(acc - (int32_t) whole_part * (1 << TURN_FRAC_SHIFT));
     return whole_part;
 }

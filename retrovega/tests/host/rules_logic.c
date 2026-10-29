@@ -11,6 +11,11 @@
 
 PilotInput __far g_pilot;
 
+void logic_prepare_spawn(int16_t s)     /* (nothing kept for a slot here) */
+{
+    (void)s;
+}
+
 void logic_start(const RvMission __far *m)
 {
     (void)m;

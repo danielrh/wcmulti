@@ -142,9 +142,10 @@ int32_t player_km(int16_t s);           /* km from the player, roughly (the larg
 void ship_rel(int16_t from, int16_t s, RvVec3 *out);   /* s as from sees it: right, up, ahead, in km */
 
 /* a ship into slot s: its type's numbers (speeds, shields, armour, the gun table its loadout), at a place
- * (positions), facing a way (TURN a whole turn of yaw), flown by `controller` (CTL_*) */
-void ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32_t x, int32_t y, int32_t z,
-                int16_t yaw);
+ * (positions), facing a way (TURN a whole turn of yaw), flown by `controller` (CTL_*).  The slot it spawned into (s);
+ * -1 when s is no ship slot (0 .. RV_MAX_SHIP_SLOT), the slot then untouched */
+int16_t ship_spawn(int16_t s, int16_t type, int16_t side, int16_t controller, int32_t x, int32_t y, int32_t z,
+                   int16_t yaw);
 void ship_clear(int16_t s);             /* the slot empty (no explosion, nothing else: the caller's) */
 int16_t ship_free_slot(void);           /* the first empty ship slot 1 .. RV_MAX_SHIP_SLOT, or -1 */
 void ship_guns(int16_t s);              /* its gun table from its type's loadout (ship_spawn does it) */

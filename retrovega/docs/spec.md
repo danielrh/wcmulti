@@ -299,7 +299,10 @@ the layer computes it from `GameParams.slots`.
 MAXSHIPSLOT is a build constant:
 
 - **9** for bring-up, exactly WC.EXE's partition. With 9 the layer needs no slot changes.
-- **47** once the layer takes it from `GameParams` (5.3). That gives 48 ship-class entities and 77 temporaries.
+- **31** now (2026-10-29): 32 ship-class entities, a 32-bit mask's worth, and 92 temporaries (33..124). The layer
+  replicates only 0..9 until it takes the number from `GameParams` (5.3, and phase 2 below), so slots 10..31 are
+  single-player until then.
+- **47** is the most the layer's plan allows: 48 ship-class entities and 77 temporaries.
 
 ### 4.3 EntityType (`maybeEntityType`)
 

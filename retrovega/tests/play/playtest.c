@@ -1125,6 +1125,70 @@ static void t_respawn(void)
     }
 }
 
+/* M1.21 */
+static void t_full_house(void)
+{
+    static const char __far e_spawn[] = "ship_spawn into slot %d returned %d: every slot 1 .. %d (RV_MAX_SHIP_SLOT) takes a "
+        "ship, and its number comes back";
+    static const char __far e_free[] = "ship_free_slot() is %d with every ship slot full: -1 expected";
+    static const char __far e_move[] = "slot %d of a full house moved %d km in 2 s at %d kps: every ship slot flies";
+    int16_t s, got;
+    int32_t km;
+    pt_alone(PT_PLAYER);
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
+        got = ship_spawn(s, PT_ENEMY, SIDE_AERA, CTL_AI, (int32_t)s * 2000 * KM, 0, INT32_C(30000) * KM, 0);
+        REQUIRE(got == s && slot_is_ship(s), e_spawn, s, got, RV_MAX_SHIP_SLOT);
+    }
+    REQUIRE(ship_free_slot() == -1, e_free, ship_free_slot(), 0, 0);
+    if (!pt_steps(2 * SEC))
+        return;
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
+        km = pt_km_to(s, (int32_t)s * 2000, 0, 30000);
+        REQUIRE(km > 100, e_move, s, km, (int32_t)speedLo[s]);
+    }
+}
+
+/* M1.22 */
+static void t_slot_limit(void)
+{
+    static const int16_t __far k_past[4] = { RV_MAX_SHIP_SLOT + 1, RV_SLOTS - 1, RV_SLOTS, -1 };
+    static const char __far e_past[] = "ship_spawn into slot %d returned %d: -1 expected, the ship slots are 0 .. %d";
+    static const char __far e_touched[] = "a refused ship_spawn into slot %d made it entity type %d (it was %d): it leaves "
+        "the slot as it was";
+    static const char __far e_full[] = "with every ship slot full, outerSpawnShipEntity(1, 0) returned %d: 0xFFFF (no "
+        "room) expected";
+    static const char __far e_kept[] = "a spawn refused for want of room changed ship slot %d (now type %d, side %d)";
+    int16_t i, s, got;
+    uint16_t et, spawned;
+    pt_mission();
+    pt_mship(PT_ENEMY, SIDE_AERA, 0, 1, RV_PILOT_NONE);   /* (a mission ship to ask for: record 1, at nav 0) */
+    pt_launch(PT_PLAYER);
+    /* no ship past the ship slots: refused, the slot as it was */
+    for (i = 0; i < 4; i++) {
+        s = k_past[i];
+        et = s >= 0 && s < RV_SLOTS ? maybeEntityType[s] : 0;
+        got = ship_spawn(s, PT_ENEMY, SIDE_AERA, CTL_AI, 0, 0, 0, 0);
+        REQUIRE(got == -1, e_past, s, got, RV_MAX_SHIP_SLOT);
+        if (s >= 0 && s < RV_SLOTS)
+            REQUIRE(maybeEntityType[s] == et, e_touched, s, maybeEntityType[s], et);
+    }
+    /* the logic's spawn hook takes any slot number (only ship slots keep anything: the host's sanitizers catch a write
+     * past its arrays) */
+    logic_prepare_spawn(RV_MAX_SHIP_SLOT + 1);
+    logic_prepare_spawn(RV_SLOTS + 50);
+    logic_prepare_spawn(-1);
+    /* every ship slot full: no room for another */
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
+        (void)ship_spawn(s, PT_WEAK, SIDE_TERRAN, CTL_FROZEN, (int32_t)s * 2000 * KM, 0, 0, 0);
+    spawned = outerSpawnShipEntity(1, 0);
+    REQUIRE(spawned == 0xFFFF, e_full, spawned, 0, 0);
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
+        REQUIRE(gInstanceShipTypes[s] == PT_WEAK && commAnimInfo[s] == SIDE_TERRAN, e_kept, s, gInstanceShipTypes[s],
+                commAnimInfo[s]);
+    if (!pt_step())
+        return;
+}
+
 /* ======================================================================================================== */
 /* M2: guns (step_fire, fireGunFromShip, maybe_fire_all_guns, step_timers, step_shots) */
 
@@ -2467,6 +2531,10 @@ static const char __far n_m1_19[] = "M1.19 turn-flight (step_motion): turning ha
     "points";
 static const char __far n_m1_20[] = "M1.20 respawn (step_motion): a ship spawned into a used slot turns as one in a fresh "
     "slot";
+static const char __far n_m1_21[] = "M1.21 full-house (ship_spawn, step_motion): a ship in every slot 1 .. RV_MAX_SHIP_SLOT, "
+    "all flying";
+static const char __far n_m1_22[] = "M1.22 slot-limit (ship_spawn, outerSpawnShipEntity): no ship past the ship slots, "
+    "none when they are full";
 static const char __far n_m2_1[] = "M2.1 fire-call (fireGunFromShip): one shot from the gun's mount, along the nose, "
     "at the weapon's speed";
 static const char __far n_m2_2[] = "M2.2 never-refuses (fireGunFromShip): it fires with no energy and cooling";
@@ -2531,7 +2599,8 @@ static const PtTest __far k_tests[] = {
     { n_m1_9, t_afterburner, 0 }, { n_m1_10, t_puppet, 0 }, { n_m1_11, t_frozen, 0 },
     { n_m1_12, t_turn_steps, 0 }, { n_m1_13, t_turn_back, 0 }, { n_m1_14, t_there_and_back, 0 },
     { n_m1_15, t_slow_turns, 0 }, { n_m1_16, t_body_axes, 0 }, { n_m1_17, t_two_axes, 0 }, { n_m1_18, t_steady, 0 },
-    { n_m1_19, t_turn_flight, 0 }, { n_m1_20, t_respawn, 0 },
+    { n_m1_19, t_turn_flight, 0 }, { n_m1_20, t_respawn, 0 }, { n_m1_21, t_full_house, 0 },
+    { n_m1_22, t_slot_limit, 0 },
     { n_m2_1, t_fire_call, 0 }, { n_m2_2, t_never_refuses, 0 }, { n_m2_3, t_cooldown, 0 }, { n_m2_4, t_energy, 0 },
     { n_m2_5, t_trigger, 0 }, { n_m2_6, t_safety, 0 }, { n_m2_7, t_broken_gun, 0 }, { n_m2_8, t_all_guns, 0 },
     { n_m2_9, t_range, 0 },
