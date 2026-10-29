@@ -24,6 +24,7 @@
 #include "logic.h"
 
 PilotInput __far g_pilot;
+static int16_t __far g_turn_frac[NUM_SHIP_SLOTS][3];
 
 /* the HUD's marks, worked out once a step (hud_marks, the step's end) and drawn band by band (logic_hud, some four
  * times a frame: it only draws).  arm 0: none yet */
@@ -85,10 +86,12 @@ static int16_t mission_done(void)
  * gets there (enterNavPoint).  The mission (m) is in the tables already: camp_load_units put it there */
 void logic_start(const RvMission __far *m)
 {
+    /* Clear the accumulation of fractional turn progress */
     const uint16_t *at = NAV_SHIPS(0);
     int16_t j;
     (void)m;
     _fmemset(&g_pilot, 0, sizeof g_pilot);
+    _fmemset(g_turn_frac, 0, sizeof(g_turn_frac));
     _fmemset(systemDamage, 0, systemDamage_SIZE);   /* the player's systems whole (flight.c clears only the cockpit's) */
     _fmemset(g_killed, 0, sizeof g_killed);
     _fmemset(&g_hud, 0, sizeof g_hud);   /* (no marks until the first step works them out) */
@@ -215,6 +218,17 @@ static void step_speed(int16_t ship_index, uint16_t phase)
     speedLo[ship_index] = v;
 }
 
+static int16_t turn_units(int16_t ship_index, int16_t axis, int32_t amount)
+{
+    int32_t acc = g_turn_frac[ship_index][axis] + amount;
+    /* Note that the implementation-defined behavior of >> on negatives is
+       divide due to rv_sar_check. */
+    int16_t whole_part = (int16_t)(acc >> TURN_FRAC_SHIFT);
+    g_turn_frac[ship_index][axis] = (int16_t)(acc - (int32_t) whole_part * (1 << TURN_FRAC_SHIFT));
+    return whole_part;
+}
+
+
 static void step_turn(int16_t ship_index,
                       int8_t steer_x,
                       int8_t steer_y,
@@ -225,17 +239,17 @@ static void step_turn(int16_t ship_index,
         if (steer_x) {
             vec_turn(&gOrientationFrontVector[ship_index],
                      &gOrientationRightVector[ship_index],
-                     steer_x * t->yaw_dps);
+                     turn_units(ship_index, 0, TURN_STEP(t->yaw_dps, steer_x)));
         }
         if (steer_y) {
             vec_turn(&gOrientationFrontVector[ship_index],
                      &gOrientationUpVector[ship_index],
-                     steer_y * t->pitch_dps);
+                     turn_units(ship_index, 1, TURN_STEP(t->pitch_dps, steer_y)));
         }
         if (roll) {
             vec_turn(&gOrientationRightVector[ship_index],
                      &gOrientationUpVector[ship_index],
-                     roll * t->roll_dps);
+                     turn_units(ship_index, 1, TURN_STEP(t->roll_dps, roll)));
         }
         ship_orthonormalise(ship_index);
     }
