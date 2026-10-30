@@ -862,6 +862,21 @@ int main(int argc, char **argv)
             opt.data = dir;
         }
     }
+    /* the caller's relative file names, kept good across the chdir to the data directory */
+    {
+        static char keep[6][1200];
+        const char **names[6];
+        char cwd[1024];
+        int k;
+        names[0] = &opt.scene; names[1] = &opt.shiptrace; names[2] = &opt.log; names[3] = &opt.record;
+        names[4] = &opt.replay; names[5] = &opt.shot;
+        if (getcwd(cwd, sizeof cwd))
+            for (k = 0; k < 6; k++)
+                if (*names[k] && (*names[k])[0] != '/' && strlen(cwd) + strlen(*names[k]) + 2 < sizeof keep[k]) {
+                    sprintf(keep[k], "%s/%s", cwd, *names[k]);
+                    *names[k] = keep[k];
+                }
+    }
     if (opt.data && chdir(opt.data))
         fail("no such data directory");
     colours();

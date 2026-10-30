@@ -763,57 +763,62 @@ typedef struct {
     uint8_t missile_pct;                /* percent of its locks that end in a launch */
     uint8_t wait_s;                     /* T_WAIT: the most it waits for a chance */
     uint8_t idle;                       /* its tactic with nobody to fight */
+    uint8_t pass_pct;                   /* a pass goes by the target this percent of the two hulls' half boxes apart */
+    uint8_t avoid_pct;                  /* another ship ahead within this percent of the two half boxes is steered round */
+    uint8_t turn_pct;                   /* the AI uses this percent of its type's turn rate at most */
+    uint8_t burst;                      /* steps of afterburner at the start of a break (the old games' dash) */
     Pick pick[SIT_COUNT][PICKS];        /* the dice by situation (SIT_IDLE's row is unused: idle says) */
 } AiProfile;
 
 #define AIM_CONE 250                    /* cos x 256 of the usual fire cone: some 7 degrees */
 #define LOCK_CONE 230                   /* a missile locks with the target within this: some 26 degrees */
 #define TAIL_KM 3500                    /* an attacker behind, this near, is on my tail */
-#define PASS_MARGIN_KM 300              /* a pass goes by the target this much beyond the two hulls' half boxes */
 #define RELAUNCH_STEPS (4 * LOGIC_HZ)   /* missiles no closer together than this */
 
 static const AiProfile __far k_profiles[P_COUNT] = {
-    /* P_INTERCEPTOR: light and fast: passes, loops, runs when hurt */
-    { 25000, 3000, 1400, 0, AIM_CONE, PULL_ALL, 1, 40, 30, 50, 0, T_CRUISE,
-      { { { 0, 0 } }, { { T_HEADON, 50 }, { T_PURSUE, 50 } }, { { T_PURSUE, 60 }, { T_STRAFE, 40 } },
-        { { T_EVADE, 50 }, { T_LOOP, 25 }, { T_BREAK, 25 } }, { { T_BREAK, 60 }, { T_LOOP, 40 } },
+    /* P_INTERCEPTOR: light and fast: head-on passes, flat turns round, runs when hurt */
+    { 25000, 3000, 0, 0, AIM_CONE, PULL_ALL, 0, 40, 30, 50, 0, T_CRUISE, 170, 200, 100, 10,
+      { { { 0, 0 } }, { { T_HEADON, 60 }, { T_PURSUE, 40 } }, { { T_PURSUE, 60 }, { T_STRAFE, 40 } },
+        { { T_PURSUE, 50 }, { T_BREAK, 30 }, { T_EVADE, 20 } }, { { T_PURSUE, 60 }, { T_BREAK, 40 } },
         { { T_FLEE, 60 }, { T_PURSUE, 40 } } } },
-    /* P_FIGHTER: the line fighter: head on, then round again */
-    { 25000, 3000, 1400, 0, AIM_CONE, PULL_ALL, 1, 30, 20, 50, 0, T_CRUISE,
-      { { { 0, 0 } }, { { T_HEADON, 60 }, { T_PURSUE, 40 } }, { { T_PURSUE, 70 }, { T_HEADON, 30 } },
-        { { T_EVADE, 40 }, { T_LOOP, 40 }, { T_BREAK, 20 } }, { { T_LOOP, 50 }, { T_BREAK, 50 } },
-        { { T_PURSUE, 60 }, { T_FLEE, 40 } } } },
-    /* P_HEAVY: slow and armoured: head on, rarely runs */
-    { 25000, 3000, 1200, 0, AIM_CONE, PULL_ALL, 1, 20, 10, 60, 0, T_CRUISE,
+    /* P_FIGHTER: the line fighter, as the old game's Dralthi measured (tests/wc1/README.md): straight at the
+     * target and through the pass at 1.7 hulls, flat turns at three quarters of its rate, round again in a second
+     * or two with a dash of afterburner, keeps attacking when hunted, now and then holds still a moment */
+    { 25000, 3000, 0, 0, AIM_CONE, PULL_ALL, 0, 30, 20, 50, 0, T_CRUISE, 170, 200, 76, 10,
+      { { { 0, 0 } }, { { T_HEADON, 70 }, { T_PURSUE, 30 } }, { { T_PURSUE, 57 }, { T_STRAFE, 40 }, { T_SIT, 3 } },
+        { { T_PURSUE, 50 }, { T_BREAK, 50 } }, { { T_PURSUE, 60 }, { T_BREAK, 40 } },
+        { { T_PURSUE, 70 }, { T_FLEE, 30 } } } },
+    /* P_HEAVY: slow and armoured: head on mostly, pulls rather than yaws, rarely runs */
+    { 25000, 3000, 0, 0, AIM_CONE, PULL_ALL, 1, 20, 10, 60, 0, T_CRUISE, 170, 200, 100, 10,
       { { { 0, 0 } }, { { T_HEADON, 80 }, { T_PURSUE, 20 } }, { { T_HEADON, 60 }, { T_PURSUE, 40 } },
-        { { T_BREAK, 60 }, { T_EVADE, 40 } }, { { T_BREAK, 80 }, { T_LOOP, 20 } },
+        { { T_BREAK, 60 }, { T_EVADE, 40 } }, { { T_BREAK, 70 }, { T_LOOP, 30 } },
         { { T_PURSUE, 80 }, { T_FLEE, 20 } } } },
-    /* P_ACE: strafing runs, hard evasion, never runs */
-    { 30000, 3000, 1200, 0, AIM_CONE, PULL_ALL, 1, 50, 0, 70, 0, T_CRUISE,
+    /* P_ACE: strafing runs, hard evasion, never runs, uses the afterburner half the time */
+    { 30000, 3000, 0, 0, AIM_CONE, PULL_ALL, 1, 50, 0, 70, 0, T_CRUISE, 150, 180, 100, 15,
       { { { 0, 0 } }, { { T_STRAFE, 50 }, { T_PURSUE, 50 } }, { { T_STRAFE, 50 }, { T_PURSUE, 50 } },
         { { T_EVADE, 60 }, { T_BREAK, 20 }, { T_LOOP, 20 } }, { { T_LOOP, 50 }, { T_BREAK, 50 } },
         { { T_PURSUE, 100 } } } },
-    /* P_BOMBER: torpedo runs on capital ships, else a heavy's fight */
-    { 25000, 2800, 1500, 0, AIM_CONE, PULL_ALL, 1, 20, 25, 80, 0, T_CRUISE,
+    /* P_BOMBER: torpedo runs on capital ships (off at 1,500 km once the torpedo is away), else a heavy's fight */
+    { 25000, 2800, 1500, 0, AIM_CONE, PULL_ALL, 1, 20, 25, 80, 0, T_CRUISE, 170, 200, 100, 10,
       { { { 0, 0 } }, { { T_TORPEDO, 70 }, { T_PURSUE, 30 } }, { { T_TORPEDO, 60 }, { T_PURSUE, 40 } },
         { { T_BREAK, 70 }, { T_EVADE, 30 } }, { { T_BREAK, 70 }, { T_LOOP, 30 } },
         { { T_FLEE, 60 }, { T_PURSUE, 40 } } } },
-    /* P_WINGMAN: the player's side: keeps station, fights what comes near */
-    { 12000, 3000, 1400, 0, AIM_CONE, PULL_ALL, 1, 30, 25, 50, 0, T_FORMATION,
+    /* P_WINGMAN: the player's side: keeps station, fights what comes near like a fighter */
+    { 12000, 3000, 0, 0, AIM_CONE, PULL_ALL, 0, 30, 25, 50, 0, T_FORMATION, 170, 200, 100, 10,
       { { { 0, 0 } }, { { T_PURSUE, 70 }, { T_HEADON, 30 } }, { { T_PURSUE, 80 }, { T_HEADON, 20 } },
-        { { T_BREAK, 50 }, { T_EVADE, 50 } }, { { T_BREAK, 70 }, { T_LOOP, 30 } },
+        { { T_BREAK, 50 }, { T_EVADE, 50 } }, { { T_PURSUE, 60 }, { T_BREAK, 40 } },
         { { T_FLEE, 50 }, { T_PURSUE, 50 } } } },
     /* P_CAPITAL: holds its course; its turrets and launchers are aiShipThink's */
-    { 8000, 6000, 0, 0, AIM_CONE, PULL_ALL, 0, 0, 0, 100, 0, T_CRUISE,
+    { 8000, 6000, 0, 0, AIM_CONE, PULL_ALL, 0, 0, 0, 100, 0, T_CRUISE, 100, 100, 100, 0,
       { { { 0, 0 } }, { { T_CRUISE, 100 } }, { { T_CRUISE, 100 } }, { { T_CRUISE, 100 } }, { { T_CRUISE, 100 } },
         { { T_CRUISE, 100 } } } },
-    /* P_WAITER: lies still (cloaked) until a target comes near unawares, then an interceptor's fight */
-    { 25000, 3000, 1400, 5000, AIM_CONE, PULL_ALL, 1, 60, 30, 50, 30, T_WAIT,
+    /* P_WAITER: lies still (cloaked) until a target comes near unawares, then a fighter's fight on the afterburner */
+    { 25000, 3000, 0, 5000, AIM_CONE, PULL_ALL, 0, 60, 30, 50, 30, T_WAIT, 170, 200, 100, 10,
       { { { 0, 0 } }, { { T_PURSUE, 70 }, { T_HEADON, 30 } }, { { T_PURSUE, 60 }, { T_STRAFE, 40 } },
-        { { T_EVADE, 50 }, { T_LOOP, 25 }, { T_BREAK, 25 } }, { { T_BREAK, 60 }, { T_LOOP, 40 } },
+        { { T_PURSUE, 50 }, { T_BREAK, 30 }, { T_EVADE, 20 } }, { { T_PURSUE, 60 }, { T_BREAK, 40 } },
         { { T_FLEE, 60 }, { T_PURSUE, 40 } } } },
     /* P_NOLEFT: a fighter whose controls cannot turn left: it rolls and pulls instead */
-    { 25000, 3000, 1400, 0, AIM_CONE, PULL_RIGHT | PULL_UP | PULL_DOWN, 0, 30, 20, 50, 0, T_CRUISE,
+    { 25000, 3000, 0, 0, AIM_CONE, PULL_RIGHT | PULL_UP | PULL_DOWN, 0, 30, 20, 50, 0, T_CRUISE, 170, 200, 100, 10,
       { { { 0, 0 } }, { { T_HEADON, 60 }, { T_PURSUE, 40 } }, { { T_PURSUE, 70 }, { T_HEADON, 30 } },
         { { T_EVADE, 40 }, { T_LOOP, 40 }, { T_BREAK, 20 } }, { { T_LOOP, 50 }, { T_BREAK, 50 } },
         { { T_PURSUE, 60 }, { T_FLEE, 40 } } } },
@@ -926,18 +931,67 @@ static int8_t steer_of(int16_t angle)
  * one whose pulls do not allow the straight way, rolls until the target lies along an allowed pull (right, left,
  * up or down of the nose) and pulls there.  A roll of +t (the right wing up) turns a bearing in the right-up plane
  * by -t: to bring a bearing b to the pull c, roll by b - c */
+/* the two hulls' half boxes together, km: the unit the passes and the avoidance are measured in */
+static int32_t room_of(int16_t a, int16_t b)
+{
+    return TO_KM(collide_half(a) + collide_half(b));
+}
+
+/* collision avoidance: another ship ahead (the mind's own target excepted: the pass takes care of it) within the
+ * profile's avoid distance pushes the wanted direction away from it, the harder the nearer */
+static void avoid(int16_t s, const AiProfile __far *p, uint8_t target, int32_t *dx, int32_t *dy)
+{
+    int16_t k;
+    int32_t limit;
+    RvVec3 r;
+    if (!p->avoid_pct)
+        return;
+    for (k = 0; k < NUM_SHIP_SLOTS; k++) {
+        if (k == s || k == target || !slot_is_ship(k))
+            continue;
+        limit = room_of(s, k) * p->avoid_pct / 100;
+        if (labs(TO_KM(gPositionVector[k].x - gPositionVector[s].x)) > limit
+            || labs(TO_KM(gPositionVector[k].y - gPositionVector[s].y)) > limit
+            || labs(TO_KM(gPositionVector[k].z - gPositionVector[s].z)) > limit)
+            continue;
+        ship_rel(s, k, &r);
+        if (r.z < 0)
+            continue;
+        {
+            int32_t d = len_of(r.x, r.y, r.z), away = limit - d;
+            if (away <= 0)
+                continue;
+            if (labs(r.x) + labs(r.y) < 10) {   /* (dead ahead: to the right) */
+                *dx += away;
+                continue;
+            }
+            *dx -= r.x * away / d;
+            *dy -= r.y * away / d;
+        }
+    }
+}
+
 static void steer_to(int16_t s, const AiProfile __far *p, int32_t dx, int32_t dy, int32_t dz)
 {
     static const int16_t __far k_pull_at[4] = { 0, 512, 256, 768 };   /* PULL_RIGHT, LEFT, UP, DOWN: their bearings */
-    int32_t horiz = len_of(dx, 0, dz), across = len_of(dx, dy, 0);
-    int16_t yaw = angle_of(dx, dz), pitch = angle_of(dy, horiz), off = angle_of(across, dz);
-    int16_t bearing = angle_of(dy, dx), best = -1, bd = 1024, k, c, d, roll, pull;
+    int32_t horiz, across;
+    int16_t yaw, pitch, off, cap = (int16_t)((9 * p->turn_pct + 50) / 100);
+    int16_t bearing, best = -1, bd = 1024, k, c, d, roll, pull;
     Turn __far *t = &g_turn[s];
+    avoid(s, p, g_mind[s].target, &dx, &dy);
+    horiz = len_of(dx, 0, dz);
+    across = len_of(dx, dy, 0);
+    yaw = angle_of(dx, dz);
+    pitch = angle_of(dy, horiz);
+    off = angle_of(across, dz);
+    bearing = angle_of(dy, dx);
+    if (cap < 1)
+        cap = 1;
     if (off < 0)
         off = (int16_t)-off;
     if ((p->pulls & PULL_ALL) == PULL_ALL && (!p->bank || off <= 2 * FULL_AT)) {
-        t->x = steer_of(yaw);
-        t->y = steer_of(pitch);
+        t->x = (int8_t)clamp32(steer_of(yaw), -cap, cap);
+        t->y = (int8_t)clamp32(steer_of(pitch), -cap, cap);
         t->roll = 0;
         return;
     }
@@ -965,6 +1019,8 @@ static void steer_to(int16_t s, const AiProfile __far *p, int32_t dx, int32_t dy
     pull = (int16_t)((int32_t)steer_of(off) * lf_cos(c) / 16384);
     if (pull < 0)
         pull = 0;
+    if (pull > cap)
+        pull = cap;
     t->x = (int8_t)(best == 0 ? pull : best == 1 ? -pull : 0);
     t->y = (int8_t)(best == 2 ? pull : best == 3 ? -pull : 0);
     t->roll = (int8_t)roll;
@@ -974,13 +1030,12 @@ static void steer_to(int16_t s, const AiProfile __far *p, int32_t dx, int32_t dy
 
 static int16_t situation(int16_t s, const Mind __far *m, const AiProfile __far *p, const View *v)
 {
-    (void)m;
     if (p->flee_pct && hull_pct(s) < p->flee_pct)
         return SIT_HURT;
     if (v->rel.z < 0 && v->km < TAIL_KM && v->cos_its > 180)
         return SIT_TAILED;
-    if (v->km < (int32_t)p->break_km * 2 && v->cos_nose < 100)
-        return SIT_PASSED;
+    if (m->target != 0xFF && v->km < room_of(s, m->target) * 4 && (v->rel.z < 0 || v->cos_nose < 100))
+        return SIT_PASSED;              /* (just passed, or about to: within four hulls and off the nose) */
     if (v->km < (int32_t)p->fire_km * 4 / 3 && v->cos_nose > 0)
         return SIT_NEAR;
     return SIT_FAR;
@@ -1157,7 +1212,7 @@ static int32_t pass_side(int16_t s, const Mind __far *m, const AiProfile __far *
     int16_t k;
     if (m->target == 0xFF)
         return 0;
-    room = TO_KM(collide_half(s) + collide_half(m->target)) + PASS_MARGIN_KM;
+    room = room_of(s, m->target) * p->pass_pct / 100;
     for (k = 0; k < NUM_SHIP_SLOTS; k++)
         if (k != s && slot_is_ship(k) && rvController[k] == CTL_AI && shipAiState[k] != 9 && g_mind[k].target == m->target
             && commAnimInfo[k] == commAnimInfo[s] && maybeEntityType[k] == ET_SHIP) {
@@ -1167,7 +1222,7 @@ static int32_t pass_side(int16_t s, const Mind __far *m, const AiProfile __far *
         }
     if (n)                              /* (lanes -n/2 .. n/2 about the target) */
         lane = (rank * 2 - n) * room / 2;
-    if (v->km <= (int32_t)p->break_km * 2)
+    if (v->km <= room * 3)              /* (near: by its own side of the target) */
         lane += (int32_t)m->dir * room;
     return lane;
 }
@@ -1180,7 +1235,7 @@ static int16_t run_tactic(int16_t s, Mind __far *m, const AiProfile __far *p, co
     switch (m->tactic) {
     case T_PURSUE:                      /* at its lead point; closing, then matching; off before a collision */
         steer_to(s, p, v->aim.x + pass_side(s, m, p, v), v->aim.y, v->aim.z);
-        throttle(s, v->km > 2500 ? max : clamp32(speedLo[m->target] + 60, 150, max), v->km > 5000 && m->burn);
+        throttle(s, v->km > p->fire_km ? max : clamp32(speedLo[m->target] + max / 5, 150, max), v->km > 5000 && m->burn);
         aim_and_fire(s, m, p, v, 1);
         if (p->break_km && v->km < p->break_km && v->cos_nose > 0) {
             take_tactic(s, m, p, T_BREAK);
@@ -1196,7 +1251,7 @@ static int16_t run_tactic(int16_t s, Mind __far *m, const AiProfile __far *p, co
             take_tactic(s, m, p, T_BREAK);
             return 0;
         }
-        return m->tactic == T_STRAFE && v->rel.z < 0 && v->km > p->break_km;
+        return v->rel.z < 0;            /* (through the pass: the target behind, the dice again) */
     case T_SIT:                         /* still, turning onto it, firing */
         steer_to(s, p, v->aim.x, v->aim.y, v->aim.z);
         throttle(s, 0, 0);
@@ -1218,11 +1273,24 @@ static int16_t run_tactic(int16_t s, Mind __far *m, const AiProfile __far *p, co
         }
         return l < 0 || (p->break_km && v->km < p->break_km);
     }
-    case T_BREAK:                       /* a hard pull one way, rolling with it, at full throttle */
-        g_turn[s].y = (int8_t)(9 * m->dir);
-        g_turn[s].roll = (int8_t)(5 * m->dir);
-        throttle(s, max, m->burn);
+    case T_BREAK: {                     /* a hard turn one way at full throttle: flat (a yaw, toward the side the target
+                                           went) for a profile that does not bank, a pull with a roll for one that does;
+                                           the afterburner for the profile's burst at its start */
+        int16_t at = (int16_t)(tactic_steps(s, T_BREAK) - m->timer), cap = (int16_t)((9 * p->turn_pct + 50) / 100);
+        if (!m->phase) {
+            m->phase = 1;
+            if (m->target != 0xFF)
+                m->dir = (int8_t)(v->rel.x < 0 ? -1 : 1);
+        }
+        if (p->bank) {
+            g_turn[s].y = (int8_t)(cap * m->dir);
+            g_turn[s].roll = (int8_t)(5 * m->dir);
+        } else {
+            g_turn[s].x = (int8_t)(cap * m->dir);
+        }
+        throttle(s, max, m->burn && at < p->burst);
         return 0;
+    }
     case T_EVADE: {                     /* jinks: a pull each way with a roll, a stop by chance, then away */
         int16_t at = (int16_t)(tactic_steps(s, T_EVADE) - m->timer);
         if (at < LOGIC_HZ) {

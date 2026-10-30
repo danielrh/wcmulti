@@ -163,4 +163,5 @@ def main():
     for i, fl in enumerate(flights):
         summarise(fl, i, fps, '--timeline' in sys.argv, only)
 
-main()
+if __name__ == '__main__':
+    main()
