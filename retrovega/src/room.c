@@ -117,6 +117,10 @@ static void hot_centre(int kind, int index, int *x, int *y)
     }
 }
 
+static int s_tab_x = -1, s_tab_y = -1;   /* where the last Tab put the pointer: the round goes on from there, not from
+                                           whatever is under it (a seated pilot's sprite over a hatch's centre would
+                                           send it back to the hatch for ever, and the targets beyond unreachable) */
+
 /* Tab and Shift+Tab: the next target to the right (or left), wrapping round */
 static void tab_move(int dir)
 {
@@ -124,7 +128,9 @@ static void tab_move(int dir)
     int best = -1, bkind = 0, first = -1, fkind = 0, i, k;
     long bkey = 0, fkey = 0, here;
     /* targets in order of their centres, left to right, then top to bottom */
-    if (g_scene.hover_kind != HOVER_NONE) {
+    if (s_tab_x >= 0 && g_scene.px == s_tab_x && g_scene.py == s_tab_y) {
+        here = (long)s_tab_x * 1024 + s_tab_y;
+    } else if (g_scene.hover_kind != HOVER_NONE) {
         int x, y;
         hot_centre(g_scene.hover_kind, g_scene.hover_index, &x, &y);
         here = (long)x * 1024 + y;
@@ -156,6 +162,8 @@ static void tab_move(int dir)
         dirty_pointer();
         g_scene.px = x;
         g_scene.py = y;
+        s_tab_x = x;
+        s_tab_y = y;
         dirty_pointer();
     }
 }
