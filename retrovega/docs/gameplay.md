@@ -475,8 +475,9 @@ whether the mission was won: nonzero won.
 4. **`missionVictoryCalc`**, the layer's moment: in multiplayer the host's score becomes everyone's.
 5. **The debriefing:** won or lost by `victoryPoints`, with the mission's `win` or `lose` lines, then
    `camp_resolve(won)`.
-6. **The campaign:** each node has four missions. Three or four won take the good way out, none or one the bad; two
-   go by the campaign's running total (engine.md, "The campaign").
+6. **The campaign:** each node has one to four missions. More won than lost takes the good way out, fewer the bad,
+   an even split goes by the campaign's running total (a node of four: three or four won good, none or one bad, two by
+   the total; engine.md, "The campaign").
 
 **What the engine doesn't do yet** (mine to add when you want them):
 
