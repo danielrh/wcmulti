@@ -677,7 +677,7 @@ static void deck_underlay(int y0, int y1)
 
 static void deck_overlay(int y0, int y1)
 {
-    char s[64];
+    char s[96];                         /* (a 40-character title, the words and a name: 69 at most; 64 overflowed) */
     sprintf(s, "%.40Fs  //  your fighter: %s", (char __far *)g_m.title, ship_name(g_camp.player_ship));
     gfx_text(FONT_BODY, 14, 8, s, RV_TEXT_AMBER | 0x10, y0, y1);
 }
