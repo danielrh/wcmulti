@@ -117,9 +117,11 @@ static void hot_centre(int kind, int index, int *x, int *y)
     }
 }
 
-static int s_tab_x = -1, s_tab_y = -1;   /* where the last Tab put the pointer: the round goes on from there, not from
-                                           whatever is under it (a seated pilot's sprite over a hatch's centre would
-                                           send it back to the hatch for ever, and the targets beyond unreachable) */
+/* where the last Tab put the pointer, and on what: while the pointer stays there, that is the target (its label, its
+ * pointer, Enter), and the next Tab goes on from it: not whatever is under the pointer, as a seated pilot's sprite over
+ * a hatch's centre would open the pilot on Enter and send the round back to the hatch for ever, the targets beyond
+ * unreachable */
+static int s_tab_x = -1, s_tab_y = -1, s_tab_kind, s_tab_index;
 
 /* Tab and Shift+Tab: the next target to the right (or left), wrapping round */
 static void tab_move(int dir)
@@ -164,6 +166,8 @@ static void tab_move(int dir)
         g_scene.py = y;
         s_tab_x = x;
         s_tab_y = y;
+        s_tab_kind = bkind;
+        s_tab_index = best;
         dirty_pointer();
     }
 }
@@ -194,6 +198,10 @@ int scene_update(const Input *in, SceneAction *act)
         dirty_pointer();
     }
     find_hover(g_scene.px, g_scene.py, &kind, &index);
+    if (s_tab_x >= 0 && g_scene.px == s_tab_x && g_scene.py == s_tab_y) {   /* (the Tab's target, while it stays) */
+        kind = s_tab_kind;
+        index = s_tab_index;
+    }
     if (kind != g_scene.hover_kind || index != g_scene.hover_index) {
         g_scene.hover_kind = kind;
         g_scene.hover_index = index;
