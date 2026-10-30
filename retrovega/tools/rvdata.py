@@ -34,9 +34,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 6                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
+VERSION = 7                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
                                         # and each type's loadout; 5: each weapon's sound (data/sounds.csv); 6: the
-                                        # ship types' slide speeds
+                                        # ship types' slide speeds; 7: their sizes (radius_km)
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
           'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
@@ -80,6 +80,7 @@ SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME
             ('unsigned short', 'shield_f', 'H'), ('unsigned short', 'shield_r', 'H'),
             ('unsigned short', 'armor_f', 'H'), ('unsigned short', 'armor_r', 'H'), ('unsigned short', 'armor_l', 'H'),
             ('unsigned short', 'armor_rt', 'H'), ('unsigned short', 'hull', 'H'), ('unsigned short', 'lod0_px', 'H'),
+            ('unsigned short', 'radius_km', 'H'),
             ('unsigned short', 'missiles', 'H'), ('unsigned char', 'nengines', 'B'), ('unsigned char', 'pad', 'B'),
             ('signed char', 'engine[RV_ENGINES][4]', '%db' % (4 * 4)),
             ('unsigned char', 'hit[3]', '3B'), ('unsigned char', 'core', 'B'), ('unsigned char', 'nvitals', 'B'),
@@ -286,6 +287,10 @@ def compile_all():
         for k in ('yaw_dps', 'pitch_dps', 'roll_dps'):
             if n(k) > 255:
                 raise Fail('ships.csv %s: %s %d does not fit a byte' % (r['key'], k, n(k)))
+        # the ship's size: its half box, km (the old game's measured radii for its counterparts, the user's call of
+        # 2026-10-30: 100 for a light fighter, 700 for the carrier); blank: by the sprite's size, a light fighter's
+        # 128 px as 100 km, the carrier's 640 as 700
+        radius = n('radius_km') or (n('lod0_px') * (700 if int(r['type'], 16) >= 0x20 else 100) // (640 if int(r['type'], 16) >= 0x20 else 128))
         # the speed above which a full-rate turn slides, and that with the acceleration absorbers damaged; blank:
         # its top speed (it slides on the afterburner only), and its cruise
         slide, slide_dmg = n('slide_kps') or n('max_kps'), n('slide_dmg_kps') or n('cruise_kps')
@@ -296,7 +301,7 @@ def compile_all():
                                      n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), slide, slide_dmg,
                                      n('yaw_dps'), n('pitch_dps'), n('roll_dps'), guns, n('shield_f'), n('shield_r'),
                                      n('armor_f'), n('armor_r'), n('armor_l'), n('armor_rt'), n('hull'),
-                                     n('lod0_px'), rounds, nengines, 0, *eng, *hit, core, nvitals, *vit, loadout))
+                                     n('lod0_px'), radius, rounds, nengines, 0, *eng, *hit, core, nvitals, *vit, loadout))
     talk_ok = {frozenset((r['a'], r['b'])): r['talk'] == 'yes' for r in load_csv('relations.csv')}
     for pair in talk_ok:
         for k in pair:

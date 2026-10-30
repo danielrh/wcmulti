@@ -249,6 +249,8 @@ What the tests expect (an AI Nicander against a still player):
 | M5.8 formation | flying straight at cruise for a minute, the wingman stays within 5,000 km of the player for the last 10 s |
 | M5.9 no-left | an enemy whose profile may not turn left (byte 17 of its mission ship record names the profile) never yaws left, and still brings its nose onto the player on its left within 20 s |
 | M5.10 waiter | an enemy whose profile lies in wait stays still and cloaked (`rvFlags` 16) while the player points at it, and comes, uncloaked, within 10 s of the player turning away |
+| M5.11 old-straight | the old game's first mission measured (tests/wc1/README.md): a line fighter crossing 15,000 km ahead of a player flying straight at the 300 setting fires first from 1,500-6,000 km, a volley at a time (never two within 12 steps), comes within 2,500 km without a collision, and has its nose back on the player within 15 s of a pass (needs M2: the shot) |
+| M5.12 old-hunt | the same fighter against a player whose nose is set onto it every 3 s: five passes or more in 90 s, one collision at most, the nose back in time after all but one, the volleys apart |
 
 **The AI as written** (docs/ai.md): a mind per slot runs a tactic picked by weighted dice from its profile's table for
 its situation; a steering turns the tactic's wanted direction into the player's own steer and roll, pulling only where
@@ -558,7 +560,7 @@ into `RVGAME.DAT` (run by `build.sh`, and by `host/build.sh` for the harness).
 `tests/play/playtest.c` is the suite, in one file that builds for both sides; `tests/play/playtest.sh` runs it.
 
 ```
-tests/play/playtest.sh              all 74 on the host
+tests/play/playtest.sh              all 76 on the host
 tests/play/playtest.sh M3 M5.2      milestone 3 and test M5.2
 tests/play/playtest.sh --dos        on the host, then in DOSBox, and the hashes compared
 tests/play/playtest.sh --steps M5.3 one test on both, a hash of each part of the world after every step

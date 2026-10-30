@@ -677,12 +677,14 @@ static void hunt_face(void)
             best = s;
         }
     }
-    if (best < 0 || bd < 1500)          /* (nearer than that it flies on past: a test pilot does not ram) */
+    if (best < 0)
         return;
     v = vec3(TO_KM(gPositionVector[best].x - gPositionVector[0].x), TO_KM(gPositionVector[best].y - gPositionVector[0].y),
              TO_KM(gPositionVector[best].z - gPositionVector[0].z));
     horiz = (int32_t)lf_sqrt((uint32_t)((v.x >> 4) * (v.x >> 4) + (v.z >> 4) * (v.z >> 4))) << 4;
-    ship_face(0, lf_atan2(v.x, v.z), lf_atan2(v.y, horiz));
+    /* (straight at it, however near: the old game's rig faced its slot every 3 s and its AI did the passing) */
+    ship_face(0, (int16_t)lf_atan2(v.x, v.z),
+              lf_atan2(v.y, horiz));
     g_sys.target = best;
 }
 

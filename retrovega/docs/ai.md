@@ -24,7 +24,7 @@ ship is a puppet):
    | `SIT_IDLE` | no target |
    | `SIT_HURT` | the hull below the profile's `flee_pct` |
    | `SIT_TAILED` | the target behind, within `TAIL_KM` (3,500 km), and pointing at the ship |
-   | `SIT_PASSED` | within 2 × `break_km` and off the nose: just passed, or about to |
+   | `SIT_PASSED` | within four hull sums (`room_of` × 4) and behind or off the nose: just passed, or about to |
    | `SIT_NEAR` | ahead, within 4/3 × `fire_km` |
    | `SIT_FAR` | the rest |
 
@@ -71,15 +71,26 @@ dice say so (`missile_pct`).
 
 `steer_to(s, profile, dx, dy, dz)` wants the nose along (dx right, dy up, dz ahead):
 
-- **Straight** (`bank` 0, or within 20° of the way): a yaw and a pitch at once, each a full steer beyond
-  `FULL_AT` (10°) off and eased in within it. So a target 10° up and right gets both.
-- **Bank and pull** (`bank` 1, farther than 20° off): the target's bearing in the right-up plane is taken, the
-  nearest allowed **pull** (right, left, up or down) is chosen, the ship rolls toward it (a roll of +t, the right
-  wing up, turns a bearing by -t), and pulls along it, full once the bearing is within a quarter turn of the pull.
-  This is how the fighters of the old games turned: a roll, then the nose comes round.
+- **Straight** (a profile with every pull and `bank` 0, or any banking profile within 20° of the way): a yaw and
+  a pitch at once, each a full steer beyond `FULL_AT` (10°) off and eased in within it. So a target 10° up and
+  right gets both: the fine aim, which the old games' fighters had (their shots at 0° off).
+- **Bank and pull** (`bank` 1 farther than 20° off, or a profile without every pull and `bank` 0 always): the
+  target's bearing in the right-up plane is taken, the nearest allowed **pull** (right, left, up or down) is
+  chosen, the ship rolls toward it (a roll of +t, the right wing up, turns a bearing by -t), and pulls along it,
+  full once the bearing is within a quarter turn of the pull. This is how the fighters of the old games turned: a
+  roll, then the nose comes round, flat.
 - **The pulls** (`pulls`, `PULL_*` bits): a profile that may not pull one way never does. A ship that cannot
   turn left (`P_NOLEFT`) given a target on its left rolls until the target is above or below it and pulls there.
-  A profile that may pull nowhere flies straight.
+  The line fighter pulls right and left only: it yaws and never pitches, as the old game's Dralthi did. A profile
+  that may pull nowhere flies straight.
+- **Avoidance** (`avoid`, within `steer_to`): every other ship within the profile's `avoid_pct` of the two half
+  boxes and coming together with this one pushes the wanted direction sideways, the harder the nearer; and the
+  attackers of one target take lanes a hull apart (`pass_side`).
+- **A break** (`T_BREAK`) is not steered: a profile that yaws turns flat at its rate, away from a target still
+  ahead and after one gone behind (over as soon as the nose is on a target ahead again: the pursuit takes it from
+  there); a banking profile that may pull up or down pulls with a roll toward the target's side. The afterburner
+  for the profile's `burst` at its start, and an AI's burner is at the type's `ab_kps` at once (the old games'
+  dash), where a player's ramps up.
 
 ## The profiles
 
@@ -92,23 +103,30 @@ record (`P_*` + 1; 0 the type's own), which a mission may set.
 |---|---|
 | `engage_km` | an enemy this near is fought |
 | `fire_km` | the guns fire within this (and their own range) |
-| `break_km` | a closing attacker breaks off this near; 0 never (it rams) |
+| `break_km` | a pursuit with a pass coming (`passing`: closing at a tenth of the top speed or more) breaks off this near; 0 never (it rams) |
 | `pounce_km` | `T_WAIT`'s chance distance |
 | `aim_cos` | the fire cone (cos × 256) |
-| `pulls`, `bank` | the steering's allowed pulls and style |
+| `pulls`, `bank` | the steering's allowed pulls and style (below) |
 | `ab_pct` | the chance a tactic that closes or flees uses the afterburner |
 | `flee_pct` | the hull percent below which it runs (0 never) |
 | `missile_pct` | the chance a completed lock is a launch |
 | `wait_s` | `T_WAIT`'s patience |
 | `idle` | its tactic with nobody to fight (`T_CRUISE`, `T_FORMATION`, `T_ESCORT`, `T_WAIT`) |
+| `pass_pct` | the attackers of one target spread across it this percent of the two half boxes apart (lanes), and a pass goes by its own side of the target by as much |
+| `avoid_pct` | another ship (the target too) within this percent of the two half boxes, coming together at a quarter of the top speed or more, pushes the wanted direction sideways |
+| `turn_pct` | it uses this percent of its type's turn rate at most |
+| `burst` | steps of afterburner at the start of every break (the old games' dash); 0 none |
+| `lead_pct` | how much of the lead it aims off: 100 the shots meet the target, 0 it aims at the target itself (the old games' fighters) |
+| `tail_pct` | behind its target within the guns' range it flies this percent of its top speed |
+| `fire_gap` | steps between its volleys with the target in the cone (the old game's fighters: one every 0.75 s) |
 | `pick[SIT_*][4]` | the dice: up to four (tactic, weight) a situation |
 
 The rows as they stand:
 
 | profile | character |
 |---|---|
-| `P_INTERCEPTOR` | light and fast: head-on passes and pursuits, strafes near, evades and loops when tailed, runs at 30% hull |
-| `P_FIGHTER` | the line fighter: head on, round again, loops; runs at 20% |
+| `P_INTERCEPTOR` | light and fast: head-on passes and pursuits, strafes near, evades when tailed, runs at 30% hull; yaws, no pitch |
+| `P_FIGHTER` | the line fighter, as the old game's Dralthi measured (tests/wc1/README.md): straight at the target at full speed, a hard flat yaw away at 900 km with a dash, round again in a second or two, a tail at 60%, a volley every 0.75 s; runs at 20% |
 | `P_HEAVY` | slow and armoured: head on mostly, breaks rather than jinks, rarely runs |
 | `P_ACE` | strafing runs, hard evasion, never runs, uses the afterburner half the time |
 | `P_BOMBER` | torpedo runs at capital ships, else a heavy's fight; runs at 25% |
@@ -132,8 +150,9 @@ make a ship fly faster or turn harder than its data allows; the play tests check
 
 ## Checking against the old games
 
-The tactics' numbers are meant to be measured, not guessed: `tests/wc1/` (to come) flies the first mission of
-the old game under the multiplayer layer with its ships' positions, headings, speeds and fire traced each frame,
-the same scene flown here with the matching types, and the two traces compared: when the enemies turn in, how
-close they come before they break, how often they pass and loop, how far out they open fire. The results and
-the rows they changed are recorded there.
+The tactics' numbers are measured, not guessed: `tests/wc1/` flies the first mission of the old game under the
+multiplayer layer with its ships' positions, headings, speeds and fire traced each frame, the same scene flown here
+with the matching types (`compare.sh`), and the two traces digested alike: speeds, turn rates, how long the nose is
+on the player, when and from how far they fire, every pass and the time until the nose is back, collisions. The
+results, the line fighter's row as set from them, and what is still apart are in `tests/wc1/README.md`; the play
+tests M5.11 and M5.12 hold the row to that measure on every build. `RV_TACTICS=1` has rvsim log each tactic taken.

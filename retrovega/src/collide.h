@@ -23,8 +23,9 @@
 int16_t collide_reserve(void);          /* when the game starts (resident XMS): SHAPES.DAT in */
 void collide_flight_end(void);          /* the silhouettes kept for the flight's types given back */
 
-/* a slot's ship: its half box in positions (256 a km): the flight draws a ship lod0_px across at full size, 2,500
- * km away at a focal length of 400, so its half box is lod0_px x 3.125 km; 0 when there is no ship there */
+/* a slot's ship: its half box in positions (256 a km): its type's radius_km (data/ships.csv: the old game's sizes, a
+ * light fighter 100 km, the carrier 700; the flight draws the sprite full size where its width is that), 0 when there
+ * is no ship there */
 int32_t collide_half(int16_t slot);
 
 int16_t collide_coarse(int16_t a, int16_t b);   /* their bounding spheres touch */

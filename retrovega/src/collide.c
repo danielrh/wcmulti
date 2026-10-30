@@ -25,8 +25,8 @@
 #include "rvhooks.h"
 #include "campaign.h"
 #include "collide.h"
+#include "world.h"
 
-#define HALF_PER_PX INT32_C(800)        /* positions of half box per sprite pixel across (lod0_px): 2500/400 km / 2 x 256 */
 #define SN 64                           /* a silhouette's cells across */
 #define SROW 8                          /* bytes a row */
 #define SMASK 512
@@ -152,7 +152,7 @@ static int16_t body(int16_t s, Body *o)
     o->ax[1][0] = gOrientationUpVector[s].x; o->ax[1][1] = gOrientationUpVector[s].y; o->ax[1][2] = gOrientationUpVector[s].z;
     o->ax[2][0] = gOrientationFrontVector[s].x; o->ax[2][1] = gOrientationFrontVector[s].y;
     o->ax[2][2] = gOrientationFrontVector[s].z;
-    o->H = (int32_t)o->t->lod0_px * HALF_PER_PX;
+    o->H = (int32_t)o->t->radius_km * KM;   /* (its size: ships.csv's radius_km) */
     for (i = 0; i < 3; i++) {
         o->h[i] = o->H * o->t->hit[i] / 127;
         o->cs[i] = 2 * o->h[i] / SN;
@@ -169,7 +169,7 @@ int32_t collide_half(int16_t slot)
     const RvShipType __far *t;
     if (!is_ship(slot) || (t = ship_type(gInstanceShipTypes[slot])) == 0)
         return 0;
-    return (int32_t)t->lod0_px * HALF_PER_PX;
+    return (int32_t)t->radius_km * KM;
 }
 
 int16_t collide_coarse(int16_t a, int16_t b)

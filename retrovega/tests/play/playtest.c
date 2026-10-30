@@ -2116,6 +2116,143 @@ static void t_waiter(void)
 /* ======================================================================================================== */
 /* M6: collisions (step_collisions) */
 
+/* --- M5.11, M5.12: the old game's first mission, measured (tests/wc1/README.md), as the line fighter's envelope --- */
+
+#define PT_AI_FIGHTER 2                 /* P_FIGHTER + 1 */
+#define OLD_PASS_FAR 2500               /* its passes: closest points under this */
+#define OLD_SHOT_NEAR 1500              /* its first shot 2,455-5,129 km out */
+#define OLD_SHOT_FAR 6000
+#define OLD_BACK_STEPS (15 * SEC)       /* its nose back on the player after a pass in 1-3 s mostly, 12 at most */
+#define OLD_GAP_STEPS 12                /* its volleys 0.75 s apart: never nearer than this (0.4 s) */
+
+typedef struct {
+    int16_t passes, bumps, late, gap;   /* passes; collision damage; passes with the nose not back in time; the
+                                           shortest gap between volleys (steps; 0x7FFF none) */
+    int32_t nearest, first_shot;        /* the closest it came (km); the first shot's range (km; 0 none) */
+} Duel;
+
+/* the player's nose onto a slot (the old game's rig: its "face" key every 3 s) */
+static void pt_face(int16_t s)
+{
+    int32_t x = (gPositionVector[s].x - gPositionVector[0].x) / 256, y = (gPositionVector[s].y - gPositionVector[0].y) / 256,
+            z = (gPositionVector[s].z - gPositionVector[0].z) / 256, horiz = pt_len(x, 0, z);
+    ship_face(0, lf_atan2(x, z), lf_atan2(y, horiz));
+}
+
+/* a flight against one AI fighter (the old game's first mission's Dralthi: a Nicander with the line fighter's profile),
+ * 15,000 km ahead and to the left, crossing at the 200 setting; the player a Schroedinger at the 300 setting, its guns
+ * silent, invulnerable, flying straight (hunt 0) or facing the fighter every `hunt` seconds; for `secs`.  The fighter's
+ * passes (closest points under OLD_PASS_FAR), bumps (its hull down, a second apart: the player never fires), the first shot's range,
+ * the shortest gap between its volleys, and the passes after which its nose was not back on the player within
+ * OLD_BACK_STEPS.  0 when the world broke (the test has failed) */
+static int16_t pt_old_duel(int16_t hunt, int16_t secs, Duel *d)
+{
+    int16_t s, i, falling = 0, since_pass = 0x7FFF, since_fire = 0x7FFF, since_bump = 0x7FFF, open_ = 0;
+    int32_t prev = INT32_C(0x7FFFFFFF), low = INT32_C(0x7FFFFFFF), hull;
+    uint16_t a0;
+    memset(d, 0, sizeof(*d));
+    d->nearest = INT32_C(0x7FFFFFFF);
+    d->gap = 0x7FFF;
+    pt_alone(PT_PLAYER);
+    g_sys.armed = 0;
+    playerCanBeDamaged = 0;
+    pt_speed(0, 300);
+    s = pt_ai_ship(PT_ENEMY, PT_AI_FIGHTER, -7000, 700, 13500, TURN / 4);
+    if (s < 1)
+        return 0;
+    pt_speed(s, 200);
+    hull = pt_health(s);
+    a0 = shots_added();
+    for (i = 0; i < secs * SEC && slot_is_ship(s); i++) {
+        int32_t km;
+        if (hunt && i % (hunt * SEC) == 0)
+            pt_face(s);
+        if (!pt_step())
+            return 0;
+        km = pt_km(0, s);
+        if (km < d->nearest)
+            d->nearest = km;
+        /* a pass: the distance fell under OLD_PASS_FAR and rises again (a second after the last) */
+        if (km < prev) {
+            falling = 1;
+            low = km;
+        } else if (falling && low < OLD_PASS_FAR && since_pass > SEC) {
+            falling = 0;
+            d->passes++;
+            since_pass = 0;
+            open_ = 1;
+        } else
+            falling = 0;
+        prev = km;
+        if (since_pass < 0x7FFF)
+            since_pass++;
+        if (open_ && pt_aim(s, 0) >= 230)
+            open_ = 0;
+        if (open_ && since_pass > OLD_BACK_STEPS) {
+            open_ = 0;
+            d->late++;
+        }
+        if (pt_health(s) < hull) {      /* (a collision hurts every few steps while it lasts: one bump a second) */
+            if (since_bump > SEC)
+                d->bumps++;
+            since_bump = 0;
+            hull = pt_health(s);
+        }
+        if (since_bump < 0x7FFF)
+            since_bump++;
+        if (shots_added() != a0) {
+            a0 = shots_added();
+            if (!d->first_shot)
+                d->first_shot = km;
+            if (since_fire > 2 && since_fire < d->gap)   /* (a volley over two steps is one) */
+                d->gap = since_fire;
+            since_fire = 0;
+        }
+        if (since_fire < 0x7FFF)
+            since_fire++;
+    }
+    return 1;
+}
+
+/* M5.11: the player flying straight: the fighter comes in and shoots from the old game's range, passes without a bump,
+ * is back on the player in time, and fires a volley at a time */
+static void t_old_straight(void)
+{
+    static const char __far e_shot[] = "in 60 s the fighter never fired at a player flying straight (nearest %d km)";
+    static const char __far e_range[] = "its first shot came at %d km: the old game's from 2,455-5,129";
+    static const char __far e_pass[] = "in 60 s it never came within 2,500 km of the player (nearest %d km)";
+    static const char __far e_bump[] = "it hit the player %d times (nearest %d km): the old game's passed clear";
+    static const char __far e_back[] = "after %d of %d passes its nose was not back on the player within 15 s";
+    static const char __far e_gap[] = "two volleys %d steps apart: the old game's fighters fired one every 0.75 s";
+    Duel d;
+    if (!pt_old_duel(0, 60, &d))
+        return;
+    REQUIRE(d.first_shot, e_shot, d.nearest, 0, 0);
+    REQUIRE(d.first_shot >= OLD_SHOT_NEAR && d.first_shot <= OLD_SHOT_FAR, e_range, d.first_shot, 0, 0);
+    REQUIRE(d.passes >= 1, e_pass, d.nearest, 0, 0);
+    REQUIRE(d.bumps == 0, e_bump, d.bumps, d.nearest, 0);
+    REQUIRE(d.late == 0, e_back, d.late, d.passes, 0);
+    REQUIRE(d.gap >= OLD_GAP_STEPS, e_gap, d.gap, 0, 0);
+}
+
+/* M5.12: the player hunting (its nose onto the fighter every 3 s, as the old game's rig did): many passes, at most one
+ * bump, the nose back in time after all but one, the volleys apart */
+static void t_old_hunt(void)
+{
+    static const char __far e_pass[] = "in 90 s of hunting the fighter passed the player %d times (nearest %d km): the old "
+        "game's some 15";
+    static const char __far e_bump[] = "it hit the hunting player %d times (nearest %d km): the old game's once in 52 passes";
+    static const char __far e_back[] = "after %d of %d passes its nose was not back on the player within 15 s";
+    static const char __far e_gap[] = "two volleys %d steps apart: the old game's fighters fired one every 0.75 s";
+    Duel d;
+    if (!pt_old_duel(3, 90, &d))
+        return;
+    REQUIRE(d.passes >= 5, e_pass, d.passes, d.nearest, 0);
+    REQUIRE(d.bumps <= 1, e_bump, d.bumps, d.nearest, 0);
+    REQUIRE(d.late <= 1, e_back, d.late, d.passes, 0);
+    REQUIRE(d.gap >= OLD_GAP_STEPS, e_gap, d.gap, 0, 0);
+}
+
 /* M6.1 */
 static void t_ram(void)
 {
@@ -2127,15 +2264,15 @@ static void t_ram(void)
     int32_t depth, h0, h1;
     int16_t i;
     pt_alone(PT_PLAYER);
-    pt_ship(1, PT_ENEMY, SIDE_AERA, CTL_FROZEN, 0, 0, 300, TURN / 2);
+    pt_ship(1, PT_ENEMY, SIDE_AERA, CTL_FROZEN, 0, 0, 150, TURN / 2);   /* (inside one another: the radii are 100 and 160 km) */
     REQUIRE(collide_ships(0, 1, &push, &depth), e_test, 0, 0, 0);
     h0 = pt_health(0);
     h1 = pt_health(1);
     for (i = 0; i < 10; i++)
         if (!pt_step())
             return;
-    REQUIRE(!slot_is_ship(1) || !collide_ships(0, 1, &push, &depth) || depth <= collide_half(0) / 16, e_stuck, depth,
-            collide_half(0) / 16, 0);
+    REQUIRE(!slot_is_ship(1) || !collide_ships(0, 1, &push, &depth) || depth <= collide_half(0) / 4, e_stuck, depth,
+            collide_half(0) / 4, 0);
     REQUIRE(pt_health(0) < h0 && (pt_health(1) < h1 || shipAiState[1] == 9 || !slot_is_ship(1)), e_hurt,
             h0 - pt_health(0), slot_is_ship(1) ? h1 - pt_health(1) : 0, 0);
 }
@@ -2158,7 +2295,7 @@ static void t_no_ghosts(void)
     for (i = 0; i < 5 * SEC; i++) {
         if (!pt_step())
             return;
-        if (slot_is_ship(1) && collide_ships(0, 1, &push, &depth) && depth > collide_half(0) / 16)
+        if (slot_is_ship(1) && collide_ships(0, 1, &push, &depth) && depth > collide_half(0) / 4)   /* (touching: a step's worth) */
             REQUIRE(++run <= 3, e_in, run, i, 0);
         else
             run = 0;
@@ -2665,6 +2802,10 @@ static const char __far n_m5_8[] = "M5.8 formation (aiFighterThink): a wingman k
 static const char __far n_m5_9[] = "M5.9 no-left (aiFighterThink): a profile that cannot turn left rolls and pulls instead";
 static const char __far n_m5_10[] = "M5.10 waiter (aiFighterThink): a profile that lies in wait comes when the player "
     "looks away";
+static const char __far n_m5_11[] = "M5.11 old-straight (aiFighterThink): against a player flying straight, the line "
+    "fighter keeps the old game's measure: shots from 1,500-6,000 km, a volley at a time, passes clear, round in 15 s";
+static const char __far n_m5_12[] = "M5.12 old-hunt (aiFighterThink): hunted by the player, it passes many times, bumps "
+    "once at most, comes round in time, fires a volley at a time";
 static const char __far n_m6_1[] = "M6.1 ram (step_collisions): ships inside one another are pushed apart, both hurt";
 static const char __far n_m6_2[] = "M6.2 no-ghosts (step_collisions): a ship flown at another does not pass through";
 static const char __far n_m7_1[] = "M7.1 launch (fireGunFromShip): a launcher puts a missile in a ship slot";
@@ -2704,7 +2845,8 @@ static const PtTest __far k_tests[] = {
     { n_m4_1, t_kill, 0 }, { n_m4_2, t_dying_quiet, 0 }, { n_m4_3, t_player_dies, 0 },
     { n_m5_1, t_ai_thunks, 1 }, { n_m5_2, t_ai_turns, 0 }, { n_m5_3, t_ai_closes, 0 }, { n_m5_4, t_ai_fires, 0 },
     { n_m5_5, t_ai_aims, 1 }, { n_m5_6, t_ai_limits, 0 }, { n_m5_7, t_wingman_fights, 0 },
-    { n_m5_8, t_formation, 0 }, { n_m5_9, t_no_left, 0 }, { n_m5_10, t_waiter, 0 },
+    { n_m5_8, t_formation, 0 }, { n_m5_9, t_no_left, 0 }, { n_m5_10, t_waiter, 0 }, { n_m5_11, t_old_straight, 0 },
+    { n_m5_12, t_old_hunt, 0 },
     { n_m6_1, t_ram, 0 }, { n_m6_2, t_no_ghosts, 0 },
     { n_m7_1, t_launch, 0 }, { n_m7_2, t_missile_key, 0 }, { n_m7_3, t_missile_flies, 0 },
     { n_m7_4, t_missile_hits, 0 }, { n_m7_5, t_missile_homes, 0 }, { n_m7_6, t_missile_ends, 0 },

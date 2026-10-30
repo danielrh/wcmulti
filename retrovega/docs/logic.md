@@ -133,7 +133,7 @@ spare near vector for `do_damage`'s `where`).
 ### Units and the integer maths
 
 - **Positions:** 256 a km, in `int32_t`.
-  - A WC-scale fighter's half box is `lod0_px` × 3.125 km (`collide_half(s)`, in positions). That is about 450 km for a Gawain.
+  - A ship's half box is its type's `radius_km` (`collide_half(s)`, in positions): the old game's sizes, 100 km for a light fighter, 160 for a Nicander, 700 for the carrier (ships.csv). The sprite is drawn full size where its width is that (625 km for a light fighter).
   - Ships spawn 4,000 to 12,000 km apart.
 - **Directions:** 256 = 1.0.
   - `vec_turn(a, b, t)` turns a pair of axes; `ship_orthonormalise(s)` squares the frame up again. Do it every step a ship turns.

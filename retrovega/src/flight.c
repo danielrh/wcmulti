@@ -343,15 +343,17 @@ static void basis_of(int s, LfBasis *b)
     b->up = *(const LfVec *)&gOrientationUpVector[s];
 }
 
-/* how big a ship shows: full size at 2,500 km, smaller beyond, up to twice
- * full size closer in.  Nothing physical: the ABI's units are WC's (256 = 1
- * km, a kps moves 12.8 units a frame, so a fighter crosses 250 km a second),
- * where a dogfight spans thousands of km and a fighter is drawn big at a
- * couple of thousand, and that is the scale the flight keeps. */
+/* how big a ship shows: full size where the sprite's width (lod0_px at a
+ * focal length of 400) is its type's size (radius_km, ships.csv: the old
+ * game's, a light fighter 100 km, so full size at 625 km), smaller beyond, up
+ * to twice full size closer in; a type unknown (a test scene's) at 2,500 km.
+ * Nothing physical: the ABI's units are WC's (256 = 1 km, a kps moves 12.8
+ * units a frame), where a dogfight spans thousands of km. */
 #define FULL_SIZE_UNITS (256L * 2500)
-static int scale_of(const LfVec *rel)
+static int scale_of(const LfVec *rel, const RvShipType __far *t)
 {
     long x = rel->x / 64, y = rel->y / 64, z = rel->z / 64, k = 64, d, sc;
+    long full = t && t->radius_km && t->lod0_px ? (long)t->radius_km * 256 * 800 / t->lod0_px : FULL_SIZE_UNITS;
     while (x > 37000 || x < -37000 || y > 37000 || y < -37000 || z > 37000 || z < -37000) {
         x /= 4;                         /* (the squares' sum must fit 32 bits: it wrapped past 16,384 km, */
         y /= 4;                         /*  a ship there drawn too big; /flametest found it) */
@@ -359,7 +361,7 @@ static int scale_of(const LfVec *rel)
         k *= 4;
     }
     d = (long)lf_sqrt((unsigned long)(x * x) + (unsigned long)(y * y) + (unsigned long)(z * z)) * k;
-    sc = d ? FULL_SIZE_UNITS * 256 / d : 512;
+    sc = d ? full * 256 / d : 512;
     return (int)(sc > 512 ? 512 : sc);
 }
 
@@ -407,7 +409,7 @@ static void plan_draws(void)
             continue;
         rel_of(s, &rel);
         basis_of(s, &ship);
-        g_plan[g_nplan].scale = scale_of(&rel);
+        g_plan[g_nplan].scale = scale_of(&rel, slot_type(s));
         px[g_nplan] = ships_size_of(set, &rel, &cam, &ship, g_plan[g_nplan].scale, &p);
         if (!p.on_screen)
             continue;
@@ -540,7 +542,7 @@ int16_t flight_ent_box(int16_t slot, const RvCamera *cam, EntBox *o)
     ay = cam->cy - o->Y * cam->focal / o->Z;
     o->sx = (short)(ax < -16000 ? -16000 : ax > 16000 ? 16000 : ax);
     o->sy = (short)(ay < -16000 ? -16000 : ay > 16000 ? 16000 : ay);
-    sc = (int)((long)scale_of(&rel) * cam->focal / 400);   /* (the sprites' size is the flight's, at its focal length) */
+    sc = (int)((long)scale_of(&rel, slot_type(slot)) * cam->focal / 400);   /* (the sprites' size is the flight's, at its focal length) */
     t = slot_type(slot);
     o->half = (short)(t ? (long)t->lod0_px * sc / 512 : 4);
     if (o->half < 2)
@@ -783,7 +785,7 @@ static void ft_sheet(void)
         rel[c].x = cam.front.x * km + (cam.right.x * km * dx + cam.up.x * km * dy) / 400;
         rel[c].y = cam.front.y * km + (cam.right.y * km * dx + cam.up.y * km * dy) / 400;
         rel[c].z = cam.front.z * km + (cam.right.z * km * dx + cam.up.z * km * dy) / 400;
-        sc[c] = scale_of(&rel[c]);
+        sc[c] = scale_of(&rel[c], 0);
         how[c] = c < 4 ? SHIP_AS_SETS : SHIP_AS_EXACT;
         ships_drawn(set[c], how[c], &rel[c], &cam, &ship[c], sc[c], &p[c], &nb, &nh);
         flames_add(ship_type(types[c]), &p[c], nb, nh, sc[c], c & 1, c, &fs[c]);
@@ -867,7 +869,7 @@ static void flame_test(void)
                     rel.y = cam.front.y * km + (cam.right.y * km * dx + cam.up.y * km * dy) / 12;
                     rel.z = cam.front.z * km + (cam.right.z * km * dx + cam.up.z * km * dy) / 12;
                 }
-                sc = scale_of(&rel);
+                sc = scale_of(&rel, 0);
                 for (ex = 0; ex < 2; ex++) {    /* (SHIP_AS_SETS, _EXACT) */
                     LfPlace p, p0;
                     FlameSet fs;
@@ -2207,7 +2209,7 @@ static void lasers_draw_far(int y0, int y1, const short __far *ext, int ey0, int
         rel.x = g_lz_ship[k].pos.x - gPositionVector[0].x;
         rel.y = g_lz_ship[k].pos.y - gPositionVector[0].y;
         rel.z = g_lz_ship[k].pos.z - gPositionVector[0].z;
-        ships_draw(g_lz_ship[k].set, &rel, &cam, &ship, scale_of(&rel), y0, y1, 0, SCR_W, ext, ey0, rows);
+        ships_draw(g_lz_ship[k].set, &rel, &cam, &ship, scale_of(&rel, 0), y0, y1, 0, SCR_W, ext, ey0, rows);
     }
     g_t_far_ships += clock240() - t0;
     bolts_draw_far(y0, y1, ext, ey0, rows);

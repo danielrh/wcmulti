@@ -566,7 +566,7 @@ static void hits(int n, const LfBasis *cam)
     int i, k;
     if (!t || maybeEntityType[0] != 0xC)
         return;
-    H = (long)t->lod0_px * 800 / 256;   /* (collide.c's half box, km) */
+    H = t->radius_km;                   /* (collide.c's half box, km) */
     for (k = 0; k < 3; k++)
         h[k] = H * t->hit[k] / 127;
     for (i = 0; i < n; i++) {

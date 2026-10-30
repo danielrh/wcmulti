@@ -4,7 +4,7 @@ the flights in it (the frame count restarts with each), each ship's life in a sl
 point), and for each AI ship a summary of what it did against the player (slot 0): how it came in, how fast it
 turned, when and from how far it fired, its passes, and a timeline.
 
-    trace.py TRACE [--fps N] [--timeline] [--slot S]
+    trace2.py TRACE [--fps N] [--timeline] [--slot S]
 
 The lines: "S frame slot entity type side pilot x y z fx fy fz ux uy uz vx vy vz speed setspeed aistate aitimer
 missiletarget parent hull shf shr arf arr arl arrt", "F frame ship gun", "D frame src dst qty".  Positions are
@@ -97,7 +97,7 @@ def summarise(flight, fi, fps, timeline, only):
             aims.append(cn)
             its.append(ci)
             if prev is not None:
-                c = max(-1.0, min(1.0, dot(prev['front'], r['front']) / 65536.0))
+                c = max(-1.0, min(1.0, dot(prev['front'], r['front']) / max(1.0, length(prev['front']) * length(r['front']))))
                 turns.append(math.degrees(math.acos(c)) * fps)
             prev = r
         print('  speed km/s: median %.0f, 90%% %.0f, max %.0f; turn deg/s: median %.0f, 90%% %.0f, max %.0f' % (
