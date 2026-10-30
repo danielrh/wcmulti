@@ -26,11 +26,51 @@
 PilotInput __far g_pilot;
 static int16_t __far g_turn_frac[NUM_SHIP_SLOTS][3];
 
+/* --- the minds' decisions: a turn a slot (step_minds fills it, step_motion flies it), and each mind's memory --- */
+
+typedef struct { int8_t x, y, roll, pad; } Turn;   /* steer_x, steer_y, roll: -9 .. 9, as g_pilot gives them */
+static Turn __far g_turn[NUM_SHIP_SLOTS];
+
+/* an AI's memory (the AI, below): what it is doing, and to whom */
+typedef struct {
+    uint8_t tactic, phase;              /* the maneuver running (T_*), its phase */
+    int16_t timer;                      /* steps left in it */
+    uint8_t target;                     /* the slot it fights, 0xFF none (rvTarget says the same) */
+    uint8_t leader;                     /* the slot it keeps station on, 0xFF none */
+    int8_t dir;                         /* which way a break or a loop goes */
+    uint8_t burn;                       /* the afterburner this tactic */
+    uint8_t fire;                       /* FIRE_*: what step_fire does for it this step */
+    uint8_t launcher;                   /* the launcher FIRE_MISSILE fires */
+    uint8_t profile;                    /* its AiProfile (P_*) */
+    uint8_t pad;
+    uint16_t lock;                      /* steps its target has sat in its missiles' lock cone */
+    uint16_t turrets;                   /* a capital ship's turrets to fire this step, a bit each */
+    uint16_t since;                     /* the step it last fired a missile */
+} Mind;
+enum { FIRE_GUNS = 1, FIRE_MISSILE = 2 };
+static Mind __far g_mind[NUM_SHIP_SLOTS];
+
+/* a missile's own (its slot has no ship type) */
+typedef struct { uint16_t weapon, life; } MissileState;
+static MissileState __far g_missile[NUM_SHIP_SLOTS];
+
+#define RAM_STEPS 10                    /* a ship hurt by a ram is not hurt by one again for this many steps */
+static uint16_t __far g_rammed[NUM_SHIP_SLOTS];   /* the step a ship was last hurt by a ram */
+
+static uint8_t profile_of(uint16_t type, uint16_t side);
+
 void logic_prepare_spawn(int16_t ship_index)
 {
-    if (ship_index < 0 || ship_index >= NUM_SHIP_SLOTS)   /* (only ship slots keep a turn: nothing to forget) */
+    if (ship_index < 0 || ship_index >= NUM_SHIP_SLOTS)   /* (only ship slots keep anything: nothing to forget) */
         return;
     _fmemset(&g_turn_frac[ship_index][0], 0, sizeof(g_turn_frac[0]));
+    _fmemset(&g_turn[ship_index], 0, sizeof(Turn));
+    _fmemset(&g_mind[ship_index], 0, sizeof(Mind));
+    g_mind[ship_index].target = g_mind[ship_index].leader = 0xFF;
+    g_mind[ship_index].profile = profile_of(gInstanceShipTypes[ship_index], commAnimInfo[ship_index]);
+    g_missile[ship_index].weapon = 0xFFFF;
+    g_missile[ship_index].life = 0;
+    g_rammed[ship_index] = (uint16_t)(frameCounter - RAM_STEPS);
 }
 
 /* the HUD's marks, worked out once a step (hud_marks, the step's end) and drawn band by band (logic_hud, some four
@@ -99,6 +139,10 @@ void logic_start(const RvMission __far *m)
     (void)m;
     _fmemset(&g_pilot, 0, sizeof g_pilot);
     _fmemset(g_turn_frac, 0, sizeof(g_turn_frac));
+    _fmemset(g_turn, 0, sizeof g_turn);
+    _fmemset(g_mind, 0, sizeof g_mind);
+    _fmemset(g_missile, 0, sizeof g_missile);
+    _fmemset(g_rammed, 0, sizeof g_rammed);
     _fmemset(systemDamage, 0, systemDamage_SIZE);   /* the player's systems whole (flight.c clears only the cockpit's) */
     _fmemset(g_killed, 0, sizeof g_killed);
     _fmemset(&g_hud, 0, sizeof g_hud);   /* (no marks until the first step works them out) */
@@ -147,13 +191,71 @@ static void step_timers(void)
  * mission's; CTL_FROZEN nothing.  A mind decides: where to turn, the throttle (aiSetSpeed), whom to target */
 static void step_minds(void)
 {
+    int16_t s;
+    for (s = 0; s < NUM_SHIP_SLOTS; s++) {
+        if (!slot_is_ship(s))
+            continue;
+        g_turn[s].x = g_turn[s].y = g_turn[s].roll = 0;
+        g_mind[s].fire = 0;
+        g_mind[s].turrets = 0;
+        if (shipAiState[s] == 9)        /* dying: it neither thinks nor steers (it coasts to its end) */
+            continue;
+        switch (rvController[s]) {
+        case CTL_PLAYER:
+            g_turn[s].x = g_pilot.steer_x;
+            g_turn[s].y = g_pilot.steer_y;
+            g_turn[s].roll = g_pilot.roll;
+            rvTarget[s] = (uint8_t)(g_sys.target >= 0 ? g_sys.target : 0xFF);   /* (the layer reads them) */
+            playerTarget = (uint16_t)(g_sys.target >= 0 ? g_sys.target : 0xFFFF);
+            break;
+        case CTL_AI:                    /* (always the thunk: the layer skips it where the ship is a puppet) */
+            if (maybeEntityType[s] == ET_CAPSHIP)
+                aiShipThink((uint16_t)s);
+            else
+                aiFighterThink((uint16_t)s);
+            break;
+        default:                        /* a puppet (the layer flies it), a script's, a frozen one: nothing of its own */
+            break;
+        }
+    }
 }
 
 /* 3. the fire loop: who pulls a trigger this step (the player's g_pilot.guns with g_sys.armed, g_pilot.missile;
  * the AI's own decisions) and which guns are ready (cooled, the energy there): each one fired through the
  * fireGunFromShip thunk (or maybe_fire_all_guns), which makes the shot */
+/* a ship's launcher with rounds left: the first (the panel has no weapon choice yet), -1 none */
+static int16_t launcher_of(int16_t s)
+{
+    int16_t g;
+    for (g = 0; g < GUN_COUNT(s); g++) {
+        const RvWeapon __far *w = weapon(GUN_TYPE(s, g));
+        if (w && (w->kind == RV_WK_MISSILE || w->kind == RV_WK_TORPEDO || w->kind == RV_WK_ROCKET)
+            && !(GUN_STATE(s, g) & GUN_DESTROYED) && (GUN_STATE(s, g) & 0x7F))
+            return g;
+    }
+    return -1;
+}
+
 static void step_fire(void)
 {
+    int16_t s, g;
+    /* the player: the missile key (the guns' trigger is the guns' milestone's, M2) */
+    if (slot_is_ship(0) && rvController[0] == CTL_PLAYER && shipAiState[0] != 9 && g_pilot.missile && g_sys.armed
+        && (g = launcher_of(0)) >= 0)
+        (void)fireGunFromShip(0, (uint16_t)g);
+    /* the minds' choices (aiFighterThink, aiShipThink left them in g_mind): through the thunks */
+    for (s = 1; s < NUM_SHIP_SLOTS; s++) {
+        if (!slot_is_ship(s) || rvController[s] != CTL_AI || shipAiState[s] == 9)
+            continue;
+        if (g_mind[s].fire & FIRE_GUNS)
+            maybe_fire_all_guns((uint16_t)s);
+        if (g_mind[s].fire & FIRE_MISSILE)
+            (void)fireGunFromShip((uint16_t)s, g_mind[s].launcher);
+        if (g_mind[s].turrets)          /* a capital ship's turrets that bear */
+            for (g = 0; g < GUN_COUNT(s) && g < 16; g++)
+                if (g_mind[s].turrets & (1u << g))
+                    (void)fireGunFromShip((uint16_t)s, (uint16_t)g);
+    }
 }
 
 
@@ -260,12 +362,958 @@ static void step_turn(int16_t ship_index,
         if (roll) {
             vec_turn(&gOrientationRightVector[ship_index],
                      &gOrientationUpVector[ship_index],
-                     turn_units(ship_index, 1, TURN_STEP(t->roll_dps, roll)));
+                     turn_units(ship_index, 2, TURN_STEP(t->roll_dps, roll)));
         }
         ship_orthonormalise(ship_index);
     }
 }
   
+
+/* ====================================================================================================================
+ * Helpers of the minds, the missiles and the collisions: angles and lengths in km (positions overflow when squared)
+ * ==================================================================================================================== */
+
+/* the angle of (x, y) in the plane of x (0) and y (a quarter turn), -512 .. 511 (TURN a whole turn): the arguments
+ * halved until lf_atan2 takes them (under 2^16) */
+static int16_t angle_of(int32_t y, int32_t x)
+{
+    int16_t t;
+    while (x >= 32768L || x <= -32768L || y >= 32768L || y <= -32768L) {
+        x /= 2;
+        y /= 2;
+    }
+    t = lf_atan2(y, x);
+    return (int16_t)(t >= 512 ? t - 1024 : t);
+}
+
+/* |(x, y, z)|, the parts halved until their squares fit */
+static int32_t len_of(int32_t x, int32_t y, int32_t z)
+{
+    int32_t k = 1;
+    while (labs(x) > 30000L || labs(y) > 30000L || labs(z) > 30000L) {
+        x /= 2;
+        y /= 2;
+        z /= 2;
+        k *= 2;
+    }
+    return (int32_t)lf_sqrt((uint32_t)(x * x) + (uint32_t)(y * y) + (uint32_t)(z * z)) * k;
+}
+
+static int32_t clamp32(int32_t v, int32_t lo, int32_t hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+/* km between two slots */
+static int32_t km_between(int16_t a, int16_t b)
+{
+    return len_of(TO_KM(gPositionVector[b].x - gPositionVector[a].x), TO_KM(gPositionVector[b].y - gPositionVector[a].y),
+                  TO_KM(gPositionVector[b].z - gPositionVector[a].z));
+}
+
+/* a world vector (km, or anything under 2^23) as s's frame sees it: right, up, ahead */
+static void to_body(int16_t s, const RvVec3 *d, RvVec3 *out)
+{
+    out->x = vec_dot(d, &gOrientationRightVector[s]) / 256;
+    out->y = vec_dot(d, &gOrientationUpVector[s]) / 256;
+    out->z = vec_dot(d, &gOrientationFrontVector[s]) / 256;
+}
+
+/* s flying along its nose at its speed (after a jump: no momentum the other way to slide off) */
+static void fly_ahead(int16_t s)
+{
+    const RvVec3 *F = &gOrientationFrontVector[s];
+    int32_t step = KPS_STEP(speedLo[s]);
+    gVelocityVector[s] = vec3(FIX_MUL(F->x, step), FIX_MUL(F->y, step), FIX_MUL(F->z, step));
+}
+
+/* where a gun record's mount is (positions): across and up in 32nds of the half box, and the nose ahead */
+static void gun_mount(int16_t s, int16_t g, RvVec3 *out)
+{
+    const RvShipType __far *t = slot_type(s);
+    int32_t h = collide_half(s), ax = (int32_t)GUN_MOUNT_X(s, g) * (h / 32), ay = (int32_t)GUN_MOUNT_Y(s, g) * (h / 32);
+    int32_t az = t ? (int32_t)t->hit[2] * (h / 127) : h / 2;
+    const RvVec3 *R = &gOrientationRightVector[s], *U = &gOrientationUpVector[s], *F = &gOrientationFrontVector[s];
+    out->x = gPositionVector[s].x + FIX_MUL(R->x, ax) + FIX_MUL(U->x, ay) + FIX_MUL(F->x, az);
+    out->y = gPositionVector[s].y + FIX_MUL(R->y, ax) + FIX_MUL(U->y, ay) + FIX_MUL(F->y, az);
+    out->z = gPositionVector[s].z + FIX_MUL(R->z, ax) + FIX_MUL(U->z, ay) + FIX_MUL(F->z, az);
+}
+
+/* the hull left, percent */
+static int16_t hull_pct(int16_t s)
+{
+    const RvShipType __far *t = slot_type(s);
+    if (!t || !t->hull)
+        return 100;
+    return (int16_t)(100 - (int32_t)damagePoints[s] * 100 / t->hull);
+}
+
+/* the first of s's guns (a gun or a turret, not destroyed), -1 none: its weapon says how far and fast they shoot */
+static int16_t gun_of(int16_t s)
+{
+    int16_t g;
+    for (g = 0; g < GUN_COUNT(s); g++) {
+        const RvWeapon __far *w = weapon(GUN_TYPE(s, g));
+        if (w && (w->kind == RV_WK_GUN || w->kind == RV_WK_TURRET) && !(GUN_STATE(s, g) & GUN_DESTROYED))
+            return g;
+    }
+    return -1;
+}
+
+/* ====================================================================================================================
+ * The guns (M2: fireGunFromShip's guns and turrets, maybe_fire_all_guns): to be written (docs/gameplay.md)
+ * ==================================================================================================================== */
+
+/* (ship, gun, its weapon): a gun or a turret fires: a shot from its mount (gun_mount), along the nose at the
+ * weapon's speed (a turret's toward rvTarget[ship]'s lead point: the ship's mind aims it); the cooldown into
+ * GUN_STATE's low bits, the energy off gunEnergy.  Returns 0xFFFF */
+static uint16_t gun_fire(uint16_t ship, uint16_t gun, const RvWeapon __far *w)
+{
+    (void)ship;
+    (void)gun;
+    (void)w;
+    return 0xFFFF;
+}
+
+/* (ship): each gun or turret that is ready (not destroyed, cooled, the energy there), through the fireGunFromShip
+ * thunk; never a launcher */
+static void guns_fire_ready(uint16_t ship)
+{
+    (void)ship;
+}
+
+/* ====================================================================================================================
+ * Collisions (M6): two ships inside one another are parted and both hurt
+ * ==================================================================================================================== */
+
+#define RAM_BASE 2                      /* a touch's damage */
+#define RAM_PER 320                     /* positions a step of closing speed a point more (25 kps) */
+
+/* a ship gives way in a collision: a frozen one or a puppet (the layer's) never */
+static int16_t ram_moves(int16_t s)
+{
+    return rvController[s] != CTL_FROZEN && rvController[s] != CTL_PUPPET;
+}
+
+/* moved by part / 256 of push (positions); its velocity's part toward the other ship (into: the sign of the push that
+ * points at it) taken away, and its speed halved: a collision stops a ship */
+static void ram_shove(int16_t s, const LfVec *push, int16_t part, int16_t into)
+{
+    RvVec3 n, *v = &gVelocityVector[s];
+    int32_t d;
+    gPositionVector[s].x += push->x / 256 * part + (push->x % 256) * part / 256;
+    gPositionVector[s].y += push->y / 256 * part + (push->y % 256) * part / 256;
+    gPositionVector[s].z += push->z / 256 * part + (push->z % 256) * part / 256;
+    n = vec3(TO_KM(push->x), TO_KM(push->y), TO_KM(push->z));   /* (its way: km, so the squares fit) */
+    vec_norm(&n);
+    d = vec_dot(v, &n) / 256 * into;    /* (the velocity toward the other ship) */
+    if (d > 0) {
+        v->x -= FIX_MUL(n.x, d) * into;
+        v->y -= FIX_MUL(n.y, d) * into;
+        v->z -= FIX_MUL(n.z, d) * into;
+    }
+    speedLo[s] = speedLo[s] / 2;
+}
+
+/* a collision's damage: the two ships' closing speed, positions a step, into points */
+static uint16_t ram_damage(int16_t a, int16_t b)
+{
+    int32_t closing = len_of(gVelocityVector[a].x - gVelocityVector[b].x, gVelocityVector[a].y - gVelocityVector[b].y,
+                             gVelocityVector[a].z - gVelocityVector[b].z);
+    return (uint16_t)(RAM_BASE + closing / RAM_PER);
+}
+
+/* a and b touch coarsely: the fine test, then the push that parts them (the lighter, by its box, gives way the more;
+ * one that cannot move leaves it all to the other) and the hurt, each with the other as the source and the other's
+ * place as the hit's (the side facing it); a pair touching on hurts every RAM_STEPS */
+static void ram(int16_t a, int16_t b)
+{
+    LfVec push;
+    int32_t depth, ha, hb;
+    int16_t ma, mb, pa, pb;
+    uint16_t qty;
+    if (!collide_ships(a, b, &push, &depth))
+        return;
+    push.x += push.x / 8;               /* (a little past touching, so the next step is not inside again) */
+    push.y += push.y / 8;
+    push.z += push.z / 8;
+    ma = ram_moves(a);
+    mb = ram_moves(b);
+    ha = collide_half(a);
+    hb = collide_half(b);
+    if (ma && mb) {                     /* push is b's move: shared in the other's weight */
+        pb = (int16_t)(ha * 256 / (ha + hb));
+        pa = (int16_t)(256 - pb);
+    } else {
+        pa = ma ? 256 : 0;
+        pb = mb ? 256 : 0;
+    }
+    qty = ram_damage(a, b);
+    if (pb)
+        ram_shove(b, &push, pb, -1);
+    if (pa)
+        ram_shove(a, &push, (int16_t)-pa, 1);
+    if ((uint16_t)(frameCounter - g_rammed[a]) >= RAM_STEPS) {
+        g_rammed[a] = frameCounter;
+        (void)do_damage((uint16_t)b, (uint16_t)a, qty, RV_WHERE(&gPositionVector[b]));
+    }
+    if ((uint16_t)(frameCounter - g_rammed[b]) >= RAM_STEPS) {
+        g_rammed[b] = frameCounter;
+        (void)do_damage((uint16_t)a, (uint16_t)b, qty, RV_WHERE(&gPositionVector[a]));
+    }
+}
+
+/* ====================================================================================================================
+ * Missiles (M7): a launcher's round is a ship slot of ET_MISSILE that flies, homes and bursts on what it meets
+ * ==================================================================================================================== */
+
+#define MISSILE_HALF_KM 1               /* its half box (gMaybeShipRadius), km */
+/* a seeker's turn rate by its lock (RV_LOCK_*: none, heat, image, auto, proximity), degrees a second; a torpedo's
+ * own.  (weapons.csv has no column for it yet) */
+static const uint8_t __far k_seeker_dps[5] = { 0, 70, 60, 90, 0 };
+#define TORPEDO_DPS 25
+
+static int16_t missile_dps(const RvWeapon __far *w)
+{
+    return w->kind == RV_WK_TORPEDO ? TORPEDO_DPS : w->lock < 5 ? k_seeker_dps[w->lock] : 0;
+}
+
+static int16_t nearest_enemy(int16_t s, int16_t capital_only);
+
+/* whom a missile launched by `ship` homes on: a dumbfire nobody; the player's the cockpit's lock (a friend-or-foe
+ * the target, else the nearest enemy); an AI's its own target */
+static uint8_t missile_target_of(int16_t ship, const RvWeapon __far *w)
+{
+    int16_t t;
+    if (w->lock == RV_LOCK_NONE || w->lock == RV_LOCK_PROXIMITY)
+        return 0xFF;
+    if (rvController[ship] != CTL_PLAYER)
+        return rvTarget[ship];
+    if (g_sys.target >= 0 && slot_is_ship(g_sys.target) && (g_sys.lock || w->lock == RV_LOCK_AUTO))
+        return (uint8_t)g_sys.target;
+    if (w->lock == RV_LOCK_AUTO && (t = nearest_enemy(ship, 0)) >= 0)
+        return (uint8_t)t;
+    return 0xFF;
+}
+
+/* (ship, gun, its weapon): a launcher fires: a round fewer, and the missile into a free ship slot at the mount,
+ * facing the ship's way at its weapon's speed, its parent the ship, its target by the lock.  The slot (the layer
+ * maps it), 0xFFFF when every slot is taken (the round is spent and nothing flies) */
+static uint16_t missile_launch(uint16_t ship, uint16_t gun, const RvWeapon __far *w)
+{
+    int16_t s = ship_free_slot(), k;
+    uint8_t rounds = (uint8_t)(GUN_STATE(ship, gun) & 0x7F);
+    RvVec3 at;
+    if (rounds)
+        GUN_STATE(ship, gun) = (uint8_t)((GUN_STATE(ship, gun) & GUN_DESTROYED) | (rounds - 1));
+    if (s < 0)
+        return 0xFFFF;
+    gun_mount((int16_t)ship, (int16_t)gun, &at);
+    maybeEntityType[s] = ET_MISSILE;
+    gInstanceShipTypes[s] = GUN_TYPE(ship, gun);   /* (its weapon: the drawing and the effects read it; no ship type) */
+    commAnimInfo[s] = commAnimInfo[ship];
+    rvController[s] = CTL_AI;
+    parentShipForShip[s] = (uint8_t)ship;
+    shipStateByte[s] = 0xFF;
+    slotMissionShip[s] = 0xFFFF;
+    gPositionVector[s] = at;
+    gOrientationFrontVector[s] = gOrientationFrontVector[ship];
+    gOrientationRightVector[s] = gOrientationRightVector[ship];
+    gOrientationUpVector[s] = gOrientationUpVector[ship];
+    setSpeed[s] = speedLo[s] = w->speed_kps;
+    fly_ahead(s);
+    for (k = 0; k < 2; k++)
+        SHIELD(s, k) = SHIELD_MAX(s, k) = 0;
+    for (k = 0; k < 4; k++)
+        ARMOR(s, k) = 0;
+    damagePoints[s] = 0;
+    coreHp[s] = 0;
+    gunEnergy[s] = 0;
+    gunDamage[s] = 0;
+    engineFlag[s] = 0;
+    GUN_COUNT(s) = 0;
+    shipAiState[s] = 0;
+    gMaybeShipRadius[s] = MISSILE_HALF_KM;
+    damageProperty[s] = w->damage;
+    rvFlags[s] = 0;
+    rvAfterburner[s] = 0;
+    logic_prepare_spawn(s);
+    missileTarget[s] = rvTarget[s] = missile_target_of((int16_t)ship, w);
+    g_missile[s].weapon = GUN_TYPE(ship, gun);
+    g_missile[s].life = (uint16_t)((int32_t)w->range_km * KPS_HZ / (w->speed_kps ? w->speed_kps : 1));
+    return (uint16_t)s;
+}
+
+/* a seeker's nose toward its target's lead point (where the target will be when it gets there), by at most its rate */
+static void missile_seek(int16_t s, int16_t t, int16_t dps)
+{
+    RvVec3 d, b;
+    int32_t tof, horiz;
+    int16_t yaw, pitch, most;
+    d = vec3(TO_KM(gPositionVector[t].x - gPositionVector[s].x), TO_KM(gPositionVector[t].y - gPositionVector[s].y),
+             TO_KM(gPositionVector[t].z - gPositionVector[s].z));
+    tof = len_of(d.x, d.y, d.z) / (speedLo[s] / KPS_HZ + 1);   /* steps to it (km a step: kps / KPS_HZ) */
+    d.x += TO_KM(gVelocityVector[t].x) * tof;
+    d.y += TO_KM(gVelocityVector[t].y) * tof;
+    d.z += TO_KM(gVelocityVector[t].z) * tof;
+    to_body(s, &d, &b);
+    horiz = len_of(b.x, 0, b.z);
+    yaw = angle_of(b.x, b.z);
+    pitch = angle_of(b.y, horiz);
+    most = turn_units(s, 0, TURN_STEP(dps, 9));   /* (its rate's units this step, the fraction carried) */
+    yaw = (int16_t)clamp32(yaw, -most, most);
+    most = turn_units(s, 1, TURN_STEP(dps, 9));
+    pitch = (int16_t)clamp32(pitch, -most, most);
+    if (yaw)
+        vec_turn(&gOrientationFrontVector[s], &gOrientationRightVector[s], yaw);
+    if (pitch)
+        vec_turn(&gOrientationFrontVector[s], &gOrientationUpVector[s], pitch);
+    if (yaw || pitch)
+        ship_orthonormalise(s);
+}
+
+/* a missile's step: its life down (gone at its range), its seeking, its move, and its hit: its step through a ship's
+ * hull (any ship but its launcher), where it bursts (do_damage with the missile as the source) and its slot ends */
+static void missile_step(int16_t s)
+{
+    const RvWeapon __far *w;
+    RvVec3 last, hit;
+    LfVec lh;
+    int32_t reach;
+    int16_t t, dps, k;
+    if (rvController[s] == CTL_PUPPET) {   /* (the layer flies it) */
+        gPositionVector[s].x += gVelocityVector[s].x;
+        gPositionVector[s].y += gVelocityVector[s].y;
+        gPositionVector[s].z += gVelocityVector[s].z;
+        return;
+    }
+    w = weapon(g_missile[s].weapon);
+    if (!w || !g_missile[s].life) {
+        ship_clear(s);
+        return;
+    }
+    g_missile[s].life--;
+    t = missileTarget[s];
+    dps = missile_dps(w);
+    if (dps && t != 0xFF && slot_is_ship(t) && shipAiState[t] != 9)
+        missile_seek(s, t, dps);
+    last = gPositionVector[s];
+    fly_ahead(s);
+    gPositionVector[s].x += gVelocityVector[s].x;
+    gPositionVector[s].y += gVelocityVector[s].y;
+    gPositionVector[s].z += gVelocityVector[s].z;
+    reach = KPS_STEP(speedLo[s]);
+    for (k = 0; k < NUM_SHIP_SLOTS; k++) {
+        int32_t h;
+        if (!slot_is_ship(k) || k == parentShipForShip[s] || shipAiState[k] == 9)
+            continue;
+        h = collide_half(k) + reach;    /* (its step's box against the ship's: nothing near, nothing more) */
+        if (labs(gPositionVector[s].x - gPositionVector[k].x) > h || labs(gPositionVector[s].y - gPositionVector[k].y) > h
+            || labs(gPositionVector[s].z - gPositionVector[k].z) > h)
+            continue;
+        if (collide_segment(k, (const LfVec *)&last, (const LfVec *)&gPositionVector[s], &lh, 0)) {
+            hit = vec3(lh.x, lh.y, lh.z);
+            (void)do_damage((uint16_t)s, (uint16_t)k, w->damage, RV_WHERE(&hit));
+            ship_clear(s);
+            return;
+        }
+    }
+}
+
+/* ====================================================================================================================
+ * The AI (M5): minds for the ships of CTL_AI, through aiFighterThink and aiShipThink (docs/ai.md)
+ *
+ * A mind runs a TACTIC (T_*: a maneuver with phases) picked from its PROFILE's table by the SITUATION it is in
+ * (SIT_*: the target far, near ahead, on its tail, just passed, itself hurt, nobody about), with weighted dice from
+ * game_rand.  The tactic decides where the nose should point (a direction in the ship's own frame), the throttle
+ * (aiSetSpeed), the afterburner and whether to fire; the STEERING turns that direction into the steer and roll the
+ * player's controls give (g_turn), within the profile's PULLS (which ways it may pull the nose: a ship that cannot
+ * turn left rolls until the target is above or below it and pulls there) and its style (bank then pull, as the
+ * fighters of the early nineties turned, or yaw and pitch at once).  The flight model (step_motion) flies it like
+ * any ship, within its type's rates and speeds.  Every number is a table entry: the profiles are measured against
+ * the old games' flights (docs/ai.md), and a new behaviour is a new row.
+ * ==================================================================================================================== */
+
+enum { T_IDLE, T_CRUISE, T_FORMATION, T_ESCORT, T_WAIT,         /* nobody to fight (T_WAIT: still, until a chance) */
+       T_PURSUE, T_HEADON, T_STRAFE, T_SIT, T_RAM, T_TORPEDO,    /* attacks */
+       T_BREAK, T_EVADE, T_LOOP, T_FLEE,                        /* getting away */
+       T_COUNT };
+enum { SIT_IDLE, SIT_FAR, SIT_NEAR, SIT_TAILED, SIT_PASSED, SIT_HURT, SIT_COUNT };
+enum { PULL_RIGHT = 1, PULL_LEFT = 2, PULL_UP = 4, PULL_DOWN = 8, PULL_ALL = 15 };
+enum { P_INTERCEPTOR, P_FIGHTER, P_HEAVY, P_ACE, P_BOMBER, P_WINGMAN, P_CAPITAL, P_WAITER, P_NOLEFT, P_COUNT };
+
+#define PICKS 4
+typedef struct { uint8_t tactic, weight; } Pick;
+typedef struct {
+    uint16_t engage_km;                 /* an enemy this near is fought */
+    uint16_t fire_km;                   /* the guns fire within this (and their own range) */
+    uint16_t break_km;                  /* a closing attacker breaks off this near (0: never) */
+    uint16_t pounce_km;                 /* T_WAIT: a target this near is a chance */
+    uint8_t aim_cos;                    /* the fire cone: the lead point within it (cos x 256) */
+    uint8_t pulls;                      /* PULL_*: which ways the steering may pull the nose */
+    uint8_t bank;                       /* 1: roll toward the target, then pull; 0: yaw and pitch at once */
+    uint8_t ab_pct;                     /* percent of its closing and fleeing on the afterburner */
+    uint8_t flee_pct;                   /* it runs with its hull below this percent (0: never) */
+    uint8_t missile_pct;                /* percent of its locks that end in a launch */
+    uint8_t wait_s;                     /* T_WAIT: the most it waits for a chance */
+    uint8_t idle;                       /* its tactic with nobody to fight */
+    Pick pick[SIT_COUNT][PICKS];        /* the dice by situation (SIT_IDLE's row is unused: idle says) */
+} AiProfile;
+
+#define AIM_CONE 250                    /* cos x 256 of the usual fire cone: some 7 degrees */
+#define LOCK_CONE 230                   /* a missile locks with the target within this: some 26 degrees */
+#define TAIL_KM 3500                    /* an attacker behind, this near, is on my tail */
+#define RELAUNCH_STEPS (4 * LOGIC_HZ)   /* missiles no closer together than this */
+
+static const AiProfile __far k_profiles[P_COUNT] = {
+    /* P_INTERCEPTOR: light and fast: passes, loops, runs when hurt */
+    { 25000, 3000, 700, 0, AIM_CONE, PULL_ALL, 1, 40, 30, 50, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_HEADON, 50 }, { T_PURSUE, 50 } }, { { T_PURSUE, 50 }, { T_STRAFE, 30 }, { T_SIT, 20 } },
+        { { T_EVADE, 50 }, { T_LOOP, 25 }, { T_BREAK, 25 } }, { { T_BREAK, 60 }, { T_LOOP, 40 } },
+        { { T_FLEE, 60 }, { T_PURSUE, 40 } } } },
+    /* P_FIGHTER: the line fighter: head on, then round again */
+    { 25000, 3000, 700, 0, AIM_CONE, PULL_ALL, 1, 30, 20, 50, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_HEADON, 60 }, { T_PURSUE, 40 } }, { { T_PURSUE, 60 }, { T_HEADON, 20 }, { T_SIT, 20 } },
+        { { T_EVADE, 40 }, { T_LOOP, 40 }, { T_BREAK, 20 } }, { { T_LOOP, 50 }, { T_BREAK, 50 } },
+        { { T_PURSUE, 60 }, { T_FLEE, 40 } } } },
+    /* P_HEAVY: slow and armoured: head on, rarely runs */
+    { 25000, 3000, 600, 0, AIM_CONE, PULL_ALL, 1, 20, 10, 60, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_HEADON, 80 }, { T_PURSUE, 20 } }, { { T_HEADON, 50 }, { T_PURSUE, 30 }, { T_SIT, 20 } },
+        { { T_BREAK, 60 }, { T_EVADE, 40 } }, { { T_BREAK, 80 }, { T_LOOP, 20 } },
+        { { T_PURSUE, 80 }, { T_FLEE, 20 } } } },
+    /* P_ACE: strafing runs, hard evasion, never runs */
+    { 30000, 3000, 500, 0, AIM_CONE, PULL_ALL, 1, 50, 0, 70, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_STRAFE, 50 }, { T_PURSUE, 50 } }, { { T_STRAFE, 40 }, { T_PURSUE, 40 }, { T_SIT, 20 } },
+        { { T_EVADE, 60 }, { T_BREAK, 20 }, { T_LOOP, 20 } }, { { T_LOOP, 50 }, { T_BREAK, 50 } },
+        { { T_PURSUE, 100 } } } },
+    /* P_BOMBER: torpedo runs on capital ships, else a heavy's fight */
+    { 25000, 2800, 800, 0, AIM_CONE, PULL_ALL, 1, 20, 25, 80, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_TORPEDO, 70 }, { T_PURSUE, 30 } }, { { T_TORPEDO, 50 }, { T_PURSUE, 30 }, { T_SIT, 20 } },
+        { { T_BREAK, 70 }, { T_EVADE, 30 } }, { { T_BREAK, 70 }, { T_LOOP, 30 } },
+        { { T_FLEE, 60 }, { T_PURSUE, 40 } } } },
+    /* P_WINGMAN: the player's side: keeps station, fights what comes near */
+    { 12000, 3000, 700, 0, AIM_CONE, PULL_ALL, 1, 30, 25, 50, 0, T_FORMATION,
+      { { { 0, 0 } }, { { T_PURSUE, 70 }, { T_HEADON, 30 } }, { { T_PURSUE, 70 }, { T_SIT, 30 } },
+        { { T_BREAK, 50 }, { T_EVADE, 50 } }, { { T_BREAK, 70 }, { T_LOOP, 30 } },
+        { { T_FLEE, 50 }, { T_PURSUE, 50 } } } },
+    /* P_CAPITAL: holds its course; its turrets and launchers are aiShipThink's */
+    { 8000, 6000, 0, 0, AIM_CONE, PULL_ALL, 0, 0, 0, 100, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_CRUISE, 100 } }, { { T_CRUISE, 100 } }, { { T_CRUISE, 100 } }, { { T_CRUISE, 100 } },
+        { { T_CRUISE, 100 } } } },
+    /* P_WAITER: lies still (cloaked) until a target comes near unawares, then an interceptor's fight */
+    { 25000, 3000, 700, 5000, AIM_CONE, PULL_ALL, 1, 60, 30, 50, 30, T_WAIT,
+      { { { 0, 0 } }, { { T_PURSUE, 70 }, { T_HEADON, 30 } }, { { T_PURSUE, 60 }, { T_STRAFE, 40 } },
+        { { T_EVADE, 50 }, { T_LOOP, 25 }, { T_BREAK, 25 } }, { { T_BREAK, 60 }, { T_LOOP, 40 } },
+        { { T_FLEE, 60 }, { T_PURSUE, 40 } } } },
+    /* P_NOLEFT: a fighter whose controls cannot turn left: it rolls and pulls instead */
+    { 25000, 3000, 700, 0, AIM_CONE, PULL_RIGHT | PULL_UP | PULL_DOWN, 0, 30, 20, 50, 0, T_CRUISE,
+      { { { 0, 0 } }, { { T_HEADON, 60 }, { T_PURSUE, 40 } }, { { T_PURSUE, 60 }, { T_HEADON, 20 }, { T_SIT, 20 } },
+        { { T_EVADE, 40 }, { T_LOOP, 40 }, { T_BREAK, 20 } }, { { T_LOOP, 50 }, { T_BREAK, 50 } },
+        { { T_PURSUE, 60 }, { T_FLEE, 40 } } } },
+};
+
+/* a type's profile (data/ships.csv's roles; a mission ship's record may name another) */
+static uint8_t profile_of(uint16_t type, uint16_t side)
+{
+    const RvShipType __far *t = ship_type(type);
+    if (!t)
+        return P_FIGHTER;
+    if (t->type >= 0x20)
+        return P_CAPITAL;
+    if (side == SIDE_TERRAN)
+        return P_WINGMAN;
+    switch (type) {
+    case 0x0B: case 0x10: case 0x15: return P_INTERCEPTOR;   /* Agis, Shizu, Gaozong */
+    case 0x0A: case 0x12: return P_BOMBER;   /* Areus, Taizong */
+    case 0x0C: case 0x11: return P_HEAVY;    /* Cleomenes, Zhuangzong */
+    case 0x0D: return P_ACE;                 /* Convolution */
+    default: return P_FIGHTER;
+    }
+}
+
+/* the target as a mind sees it */
+typedef struct {
+    RvVec3 rel;                         /* right, up, ahead, km */
+    RvVec3 aim;                         /* its lead point the same way: where the guns' shots meet it */
+    int32_t km;
+    int16_t cos_nose;                   /* how straight my nose points at it (x 256) */
+    int16_t cos_aim;                    /* at its lead point */
+    int16_t cos_its;                    /* how straight ITS nose points at me */
+} View;
+
+static int16_t cos_of(const RvVec3 *v, int32_t len)
+{
+    return (int16_t)(len ? clamp32(v->z * 256 / len, -256, 256) : 256);
+}
+
+/* s's view of t: where it is, where its lead point is for s's guns (the first gun's speed), who points at whom */
+static void view_of(int16_t s, int16_t t, View *v)
+{
+    RvVec3 d, w, vt;
+    int16_t g = gun_of(s);
+    const RvWeapon __far *gw = g >= 0 ? weapon(GUN_TYPE(s, g)) : 0;
+    int32_t tof, kps = gw && gw->speed_kps ? gw->speed_kps : 2000, alen;
+    ship_rel(s, t, &v->rel);
+    v->km = len_of(v->rel.x, v->rel.y, v->rel.z);
+    v->cos_nose = cos_of(&v->rel, v->km);
+    /* the lead: the target's move over the shot's flight, twice refined */
+    vt = vec3(TO_KM(gVelocityVector[t].x), TO_KM(gVelocityVector[t].y), TO_KM(gVelocityVector[t].z));
+    to_body(s, &vt, &w);
+    tof = v->km / (kps / KPS_HZ);
+    v->aim = vec3(v->rel.x + w.x * tof, v->rel.y + w.y * tof, v->rel.z + w.z * tof);
+    tof = len_of(v->aim.x, v->aim.y, v->aim.z) / (kps / KPS_HZ);
+    v->aim = vec3(v->rel.x + w.x * tof, v->rel.y + w.y * tof, v->rel.z + w.z * tof);
+    alen = len_of(v->aim.x, v->aim.y, v->aim.z);
+    v->cos_aim = cos_of(&v->aim, alen);
+    /* its nose on me: me from it, along its front */
+    d = vec3(TO_KM(gPositionVector[s].x - gPositionVector[t].x), TO_KM(gPositionVector[s].y - gPositionVector[t].y),
+             TO_KM(gPositionVector[s].z - gPositionVector[t].z));
+    v->cos_its = (int16_t)(v->km ? clamp32(vec_dot(&d, &gOrientationFrontVector[t]) / v->km, -256, 256) : 0);
+}
+
+/* the nearest living ship of another side (not cloaked), or of the capital ships only; -1 none */
+static int16_t nearest_enemy(int16_t s, int16_t capital_only)
+{
+    int16_t k, best = -1;
+    int32_t bd = INT32_C(0x7FFFFFFF), d;
+    for (k = 0; k < NUM_SHIP_SLOTS; k++) {
+        if (k == s || !slot_is_ship(k) || commAnimInfo[k] == commAnimInfo[s] || shipAiState[k] == 9 || (rvFlags[k] & 16))
+            continue;
+        if (capital_only && maybeEntityType[k] != ET_CAPSHIP)
+            continue;
+        d = km_between(s, k);
+        if (d < bd) {
+            bd = d;
+            best = k;
+        }
+    }
+    return best;
+}
+
+/* the slot s keeps station on: its mission record's leader, else (on the player's side) the player; 0xFF none */
+static uint8_t leader_of(int16_t s)
+{
+    int16_t k;
+    if (slotMissionShip[s] < 64) {
+        uint16_t lead = *(const uint16_t *)(MSHIP(slotMissionShip[s]) + 4);
+        if (lead < 64)
+            for (k = 0; k < NUM_SHIP_SLOTS; k++)
+                if (k != s && slot_is_ship(k) && slotMissionShip[k] == lead)
+                    return (uint8_t)k;
+    }
+    if (s != 0 && commAnimInfo[s] == commAnimInfo[0] && slot_is_ship(0))
+        return 0;
+    return 0xFF;
+}
+
+/* --- the steering: the nose toward a direction in the ship's own frame, as the profile allows --- */
+
+#define FULL_AT 28                      /* a full steer this far off the way (1024 a turn: 10 degrees), less within */
+
+static int8_t steer_of(int16_t angle)
+{
+    return (int8_t)clamp32((int32_t)angle * 9 / FULL_AT, -9, 9);
+}
+
+/* (dx right, dy up, dz ahead): g_turn[s].  The straight way is a yaw and a pitch at once; a profile that banks, or
+ * one whose pulls do not allow the straight way, rolls until the target lies along an allowed pull (right, left,
+ * up or down of the nose) and pulls there.  A roll of +t (the right wing up) turns a bearing in the right-up plane
+ * by -t: to bring a bearing b to the pull c, roll by b - c */
+static void steer_to(int16_t s, const AiProfile __far *p, int32_t dx, int32_t dy, int32_t dz)
+{
+    static const int16_t __far k_pull_at[4] = { 0, 512, 256, 768 };   /* PULL_RIGHT, LEFT, UP, DOWN: their bearings */
+    int32_t horiz = len_of(dx, 0, dz), across = len_of(dx, dy, 0);
+    int16_t yaw = angle_of(dx, dz), pitch = angle_of(dy, horiz), off = angle_of(across, dz);
+    int16_t bearing = angle_of(dy, dx), best = -1, bd = 1024, k, c, d, roll, pull;
+    Turn __far *t = &g_turn[s];
+    if (off < 0)
+        off = (int16_t)-off;
+    if ((p->pulls & PULL_ALL) == PULL_ALL && (!p->bank || off <= 2 * FULL_AT)) {
+        t->x = steer_of(yaw);
+        t->y = steer_of(pitch);
+        t->roll = 0;
+        return;
+    }
+    /* the allowed pull nearest the bearing */
+    for (k = 0; k < 4; k++) {
+        if (!(p->pulls & (1 << k)))
+            continue;
+        d = (int16_t)(bearing - k_pull_at[k]);
+        d = (int16_t)(((d + 512) & 1023) - 512);   /* (the shorter way round) */
+        if (d < 0)
+            d = (int16_t)-d;
+        if (d < bd || (d == bd && k == 2)) {
+            bd = d;
+            best = k;
+        }
+    }
+    if (best < 0) {                     /* (a profile that may pull nowhere: it flies straight) */
+        t->x = t->y = t->roll = 0;
+        return;
+    }
+    c = (int16_t)(bearing - k_pull_at[best]);
+    c = (int16_t)(((c + 512) & 1023) - 512);
+    roll = steer_of(c);                 /* (toward the pull) */
+    /* the pull: full when off the nose, eased in near it; only once the target is within a quarter turn of the pull */
+    pull = (int16_t)((int32_t)steer_of(off) * lf_cos(c) / 16384);
+    if (pull < 0)
+        pull = 0;
+    t->x = (int8_t)(best == 0 ? pull : best == 1 ? -pull : 0);
+    t->y = (int8_t)(best == 2 ? pull : best == 3 ? -pull : 0);
+    t->roll = (int8_t)roll;
+}
+
+/* --- the situation, the dice, and the tactics --- */
+
+static int16_t situation(int16_t s, const Mind __far *m, const AiProfile __far *p, const View *v)
+{
+    (void)m;
+    if (p->flee_pct && hull_pct(s) < p->flee_pct)
+        return SIT_HURT;
+    if (v->rel.z < 0 && v->km < TAIL_KM && v->cos_its > 180)
+        return SIT_TAILED;
+    if (v->km < (int32_t)p->break_km * 2 && v->cos_nose < 100)
+        return SIT_PASSED;
+    if (v->km < (int32_t)p->fire_km * 4 / 3 && v->cos_nose > 0)
+        return SIT_NEAR;
+    return SIT_FAR;
+}
+
+/* a tactic's length, steps */
+static int16_t tactic_steps(int16_t s, int16_t tactic)
+{
+    const RvShipType __far *t = slot_type(s);
+    switch (tactic) {
+    case T_PURSUE: return 8 * LOGIC_HZ;
+    case T_HEADON: case T_STRAFE: case T_TORPEDO: return 20 * LOGIC_HZ;
+    case T_SIT: return 3 * LOGIC_HZ;
+    case T_BREAK: return (int16_t)(LOGIC_HZ + LOGIC_HZ / 2);
+    case T_EVADE: return 4 * LOGIC_HZ;
+    case T_LOOP: return (int16_t)(t && t->pitch_dps ? INT32_C(360) * KPS_HZ / t->pitch_dps + 4 : 60);
+    case T_FLEE: return 6 * LOGIC_HZ;
+    case T_CRUISE: case T_FORMATION: case T_ESCORT: return 2 * LOGIC_HZ;
+    default: return 0x7FFF;             /* (T_RAM, T_WAIT: until something else) */
+    }
+}
+
+/* a tactic taken up: its timer, its way and its afterburner */
+static void take_tactic(int16_t s, Mind __far *m, const AiProfile __far *p, int16_t tactic)
+{
+    m->tactic = (uint8_t)tactic;
+    m->phase = 0;
+    m->timer = tactic_steps(s, tactic);
+    m->dir = (int8_t)(game_rand() & 1 ? 1 : -1);
+    m->burn = (uint8_t)(p->ab_pct && game_rand() % 100 < p->ab_pct);
+    if (tactic == T_WAIT) {
+        m->timer = (int16_t)(p->wait_s * LOGIC_HZ);
+        rvFlags[s] |= 16;               /* (cloaked: unseen by the others' minds) */
+    }
+}
+
+/* the dice over the profile's picks for a situation (a torpedo run only with a torpedo and a capital ship to run at:
+ * else a pursuit) */
+static void pick_tactic(int16_t s, Mind __far *m, const AiProfile __far *p, int16_t sit)
+{
+    const Pick __far *row = p->pick[sit];
+    int16_t k, sum = 0, tactic = T_PURSUE;
+    uint16_t r;
+    for (k = 0; k < PICKS; k++)
+        sum = (int16_t)(sum + row[k].weight);
+    if (sum) {
+        r = (uint16_t)(game_rand() % sum);
+        for (k = 0; k < PICKS; k++) {
+            if (r < row[k].weight) {
+                tactic = row[k].tactic;
+                break;
+            }
+            r = (uint16_t)(r - row[k].weight);
+        }
+    }
+    if (tactic == T_TORPEDO && (launcher_of(s) < 0 || m->target == 0xFF || maybeEntityType[m->target] != ET_CAPSHIP))
+        tactic = T_PURSUE;
+    take_tactic(s, m, p, tactic);
+}
+
+/* the throttle, through the thunk, and the afterburner */
+static void throttle(int16_t s, int32_t kps, int16_t burn)
+{
+    const RvShipType __far *t = slot_type(s);
+    int32_t most = t ? t->max_kps : 300;
+    aiSetSpeed((uint16_t)s, (uint16_t)clamp32(kps, 0, most));
+    rvAfterburner[s] = (uint8_t)(burn && t && t->ab_kps ? 1 : 0);
+    if (!rvAfterburner[s] && speedLo[s] > (uint32_t)most)   /* (off the burner, an AI is at its top speed at once) */
+        speedLo[s] = (uint32_t)most;
+}
+
+/* the guns, when the lead point is in the cone and the target in range; a missile after a lock */
+static void aim_and_fire(int16_t s, Mind __far *m, const AiProfile __far *p, const View *v, int16_t guns)
+{
+    int16_t g = gun_of(s), l;
+    const RvWeapon __far *w = g >= 0 ? weapon(GUN_TYPE(s, g)) : 0;
+    int32_t reach = w ? w->range_km : 0;
+    if (reach > p->fire_km)
+        reach = p->fire_km;
+    if (guns && w && v->km <= reach && v->cos_aim >= p->aim_cos && gunEnergy[s] > 0)
+        m->fire |= FIRE_GUNS;
+    /* a lock: the target in the cone for the weapon's lock time, then the dice, then the launch */
+    if ((l = launcher_of(s)) >= 0 && (w = weapon(GUN_TYPE(s, l))) != 0 && v->cos_nose >= LOCK_CONE
+        && v->km <= w->range_km && (uint16_t)(frameCounter - m->since) >= RELAUNCH_STEPS) {
+        if (++m->lock >= (uint16_t)(w->lock_tenths * 3 + 1)) {
+            m->lock = 0;
+            m->since = frameCounter;
+            if (game_rand() % 100 < p->missile_pct) {
+                m->fire |= FIRE_MISSILE;
+                m->launcher = (uint8_t)l;
+            }
+        }
+    } else {
+        m->lock = 0;
+    }
+}
+
+/* T_FORMATION: station on the leader (formationOffset, km in its frame: taken from where the ship is when it has
+ * none), the leader's heading once there, and a throttle that closes the gap and then matches */
+static void formation_step(int16_t s, Mind __far *m, const AiProfile __far *p)
+{
+    int16_t L = m->leader;
+    int16_t *off = (int16_t *)(formationOffset + 6 * s);
+    RvVec3 st, d, b;
+    int32_t km, along, kps;
+    const RvVec3 *R, *U, *F;
+    if (L == 0xFF || !slot_is_ship(L) || shipAiState[L] == 9) {
+        throttle(s, slot_type(s) ? slot_type(s)->cruise_kps : 200, 0);
+        return;
+    }
+    R = &gOrientationRightVector[L];
+    U = &gOrientationUpVector[L];
+    F = &gOrientationFrontVector[L];
+    if (!off[0] && !off[1] && !off[2]) {   /* its place: where it is now off the leader, at least 800 km to a side */
+        ship_rel(L, s, &b);
+        off[0] = (int16_t)clamp32(b.x, -6000, 6000);
+        off[1] = (int16_t)clamp32(b.y, -6000, 6000);
+        off[2] = (int16_t)clamp32(b.z, -6000, 6000);
+        if (labs(off[0]) < 800 && labs(off[1]) < 800)
+            off[0] = (int16_t)(off[0] < 0 ? -800 : 800);
+    }
+    st = vec3(gPositionVector[L].x + (FIX_MUL(R->x, off[0]) + FIX_MUL(U->x, off[1]) + FIX_MUL(F->x, off[2])) * KM,
+              gPositionVector[L].y + (FIX_MUL(R->y, off[0]) + FIX_MUL(U->y, off[1]) + FIX_MUL(F->y, off[2])) * KM,
+              gPositionVector[L].z + (FIX_MUL(R->z, off[0]) + FIX_MUL(U->z, off[1]) + FIX_MUL(F->z, off[2])) * KM);
+    d = vec3(TO_KM(st.x - gPositionVector[s].x), TO_KM(st.y - gPositionVector[s].y), TO_KM(st.z - gPositionVector[s].z));
+    km = len_of(d.x, d.y, d.z);
+    along = vec_dot(&d, F) / 256;       /* (the gap along the leader's way: behind it, or ahead of it) */
+    if (km > 200) {
+        to_body(s, &d, &b);
+        steer_to(s, p, b.x, b.y, b.z);
+    } else {
+        RvVec3 f = *F;
+        to_body(s, &f, &b);
+        steer_to(s, p, b.x, b.y, b.z);
+    }
+    kps = speedLo[L];
+    if (km > 4000)
+        kps = 9999;
+    else if (along > 0)
+        kps += along / 8 + 20;
+    else
+        kps += along / 8;
+    throttle(s, kps, km > 8000 && m->burn);
+}
+
+/* T_ESCORT: round the leader at a distance, a turn every so often */
+static void escort_step(int16_t s, Mind __far *m, const AiProfile __far *p)
+{
+    int16_t L = m->leader, a = (int16_t)((frameCounter / 4) & 1023);
+    RvVec3 st, d, b;
+    const RvVec3 *R, *F;
+    if (L == 0xFF || !slot_is_ship(L) || shipAiState[L] == 9) {
+        formation_step(s, m, p);
+        return;
+    }
+    R = &gOrientationRightVector[L];
+    F = &gOrientationFrontVector[L];
+    st = vec3(gPositionVector[L].x + (FIX_MUL(R->x, lf_cos(a) / 64 * 2500 / 256) + FIX_MUL(F->x, lf_sin(a) / 64 * 2500 / 256)) * KM,
+              gPositionVector[L].y,
+              gPositionVector[L].z + (FIX_MUL(R->z, lf_cos(a) / 64 * 2500 / 256) + FIX_MUL(F->z, lf_sin(a) / 64 * 2500 / 256)) * KM);
+    d = vec3(TO_KM(st.x - gPositionVector[s].x), TO_KM(st.y - gPositionVector[s].y), TO_KM(st.z - gPositionVector[s].z));
+    to_body(s, &d, &b);
+    steer_to(s, p, b.x, b.y, b.z);
+    throttle(s, slot_type(s) ? slot_type(s)->cruise_kps : 200, 0);
+}
+
+/* the tactic's step: the nose, the throttle, the fire; 1 when it is over before its time */
+static int16_t run_tactic(int16_t s, Mind __far *m, const AiProfile __far *p, const View *v)
+{
+    const RvShipType __far *t = slot_type(s);
+    int32_t cruise = t ? t->cruise_kps : 200, max = t ? t->max_kps : 300;
+    switch (m->tactic) {
+    case T_PURSUE:                      /* at its lead point; closing, then matching; off before a collision */
+        steer_to(s, p, v->aim.x, v->aim.y, v->aim.z);
+        throttle(s, v->km > 2500 ? max : clamp32(speedLo[m->target] + 60, 150, max), v->km > 5000 && m->burn);
+        aim_and_fire(s, m, p, v, 1);
+        if (p->break_km && v->km < p->break_km && v->cos_nose > 0) {
+            take_tactic(s, m, p, T_BREAK);
+            return 0;
+        }
+        return v->rel.z < 0 && v->km < TAIL_KM;
+    case T_HEADON:                      /* straight at it at full speed, firing; off at the break distance */
+    case T_STRAFE:                      /* the same, but through: it keeps going until it has passed */
+        steer_to(s, p, v->aim.x, v->aim.y, v->aim.z);
+        throttle(s, max, m->burn && v->km > 4000);
+        aim_and_fire(s, m, p, v, 1);
+        if (m->tactic == T_HEADON && p->break_km && v->km < p->break_km) {
+            take_tactic(s, m, p, T_BREAK);
+            return 0;
+        }
+        return m->tactic == T_STRAFE && v->rel.z < 0 && v->km > p->break_km;
+    case T_SIT:                         /* still, turning onto it, firing */
+        steer_to(s, p, v->aim.x, v->aim.y, v->aim.z);
+        throttle(s, 0, 0);
+        aim_and_fire(s, m, p, v, 1);
+        return 0;
+    case T_RAM:                         /* at it, as fast as it goes, never off */
+        steer_to(s, p, v->rel.x, v->rel.y, v->rel.z);
+        throttle(s, max, 1);
+        aim_and_fire(s, m, p, v, 1);
+        return 0;
+    case T_TORPEDO: {                   /* at a capital ship until a torpedo is away, then off */
+        int16_t l = launcher_of(s);
+        steer_to(s, p, v->aim.x, v->aim.y, v->aim.z);
+        throttle(s, v->km > 4000 ? max : cruise, 0);
+        aim_and_fire(s, m, p, v, v->km < 2000);
+        if (m->fire & FIRE_MISSILE) {
+            take_tactic(s, m, p, T_BREAK);
+            return 0;
+        }
+        return l < 0 || (p->break_km && v->km < p->break_km);
+    }
+    case T_BREAK:                       /* a hard pull one way, rolling with it, at full throttle */
+        g_turn[s].y = (int8_t)(9 * m->dir);
+        g_turn[s].roll = (int8_t)(5 * m->dir);
+        throttle(s, max, m->burn);
+        return 0;
+    case T_EVADE: {                     /* jinks: a pull each way with a roll, a stop by chance, then away */
+        int16_t at = (int16_t)(tactic_steps(s, T_EVADE) - m->timer);
+        if (at < LOGIC_HZ) {
+            g_turn[s].y = (int8_t)(9 * m->dir);
+            g_turn[s].roll = 9;
+            throttle(s, max, 0);
+        } else if (at < 2 * LOGIC_HZ) {
+            g_turn[s].y = (int8_t)(-9 * m->dir);
+            g_turn[s].roll = -9;
+            throttle(s, max, 0);
+        } else if (m->burn) {           /* (the stop: the pursuer overshoots) */
+            g_turn[s].x = (int8_t)(5 * m->dir);
+            throttle(s, at < 3 * LOGIC_HZ ? 0 : max, at >= 3 * LOGIC_HZ);
+        } else {
+            g_turn[s].y = 9;
+            g_turn[s].roll = (int8_t)(4 * m->dir);
+            throttle(s, max, 1);
+        }
+        return v->rel.z > 0 && v->km > TAIL_KM;
+    }
+    case T_LOOP:                        /* a whole loop, nose up */
+        g_turn[s].y = 9;
+        throttle(s, cruise, 0);
+        return 0;
+    case T_FLEE:                        /* away from it, as fast as it goes */
+        steer_to(s, p, -v->rel.x, -v->rel.y, -v->rel.z);
+        throttle(s, max, m->burn);
+        return 0;
+    default:
+        return 1;
+    }
+}
+
+/* a fighter's mind for a step: its target, its situation, its tactic, its decisions (g_turn, the throttle, fire) */
+static void fighter_think(int16_t s)
+{
+    Mind __far *m = &g_mind[s];
+    const AiProfile __far *p = &k_profiles[m->profile < P_COUNT ? m->profile : P_FIGHTER];
+    View v;
+    int16_t sit, k, near_ = -1;
+    int32_t d, bd = INT32_C(0x7FFFFFFF);
+    m->leader = leader_of(s);
+    /* the target: kept while it lives and stays in reach, else the nearest enemy within the engage distance */
+    if (m->target != 0xFF && (!slot_is_ship(m->target) || shipAiState[m->target] == 9 || commAnimInfo[m->target] == commAnimInfo[s]
+                              || km_between(s, m->target) > (int32_t)p->engage_km * 3 / 2))
+        m->target = 0xFF;
+    for (k = 0; k < NUM_SHIP_SLOTS; k++) {
+        if (k == s || !slot_is_ship(k) || commAnimInfo[k] == commAnimInfo[s] || shipAiState[k] == 9 || (rvFlags[k] & 16))
+            continue;
+        d = km_between(s, k);
+        if (d < bd) {
+            bd = d;
+            near_ = k;
+        }
+    }
+    if (near_ >= 0 && bd <= p->engage_km && (m->target == 0xFF || bd * 3 < km_between(s, m->target) * 2))
+        m->target = (uint8_t)near_;
+    rvTarget[s] = m->target;
+    if (m->target == 0xFF) {            /* nobody to fight: the idle tactic */
+        if (m->tactic != p->idle) {
+            take_tactic(s, m, p, p->idle);
+            m->timer = tactic_steps(s, p->idle);
+            if (p->idle == T_WAIT)
+                m->timer = (int16_t)(p->wait_s * LOGIC_HZ);
+        }
+        if (m->tactic == T_FORMATION)
+            formation_step(s, m, p);
+        else if (m->tactic == T_ESCORT)
+            escort_step(s, m, p);
+        else if (m->tactic == T_WAIT) {
+            throttle(s, 0, 0);
+            if (--m->timer <= 0)
+                rvFlags[s] &= ~16;      /* (its patience over: it shows itself and flies on) */
+        } else
+            throttle(s, slot_type(s) ? slot_type(s)->cruise_kps : 200, 0);
+        return;
+    }
+    view_of(s, m->target, &v);
+    if (m->tactic == T_WAIT) {          /* still until a chance: the target near and not pointing at it, or very near */
+        throttle(s, 0, 0);
+        if (--m->timer > 0 && !(v.km < p->pounce_km && (v.cos_its < 100 || v.km < p->pounce_km / 2)))
+            return;
+        rvFlags[s] &= ~16;
+        take_tactic(s, m, p, T_PURSUE);
+        m->burn = 1;
+    }
+    sit = situation(s, m, p, &v);
+    if (m->tactic < T_PURSUE || m->timer <= 0)
+        pick_tactic(s, m, p, sit);
+    m->timer--;
+    if (run_tactic(s, m, p, &v))
+        pick_tactic(s, m, p, sit);
+}
+
+/* a capital ship's mind for a step: its course held at cruise; its turrets at the nearest enemy in their range (each
+ * that is cooled: fired by step_fire through the thunk, aimed at rvTarget by the gun's own code); a launcher at an
+ * enemy capital ship now and then */
+static void ship_think(int16_t s)
+{
+    Mind __far *m = &g_mind[s];
+    const RvShipType __far *t = slot_type(s);
+    int16_t near_ = nearest_enemy(s, 0), g;
+    throttle(s, t ? t->cruise_kps : 100, 0);
+    m->target = (uint8_t)(near_ >= 0 ? near_ : 0xFF);
+    rvTarget[s] = m->target;
+    if (near_ < 0)
+        return;
+    for (g = 0; g < GUN_COUNT(s) && g < 16; g++) {
+        const RvWeapon __far *w = weapon(GUN_TYPE(s, g));
+        if (!w || (GUN_STATE(s, g) & GUN_DESTROYED))
+            continue;
+        if (w->kind == RV_WK_TURRET) {
+            if (!(GUN_STATE(s, g) & 0x7F) && km_between(s, near_) <= w->range_km)
+                m->turrets |= (uint16_t)(1u << g);
+        } else if (w->kind == RV_WK_TORPEDO || w->kind == RV_WK_MISSILE) {
+            int16_t cap = nearest_enemy(s, 1);
+            if (cap >= 0 && (GUN_STATE(s, g) & 0x7F) && km_between(s, cap) <= w->range_km
+                && (uint16_t)(frameCounter - m->since) >= (uint16_t)(10 * LOGIC_HZ)) {
+                m->since = frameCounter;
+                rvTarget[s] = (uint8_t)cap;
+                m->fire |= FIRE_MISSILE;
+                m->launcher = (uint8_t)g;
+            }
+        }
+    }
+}
 
 /* 4. every ship flies its step: its turn applied to its orientation (vec_turn, then ship_orthonormalise), its speed
  * toward setSpeed, gVelocityVector (positions a step: KPS_STEP), the velocity added to gPositionVector.  A puppet
@@ -279,11 +1327,7 @@ static void step_motion(void)
             continue;
         }
         if (rvController[ship_index] != CTL_PUPPET) {
-            if (ship_index == 0) {
-                step_turn(ship_index, g_pilot.steer_x, g_pilot.steer_y, g_pilot.roll);
-            } else {
-                // step_turn(ship_index, mind[something].steer_x, mind[something].steer_y, mind[something].roll);
-            }
+            step_turn(ship_index, g_turn[ship_index].x, g_turn[ship_index].y, g_turn[ship_index].roll);
             step_speed(ship_index, phase);
             reduce_slide(ship_index);
         }
@@ -314,11 +1358,23 @@ static void step_shots(void)
 /* 6. missiles (ship slots of ET_MISSILE: they steer like ships, home on missileTarget, burst by a proximity test) */
 static void step_missiles(void)
 {
+    int16_t s;
+    for (s = 1; s < NUM_SHIP_SLOTS; s++)
+        if (maybeEntityType[s] == ET_MISSILE)
+            missile_step(s);
 }
 
 /* 7. ships into ships (collide_ships: the push that parts them, the damage both ways through do_damage) */
 static void step_collisions(void)
 {
+    int16_t a, b;
+    for (a = 0; a < NUM_SHIP_SLOTS - 1; a++) {
+        if (!slot_is_ship(a))
+            continue;
+        for (b = a + 1; b < NUM_SHIP_SLOTS; b++)   /* (a dying ship is still a hull: the others bump into it) */
+            if (slot_is_ship(b) && collide_coarse(a, b))
+                ram(a, b);
+    }
 }
 
 /* 8. the dying (shipAiState 9: an explosion's time, then despawn) and the player's end (missionStatus 4) */
@@ -400,14 +1456,6 @@ void logic_end(void)
 #define AUTOPILOT_CLEAR_KM 8000         /* no enemy this near (the engine's autopilot lamp says the same: flight.c) */
 #define AUTOPILOT_SHORT_KM 3000         /* it stops this far short of the nav point, facing it */
 #define AUTOPILOT_WING_KM 10000         /* the friendly fighters this near come along, keeping their places */
-
-/* s flying along its nose at its speed (after a jump: no momentum the other way to slide off) */
-static void fly_ahead(int16_t s)
-{
-    const RvVec3 *F = &gOrientationFrontVector[s];
-    int32_t step = KPS_STEP(speedLo[s]);
-    gVelocityVector[s] = vec3(FIX_MUL(F->x, step), FIX_MUL(F->y, step), FIX_MUL(F->z, step));
-}
 
 /* the autopilot key (A), between two steps: with no enemy near, the player (and the wing) taken on to the next nav
  * point, as the old games cut to the arrival; 1 when it went, 0 when it may not.  (On a multiplayer client the layer
@@ -527,28 +1575,34 @@ uint16_t __far __cdecl do_damage_impl(uint16_t src, uint16_t dst, uint16_t qty, 
  * Returns a missile's slot (the layer maps it), else 0xFFFF */
 uint16_t __far __cdecl fireGunFromShip_impl(uint16_t ship, uint16_t gun)
 {
-    (void)ship;
-    (void)gun;
-    return 0xFFFF;
+    const RvWeapon __far *w;
+    if (!slot_is_ship((int16_t)ship) || gun >= GUN_COUNT(ship) || (w = weapon(GUN_TYPE(ship, gun))) == 0)
+        return 0xFFFF;
+    if (w->kind == RV_WK_MISSILE || w->kind == RV_WK_TORPEDO || w->kind == RV_WK_ROCKET)
+        return missile_launch(ship, gun, w);
+    return gun_fire(ship, gun, w);
 }
 
 /* (ship): every one of its guns that is ready, fired through the fireGunFromShip thunk */
 void __far __cdecl maybe_fire_all_guns_impl(uint16_t ship)
 {
-    (void)ship;
+    if (slot_is_ship((int16_t)ship))
+        guns_fire_ready(ship);
 }
 
 /* (slot): a fighter's mind for a step (an AI ship's: the layer skips it on the machines where the ship is a
  * puppet) */
 void __far __cdecl aiFighterThink_impl(uint16_t s)
 {
-    (void)s;
+    if (RV_SLOT_OK(s) && slot_is_ship((int16_t)s))
+        fighter_think((int16_t)s);
 }
 
 /* (slot): a capital ship's mind for a step: its turrets, its course */
 void __far __cdecl aiShipThink_impl(uint16_t s)
 {
-    (void)s;
+    if (RV_SLOT_OK(s) && slot_is_ship((int16_t)s))
+        ship_think((int16_t)s);
 }
 
 /* (ship): the game's own ending of a ship (its explosion, its debris, a comm line), then the slot empty
@@ -629,5 +1683,7 @@ uint16_t __far __cdecl outerSpawnShipEntity_impl(uint16_t missionShip, uint16_t 
                KM * (*(const int16_t *)(nav + 6) + *(const int16_t *)(rec + 14)), 0);
     slotMissionShip[s] = missionShip;
     shipStateByte[s] = s == 0 ? 8 : rec[16];
+    if (rec[17] && rec[17] <= P_COUNT)  /* (its AI's profile, when the mission names one: docs/ai.md) */
+        g_mind[s].profile = (uint8_t)(rec[17] - 1);
     return (uint16_t)s;
 }
