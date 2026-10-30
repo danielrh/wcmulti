@@ -104,8 +104,11 @@ static const uint8_t __far *shape(uint16_t type)
         if (g_cache[i].used < g_cache[lru].used)
             lru = i;
     }
-    if (!g_cache[lru].m && (g_cache[lru].m = (uint8_t __far *)_fmalloc(SBYTES)) == 0)
+    if (!g_cache[lru].m && (g_cache[lru].m = (uint8_t __far *)_fmalloc(SBYTES)) == 0) {
+        static const char __far s_nomem[] = "collide: no memory for type %u's silhouettes: its box stands in";
+        rv_logf(s_nomem, type);
         return 0;
+    }
     xms_get(g_shape_blk, (uint32_t)g_shape_of[type] * SBYTES, g_cache[lru].m, SBYTES);
     g_cache[lru].type = (int16_t)type;
     g_cache[lru].used = g_tick;

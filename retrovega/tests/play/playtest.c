@@ -2023,6 +2023,96 @@ static void t_formation(void)
     REQUIRE(pt_km_to(0, 0, 0, 0) > 10000, e_still, pt_km_to(0, 0, 0, 0), 0, 0);
 }
 
+/* the AI profiles a mission ship's record may name in its byte 17 (P_* + 1 of src/logic.c's; docs/ai.md) */
+#define PT_AI_WAITER 8
+#define PT_AI_NOLEFT 9
+
+/* an AI enemy spawned through the mission's own way (outerSpawnShipEntity of a record at nav 0), with a profile: the
+ * slot it took, -1 none */
+static int16_t pt_ai_ship(int16_t type, int16_t profile, int16_t x, int16_t y, int16_t z, int16_t yaw)
+{
+    uint8_t *rec = missionShipTable + missionShipTable_SIZE * 1;
+    uint16_t s;
+    _fmemset(rec, 0, missionShipTable_SIZE);
+    *(uint16_t *)rec = (uint16_t)type;
+    *(uint16_t *)(rec + 2) = SIDE_AERA;
+    *(uint16_t *)(rec + 4) = 0xFFFF;
+    *(int16_t *)(rec + 10) = x;
+    *(int16_t *)(rec + 12) = y;
+    *(int16_t *)(rec + 14) = z;
+    rec[16] = RV_PILOT_NONE;
+    rec[17] = (uint8_t)profile;
+    s = outerSpawnShipEntity(1, 0);
+    if (s > RV_MAX_SHIP_SLOT)
+        return -1;
+    ship_face((int16_t)s, yaw, 0);
+    pt_speed((int16_t)s, 0);
+    return (int16_t)s;
+}
+
+/* M5.9: an enemy that cannot turn left (profile P_NOLEFT), the player on its left: its nose never goes left, and
+ * yet comes round onto the player (it rolls, and pulls up or down) */
+static void t_no_left(void)
+{
+    static const char __far e_spawn[] = "no enemy spawned through outerSpawnShipEntity (slot %d)";
+    static const char __far e_left[] = "the enemy's nose went left by %d (1024 a turn) at step %d: its profile may not";
+    static const char __far e_turn[] = "in 20 s the enemy never pointed its nose at the player on its left (best %d/256)";
+    RvVec3 f, r;
+    int16_t s, i, a;
+    int32_t best = -256, c;
+    pt_alone(PT_PLAYER);
+    g_sys.armed = 0;
+    playerCanBeDamaged = 0;
+    s = pt_ai_ship(PT_ENEMY, PT_AI_NOLEFT, -4000, 0, 3000, 0);   /* (facing +z: the player behind its left shoulder) */
+    REQUIRE(s >= 1, e_spawn, s, 0, 0);
+    for (i = 0; i < 20 * SEC && best < 230; i++) {
+        f = gOrientationFrontVector[s];
+        r = gOrientationRightVector[s];
+        if (!pt_step())
+            return;
+        a = pt_angle(&gOrientationFrontVector[s], &f, &r);   /* (the nose's move toward its own right: a yaw) */
+        REQUIRE(a >= -2, e_left, a, i + 1, 0);
+        if ((c = pt_aim(s, 0)) > best)
+            best = c;
+    }
+    REQUIRE(best >= 230, e_turn, best, 0, 0);
+}
+
+/* M5.10: an enemy that waits (profile P_WAITER), 4,000 km ahead of a player pointing at it: it stays still and cloaked
+ * while the player watches it; once the player turns away it comes, uncloaked, and gets its nose on the player */
+static void t_waiter(void)
+{
+    static const char __far e_spawn[] = "no enemy spawned through outerSpawnShipEntity (slot %d)";
+    static const char __far e_moved[] = "the waiting enemy moved %d km in 5 s with the player pointing at it";
+    static const char __far e_cloak[] = "the waiting enemy is not cloaked (rvFlags %d): bit 16 while it waits";
+    static const char __far e_still[] = "10 s after the player turned away, the enemy has moved only %d km (speed %d)";
+    static const char __far e_shown[] = "the enemy came but stayed cloaked (rvFlags %d)";
+    static const char __far e_turn[] = "in 15 s after coming the enemy never pointed its nose at the player (best %d/256)";
+    int16_t s, i;
+    int32_t best = -256, c;
+    pt_alone(PT_PLAYER);
+    g_sys.armed = 0;
+    playerCanBeDamaged = 0;
+    s = pt_ai_ship(PT_ENEMY, PT_AI_WAITER, 0, 0, 4000, TURN / 2);   /* (facing the player, who faces it) */
+    REQUIRE(s >= 1, e_spawn, s, 0, 0);
+    if (!pt_steps(5 * SEC))
+        return;
+    REQUIRE(pt_km_to(s, 0, 0, 4000) < 50, e_moved, pt_km_to(s, 0, 0, 4000), 0, 0);
+    REQUIRE(rvFlags[s] & 16, e_cloak, rvFlags[s], 0, 0);
+    ship_face(0, TURN / 4, 0);          /* (the player turns away: its chance) */
+    if (!pt_steps(10 * SEC))
+        return;
+    REQUIRE(pt_km_to(s, 0, 0, 4000) > 500, e_still, pt_km_to(s, 0, 0, 4000), (int32_t)speedLo[s], 0);
+    REQUIRE(!(rvFlags[s] & 16), e_shown, rvFlags[s], 0, 0);
+    for (i = 0; i < 15 * SEC && best < 230; i++) {
+        if (!pt_step())
+            return;
+        if (slot_is_ship(s) && (c = pt_aim(s, 0)) > best)
+            best = c;
+    }
+    REQUIRE(best >= 230, e_turn, best, 0, 0);
+}
+
 /* ======================================================================================================== */
 /* M6: collisions (step_collisions) */
 
@@ -2572,6 +2662,9 @@ static const char __far n_m5_6[] = "M5.6 ai-limits (aiFighterThink, step_motion)
     "type";
 static const char __far n_m5_7[] = "M5.7 wingman-fights (aiFighterThink): a wingman attacks the enemy";
 static const char __far n_m5_8[] = "M5.8 formation (aiFighterThink): a wingman keeps with its leader";
+static const char __far n_m5_9[] = "M5.9 no-left (aiFighterThink): a profile that cannot turn left rolls and pulls instead";
+static const char __far n_m5_10[] = "M5.10 waiter (aiFighterThink): a profile that lies in wait comes when the player "
+    "looks away";
 static const char __far n_m6_1[] = "M6.1 ram (step_collisions): ships inside one another are pushed apart, both hurt";
 static const char __far n_m6_2[] = "M6.2 no-ghosts (step_collisions): a ship flown at another does not pass through";
 static const char __far n_m7_1[] = "M7.1 launch (fireGunFromShip): a launcher puts a missile in a ship slot";
@@ -2611,7 +2704,7 @@ static const PtTest __far k_tests[] = {
     { n_m4_1, t_kill, 0 }, { n_m4_2, t_dying_quiet, 0 }, { n_m4_3, t_player_dies, 0 },
     { n_m5_1, t_ai_thunks, 1 }, { n_m5_2, t_ai_turns, 0 }, { n_m5_3, t_ai_closes, 0 }, { n_m5_4, t_ai_fires, 0 },
     { n_m5_5, t_ai_aims, 1 }, { n_m5_6, t_ai_limits, 0 }, { n_m5_7, t_wingman_fights, 0 },
-    { n_m5_8, t_formation, 0 },
+    { n_m5_8, t_formation, 0 }, { n_m5_9, t_no_left, 0 }, { n_m5_10, t_waiter, 0 },
     { n_m6_1, t_ram, 0 }, { n_m6_2, t_no_ghosts, 0 },
     { n_m7_1, t_launch, 0 }, { n_m7_2, t_missile_key, 0 }, { n_m7_3, t_missile_flies, 0 },
     { n_m7_4, t_missile_hits, 0 }, { n_m7_5, t_missile_homes, 0 }, { n_m7_6, t_missile_ends, 0 },

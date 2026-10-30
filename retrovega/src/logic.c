@@ -143,7 +143,9 @@ void logic_start(const RvMission __far *m)
     _fmemset(g_mind, 0, sizeof g_mind);
     _fmemset(g_missile, 0, sizeof g_missile);
     _fmemset(g_rammed, 0, sizeof g_rammed);
-    _fmemset(systemDamage, 0, systemDamage_SIZE);   /* the player's systems whole (flight.c clears only the cockpit's) */
+    memset(systemDamage, 0, systemDamage_SIZE);   /* the player's systems whole (flight.c clears only the cockpit's).  (A
+                                           near memset: Watcom makes a far pointer from this fixed address with segment
+                                           0, so _fmemset cleared the interrupt table instead and the damage stayed) */
     _fmemset(g_killed, 0, sizeof g_killed);
     _fmemset(&g_hud, 0, sizeof g_hud);   /* (no marks until the first step works them out) */
     g_navs_seen = 1;
@@ -1230,6 +1232,8 @@ static void fighter_think(int16_t s)
     int16_t sit, k, near_ = -1;
     int32_t d, bd = INT32_C(0x7FFFFFFF);
     m->leader = leader_of(s);
+    if (m->tactic == T_IDLE && p->idle == T_WAIT)   /* (its first thought: one that waits lies in wait from the start) */
+        take_tactic(s, m, p, T_WAIT);
     /* the target: kept while it lives and stays in reach, else the nearest enemy within the engage distance */
     if (m->target != 0xFF && (!slot_is_ship(m->target) || shipAiState[m->target] == 9 || commAnimInfo[m->target] == commAnimInfo[s]
                               || km_between(s, m->target) > (int32_t)p->engage_km * 3 / 2))
