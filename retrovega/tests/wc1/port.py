@@ -31,13 +31,13 @@ FIELDS = {22: 'asteroid', 23: 'mine'}
 # the systems, in the old campaign's order, as places of the Aera war: (node id, name, good next, bad next)
 SERIES = [
     ('ENIGMA', 'the Enigma shipyards', 'CEPHID', 'CEPHID'),
-    ('CEPHID', 'Cephid 17', 'SHELTON', 'CRUCIBLE'),
+    ('CEPHID', 'Cephid 17', 'SHELTON', 'CRUCIBL'),
     ('SHELTON', 'Shelton', 'LIXIS', 'OLDZIEY'),
-    ('CRUCIBLE', 'the Crucible picket', 'OLDZIEY', 'DEFIANCE'),
-    ('OLDZIEY', 'Oldziey', 'LIXIS', 'ATARAXIA'),
-    ('DEFIANCE', 'Defiance', 'ATARAXIA', 'BARNARD'),
+    ('CRUCIBL', 'the Crucible picket', 'OLDZIEY', 'DEFIANC'),
+    ('OLDZIEY', 'Oldziey', 'LIXIS', 'ATARAXI'),
+    ('DEFIANC', 'Defiance', 'ATARAXI', 'BARNARD'),
     ('LIXIS', 'the Lixis beacon', 'SHMRN', 'RIGEL'),
-    ('ATARAXIA', 'Ataraxia', 'RIGEL', 'BARNARD'),
+    ('ATARAXI', 'Ataraxia', 'RIGEL', 'BARNARD'),
     ('RIGEL', 'the Rigel relay', 'SHMRN', 'BARNARD'),
     ('BARNARD', "Barnard's Star", 'SHMRN', 'WOLF359'),
     ('WOLF359', 'Wolf 359', 'SHMRN', 'LUYTEN'),
@@ -178,6 +178,7 @@ def port(dumpdir):
                 seats = seat_room(rng, room, used, rel)
                 lines.append('%-8s %s' % (room, ' '.join('%s=%s' % (k, v or '-') for k, v in seats.items())))
                 people = [v for v in seats.values() if v]
+                used.update(people)     # (nobody in both rooms of one mission)
                 if len(people) >= 2:
                     a, b = people[0], people[1]
                     talk = TALK[rel.get(frozenset((a, b)), (True, 'none'))[1]]
