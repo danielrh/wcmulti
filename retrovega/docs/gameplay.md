@@ -247,6 +247,14 @@ What the tests expect (an AI Nicander against a still player):
 | M5.6 ai-limits | its nose turns no faster than 1.5 × its type's rate; its speed within `max_kps`, or `ab_kps` while lit; and it does turn and fly |
 | M5.7 wingman-fights | a Terran AI hurts an enemy within 60 s while the player holds fire (on the host: by its gunfire) |
 | M5.8 formation | flying straight at cruise for a minute, the wingman stays within 5,000 km of the player for the last 10 s |
+| M5.9 no-left | an enemy whose profile may not turn left (byte 17 of its mission ship record names the profile) never yaws left, and still brings its nose onto the player on its left within 20 s |
+| M5.10 waiter | an enemy whose profile lies in wait stays still and cloaked (`rvFlags` 16) while the player points at it, and comes, uncloaked, within 10 s of the player turning away |
+
+**The AI as written** (docs/ai.md): a mind per slot runs a tactic picked by weighted dice from its profile's table for
+its situation; a steering turns the tactic's wanted direction into the player's own steer and roll, pulling only where
+the profile allows; the profiles are rows of a table, one a character (interceptor, fighter, heavy, ace, bomber,
+wingman, capital, waiter, no-left), a type's by `profile_of`, or a mission ship record's byte 17 (`P_*` + 1). The
+numbers are measured against the old games' flights (`tests/wc1/`).
 
 ### M6: collisions (`step_collisions`)
 
@@ -549,7 +557,7 @@ into `RVGAME.DAT` (run by `build.sh`, and by `host/build.sh` for the harness).
 `tests/play/playtest.c` is the suite, in one file that builds for both sides; `tests/play/playtest.sh` runs it.
 
 ```
-tests/play/playtest.sh              all 61 on the host
+tests/play/playtest.sh              all 74 on the host
 tests/play/playtest.sh M3 M5.2      milestone 3 and test M5.2
 tests/play/playtest.sh --dos        on the host, then in DOSBox, and the hashes compared
 tests/play/playtest.sh --steps M5.3 one test on both, a hash of each part of the world after every step
