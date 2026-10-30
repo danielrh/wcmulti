@@ -186,7 +186,7 @@ _rv_fixed_block:
         times 0x0010 - ($ - rvfixed_start) db 0
 ; 0x0010 rvPuppetHeader
         db "RVPUPPET"
-        dw 1, 128, 9, 10, 125
+        dw 1, 128, 31, 32, 125
         dw 0x2a, 0x4d, 0x33, 5, 0
         dd 0                           ; build number (the build stamps it)
         times 16 db 0                  ; build date

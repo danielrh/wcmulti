@@ -23,7 +23,8 @@
 # frame; one frame = one simulation step (20 per second).
 
 SLOTS 128
-MAXSHIPSLOT 9          # bring-up: ships in 1..9 like WC.EXE; 47 once the layer takes it from GameParams
+MAXSHIPSLOT 31         # ships, capital ships and missiles in 1..31 (WC.EXE had 1..9): 32 ship-class slots, a
+                       # 32-bit mask's worth.  The layer replicates 0..9 until it takes it from GameParams (spec 4.2)
 DGROUP_PARA 0x0100     # DGROUP's paragraph in the image (RVHOOK, 4 KB, is paragraph 0)
 
 SECTION header 0x0000

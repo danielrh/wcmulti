@@ -5,7 +5,7 @@
 #include "rvtypes.h"
 
 #define RVGAME_MAGIC "RVGAME"
-#define RVGAME_VERSION 5
+#define RVGAME_VERSION 6
 
 #define RV_PILOTS 16
 #define RV_NODES 32
@@ -238,6 +238,8 @@ typedef struct {
     uint16_t max_kps;
     uint16_t ab_kps;
     uint16_t accel;
+    uint16_t slide_kps;
+    uint16_t slide_dmg_kps;
     uint8_t yaw_dps;
     uint8_t pitch_dps;
     uint8_t roll_dps;
@@ -281,7 +283,7 @@ typedef struct {
 #define RV_PILOT_SIZE 120
 #define RV_NODE_SIZE 22
 #define RV_MISSION_SIZE 1424
-#define RV_SHIPTYPE_SIZE 166
+#define RV_SHIPTYPE_SIZE 170
 #define RV_WEAPON_SIZE 40
 
 /* sin(i/256 x 90 degrees) x 16384, i = 0..256: the simulation's trigonometry (flight.c) */

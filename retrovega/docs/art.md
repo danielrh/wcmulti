@@ -39,11 +39,11 @@ in four liveries.
 
 It is a minimal headless OpenGL renderer: moderngl on Mesa's EGL. llvmpipe
 is enough; no GPU or display is needed. System Python refuses pip
-installs, so it lives in a virtual environment that reuses the system's
-numpy, scipy and Pillow:
+installs, so it lives in a virtual environment (`build.sh` makes it with uv, taking
+only releases at least 30 days old):
 
-    python3 -m venv --system-site-packages ~/.venvs/retrovega-art
-    ~/.venvs/retrovega-art/bin/pip install moderngl
+    uv venv --python python3 ~/.venvs/retrovega-art
+    uv pip install --python ~/.venvs/retrovega-art/bin/python --exclude-newer "30 days" -r tools/art-requirements.txt
 
 The assets are a copy of Vega Strike's Assets-Production at
 `~/dev/vegastrike-assets` (`--assets` to change it).

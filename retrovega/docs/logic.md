@@ -90,9 +90,9 @@ array one element per slot.
 | slots | hold |
 |---|---|
 | 0 | the player (the camera and the cockpit are slot 0's) |
-| 1 .. `RV_MAX_SHIP_SLOT` (9) | ships, capital ships, missiles |
-| 10 = `SHOT_PROXY_SLOT` | the shots' stand-in bolt for `do_damage` (below) |
-| 11 .. 117 | temporaries, all free: keep them so (see the rules) |
+| 1 .. `RV_MAX_SHIP_SLOT` (31) | ships, capital ships, missiles (`ship_spawn` refuses any slot past them, returning -1) |
+| 32 = `SHOT_PROXY_SLOT` | the shots' stand-in bolt for `do_damage` (below) |
+| 33 .. 117 | temporaries, all free: keep them so (see the rules) |
 | 124 down to 118 | the asteroid and mine fields' hazard slots, one a field (rocks.c) |
 | 125 | the camera; 127 the scratch vector |
 
@@ -142,6 +142,9 @@ spare near vector for `do_damage`'s `where`).
   - `lf_atan2(y, x)` returns 0..1023. Keep its arguments under 2^16: halve them until they are.
 - **Speeds:** `KPS_STEP(kps)` is positions a step: kps × 256 / `KPS_HZ`.
 - **Turn rates:** degrees a second × `TURN` / 360 / `KPS_HZ` × steer / 9 is a step's turn. The first flight's `turn_step` does exactly this.
+  - `TURN_STEP(dps, steer)` (world.h) gives it in 1/256ths of a unit (`TURN_FRAC_SHIFT`) with a multiply and a shift. Carry the fraction from step to step: the slowest ships turn under a unit a step.
+  - It is approximate: 18 of the 4,864 rates and steers come out 1/256 of a unit off the exact quotient, the same on every machine. Its comment in world.h says what changing it takes, and how to make it exact.
+- **Dividing by a constant:** a 32-bit `/` is a runtime call on DOS (`__I4D`). `QCONST(num, den, q)` makes num / den a fixed-point constant at compile time, and `QMUL(x, k, q)` multiplies by it, rounded. Keep a plain `/` where the exact quotient matters.
 - **`KPS_HZ` (20) against `LOGIC_HZ` (30): a decision for you.**
   - The spec converts a kps at 20 steps a second; the flight steps 30 times a second. Everything therefore moves and turns 1.5 times its nominal rate. The first flight did too, and its feel (rocks, dodging) was tuned at that.
   - Set `KPS_HZ` to `LOGIC_HZ` in world.h if you want kps to mean km a second.
@@ -156,7 +159,7 @@ spare near vector for `do_damage`'s `where`).
 |---|---|
 | `vec_dot`, `vec_norm`, `vec_cross`, `vec_turn` | vector maths on `RvVec3` (`vec_turn(&front, &right, t)` yaws right; `(&front, &up)` pitches up; `(&right, &up)` lifts the right wing) |
 | `ship_orthonormalise(s)`, `ship_face(s, yaw, pitch)` | square a ship's frame; set it facing a way, level |
-| `slot_is_ship(s)`, `slot_type(s)` | a ship or capital ship in 0..9; its type's numbers (speeds, turn rates, shields, armour, hull, `hit[]` box, `loadout`) |
+| `slot_is_ship(s)`, `slot_type(s)` | a ship or capital ship in 0..31; its type's numbers (speeds, turn rates, shields, armour, hull, `hit[]` box, `loadout`) |
 | `ship_rel(from, s, &v)` | where s is as `from` sees it: right, up, ahead, in km (an AI's eyes) |
 | `player_km(s)` | km from the player, roughly |
 | `ship_spawn(s, type, side, controller, x, y, z, yaw)` | a ship into slot s: its type's speeds, shields, armour and gun table (`ship_guns`); everything else reset |
@@ -309,8 +312,8 @@ source slot to learn who fired:
 - anything else is ramming or a hazard;
 - between two human pilots, a ship slot as the source would even be taken for a harmless wing bump.
 
-So `shot_source` writes `SHOT_PROXY_SLOT` (slot 10) as a bolt of the shot's
-owner, weapon and damage, and returns 10. It stays valid until the next
+So `shot_source` writes `SHOT_PROXY_SLOT` (slot 32) as a bolt of the shot's
+owner, weapon and damage, and returns 32. It stays valid until the next
 `shots_move()`. One slot is enough, because the layer reads it inside the
 `do_damage` call.
 
@@ -527,7 +530,7 @@ The scan for this guide, most needed first:
 3. Install Open Watcom 2:
    - download `ow-snapshot.tar.xz` from the "Current-build" release of https://github.com/open-watcom/open-watcom-v2/releases (this one is the 2026-10-01 snapshot);
    - `mkdir -p ~/opt/watcom && tar -xJf ow-snapshot.tar.xz -C ~/opt/watcom`. `build.sh` uses `~/opt/watcom/binl64`; set `WATCOM=` for another place.
-4. Make the art tools' venv: `python3 -m venv ~/.venvs/retrovega-art && ~/.venvs/retrovega-art/bin/pip install numpy pillow scipy moderngl`.
+4. The art tools' venv (`~/.venvs/retrovega-art`) is made by `build.sh` when it is missing, with [uv](https://docs.astral.sh/uv/) (install it first) from `tools/art-requirements.txt`, taking only package releases at least 30 days old (`UV_EXCLUDE_NEWER` changes that).
 5. Build: `cd retrovega && ./build.sh`.
    - The first build takes several minutes: it renders the balls, the rocks and the sky, makes the comm faces and the panels, packs `RV.DAT` and pre-renders the ships' sets.
    - Later builds redo only what changed, except `RV.DAT` and the code: `CODE=1` skips `RV.DAT` while only code has changed.

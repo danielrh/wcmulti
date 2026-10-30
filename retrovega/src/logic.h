@@ -19,6 +19,9 @@ typedef struct {
 } PilotInput;
 extern PilotInput __far g_pilot;
 
+/* a ship is being spawned into a slot (ship_spawn calls it, whoever spawns): forget what is kept for the slot (its
+ * turn's fractions).  Any slot number may come; only ship slots keep anything */
+void logic_prepare_spawn(int16_t ship_index);
 void logic_start(const RvMission __far *m);   /* the flight begins: its ships into the slots (before their art loads) */
 void logic_frame(void);                 /* one step (frameCounter is already one more) */
 void logic_hud(void);                   /* a band of the view is drawn: draw over it with hud.h's calls */

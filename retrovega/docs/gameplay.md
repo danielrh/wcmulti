@@ -82,7 +82,8 @@ What to write:
 - **`step_minds`**: for the player (`CTL_PLAYER`), a turn for this step from `g_pilot`:
   - `steer_x` -9..9 yaws (+ right), `steer_y` pitches (+ up), `roll` rolls (+ lifts the right wing);
   - a step's turn is `dps × TURN × steer / (360 × KPS_HZ × 9)`, with the type's `yaw_dps`, `pitch_dps` and
-    `roll_dps`;
+    `roll_dps`. `TURN_STEP(dps, steer)` (world.h) gives it in 1/256ths of a unit without a divide: carry the
+    fraction from step to step, or ships under 7 dps never turn;
   - keep it in a per-slot array of your own; the AI fills the same array (M5).
 - **`step_motion`**, for each ship slot:
   - **The turn:** `vec_turn(front, right, yaw)`, `vec_turn(front, up, pitch)`, `vec_turn(right, up, roll)`, then
@@ -105,6 +106,17 @@ What the tests expect:
 | M1.9 afterburner | past `max_kps` (never past `ab_kps`) while lit; back to the throttle within 20 s after |
 | M1.10 puppet | moves exactly by its velocity; its orientation untouched; no shots; no AI calls |
 | M1.11 frozen | doesn't move (while the player does) |
+| M1.12 turn-steps | each single step of a full yaw, pitch and roll turns the right way and at most twice its share (a turn measured only over many steps can wrap round); a second's sum within ±30% |
+| M1.13 turn-back | a steer of -9 turns each axis the other way, as fast |
+| M1.14 there-and-back | a second of each turn and a second back ends within 3 units (1°) of where it began |
+| M1.15 slow-turns | under a unit a step still turns at its rate (±30%): a capital ship's yaw, and a steer of 1. Carry the fraction from step to step |
+| M1.16 body-axes | rolled a quarter turn, a yaw takes the nose toward the ship's own right and a pitch toward its own up, not the world's |
+| M1.17 two-axes | yaw and pitch at once each turn at their own rate |
+| M1.18 steady | with the controls centred after a turn, the frame moves no more than 2/256 in 20 s |
+| M1.19 turn-flight | turning hard at cruise, every step's move is within 14° of the nose (a slide, if any, belongs above the top speed) |
+| M1.20 respawn | a ship spawned into a used slot turns exactly as one spawned into a fresh slot: reset what you keep for a slot when a ship is spawned in (`logic_prepare_spawn`) |
+| M1.21 full-house | a ship spawned into every slot 1..`RV_MAX_SHIP_SLOT` (`ship_spawn` returns its slot), no slot left free, and all of them fly |
+| M1.22 slot-limit | `ship_spawn` past the ship slots (32, 127, 128, -1) returns -1 and leaves the slot alone; with every ship slot full, `outerSpawnShipEntity` returns 0xFFFF and changes nothing; `logic_prepare_spawn` takes any slot number |
 
 The flight's rate is your decision. `KPS_HZ` is 20 and the flight steps 30 times a second (`LOGIC_HZ`), so
 everything moves 1.5 times its nominal rate (logic.md, "Units"). The tests compute through `KPS_STEP` and
@@ -363,8 +375,8 @@ writes it by offset, so the offsets are fixed for good. `abi/rvabi.def` is the o
 
 ### A ship: the slot arrays
 
-128 slots. Slot 0 is the player; 1..9 (`RV_MAX_SHIP_SLOT`) are ships, capital ships and missiles; 10 is the shots'
-stand-in bolt; 11..117 are kept free; 118..124 are the fields' hazards; 125 is the camera.
+128 slots. Slot 0 is the player; 1..31 (`RV_MAX_SHIP_SLOT`) are ships, capital ships and missiles; 32 is the shots'
+stand-in bolt; 33..117 are kept free; 118..124 are the fields' hazards; 125 is the camera.
 
 | DS: (slot 0) | name | bytes | meaning, units | written by |
 |---|---|---|---|---|
@@ -527,8 +539,10 @@ into `RVGAME.DAT` (run by `build.sh`, and by `host/build.sh` for the harness).
 - **The scale.** The placeholder missions put the nav points 1,000-5,000 km out, inside the radar's 8,000 km.
   Spacing like the old games' wants 15,000-30,000 km and the autopilot between; the tests use 20,000. The missions
   are `tools/campaign.py`'s output, yours to edit by hand.
-- **The limits.** Nine ship slots, less the player, are shared by the wingmen, the enemies and the missiles in
-  flight. A nav point's ships come in when the player gets there, and the dead leave room for the next nav's.
+- **The limits.** 31 ship slots, less the player, are shared by the wingmen, the enemies and the missiles in
+  flight (`ship_spawn` refuses a slot past them, returning -1). A nav point's ships come in when the player gets
+  there, and the dead leave room for the next nav's. The multiplayer layer still replicates only slots 0..9 until
+  it reads the number from its `GameParams` (spec 4.2).
 
 ## The play tests
 

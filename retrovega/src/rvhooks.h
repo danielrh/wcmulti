@@ -15,7 +15,7 @@
 
 #define RV_ABI_VERSION 1
 #define RV_SLOTS 128
-#define RV_MAX_SHIP_SLOT 9
+#define RV_MAX_SHIP_SLOT 31
 #define RV_CAMERA_SLOT (RV_SLOTS - 3)
 #define RV_SCRATCH_SLOT (RV_SLOTS - 1)
 #define RV_FIXED_BYTES 0x8000

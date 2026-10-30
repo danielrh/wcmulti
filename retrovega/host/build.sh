@@ -8,6 +8,7 @@
 #   CC=clang                  clang, which adds its implicit-truncation check: a value that does not fit the
 #                             int16_t (or uint16_t...) it is stored in, the 16-bit overflow DOS would wrap
 #   SDL=0                     headless only (no SDL2 needed)
+#   DEPS=1                    no 32-bit SDL2 installed: unpack libsdl2-dev:i386 into ~/.local/sdl2-i386 (host/sdl32.sh)
 #   OPT=-O0                   the optimisation (default -O1; always -g3: gdb knows the slot arrays' macros)
 #   LOGIC=path/to/logic.c     another logic.c in src/logic.c's place (an experiment, a test's)
 #   WEB=1                     the browser build with Emscripten (build/hostweb/: index.html, rvsim.js, .wasm, .data)
@@ -102,7 +103,7 @@ else
     SDLL=""
     if [ "$SDL" = 1 ]; then
         if [ "$ARCH" = 32 ]; then
-            PC="env PKG_CONFIG_LIBDIR=/usr/lib/i386-linux-gnu/pkgconfig:/usr/lib32/pkgconfig pkg-config"
+            . host/sdl32.sh
         else
             PC=pkg-config
         fi

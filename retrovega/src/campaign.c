@@ -20,6 +20,7 @@ RvShipType __far g_shiptypes[RV_SHIPTYPES];
 uint16_t g_nshiptypes;
 RvWeapon __far g_weapons[RV_WEAPONS];
 uint16_t g_nweapons;
+static const RvShipType __far * __far g_type_of[RV_SHIPTYPES];   /* each type number's record (ship_type), 0 none */
 static RvGameHeader g_head;
 static XmsBlock g_missions;
 
@@ -63,9 +64,14 @@ int16_t camp_load_data(const char *path)
     RV_ASSERT(g_head.nshiptypes <= RV_SHIPTYPES && g_head.shiptype_size == sizeof(RvShipType));
     g_nshiptypes = g_head.nshiptypes;
     fseek(f, g_head.shiptypes_at, SEEK_SET);
+    for (i = 0; i < RV_SHIPTYPES; i++)
+        g_type_of[i] = 0;
     for (i = 0; i < g_nshiptypes; i++) {
+        const RvShipType __far *t = &g_shiptypes[i];
         fread(buf, 1, sizeof(RvShipType), f);
         _fmemcpy(&g_shiptypes[i], buf, sizeof(RvShipType));
+        RV_ASSERT(t->type < RV_SHIPTYPES && !g_type_of[t->type]);
+        g_type_of[t->type] = t;
     }
     RV_ASSERT(g_head.nweapons <= RV_WEAPONS && g_head.weapon_size == sizeof(RvWeapon));
     g_nweapons = g_head.nweapons;
@@ -80,13 +86,11 @@ int16_t camp_load_data(const char *path)
     return 1;
 }
 
+/* a type number's record: the records are in ships.csv's order and the numbers have gaps (0x07, 0x18 .. 0x1F, ...),
+ * so a table by number, made as RVGAME.DAT loads */
 const RvShipType __far *ship_type(uint16_t type)
 {
-    uint16_t i;
-    for (i = 0; i < g_nshiptypes; i++)
-        if (g_shiptypes[i].type == type)
-            return &g_shiptypes[i];
-    return 0;
+    return type < RV_SHIPTYPES ? g_type_of[type] : 0;
 }
 
 const RvWeapon __far *weapon(uint16_t type)
