@@ -354,9 +354,17 @@ static int16_t dying(const uint8_t *fixed, uint16_t s)
 void host_thunk_enter(uint16_t fn, const char *name, int16_t nargs, const uint16_t *a);
 void host_thunk_leave(uint16_t fn, const char *name, int16_t nargs, const uint16_t *a, uint16_t ret);
 
+FILE *host_shiptrace;
+
 void host_thunk_enter(uint16_t fn, const char *name, int16_t nargs, const uint16_t *a)
 {
     int16_t d = g_depth++;
+    if (host_shiptrace && !g_in_check) {
+        if (fn == RV_FN_fireGunFromShip)
+            fprintf(host_shiptrace, "F %u %u %u 0\n", frameCounter, a[0], a[1]);
+        else if (fn == RV_FN_do_damage)
+            fprintf(host_shiptrace, "D %u %u %u %u\n", frameCounter, a[0], a[1], a[2]);
+    }
     if (host_trace && !g_in_check) {
         char args[64] = "";
         int16_t i;

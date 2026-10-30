@@ -1,0 +1,8 @@
+# The old game's first mission at its nav 1, as its trace had it when the player arrived (tests/wc1/README.md):
+# the player and the wingman (Hornets: here Schroedingers) flying at the 300 setting, three Dralthi (here
+# Nicanders) some 15,000 km ahead and to the left, in a loose line, crossing to the player's right at 200.
+player 300
+ship SCHROED 0 758 0 0 0 0 300
+ship NICANDR 1 -6986 754 13550 90 0 200
+ship NICANDR 1 -6758 633 12679 90 0 200
+ship NICANDR 1 -7890 773 13678 90 0 200

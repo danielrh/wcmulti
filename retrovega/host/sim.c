@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #ifdef HOST_SDL
 #include <SDL.h>
@@ -19,6 +20,7 @@
 #include "campaign.h"
 #include "collide.h"
 #include "world.h"
+#include "lightfield.h"
 #include "shots.h"
 #include "flight.h"
 #include "panel.h"
@@ -44,6 +46,13 @@ static const char k_usage[] =
     "  --data DIR       where RVGAME.DAT and SHAPES.DAT are (default: beside rvsim)\n"
     "  --shot FILE      at the end, the picture as a PPM file\n"
     "  --scale N        the window's size, N x 640 x 480 (default 2)\n"
+    "  --scene FILE     the ships of FILE instead of the mission's: `ship TYPE SIDE X Y Z YAW [PROFILE] [KPS]` a line\n"
+    "                   (km from the player, which starts at the origin facing +z; YAW degrees; PROFILE the AI's,\n"
+    "                   docs/ai.md; KPS its speed), `player KPS` the player's throttle\n"
+    "  --shiptrace FILE the flight traced a step at a time, as the layer's WCNET_SHIPTRACE traces the old games\n"
+    "                   (tests/wc1/README.md): a line a ship, the shots and the hits\n"
+    "  --hunt S         the player faces the nearest enemy every S seconds with the trigger held (a test pilot)\n"
+    "  --nodamage       the player takes no damage (playerCanBeDamaged 0: a long look at the enemies)\n"
     "keys: arrows steer, Q E roll, Space fires, Enter a missile, Tab afterburner, + - F S the throttle, A autopilot,\n"
     "      M mouse steering on/off (or hold the right button), P pause, N a step while paused, Esc ends\n";
 
@@ -53,7 +62,10 @@ static struct {
     int seed_set;
     uint32_t seed, frames, hash_every;
     int headless, scale, frames_set;
-} opt = { 0, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0, 0, 2, 0 };
+    const char *scene, *shiptrace;
+    int32_t hunt, speed;                /* --hunt's seconds (0 off); the scene's player throttle (-1 the mission's) */
+    int nodamage;
+} opt = { 0, 0, 0, 0, 0, -1, -1, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, -1, 0 };
 
 static RvMission g_m;
 static uint16_t g_mission;
@@ -503,6 +515,7 @@ static void picture(void)
 /* --- the flight --- */
 
 static void fail(const char *what) __attribute__((noreturn));
+static void load_scene(const char *path);
 static void fail(const char *what)
 {
     fprintf(stderr, "rvsim: %s\n", what);
@@ -550,6 +563,127 @@ static void start(void)
            (unsigned long)g_seed);
     logic_start(&g_m);
     shots_flight_start(0);              /* (the list, no draw pools: the picture is sim.c's) */
+    if (opt.scene)
+        load_scene(opt.scene);
+    if (opt.nodamage)
+        playerCanBeDamaged = 0;
+    if (opt.shiptrace && (host_shiptrace = fopen(opt.shiptrace, "w")) == 0)
+        fail("cannot write the trace file");
+}
+
+/* --scene: the mission's ships out, the file's in (world.h's ship_spawn, through the mission ship table so a line
+ * may name an AI profile: byte 17 of the record, as logic.c reads it) */
+static int16_t type_of(const char *name)
+{
+    uint16_t i;
+    if (isdigit((unsigned char)name[0]))
+        return (int16_t)strtol(name, 0, 0);
+    for (i = 0; i < g_nshiptypes; i++)
+        if (!strncmp(g_shiptypes[i].key, name, RV_KEY) && strlen(name) <= RV_KEY)
+            return g_shiptypes[i].type;
+    return -1;
+}
+
+static void load_scene(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[200], name[32];
+    int16_t s, n = 1;
+    if (!f)
+        fail("no such scene file");
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++)
+        ship_clear(s);
+    memset(navPointTable, 0, navPointTable_SIZE * 16);   /* (no nav points but the origin: the mission's navs would bring their ships) */
+    gPositionVector[0].x = gPositionVector[0].y = gPositionVector[0].z = 0;
+    ship_face(0, 0, 0);
+    while (fgets(line, sizeof line, f)) {
+        long side, x, y, z, yaw, profile = 0, kps = -1;
+        int16_t type;
+        if (sscanf(line, "player %ld", &kps) == 1) {
+            opt.speed = (int32_t)kps;
+            continue;
+        }
+        if (sscanf(line, "ship %31s %ld %ld %ld %ld %ld %ld %ld", name, &side, &x, &y, &z, &yaw, &profile, &kps) < 6)
+            continue;
+        if ((type = type_of(name)) < 0 || n >= 64)
+            fail("scene: no such ship type, or too many ships");
+        {
+            uint8_t *rec = missionShipTable + missionShipTable_SIZE * n;
+            memset(rec, 0, missionShipTable_SIZE);
+            *(uint16_t *)rec = (uint16_t)type;
+            *(uint16_t *)(rec + 2) = (uint16_t)side;
+            *(uint16_t *)(rec + 4) = 0xFFFF;
+            *(int16_t *)(rec + 10) = (int16_t)x;
+            *(int16_t *)(rec + 12) = (int16_t)y;
+            *(int16_t *)(rec + 14) = (int16_t)z;
+            rec[16] = RV_PILOT_NONE;
+            rec[17] = (uint8_t)profile;
+            s = (int16_t)outerSpawnShipEntity((uint16_t)n, 0);
+            if (s < 1 || s > RV_MAX_SHIP_SLOT)
+                fail("scene: no slot for a ship");
+            ship_face(s, (int16_t)(yaw * TURN / 360), 0);
+            if (kps >= 0)
+                setSpeed[s] = speedLo[s] = (uint32_t)kps;
+            {
+                int32_t step = KPS_STEP(speedLo[s]);
+                const RvVec3 *F = &gOrientationFrontVector[s];
+                gVelocityVector[s] = vec3(FIX_MUL(F->x, step), FIX_MUL(F->y, step), FIX_MUL(F->z, step));
+            }
+            n++;
+        }
+    }
+    fclose(f);
+    if (opt.speed >= 0) {
+        int32_t step = KPS_STEP(opt.speed);
+        setSpeed[0] = speedLo[0] = (uint32_t)opt.speed;
+        gVelocityVector[0] = vec3(0, 0, step);
+    }
+    rv_log("rvsim: scene %s: %d ships, the player at %ld kps", path, n - 1, (long)speedLo[0]);
+}
+
+/* --shiptrace: the ships after a step, as the layer traces the old games (S frame slot entity type side pilot
+ * x y z fx fy fz ux uy uz vx vy vz speed setspeed aistate aitimer missiletarget parent hull shf shr arf arr arl arrt) */
+static void trace_step(void)
+{
+    int16_t s;
+    for (s = 0; s < RV_SLOTS; s++) {
+        if (maybeEntityType[s] != ET_SHIP && maybeEntityType[s] != ET_CAPSHIP && maybeEntityType[s] != ET_MISSILE)
+            continue;
+        fprintf(host_shiptrace, "S %u %d %u %u %u %u %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %ld %lu %lu %u %u %u %u %u %u %u %u %u %u %u\n",
+                frameCounter, s, maybeEntityType[s], gInstanceShipTypes[s], commAnimInfo[s], shipStateByte[s],
+                (long)gPositionVector[s].x, (long)gPositionVector[s].y, (long)gPositionVector[s].z,
+                (long)gOrientationFrontVector[s].x, (long)gOrientationFrontVector[s].y, (long)gOrientationFrontVector[s].z,
+                (long)gOrientationUpVector[s].x, (long)gOrientationUpVector[s].y, (long)gOrientationUpVector[s].z,
+                (long)gVelocityVector[s].x, (long)gVelocityVector[s].y, (long)gVelocityVector[s].z,
+                (unsigned long)speedLo[s], (unsigned long)setSpeed[s], shipAiState[s], damageProperty[s], missileTarget[s],
+                parentShipForShip[s], damagePoints[s], SHIELD(s, 0), SHIELD(s, 1), ARMOR(s, 0), ARMOR(s, 1), ARMOR(s, 2),
+                ARMOR(s, 3));
+    }
+}
+
+/* --hunt: the player's nose onto the nearest living enemy */
+static void hunt_face(void)
+{
+    int16_t s, best = -1;
+    int32_t bd = INT32_C(0x7FFFFFFF), d;
+    RvVec3 v;
+    int32_t horiz;
+    for (s = 1; s <= RV_MAX_SHIP_SLOT; s++) {
+        if (!slot_is_ship(s) || commAnimInfo[s] == commAnimInfo[0] || shipAiState[s] == 9)
+            continue;
+        d = player_km(s);
+        if (d < bd) {
+            bd = d;
+            best = s;
+        }
+    }
+    if (best < 0 || bd < 1500)          /* (nearer than that it flies on past: a test pilot does not ram) */
+        return;
+    v = vec3(TO_KM(gPositionVector[best].x - gPositionVector[0].x), TO_KM(gPositionVector[best].y - gPositionVector[0].y),
+             TO_KM(gPositionVector[best].z - gPositionVector[0].z));
+    horiz = (int32_t)lf_sqrt((uint32_t)((v.x >> 4) * (v.x >> 4) + (v.z >> 4) * (v.z >> 4))) << 4;
+    ship_face(0, lf_atan2(v.x, v.z), lf_atan2(v.y, horiz));
+    g_sys.target = best;
 }
 
 /* a step; 0 when the flight is over */
@@ -571,6 +705,11 @@ static int step(void)
             g_autopilot = 0;
             if (setSpeed[0] > top)
                 setSpeed[0] = top;
+            if (opt.hunt) {             /* (the test pilot: onto the nearest enemy every so often, firing) */
+                if (g_steps % (uint32_t)(opt.hunt * LOGIC_HZ) == 0)
+                    hunt_face();
+                g_pilot.guns = 1;
+            }
         }
     }
     if (g_rec)
@@ -582,6 +721,8 @@ static int step(void)
         logic_autopilot();
     frameCounter = (uint16_t)(frameCounter + 1);   /* (it wraps, as on DOS: the cast says so to clang's check) */
     logic_frame();
+    if (host_shiptrace)
+        trace_step();
     host_check_world();
     if (opt.hash_every && g_steps % opt.hash_every == 0)
         printf("step %lu hash %08lx\n", (unsigned long)g_steps, (unsigned long)host_hash());
@@ -611,6 +752,8 @@ static void finish(void)
     fflush(stdout);
     if (host_log && host_log != stderr)
         fclose(host_log);
+    if (host_shiptrace)
+        fclose(host_shiptrace);
 }
 
 #ifdef HOST_SDL
@@ -676,6 +819,10 @@ int main(int argc, char **argv)
         else if (!strcmp(a, "--data")) opt.data = VAL;
         else if (!strcmp(a, "--shot")) opt.shot = VAL;
         else if (!strcmp(a, "--scale")) opt.scale = atoi(VAL);
+        else if (!strcmp(a, "--scene")) opt.scene = VAL;
+        else if (!strcmp(a, "--shiptrace")) opt.shiptrace = VAL;
+        else if (!strcmp(a, "--hunt")) opt.hunt = atoi(VAL);
+        else if (!strcmp(a, "--nodamage")) opt.nodamage = 1;
         else {
             fputs(k_usage, strcmp(a, "--help") && strcmp(a, "-h") ? stderr : stdout);
             return strcmp(a, "--help") && strcmp(a, "-h") ? 2 : 0;
