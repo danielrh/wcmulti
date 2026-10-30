@@ -51,6 +51,7 @@ uint16_t camp_mission_index(void);              /* the mission to fly next */
 void camp_mission(uint16_t i, RvMission __far *out);
 void camp_load_units(const RvMission __far *m);   /* missionShipTable and navPointTable, then missionLoaded */
 int16_t camp_resolve(int16_t won);                      /* scores the mission; returns 1 when the node is done */
+uint16_t camp_node_missions(uint16_t node);             /* how many missions a node holds (1 .. RV_MISSIONS_PER_NODE) */
 const char *camp_ending_text(void);
 
 int16_t save_write(int16_t bunk, const char *name);

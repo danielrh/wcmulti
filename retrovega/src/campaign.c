@@ -184,6 +184,17 @@ void camp_load_units(const RvMission __far *m)
     missionLoaded(camp_mission_index());
 }
 
+/* a node's missions: up to RV_MISSIONS_PER_NODE, the unused entries 0xFFFF (a node of the old campaign's shape has two
+ * or three) */
+uint16_t camp_node_missions(uint16_t node)
+{
+    uint16_t k;
+    for (k = 0; k < RV_MISSIONS_PER_NODE; k++)
+        if (g_nodes[node].missions[k] == 0xFFFF)
+            break;
+    return k ? k : 1;
+}
+
 int16_t camp_resolve(int16_t won)
 {
     RvMission m;
@@ -199,15 +210,18 @@ int16_t camp_resolve(int16_t won)
                 g_camp.pilot[m.ship[i].pilot].kills += 1 + (uint16_t)(ticks() % 3);
         }
     missionResolved(won ? 1 : 0);
-    if (++g_camp.mission < RV_MISSIONS_PER_NODE) {
+    if (++g_camp.mission < camp_node_missions(g_camp.node)) {
         campaignNode(g_camp.node, g_camp.mission);
         return 0;
     }
     {
+        /* the way out: good with more missions won than lost, bad with fewer, and an even split by the campaign's
+         * running total (a node of four: three or four won good, none or one bad, two by the total) */
         const RvNode *n = &g_nodes[g_camp.node];
-        int16_t good = g_camp.wins >= 3 || (g_camp.wins == 2 && g_camp.trend >= 0);
+        uint16_t count = camp_node_missions(g_camp.node);
+        int16_t good = g_camp.wins * 2 > count || (g_camp.wins * 2 == count && g_camp.trend >= 0);
         next = good ? n->good : n->bad;
-        rv_log("node %.8s: %u wins, trend %d -> %s", n->id, g_camp.wins, g_camp.trend, good ? "good" : "bad");
+        rv_log("node %.8s: %u of %u won, trend %d -> %s", n->id, g_camp.wins, count, g_camp.trend, good ? "good" : "bad");
     }
     g_camp.mission = 0;
     g_camp.wins = 0;

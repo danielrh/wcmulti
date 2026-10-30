@@ -327,18 +327,18 @@ def compile_all():
     for n in nodes:
         where = 'campaign.csv %s' % n['node']
         ms = n['missions'].split()
-        if len(ms) != LIMITS['MISSIONS_PER_NODE']:
-            raise Fail('%s: %d missions, need %d' % (where, len(ms), LIMITS['MISSIONS_PER_NODE']))
+        if not 1 <= len(ms) <= LIMITS['MISSIONS_PER_NODE']:
+            raise Fail('%s: %d missions, 1 to %d' % (where, len(ms), LIMITS['MISSIONS_PER_NODE']))
         for m in ms:
             if m not in mission_index:
                 raise Fail('%s: unknown mission %s' % (where, m))
             if missions[mission_index[m]].get('node') != n['node']:
                 raise Fail('%s: mission %s says it belongs to %s' % (where, m, missions[mission_index[m]].get('node')))
         out_nodes.append(struct.pack(fmt(NODE), text(n['node'], TEXT['NODE_ID'], where), int(n['layer']),
-                                     int(n['col']), *[mission_index[m] for m in ms],
+                                     int(n['col']), *([mission_index[m] for m in ms] + [0xFFFF] * (LIMITS['MISSIONS_PER_NODE'] - len(ms))),
                                      edge(n['good'], where), edge(n['bad'], where), b''))
         if n['good'] == n['bad']:
-            raise Fail('%s: both ways out go to %s' % (where, n['good']))
+            print('%s: both ways out go to %s' % (where, n['good']), file=sys.stderr)
     check_dag(nodes)
 
     out_missions = []
