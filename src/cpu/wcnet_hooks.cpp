@@ -930,6 +930,66 @@ static void on_dump_signal(int) {
     g_dumpRequested = 1;
 }
 
+// WCNET_SHIPTRACE=path: the flight traced, for comparing the game's AI with
+// RetroVega's (retrovega/tests/wc1): a line per ship slot per game frame,
+//   S frame slot entity shiptype side pilot x y z fx fy fz ux uy uz vx vy vz speed setspeed aistate aitimer
+//     missiletarget parent hulldamage shieldf shieldr armourf armourr armourl armourrt
+// a line per gun fired ("F frame ship gun") and per hit ("D frame src dst qty").
+static FILE *g_shipTrace = NULL;
+static FILE *ship_trace() {
+    static bool tried = false;
+    if (!tried) {
+        tried = true;
+        const char *env = getenv("WCNET_SHIPTRACE");
+        if (env && env[0]) {
+            g_shipTrace = fopen(env, "w");
+            if (g_shipTrace) {
+                setvbuf(g_shipTrace, NULL, _IOFBF, 1 << 16);
+            }
+        }
+    }
+    return g_shipTrace;
+}
+
+static void ship_trace_frame() {
+    FILE *f = ship_trace();
+    static int last = -1;
+    if (!f || !DS) {
+        return;
+    }
+    int frame = rd16(ds::frameCounter);
+    if (frame == last) {
+        return;
+    }
+    last = frame;
+    for (int slot = 0; slot < kNumSlots; slot++) {
+        int et = entity_type(slot);
+        if (et != ET_SHIP && et != ET_CAPSHIP && et != ET_MISSILE) {
+            continue;
+        }
+        Vec3 p = read_vec(vec_slot(ds::gPositionVector, slot)), fr = read_vec(vec_slot(ds::gOrientationFrontVector, slot)),
+             up = read_vec(vec_slot(ds::gOrientationUpVector, slot)), v = read_vec(vec_slot(ds::gVelocityVector, slot));
+        fprintf(f, "S %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d %d\n", frame, slot, et,
+                (int)(Bit16s)rd16((Bit16u)(ds::gInstanceShipTypes + 2 * slot)), (int)(Bit16s)rd16((Bit16u)(ds::commAnimInfo + 2 * slot)),
+                (int)rd8((Bit16u)(ds::shipStateByte + slot)), (int)p.x, (int)p.y, (int)p.z, (int)fr.x, (int)fr.y, (int)fr.z,
+                (int)up.x, (int)up.y, (int)up.z, (int)v.x, (int)v.y, (int)v.z, (int)(Bit32s)rd32((Bit16u)(ds::speedLo + 4 * slot)),
+                (int)(Bit32s)rd32((Bit16u)(ds::setSpeed + 4 * slot)), (int)(Bit16s)rd16((Bit16u)(ds::shipAiState + 2 * slot)),
+                (int)(Bit16s)rd16((Bit16u)(ds::damageProperty + 2 * slot)), (int)rd8((Bit16u)(ds::missileTarget + slot)),
+                (int)rd8((Bit16u)(ds::parentShipForShip + slot)), (int)(Bit16s)rd16((Bit16u)(ds::damagePoints + 2 * slot)),
+                (int)(Bit16s)rd16((Bit16u)(ds::curShield + 4 * slot)), (int)(Bit16s)rd16((Bit16u)(ds::curShield + 4 * slot + 2)),
+                (int)(Bit16s)rd16((Bit16u)(ds::armorState + 8 * slot)), (int)(Bit16s)rd16((Bit16u)(ds::armorState + 8 * slot + 2)),
+                (int)(Bit16s)rd16((Bit16u)(ds::armorState + 8 * slot + 4)), (int)(Bit16s)rd16((Bit16u)(ds::armorState + 8 * slot + 6)));
+    }
+}
+
+static void ship_trace_event(char kind, int a, int b, int c) {
+    FILE *f = ship_trace();
+    if (!f || !DS) {
+        return;
+    }
+    fprintf(f, "%c %d %d %d %d\n", kind, (int)rd16(ds::frameCounter), a, b, c);
+}
+
 static void maybe_dump_data_segment() {
     static int frame = 0;
     static int wanted = -1;
@@ -1415,8 +1475,10 @@ static void check_hooks_slow() {
         g_session->on_in_flight_scene(call_arg16(code::playScene, 0));
     }
     if (at_function(code::do_damage)) {
+        ship_trace_event('D', call_arg16(code::do_damage, 0), call_arg16(code::do_damage, 1), call_arg16(code::do_damage, 2));
         on_do_damage_entry();
     } else if (at_function(code::fireGunFromShip)) {
+        ship_trace_event('F', call_arg16(code::fireGunFromShip, 0), call_arg16(code::fireGunFromShip, 1), 0);
         on_fire_entry();
     } else if (at_function(code::delayedDespawn)) {
         on_delayed_despawn_entry();
@@ -1536,6 +1598,7 @@ static void check_hooks_slow() {
             joystick_drop(true);
         }
         lab_game_frame();
+        ship_trace_frame();
         maybe_dump_data_segment();
         hold_cheat_hull();
         capship_hull_tick();
@@ -1603,6 +1666,7 @@ static void check_hooks_solo() {
             joystick_drop(true);
         }
         lab_game_frame();
+        ship_trace_frame();
         static int lastFrame = -1;
         if (rd16(ds::frameCounter) != lastFrame) {
             if (pace_frame(true)) {
