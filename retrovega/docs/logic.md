@@ -273,8 +273,10 @@ energy. It sets the cooldown and spends the energy itself.
 - **A launcher** puts a missile into a free ship slot: `ET_MISSILE`, `parentShipForShip` the ship, `missileTarget` its target. It returns that slot, which the layer maps across machines. Otherwise it returns 0xFFFF.
 - **Lead, don't aim** (the user's ruling, 2026-10-20): shots fly straight at a finite speed and hit only by meeting the target. No hitscan, no auto-aim.
 
-`maybe_fire_all_guns(ship)` is the "every ready gun" decision: cooled down,
-energy enough. It calls the thunk for each.
+`maybe_fire_all_guns(ship)` is the "every ready gun" decision, a group of one
+weapon type at a time (the linked lasers): the group fires when all of it is
+cooled down and the energy covers all of it, or none of it fires, so linked
+guns never fire lopsided. It calls the thunk for each gun that fires.
 
 ## Shots: the bolt list outside the slot table
 

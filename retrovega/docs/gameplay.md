@@ -135,8 +135,10 @@ What to write:
     and the energy off `gunEnergy` (never below 0);
   - **never refuse**: the caller decided, and the layer replays the call on the other machines (logic.md, "The
     contract of fireGunFromShip").
-- **`maybe_fire_all_guns_impl(ship)`**: each gun or turret that is not destroyed, cooled (`GUN_STATE & 0x7F` is
-  0) and with the energy for it, through the `fireGunFromShip` thunk. Not the launchers.
+- **`maybe_fire_all_guns_impl(ship)`**: the guns and turrets in groups of one weapon type (a loadout's `3xLAS` is a
+  group of three, linked). A group fires together, each gun through the `fireGunFromShip` thunk, when every gun in it is cooled
+  (`GUN_STATE & 0x7F` is 0) and the energy covers them all; otherwise none of it fires, so linked guns never fire
+  lopsided. A destroyed gun leaves its group, and the rest fire together without it. Not the launchers.
 - **`step_fire`**: the player's trigger, `g_pilot.guns` with the master arm `g_sys.armed` on, through
   `maybe_fire_all_guns(0)`. The AI's choices come in M5, the missile key in M7.
 - **`step_timers`**: the guns' cooldowns down a step (guns and turrets only: a launcher's low bits are its
@@ -156,6 +158,14 @@ What the tests expect:
 | M2.7 broken-gun | a destroyed gun fires nothing, the others do |
 | M2.8 all-guns | `maybe_fire_all_guns` fires each ready gun once, no launcher; at once again, nothing |
 | M2.9 range | shots are gone a few steps past their life |
+| M2.10 launcher-rounds | a launcher's `GUN_STATE` doesn't change in 3 s of nobody firing: its low bits are rounds, and only guns' and turrets' count down |
+| M2.11 destroyed-bit | firing a gun whose record says destroyed keeps bit 7, and sets a cooldown |
+| M2.12 energy-gate | for the player's first group of linked guns (two or more of one type, whatever the count): with less energy than a shot nothing fires; with all but one shot's worth, still nothing; with the whole group's, all of it fires; recharged, it fires again |
+| M2.13 muzzles | a ship turned off the world's axes fires each gun from its mount's side (`GUN_MOUNT_X`'s sign, on the ship's right), ahead of its middle and within its size, along its nose |
+| M2.14 turrets | a capital ship's turrets all fire through `maybe_fire_all_guns`, from within its size (its big mounts' arithmetic), and cool within twice their refire |
+| M2.15 shots-full | with the shot list full (`SHOTS_MAX`), a fire still sets the cooldown and spends the energy: every machine replaying the call changes the gun the same way |
+| M2.16 volleys | the player's linked guns, from one shot short of a volley's energy, 10 s of held trigger: every step fires none or the whole group, never part of it; the group's cooldowns stay equal; at least three volleys as the energy comes back |
+| M2.17 link-fire | the same for a group of four (the Redeemer's mass drivers), and for the three left with one of them destroyed |
 
 ### M3: damage (`do_damage`, `step_shots`, `step_timers`)
 

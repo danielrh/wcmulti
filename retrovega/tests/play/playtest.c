@@ -51,6 +51,7 @@ int16_t playtest_run(const char *only);
 #define PT_ENEMY 0x08                   /* the Nicander */
 #define PT_WEAK 0x0B                    /* the Agis */
 #define PT_CAPSHIP 0x20                 /* the Vigilance */
+#define PT_LINKED 0x03                  /* the Redeemer: four mass drivers, linked */
 #define SEC LOGIC_HZ                    /* steps a second */
 
 typedef void (*PtFn)(void);
@@ -1418,6 +1419,282 @@ static void t_range(void)
     REQUIRE(shots_count() == 0, e_left, shots_count(), life + 5, life);
 }
 
+/* --- the guns' edges: a launcher's low bits are rounds, bit 7 is kept, energy gates each gun, the mounts are the
+ * ship's own, turrets are guns, and a fire changes the gun the same on every machine --- */
+
+/* M2.10 */
+static void t_launcher_rounds(void)
+{
+    static const char __far e_none[] = "the Schroedinger has no launcher to look at";
+    static const char __far e_idle[] = "a gun's cooldown stayed %d for 3 s: nothing counts down yet, nothing to "
+        "compare (M2.3 first)";
+    static const char __far e_rounds[] = "a launcher's GUN_STATE went from %d to %d in 3 s of nobody firing: its low "
+        "bits are its rounds (only guns' and turrets' count down)";
+    int16_t l;
+    uint8_t r0;
+    pt_alone(PT_PLAYER);
+    l = pt_launcher(0);
+    REQUIRE(l >= 0, e_none, 0, 0, 0);
+    r0 = GUN_STATE(0, l);
+    GUN_STATE(0, 0) = (uint8_t)((GUN_STATE(0, 0) & GUN_DESTROYED) | 5);   /* (a gun cooling: the timers must run) */
+    if (!pt_steps(3 * SEC))
+        return;
+    REQUIRE(!(GUN_STATE(0, 0) & 0x7F), e_idle, GUN_STATE(0, 0) & 0x7F, 0, 0);
+    REQUIRE(GUN_STATE(0, l) == r0, e_rounds, r0, GUN_STATE(0, l), 0);
+}
+
+/* M2.11 */
+static void t_destroyed_bit(void)
+{
+    static const char __far e_bit[] = "firing a gun marked destroyed (GUN_STATE %d before) left GUN_STATE %d: bit 7 "
+        "stays when the cooldown goes into bits 0-6";
+    static const char __far e_cool[] = "firing set no cooldown (GUN_STATE %d)";
+    pt_alone(PT_PLAYER);
+    GUN_STATE(0, 0) = GUN_DESTROYED;    /* (as the layer may hand a record over: the caller decides, not the fire) */
+    (void)fireGunFromShip(0, 0);
+    REQUIRE(GUN_STATE(0, 0) & GUN_DESTROYED, e_bit, GUN_DESTROYED, GUN_STATE(0, 0), 0);
+    REQUIRE(GUN_STATE(0, 0) & 0x7F, e_cool, GUN_STATE(0, 0), 0, 0);
+}
+
+/* the guns linked with gun record g (its weapon type's, guns and turrets, not destroyed): how many */
+static int16_t pt_group(int16_t s, int16_t g)
+{
+    int16_t h, n = 0;
+    for (h = 0; h < GUN_COUNT(s); h++)
+        if (pt_is_gun(s, h) && GUN_TYPE(s, h) == GUN_TYPE(s, g) && !(GUN_STATE(s, h) & GUN_DESTROYED))
+            n++;
+    return n;
+}
+
+/* the player's first gun record that is a gun and not destroyed, -1 none */
+static int16_t pt_first_gun(int16_t s)
+{
+    int16_t g;
+    for (g = 0; g < GUN_COUNT(s); g++)
+        if (pt_is_gun(s, g) && !(GUN_STATE(s, g) & GUN_DESTROYED))
+            return g;
+    return -1;
+}
+
+static const char __far e_lone[] = "the ship (type %d) has %d gun(s) of its first gun's type: nothing to link (a group "
+    "is two or more of one weapon type)";
+
+/* M2.12 */
+static void t_energy_gate(void)
+{
+    static const char __far e_short[] = "with gun energy %d, under a shot's %d, maybe_fire_all_guns fired %d: a gun "
+        "needs the energy for its shot";
+    static const char __far e_part[] = "with energy for all but one of the group's shots (%d of %d), "
+        "maybe_fire_all_guns fired %d: linked guns fire together or not at all (part of them fires lopsided)";
+    static const char __far e_all[] = "with the group's energy (%d, %d guns) maybe_fire_all_guns fired %d: all of "
+        "them, together";
+    static const char __far e_back[] = "after recharging (gun energy %d) the trigger fired %d: it fires again";
+    const RvWeapon __far *w;
+    uint16_t a0;
+    int16_t i, g, n;
+    pt_alone(PT_PLAYER);
+    g = pt_first_gun(0);
+    n = g >= 0 ? pt_group(0, g) : 0;
+    REQUIRE(n >= 2, e_lone, PT_PLAYER, n, 0);
+    w = weapon(GUN_TYPE(0, g));
+    if (!w || w->energy < 1)
+        return;                         /* (guns that cost nothing: nothing to gate) */
+    gunEnergy[0] = (uint16_t)(w->energy - 1);
+    a0 = shots_added();
+    maybe_fire_all_guns(0);
+    REQUIRE(shots_added() == a0, e_short, gunEnergy[0], w->energy, (uint16_t)(shots_added() - a0));
+    gunEnergy[0] = (uint16_t)(n * w->energy - 1);
+    a0 = shots_added();
+    maybe_fire_all_guns(0);
+    REQUIRE(shots_added() == a0, e_part, n * w->energy - 1, n * w->energy, (uint16_t)(shots_added() - a0));
+    gunEnergy[0] = (uint16_t)(n * w->energy);
+    a0 = shots_added();
+    maybe_fire_all_guns(0);
+    REQUIRE((int16_t)(shots_added() - a0) == n, e_all, n * w->energy, n, (uint16_t)(shots_added() - a0));
+    for (i = 0; i < 20 * SEC && (gunEnergy[0] < 100 || (GUN_STATE(0, g) & 0x7F)); i++)
+        if (!pt_step())
+            return;
+    a0 = shots_added();
+    maybe_fire_all_guns(0);
+    REQUIRE(shots_added() != a0, e_back, gunEnergy[0], 0, 0);
+}
+
+/* M2.13 */
+static void t_muzzles(void)
+{
+    static const char __far e_side[] = "gun %d (mount %d across) fired from %d km to the ship's right: its mount's "
+        "side, on the ship's own axes";
+    static const char __far e_nose[] = "gun %d fired from %d km ahead of the ship's middle (its half box %d km): from "
+        "the nose, inside its size";
+    static const char __far e_way[] = "gun %d's shot flies %d/256 along the turned ship's nose";
+    static const char __far e_none[] = "no gun of the turned ship put a shot in the world: nothing to look at (M2.1 "
+        "first)";
+    const RvVec3 *F, *R;
+    RvVec3 d, v;
+    Shot __far *s;
+    int16_t g, n0, fired = 0;
+    int32_t across, ahead, len, half;
+    pt_alone(PT_PLAYER);
+    ship_face(0, TURN / 4 + 37, 40);    /* (a ship turned off the world's axes) */
+    F = &gOrientationFrontVector[0];
+    R = &gOrientationRightVector[0];
+    half = collide_half(0) / 256;
+    for (g = 0; g < GUN_COUNT(0); g++) {
+        if (!pt_is_gun(0, g))
+            continue;
+        GUN_STATE(0, g) = 0;
+        n0 = shots_count();
+        (void)fireGunFromShip(0, (uint16_t)g);
+        if (shots_count() != n0 + 1)
+            continue;                   /* (M2.1 says) */
+        fired++;
+        s = shot(n0);
+        d.x = (s->x - gPositionVector[0].x) / 256;   /* (km) */
+        d.y = (s->y - gPositionVector[0].y) / 256;
+        d.z = (s->z - gPositionVector[0].z) / 256;
+        across = vec_dot(&d, R) / 256;
+        ahead = vec_dot(&d, F) / 256;
+        if (GUN_MOUNT_X(0, g) != 0)
+            REQUIRE((across < 0) == (GUN_MOUNT_X(0, g) < 0) && across != 0, e_side, g, GUN_MOUNT_X(0, g), across);
+        REQUIRE(ahead > 0 && pt_len(d.x, d.y, d.z) <= 2 * half, e_nose, g, ahead, half);
+        v.x = s->vx;
+        v.y = s->vy;
+        v.z = s->vz;
+        len = pt_len(v.x, v.y, v.z);
+        REQUIRE(len > 0 && vec_dot(&v, F) / len >= 243, e_way, g, len ? vec_dot(&v, F) / len : 0, 0);
+    }
+    REQUIRE(fired > 0, e_none, 0, 0, 0);
+}
+
+/* M2.14 */
+static void t_turrets(void)
+{
+    static const char __far e_none[] = "the Vigilance has %d turrets ready: nothing to test";
+    static const char __far e_fired[] = "maybe_fire_all_guns fired %d shots from a capital ship with %d turrets: each "
+        "turret fires as a gun does";
+    static const char __far e_far[] = "a turret's shot started %d km from the ship: within its size (%d km) expected";
+    static const char __far e_cool[] = "turret %d still cooling after %d steps (its refire %d): turrets count down as "
+        "guns do";
+    const RvWeapon __far *w;
+    uint16_t a0;
+    int16_t n, g, i, n0, worst = 0;
+    int32_t half;
+    pt_alone(PT_CAPSHIP);
+    n = pt_guns(0);
+    REQUIRE(n > 0, e_none, n, 0, 0);
+    half = collide_half(0) / 256;
+    a0 = shots_added();
+    n0 = shots_count();
+    maybe_fire_all_guns(0);
+    REQUIRE((int16_t)(shots_added() - a0) == n, e_fired, (uint16_t)(shots_added() - a0), n, 0);
+    for (i = n0; i < shots_count(); i++)
+        REQUIRE(pt_len((shot(i)->x - gPositionVector[0].x) / 256, (shot(i)->y - gPositionVector[0].y) / 256,
+                       (shot(i)->z - gPositionVector[0].z) / 256) <= 2 * half, e_far,
+                pt_len((shot(i)->x - gPositionVector[0].x) / 256, (shot(i)->y - gPositionVector[0].y) / 256,
+                       (shot(i)->z - gPositionVector[0].z) / 256), 2 * half, 0);
+    for (g = 0; g < GUN_COUNT(0); g++)
+        if (pt_is_gun(0, g) && (w = weapon(GUN_TYPE(0, g))) != 0 && w->refire > worst)
+            worst = w->refire;
+    for (i = 0; i <= 2 * worst + 1; i++)
+        if (!pt_step())
+            return;
+    for (g = 0; g < GUN_COUNT(0); g++)
+        if (pt_is_gun(0, g) && (w = weapon(GUN_TYPE(0, g))) != 0)
+            REQUIRE(!(GUN_STATE(0, g) & 0x7F), e_cool, g, 2 * worst + 2, w->refire);
+}
+
+/* M2.15 */
+static void t_shots_full(void)
+{
+    static const char __far e_fill[] = "only %d shots went in before the list was full: SHOTS_MAX expected";
+    static const char __far e_state[] = "with the shot list full a fire left the gun's cooldown %d and its energy %d "
+        "(it was %d): set them anyway, as every machine replaying the call does (a full list is this machine's alone)";
+    const RvWeapon __far *w;
+    RvVec3 far_pos, still;
+    int16_t n;
+    uint16_t e0;
+    pt_alone(PT_PLAYER);
+    w = weapon(GUN_TYPE(0, 0));
+    far_pos.x = far_pos.y = 0;
+    far_pos.z = INT32_C(100000) * KM;
+    still.x = still.y = still.z = 0;
+    for (n = 0; n < SHOTS_MAX + 4 && shot_add(1, GUN_TYPE(0, 0), &far_pos, &still) >= 0; n++)
+        ;
+    REQUIRE(n == SHOTS_MAX, e_fill, n, 0, 0);
+    GUN_STATE(0, 0) = 0;
+    e0 = gunEnergy[0];
+    (void)fireGunFromShip(0, 0);
+    REQUIRE((GUN_STATE(0, 0) & 0x7F) && (!w || !w->energy || gunEnergy[0] < e0), e_state, GUN_STATE(0, 0) & 0x7F,
+            gunEnergy[0], e0);
+}
+
+/* a held trigger on a ship of `type` (one of its guns destroyed first if `destroy`), from one shot short of its first
+ * group's volley, so the energy keeps crossing the gate: every step fires 0 shots or the whole group, the group's
+ * cooldowns stay equal, and at least three volleys come as the energy recovers.  0 when a check failed */
+static int16_t pt_link_fire(int16_t type, int16_t destroy)
+{
+    static const char __far e_odd[] = "step %d of a held trigger fired %d shots from a group of %d linked guns: all of "
+        "them or none, never part of the group";
+    static const char __far e_step[] = "after step %d linked gun %d is cooling %d where the group's first is: they "
+        "fire together, so they cool together";
+    static const char __far e_few[] = "10 s of trigger from low energy fired only %d volleys of %d guns: the group "
+        "fires again as the energy comes back";
+    const RvWeapon __far *w;
+    uint16_t a0, d;
+    int16_t i, g, h, n, volleys = 0;
+    pt_alone(type);
+    if (destroy) {
+        g = pt_first_gun(0);
+        if (g >= 0)
+            GUN_STATE(0, g) |= GUN_DESTROYED;
+    }
+    g = pt_first_gun(0);
+    n = g >= 0 ? pt_group(0, g) : 0;
+    if (n < 2) {
+        pt_fail(e_lone, type, n, 0);
+        return 0;
+    }
+    w = weapon(GUN_TYPE(0, g));
+    gunEnergy[0] = (uint16_t)(w && w->energy ? n * w->energy - 1 : 100);
+    g_sys.armed = 1;
+    g_pilot.guns = 1;
+    for (i = 0; i < 10 * SEC; i++) {
+        a0 = shots_added();
+        if (!pt_step())
+            return 0;
+        d = (uint16_t)(shots_added() - a0);
+        if (d != 0 && d != (uint16_t)n) {
+            pt_fail(e_odd, i + 1, d, n);
+            return 0;
+        }
+        volleys += d != 0;
+        for (h = g + 1; h < GUN_COUNT(0); h++)
+            if (GUN_TYPE(0, h) == GUN_TYPE(0, g) && !(GUN_STATE(0, h) & GUN_DESTROYED)
+                && (GUN_STATE(0, h) & 0x7F) != (GUN_STATE(0, g) & 0x7F)) {
+                pt_fail(e_step, i + 1, h, GUN_STATE(0, h) & 0x7F);
+                return 0;
+            }
+    }
+    if (volleys < 3) {
+        pt_fail(e_few, volleys, n, 0);
+        return 0;
+    }
+    return 1;
+}
+
+/* M2.16 */
+static void t_volleys(void)
+{
+    (void)pt_link_fire(PT_PLAYER, 0);
+}
+
+/* M2.17 */
+static void t_link_fire(void)
+{
+    if (pt_link_fire(PT_LINKED, 0))     /* (four mass drivers) */
+        (void)pt_link_fire(PT_LINKED, 1);   /* (three: one of the four destroyed) */
+}
+
 /* ======================================================================================================== */
 /* M3: damage (do_damage, step_shots, step_timers) */
 
@@ -2773,6 +3050,20 @@ static const char __far n_m2_6[] = "M2.6 safety (step_fire): nothing fires with 
 static const char __far n_m2_7[] = "M2.7 broken-gun (step_fire, maybe_fire_all_guns): a destroyed gun stays quiet";
 static const char __far n_m2_8[] = "M2.8 all-guns (maybe_fire_all_guns): every ready gun once, no missiles";
 static const char __far n_m2_9[] = "M2.9 range (step_shots): shots end at their range";
+static const char __far n_m2_10[] = "M2.10 launcher-rounds (step_timers): a launcher's rounds don't run down with time";
+static const char __far n_m2_11[] = "M2.11 destroyed-bit (fireGunFromShip): firing keeps GUN_STATE's bit 7";
+static const char __far n_m2_12[] = "M2.12 energy-gate (maybe_fire_all_guns): linked guns fire when the energy covers "
+    "them all, not part of them";
+static const char __far n_m2_13[] = "M2.13 muzzles (fireGunFromShip): a turned ship fires from its own mounts and "
+    "nose, along its nose";
+static const char __far n_m2_14[] = "M2.14 turrets (maybe_fire_all_guns, step_timers): a capital ship's turrets fire "
+    "and cool as guns do";
+static const char __far n_m2_15[] = "M2.15 shots-full (fireGunFromShip): a fire sets the cooldown and spends the "
+    "energy even when the shot list is full";
+static const char __far n_m2_16[] = "M2.16 volleys (step_fire, maybe_fire_all_guns): a held trigger fires the "
+    "player's linked guns together, never lopsided";
+static const char __far n_m2_17[] = "M2.17 link-fire (step_fire, maybe_fire_all_guns): four linked guns fire as four, "
+    "and as three with one destroyed";
 static const char __far n_m3_1[] = "M3.1 shield-front (do_damage): a front hit takes the front shield";
 static const char __far n_m3_2[] = "M3.2 shield-rear (do_damage): a hit from behind takes the rear shield";
 static const char __far n_m3_3[] = "M3.3 armour (do_damage): with the shields down, the armour on that side";
@@ -2837,7 +3128,9 @@ static const PtTest __far k_tests[] = {
     { n_m1_22, t_slot_limit, 0 },
     { n_m2_1, t_fire_call, 0 }, { n_m2_2, t_never_refuses, 0 }, { n_m2_3, t_cooldown, 0 }, { n_m2_4, t_energy, 0 },
     { n_m2_5, t_trigger, 0 }, { n_m2_6, t_safety, 0 }, { n_m2_7, t_broken_gun, 0 }, { n_m2_8, t_all_guns, 0 },
-    { n_m2_9, t_range, 0 },
+    { n_m2_9, t_range, 0 }, { n_m2_10, t_launcher_rounds, 0 }, { n_m2_11, t_destroyed_bit, 0 },
+    { n_m2_12, t_energy_gate, 0 }, { n_m2_13, t_muzzles, 0 }, { n_m2_14, t_turrets, 0 }, { n_m2_15, t_shots_full, 0 },
+    { n_m2_16, t_volleys, 0 }, { n_m2_17, t_link_fire, 0 },
     { n_m3_1, t_shield_front, 0 }, { n_m3_2, t_shield_rear, 0 }, { n_m3_3, t_armour, 0 },
     { n_m3_4, t_armour_sides, 0 }, { n_m3_5, t_hull, 0 }, { n_m3_6, t_big_hit, 0 }, { n_m3_7, t_no_wrap, 0 },
     { n_m3_8, t_player_safe, 0 }, { n_m3_9, t_invulnerable, 0 }, { n_m3_10, t_any_source, 0 },
