@@ -36,7 +36,8 @@ DATA = os.path.join(ROOT, 'data')
 
 VERSION = 7                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
                                         # and each type's loadout; 5: each weapon's sound (data/sounds.csv); 6: the
-                                        # ship types' slide speeds; 7: their sizes (radius_km)
+                                        # ship types' slide speeds; 7: their sizes (radius_km); 8: their gun energy's
+                                        # and shields' rates back
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
           'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
@@ -81,12 +82,17 @@ SHIPTYPE = [('char', 'key[RV_KEY]', '%ds' % TEXT['KEY']), ('char', 'name[RV_NAME
             ('unsigned short', 'armor_f', 'H'), ('unsigned short', 'armor_r', 'H'), ('unsigned short', 'armor_l', 'H'),
             ('unsigned short', 'armor_rt', 'H'), ('unsigned short', 'hull', 'H'), ('unsigned short', 'lod0_px', 'H'),
             ('unsigned short', 'radius_km', 'H'),
-            ('unsigned short', 'missiles', 'H'), ('unsigned char', 'nengines', 'B'), ('unsigned char', 'pad', 'B'),
+            ('unsigned short', 'missiles', 'H'), ('unsigned char', 'nengines', 'B'),
+            ('unsigned char', 'gun_energy_steps', 'B'), ('unsigned char', 'shield_full_shift', 'B'),
             ('signed char', 'engine[RV_ENGINES][4]', '%db' % (4 * 4)),
             ('unsigned char', 'hit[3]', '3B'), ('unsigned char', 'core', 'B'), ('unsigned char', 'nvitals', 'B'),
             ('signed char', 'vital[RV_VITALS][3]', '%db' % (3 * 8)),
             ('unsigned char', 'loadout[RV_GUNTABLE]', '%ds' % 0x33)]
 SHIPTYPE_FLAG_PLAYER = 1               # the player may fly it (a cockpit kit exists)
+GUN_ENERGY_STEPS = 3                   # blank in ships.csv: the gun energy comes back a point every so many steps
+                                       # (empty to 100 in 10 s)
+SHIELD_FULL_SHIFT = 8                  # blank in ships.csv: a shield comes back from nothing in 1 << this steps (256:
+                                       # 8.5 s at LOGIC_HZ), whatever its size (2 points to 900)
 # a ship type's engines (data/engines.csv, tools/engines.py): x, y, z in its sprites' box (127 = the half box; +x
 # the ship's left, +z the nose) and the glow's radius, min(0.3 size, 0.09) of the half box, in 1/1024ths
 ENGINES = 4
@@ -294,6 +300,14 @@ def compile_all():
         # the speed above which a full-rate turn slides, and that with the acceleration absorbers damaged; blank:
         # its top speed (it slides on the afterburner only), and its cruise
         slide, slide_dmg = n('slide_kps') or n('max_kps'), n('slide_dmg_kps') or n('cruise_kps')
+        # how fast its gun energy and shields come back: step_timers divides by the one and shifts a 16-bit phase by
+        # the other
+        energy_steps = int(r['gun_energy_steps'] or GUN_ENERGY_STEPS)
+        full_shift = int(r['shield_full_shift'] or SHIELD_FULL_SHIFT)
+        if not 1 <= energy_steps <= 255:
+            raise Fail('ships.csv %s: gun_energy_steps %d is not 1 to 255' % (r['key'], energy_steps))
+        if not 0 <= full_shift <= 15:
+            raise Fail('ships.csv %s: shield_full_shift %d is not 0 to 15' % (r['key'], full_shift))
         out_types.append(struct.pack(fmt(SHIPTYPE), text(r['key'], TEXT['KEY'], 'ships.csv'),
                                      text(r['name'], TEXT['NAME'], 'ships.csv'), int(r['type'], 16), n('side'),
                                      SHIPTYPE_FLAG_PLAYER if r['key'] in cockpit_keys else 0,
@@ -301,7 +315,8 @@ def compile_all():
                                      n('cruise_kps'), n('max_kps'), n('ab_kps'), n('accel'), slide, slide_dmg,
                                      n('yaw_dps'), n('pitch_dps'), n('roll_dps'), guns, n('shield_f'), n('shield_r'),
                                      n('armor_f'), n('armor_r'), n('armor_l'), n('armor_rt'), n('hull'),
-                                     n('lod0_px'), radius, rounds, nengines, 0, *eng, *hit, core, nvitals, *vit, loadout))
+                                     n('lod0_px'), radius, rounds, nengines, energy_steps, full_shift, *eng, *hit,
+                                     core, nvitals, *vit, loadout))
     talk_ok = {frozenset((r['a'], r['b'])): r['talk'] == 'yes' for r in load_csv('relations.csv')}
     for pair in talk_ok:
         for k in pair:
@@ -518,6 +533,8 @@ def header_text(sizes):
     for k, v in ROLES.items():
         out.append('#define RV_ROLE_%s %d' % (k.upper(), v))
     out.append('#define RV_SHIPTYPE_FLAG_PLAYER %d' % SHIPTYPE_FLAG_PLAYER)
+    out.append('#define RV_GUN_ENERGY_STEPS %d' % GUN_ENERGY_STEPS)
+    out.append('#define RV_SHIELD_FULL_SHIFT %d' % SHIELD_FULL_SHIFT)
     for i, k in enumerate(SOUNDS):
         out.append('#define RV_SFX_%s %d' % (k.upper(), i))
     out.append('#define RV_SFX_COUNT %d' % len(SOUNDS))

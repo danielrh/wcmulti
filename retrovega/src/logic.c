@@ -163,29 +163,45 @@ void logic_start(const RvMission __far *m)
 
 /* --- a step: the main loop's body --- */
 
-#define SHIELD_FULL_SHIFT 8             /* a shield comes back from nothing in 1 << this steps (256: 8.5 s at LOGIC_HZ),
-                                           whatever its size (2 points to 900) */
-
-/* the points a store of `most` gains this step to fill in 1 << SHIELD_FULL_SHIFT steps, spread evenly over them:
+/* the points a store of `most` gains this step to fill in 1 << shift steps, spread evenly over them:
  * phase (the step's place among them) takes its share, and the shares add up to `most` */
-static uint16_t refill(uint16_t most, uint16_t phase)
+static uint16_t refill(uint16_t most, uint16_t phase, uint8_t shift)
 {
-    return (uint16_t)(((uint32_t)(phase + 1) * most >> SHIELD_FULL_SHIFT) - ((uint32_t)phase * most >> SHIELD_FULL_SHIFT));
+    return (uint16_t)(((uint32_t)(phase + 1) * most >> shift) - ((uint32_t)phase * most >> shift));
 }
 
 /* 1. what runs down or builds up by itself: the guns' cooldowns (GUN_STATE), gun energy (gunEnergy), the shields
- * coming back (SHIELD toward SHIELD_MAX), the afterburner's fuel.  (The guns' are M2's.)  The armour doesn't come
- * back in flight; a dying ship's shields stay down; a puppet's are the layer's */
+ * coming back (SHIELD toward SHIELD_MAX), the afterburner's fuel.  (The guns' are M2's.)  The rates are the type's
+ * (gun_energy_steps, shield_full_shift).  The armour doesn't come back in flight; a dying ship's shields stay down;
+ * a puppet's are the layer's */
 static void step_timers(void)
 {
-    uint16_t phase = frameCounter & ((1 << SHIELD_FULL_SHIFT) - 1);
-    int16_t s, k;
-    for (s = 0; s < NUM_SHIP_SLOTS; s++) {
-        if (!slot_is_ship(s) || shipAiState[s] == 9 || rvController[s] == CTL_PUPPET)
+    int16_t ship, k;
+    for (ship = 0; ship < NUM_SHIP_SLOTS; ship++) {
+        const RvShipType __far *type_of_ship;
+        uint8_t shift, energy_steps;
+        uint16_t phase;
+        if (!slot_is_ship(ship) || shipAiState[ship] == 9 || rvController[ship] == CTL_PUPPET)
             continue;
-        for (k = 0; k < 2; k++) {
-            uint16_t most = SHIELD_MAX(s, k), up = refill(most, phase);
-            SHIELD(s, k) = SHIELD(s, k) + up < most ? SHIELD(s, k) + up : most;
+        type_of_ship = slot_type(ship);
+        shift = type_of_ship ? type_of_ship->shield_full_shift : RV_SHIELD_FULL_SHIFT;
+        energy_steps = type_of_ship ? type_of_ship->gun_energy_steps : RV_GUN_ENERGY_STEPS;
+        phase = frameCounter & ((1U << shift) - 1);
+        for (k = 0; k < 2; k+=1) {
+            uint16_t most = SHIELD_MAX(ship, k), up = refill(most, phase, shift);
+            SHIELD(ship, k) = SHIELD(ship, k) + up < most ? SHIELD(ship, k) + up : most;
+        }
+        if (gunEnergy[ship] < 100 && (uint16_t)(frameCounter + ship) % energy_steps == 0) {
+            gunEnergy[ship] += 1;
+        }
+        {
+            int16_t gun_count = GUN_COUNT(ship);
+            for (k = 0; k < gun_count; k+=1) {
+                const RvWeapon __far *w = weapon(GUN_TYPE(ship, k));
+                if (w && (w->kind == RV_WK_GUN || w->kind == RV_WK_TURRET) && (GUN_STATE(ship, k) & 0x7F)) {
+                    GUN_STATE(ship, k) -= 1;
+                }
+            }
         }
     }
 }
@@ -429,7 +445,7 @@ static void fly_ahead(int16_t s)
 }
 
 /* where a gun record's mount is (positions): across and up in 32nds of the half box, and the nose ahead */
-static void gun_mount(int16_t s, int16_t g, RvVec3 *out)
+static const RvShipType __far* gun_mount(int16_t s, int16_t g, RvVec3 *out)
 {
     const RvShipType __far *t = slot_type(s);
     int32_t h = collide_half(s), ax = (int32_t)GUN_MOUNT_X(s, g) * (h / 32), ay = (int32_t)GUN_MOUNT_Y(s, g) * (h / 32);
@@ -438,6 +454,7 @@ static void gun_mount(int16_t s, int16_t g, RvVec3 *out)
     out->x = gPositionVector[s].x + FIX_MUL(R->x, ax) + FIX_MUL(U->x, ay) + FIX_MUL(F->x, az);
     out->y = gPositionVector[s].y + FIX_MUL(R->y, ax) + FIX_MUL(U->y, ay) + FIX_MUL(F->y, az);
     out->z = gPositionVector[s].z + FIX_MUL(R->z, ax) + FIX_MUL(U->z, ay) + FIX_MUL(F->z, az);
+    return t;
 }
 
 /* the hull left, percent */
@@ -470,9 +487,47 @@ static int16_t gun_of(int16_t s)
  * GUN_STATE's low bits, the energy off gunEnergy.  Returns 0xFFFF */
 static uint16_t gun_fire(uint16_t ship, uint16_t gun, const RvWeapon __far *w)
 {
-    (void)ship;
-    (void)gun;
-    (void)w;
+    RvVec3 physical_offset, vel;
+    int32_t step = KPS_STEP(w->speed_kps);
+    int16_t target = rvTarget[ship];
+    RvVec3 front = gOrientationFrontVector[ship];
+    (void)gun_mount(ship, gun, &physical_offset);
+    if (w->kind == RV_WK_TURRET && target != 0xff && slot_is_ship(target)) {
+        /* a turret's shot toward the target's lead point (km from the mount; the shot's time there, twice refined) */
+        RvVec3 d, vt = vec3(TO_KM(gVelocityVector[target].x),
+                            TO_KM(gVelocityVector[target].y),
+                            TO_KM(gVelocityVector[target].z));
+        int32_t km, tof, kps_step = w->speed_kps / KPS_HZ + 1;
+        d = vec3(TO_KM(gPositionVector[target].x - physical_offset.x),
+                 TO_KM(gPositionVector[target].y - physical_offset.y),
+                 TO_KM(gPositionVector[target].z - physical_offset.z));
+        tof = len_of(d.x, d.y, d.z) / kps_step;
+        tof = len_of(d.x + vt.x * tof, d.y + vt.y * tof, d.z + vt.z * tof) / kps_step;
+        d = vec3(d.x + vt.x * tof, d.y + vt.y * tof, d.z + vt.z * tof);
+        km = len_of(d.x, d.y, d.z);
+        while (labs(d.x) > 30000L || labs(d.y) > 30000L || labs(d.z) > 30000L) {   /* (a direction: 256 long) */
+            d.x /= 2;
+            d.y /= 2;
+            d.z /= 2;
+            km /= 2;
+        }
+        if (km) {
+            d.x = d.x * 256 / km;
+            d.y = d.y * 256 / km;
+            d.z = d.z * 256 / km;
+            front = d;
+        }
+    }
+    vel = vec3(FIX_MUL(front.x, step),
+               FIX_MUL(front.y, step),
+               FIX_MUL(front.z, step));
+    /* TODO: must we really add the ship's own velocity gVelocityVector[ship] */
+    vel.x += gVelocityVector[ship].x;
+    vel.y += gVelocityVector[ship].y;
+    vel.z += gVelocityVector[ship].z;
+    (void)shot_add((int16_t)ship, GUN_TYPE(ship, gun), &physical_offset, &vel);
+    GUN_STATE(ship, gun) = (uint8_t)((GUN_STATE(ship, gun) & GUN_DESTROYED) | (w->refire & 0x7F));
+     gunEnergy[ship] = (uint16_t)(gunEnergy[ship] > w->energy ? gunEnergy[ship] - w->energy : 0);
     return 0xFFFF;
 }
 

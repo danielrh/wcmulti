@@ -2006,6 +2006,36 @@ static void t_recharge(void)
     REQUIRE(ARMOR(0, 0) == 2, e_armour, 2, ARMOR(0, 0), 0);
 }
 
+/* M3.13 */
+static void t_type_rates(void)
+{
+    static const char __far e_energy[] = "gun energy back %d points in 60 steps, a point every 6 is 10";
+    static const char __far e_shield[] = "a shield back to %d of %d in 16 steps, shield_full_shift 4 fills it in those";
+    RvShipType __far *t;
+    uint8_t keep_steps, keep_shift;
+    uint16_t shield = 0;
+    int16_t i, ok = 1;
+    pt_alone(PT_PLAYER);
+    t = (RvShipType __far *)slot_type(0);       /* (the table outlives the test: put back before any REQUIRE) */
+    keep_steps = t->gun_energy_steps;
+    keep_shift = t->shield_full_shift;
+    t->gun_energy_steps = 6;
+    t->shield_full_shift = 4;
+    gunEnergy[0] = 0;
+    SHIELD(0, 0) = 0;
+    for (i = 0; i < 60 && ok; i++) {
+        ok = pt_step();
+        if (i == 15)
+            shield = SHIELD(0, 0);
+    }
+    t->gun_energy_steps = keep_steps;
+    t->shield_full_shift = keep_shift;
+    if (!ok)
+        return;
+    REQUIRE(shield == SHIELD_MAX(0, 0), e_shield, shield, SHIELD_MAX(0, 0), 0);
+    REQUIRE(gunEnergy[0] == 10, e_energy, gunEnergy[0], 0, 0);
+}
+
 /* ======================================================================================================== */
 /* M4: deaths (step_deaths, despawn, delayedDespawn) */
 
@@ -3077,6 +3107,7 @@ static const char __far n_m3_10[] = "M3.10 any-source (do_damage): the same hit 
 static const char __far n_m3_11[] = "M3.11 shots-hit (step_shots): gunfire hurts what it meets, src a bolt of the "
     "shooter's";
 static const char __far n_m3_12[] = "M3.12 recharge (step_timers): shields come back, armour does not";
+static const char __far n_m3_13[] = "M3.13 type-rates (step_timers): gun energy and shields come back at the type's rates";
 static const char __far n_m4_1[] = "M4.1 kill (step_deaths, despawn): dying (9), exploding a while, then gone";
 static const char __far n_m4_2[] = "M4.2 dying-quiet (step_fire, AI): a dying ship fires nothing";
 static const char __far n_m4_3[] = "M4.3 player-dies (step_deaths, logic_end): missionStatus 4, the mission lost";
@@ -3134,7 +3165,7 @@ static const PtTest __far k_tests[] = {
     { n_m3_1, t_shield_front, 0 }, { n_m3_2, t_shield_rear, 0 }, { n_m3_3, t_armour, 0 },
     { n_m3_4, t_armour_sides, 0 }, { n_m3_5, t_hull, 0 }, { n_m3_6, t_big_hit, 0 }, { n_m3_7, t_no_wrap, 0 },
     { n_m3_8, t_player_safe, 0 }, { n_m3_9, t_invulnerable, 0 }, { n_m3_10, t_any_source, 0 },
-    { n_m3_11, t_shots_hit, 0 }, { n_m3_12, t_recharge, 0 },
+    { n_m3_11, t_shots_hit, 0 }, { n_m3_12, t_recharge, 0 }, { n_m3_13, t_type_rates, 0 },
     { n_m4_1, t_kill, 0 }, { n_m4_2, t_dying_quiet, 0 }, { n_m4_3, t_player_dies, 0 },
     { n_m5_1, t_ai_thunks, 1 }, { n_m5_2, t_ai_turns, 0 }, { n_m5_3, t_ai_closes, 0 }, { n_m5_4, t_ai_fires, 0 },
     { n_m5_5, t_ai_aims, 1 }, { n_m5_6, t_ai_limits, 0 }, { n_m5_7, t_wingman_fights, 0 },

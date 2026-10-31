@@ -216,7 +216,7 @@ and hit what is where it now is.
 
 1. **`step_timers`**: what runs down or builds up by itself.
    - The guns' cooldowns: `GUN_STATE(s, g) & 0x7F` counts steps down to 0. Keep bit 7, which marks the gun destroyed.
-   - `gunEnergy` back toward 100, and the shields back toward `SHIELD_MAX`.
+   - `gunEnergy` back toward 100, a point every `gun_energy_steps` steps, and the shields back toward `SHIELD_MAX`, full from nothing in `1 << shield_full_shift` steps: the type's (ships.csv; blank is 3 and 8).
 2. **`step_minds`**: each ship slot, by `rvController`:
    - `CTL_PLAYER` flies by `g_pilot`: `steer_x` and `steer_y` (-9..9: + turns the nose right, + pulls it up), `roll` (+ lifts the right wing), `afterburner`.
    - `CTL_AI` calls the thunk: `aiFighterThink(s)`, or `aiShipThink(s)` for `ET_CAPSHIP`. Always the thunk, so the layer can skip it on clients.

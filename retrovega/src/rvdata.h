@@ -87,6 +87,8 @@
 #define RV_ROLE_XO 3
 #define RV_ROLE_TECH 4
 #define RV_SHIPTYPE_FLAG_PLAYER 1
+#define RV_GUN_ENERGY_STEPS 3
+#define RV_SHIELD_FULL_SHIFT 8
 #define RV_SFX_LASER 0
 #define RV_SFX_LASER_T 1
 #define RV_SFX_PARTICLE 2
@@ -255,7 +257,8 @@ typedef struct {
     uint16_t radius_km;
     uint16_t missiles;
     uint8_t nengines;
-    uint8_t pad;
+    uint8_t gun_energy_steps;
+    uint8_t shield_full_shift;
     int8_t engine[RV_ENGINES][4];
     uint8_t hit[3];
     uint8_t core;
@@ -284,7 +287,7 @@ typedef struct {
 #define RV_PILOT_SIZE 120
 #define RV_NODE_SIZE 22
 #define RV_MISSION_SIZE 1424
-#define RV_SHIPTYPE_SIZE 172
+#define RV_SHIPTYPE_SIZE 173
 #define RV_WEAPON_SIZE 40
 
 /* sin(i/256 x 90 degrees) x 16384, i = 0..256: the simulation's trigonometry (flight.c) */
