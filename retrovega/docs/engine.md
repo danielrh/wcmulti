@@ -1738,7 +1738,7 @@ watches the world, once a step after the logic.
 | a slot becoming `ET_MISSILE` | the launch's sound (its weapon's, `gInstanceShipTypes` if that is a weapon, else the missile's) |
 | a missile slot ending | a missile's burst where it last was, and its sound |
 | `shot_add` (shots.c's hook) | the gun's own sound (weapons.csv's `sfx`), one a volley, by distance; the player's own at a fixed level |
-| `shot_hit` finding a hit (the hook) | sparks where it struck; the player hit: the shield sound while shields are left, else the hull's; another ship: a pop (always heard when the player fired) |
+| `shot_hit` finding a hit (the hook, before its damage is done) | a fighter's shield there (front or rear, as `do_damage` picks it): a haze of blue stipple, as strong as the hit leaves that shield; a hit getting past the shield, or on a capital ship: sparks where it struck; the player hit: no picture, the shield sound while shields are left, else the hull's; another ship: a pop (always heard when the player fired) |
 
 A death must keep its 9 to the end of a step (the slot may be cleared any
 time after): fx.c looks between steps. The pictures and the sounds take
@@ -1765,11 +1765,36 @@ on the boom demo's view). Over it at the screen's pixels: a flash (a white
 core and a four-pointed glint, three frames), sparks (pixels with a streak,
 cooling white to red), debris (hull-grey chunks, their size flickering for
 a tumble). Kinds: a fighter (40 steps), a capital ship's last (75), a
-missile's burst (26), a hit (9: the flash and sparks only). Sixteen at once;
-drawn far to near between the ships (`explode_draw_to` before each, as the
-big rocks are). Memory in flight: a cache of four cels and a column map,
-11 KB, conventional (the upper memory is the dense slab's and the band
-buffer's).
+missile's burst (26), a hit (9: the flash and sparks only), a shield's haze
+(10 to 16, below). Sixteen at once; drawn far to near between the ships
+(`explode_draw_to` before each, as the big rocks are). Memory in flight: a
+cache of four cels and a column map, 11 KB, conventional (the upper memory is
+the dense slab's and the band buffer's).
+
+**A shield's haze (explode.c, `haze`).** The user's brief (2026-10-31): not an
+explosion but a blue haze right where the shot struck, stippled, changing
+frame by frame, so a fighter's shields can be judged by eye. No cels: the
+pixels are worked out each frame. A checkerboard that flips every frame, each
+pixel on it kept or not by noise (a xorshift seeded by the row, the age and
+the hit's seed, so the bands make one picture and no two hits match) against
+a density from a 64-entry table by distance squared. It grows easing out and,
+as the explosion does, loses its energy from the middle first, opening into a
+thinning ring. The denser the brighter: the colours are 92, 94, 95, 79, 14,
+143, entries every cockpit's palette keeps (`palette.json`'s pale blues at 235
+and up are the cockpit's to change: 239 is a dark green in flight). The haze
+stays on the ship (its velocity, no slowing), and is drawn its own radius
+nearer than it is, so before the hull.
+
+How much of that shield the hit leaves sets the look: its size (30 to 75 km of
+radius, at most 40 px), its density, how far up the colours it goes (white at
+the middle of a whole shield's, only the deep blues for a nearly spent one) and
+its life; under a quarter it also sputters, every other frame. Past the shield,
+the hit's sparks instead, both when the shield stopped only part of it. So blue
+is the shield holding, its strength by eye, and orange is the hurt getting
+through. A ship keeps three at once, the next taking its oldest's place, and
+when the sixteen are full a haze takes another hit's place, never an
+explosion's. A frame's haze visits about 2,500 pixels at the 40 px limit and 350
+at a usual 15, some twenty instructions each (counted roughly, not measured).
 
 **The sounds (sfx.c, tools/sfx.py, data/sounds.csv, SFX.DAT, 324 KB in
 XMS).** 27 sounds synthesized as analog patches: band-limited saws and
@@ -1803,7 +1828,10 @@ and the DMA ring's 8 KB. DGROUP: 32 bytes.
 three ships ahead at 1,500, 4,000 and 9,000 km blown up in turn by setting
 `shipAiState` 9 (as the logic will), guns and hits now and then, a
 missile's burst; `/record N` for the frames. Its log says which card the
-sound found and how many samples it mixed. `tools/explode.py --preview DIR`
+sound found and how many samples it mixed. `tests/run.sh tests/shield.txt
+/shielddemo /fly /flight 12` (RVT.EXE) is the shields' haze: two ships hit at
+each level of shield in turn, and a third, dead ahead, taking the player's real
+guns until it blows up. `tools/explode.py --preview DIR`
 draws the explosion as the game does (sheets and a GIF), `tools/sfx.py
 --wav DIR` writes each sound.
 

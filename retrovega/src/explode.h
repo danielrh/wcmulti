@@ -15,7 +15,7 @@
 #include "rvhooks.h"
 #include "lightfield.h"
 
-enum { BOOM_SHIP, BOOM_CAPITAL, BOOM_MISSILE, BOOM_HIT, BOOM_KINDS };
+enum { BOOM_SHIP, BOOM_CAPITAL, BOOM_MISSILE, BOOM_HIT, BOOM_SHIELD, BOOM_KINDS };
 #define EXPLODE_MAX 16                  /* at once */
 
 int16_t explode_reserve(void);          /* when the game starts (resident XMS): EXPLODE.DAT in */
@@ -26,6 +26,12 @@ void explode_flight_end(void);
  * radius in km, starting after `delay` steps; seed: its picture's own randomness (the variant, the turn, the
  * sparks) */
 void explode_add(const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, int16_t kind, uint16_t delay, uint16_t seed);
+
+/* a shield taking a hit (the user's brief, 2026-10-31): no cels and no fire, a haze of light blue stipple right where
+ * the shot struck, moving with the ship, its pixels new every frame.  strength: how much of that shield the hit left,
+ * 0 .. 255: the more, the bigger, denser and brighter; a failing shield's is small and dim and sputters.  A ship keeps
+ * a few at once: more hits take the place of its oldest */
+void explode_shield(const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, uint8_t strength, int16_t slot, uint16_t seed);
 int16_t explode_count(void);
 void explode_frame(void);               /* a step: each one older, drifted; the spent gone */
 

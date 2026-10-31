@@ -25,6 +25,9 @@ void __far __cdecl rv_scale_row(const unsigned char __far *line, const unsigned 
 #define CEL_MAX 64
 #define TL_MAX 64
 #define ZMIN16 (16 * 60)                /* the near plane: 60 km, in sixteenths of a km */
+#define HAZE_PX 40                      /* the widest a shield's haze is drawn, radius in px */
+#define HAZES_A_SHIP 3                  /* a ship's at once: under fire, the next takes its oldest's place */
+#define HAZE_STEPS 64                   /* its table of density by distance squared */
 
 typedef struct { uint8_t cel, thr; uint16_t gain, grow, spark, debris; } Tl;   /* EXPLODE.DAT's timeline records */
 
@@ -34,6 +37,8 @@ typedef struct {
     int32_t r16;                        /* the full radius, sixteenths of a km */
     uint16_t seed;
     uint8_t kind, life, age, wait, variant, orient;
+    uint8_t strength;                   /* a shield's haze: how much of the shield the hit left */
+    int8_t slot;                        /* its ship */
     /* placed */
     int32_t depth;                      /* along the view, positions */
     int16_t sx, sy, rpx;                /* the screen's centre, the full radius in px */
@@ -45,7 +50,10 @@ static const struct { uint8_t life, sparks, debris, ball; } __far k_kind[BOOM_KI
     { 75, 40, 12, 1 },                  /* a capital ship's last */
     { 26, 12, 0, 1 },                   /* a missile's burst */
     { 9, 6, 0, 0 },                     /* a hit: the flash and sparks */
+    { 16, 0, 0, 0 },                    /* a shield's haze (haze; its life by its strength) */
 };
+/* the haze's colours, cool to hot: light blues to white, from the entries every cockpit's palette keeps */
+static const uint8_t __far k_shield[6] = { 92, 94, 95, 79, 14, 143 };
 static const uint8_t __far k_bayer[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
 
 static XmsBlock __far g_blk;
@@ -61,6 +69,7 @@ static uint16_t __far g_cache_used[CACHE], __far g_tick;
 static uint16_t __far *__far g_map;     /* a column map, MAP_W */
 static uint8_t __far g_line[CEL_MAX];
 static uint8_t __far g_tab[256];
+static uint8_t __far g_haze[HAZE_STEPS];
 static Boom __far g_b[EXPLODE_MAX];
 static int16_t __far g_n;
 static uint8_t __far g_order[EXPLODE_MAX];
@@ -169,21 +178,10 @@ void explode_flight_end(void)
     g_ready = 0;
 }
 
-void explode_add(const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, int16_t kind, uint16_t delay, uint16_t seed)
+static void boom_set(Boom __far *b, const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, int16_t kind, uint16_t delay,
+                     uint16_t seed)
 {
-    Boom __far *b;
     uint32_t st = seed * UINT32_C(2654435761) + 1;
-    if (!g_ready || kind < 0 || kind >= BOOM_KINDS)
-        return;
-    if (g_n >= EXPLODE_MAX) {           /* full: the oldest gives its place */
-        int16_t i, old = 0;
-        for (i = 1; i < g_n; i++)
-            if (g_b[i].age > g_b[old].age)
-                old = i;
-        b = &g_b[old];
-    } else {
-        b = &g_b[g_n++];
-    }
     b->x = at->x; b->y = at->y; b->z = at->z;
     b->vx = vel->x; b->vy = vel->y; b->vz = vel->z;
     b->r16 = radius_km * 16;
@@ -196,6 +194,54 @@ void explode_add(const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, int16_t
     b->orient = (uint8_t)((st >> 20) & 7);
     b->seed = (uint16_t)(st >> 8);
     b->on = 0;
+    b->strength = 0;
+    b->slot = -1;
+}
+
+void explode_add(const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, int16_t kind, uint16_t delay, uint16_t seed)
+{
+    Boom __far *b;
+    if (!g_ready || kind < 0 || kind >= BOOM_KINDS)
+        return;
+    if (g_n >= EXPLODE_MAX) {           /* full: the oldest gives its place */
+        int16_t i, old = 0;
+        for (i = 1; i < g_n; i++)
+            if (g_b[i].age > g_b[old].age)
+                old = i;
+        b = &g_b[old];
+    } else {
+        b = &g_b[g_n++];
+    }
+    boom_set(b, at, vel, radius_km, kind, delay, seed);
+}
+
+void explode_shield(const RvVec3 *at, const RvVec3 *vel, int32_t radius_km, uint8_t strength, int16_t slot, uint16_t seed)
+{
+    Boom __far *b = 0;
+    int16_t i, mine = 0, old = -1, spare = -1;
+    if (!g_ready)
+        return;
+    for (i = 0; i < g_n; i++) {
+        if (g_b[i].kind == BOOM_SHIELD && g_b[i].slot == slot) {
+            mine++;
+            if (old < 0 || g_b[i].age > g_b[old].age)
+                old = i;
+        }
+        if ((g_b[i].kind == BOOM_SHIELD || g_b[i].kind == BOOM_HIT) && (spare < 0 || g_b[i].age > g_b[spare].age))
+            spare = i;
+    }
+    if (mine >= HAZES_A_SHIP)
+        b = &g_b[old];
+    else if (g_n < EXPLODE_MAX)
+        b = &g_b[g_n++];
+    else if (spare >= 0)                /* full: another hit's place, never an explosion's */
+        b = &g_b[spare];
+    if (!b)
+        return;
+    boom_set(b, at, vel, radius_km, BOOM_SHIELD, 0, seed);
+    b->strength = strength;
+    b->slot = (int8_t)slot;
+    b->life = (uint8_t)(10 + strength * 6 / 255);
 }
 
 int16_t explode_count(void) { return g_n; }
@@ -210,7 +256,9 @@ void explode_frame(void)
             continue;
         }
         b->x += b->vx; b->y += b->vy; b->z += b->vz;
-        b->vx -= b->vx / 16; b->vy -= b->vy / 16; b->vz -= b->vz / 16;   /* (the drift slows) */
+        if (b->kind != BOOM_SHIELD) {   /* (the drift slows; a shield's haze stays on its ship) */
+            b->vx -= b->vx / 16; b->vy -= b->vy / 16; b->vz -= b->vz / 16;
+        }
         if (++b->age >= b->life)
             g_b[i] = g_b[--g_n];
     }
@@ -243,7 +291,7 @@ void explode_place(const LfVec *eye, const LfBasis *cam, int16_t cx, int16_t cy,
         b->sx = (int16_t)sx;
         b->sy = (int16_t)sy;
         b->rpx = (int16_t)(r < 1 ? 1 : r);
-        b->depth = Z * 16;
+        b->depth = (b->kind == BOOM_SHIELD ? Z - b->r16 : Z) * 16;   /* (a shield is outside its hull: before it) */
         b->on = 1;
         for (k = g_nord; k > 0 && g_b[g_order[k - 1]].depth < b->depth; k--)   /* far to near */
             g_order[k] = g_order[k - 1];
@@ -376,12 +424,91 @@ static void overlays(const Boom __far *b, const Tl __far *t)
     }
 }
 
+/* a shield's haze: light blue stipple over the screen's pixels, made new every frame.  A checkerboard that flips each
+ * frame, the pixels on it kept by noise against a density by the distance from the middle, so the edge breaks up into
+ * specks; the denser the brighter.  It grows easing out and loses its energy from the middle first, so it opens into
+ * a thinning ring as it dies.  Its strength sets how big (fx.c), how dense and how bright, and a failing shield's
+ * sputters, frame on, frame off.  The noise is seeded by the row, so the bands make one picture */
+static void haze(const Boom __far *b, int16_t y0, int16_t y1, const int16_t __far *ext, int16_t ext_y0, int16_t ext_rows)
+{
+    int16_t age = b->age, s = b->strength, t, g, r, r2, ya, yb, y, w = 0, peak, hole, most, lift, i, shift = 0;
+    uint16_t q, qstep;
+    if (s < 64 && ((age + b->seed) & 1))
+        return;
+    t = (int16_t)(age * 128 / b->life);   /* (128ths of its life: the products stay within 16 bits) */
+    g = (int16_t)(128 - (128 - t) * (128 - t) / 128);
+    r = b->rpx < HAZE_PX ? b->rpx : HAZE_PX;
+    r = (int16_t)(r * (52 + g * 76 / 128) / 128);
+    if (r < 2)
+        r = 2;
+    r2 = (int16_t)(r * r);
+    ya = b->sy - r;
+    yb = b->sy + r + 1;
+    if (ya < y0) ya = y0;
+    if (yb > y1) yb = y1;
+    if (ya < 0) ya = 0;
+    if (yb > SCR_H) yb = SCR_H;
+    if (ya >= yb)
+        return;
+    peak = (int16_t)((120 + (s >> 1)) * (128 - t * t / 128) / 128);
+    hole = (int16_t)(t * t / 64);       /* (the spent middle, in 256ths of the radius squared) */
+    most = (int16_t)(2 + s * 3 / 255);
+    lift = (int16_t)(most / 2 * (128 - t) / 128);
+    while ((r2 >> shift) >= HAZE_STEPS)
+        shift++;
+    qstep = (uint16_t)((UINT32_C(65536) << shift) / r2);   /* (the table's steps in q, 256ths of the radius squared, 8.8) */
+    for (i = 0, q = 0; i < HAZE_STEPS; i++, q = (uint16_t)(q + qstep)) {   /* the density by distance squared */
+        int16_t at = (int16_t)(q >> 8);
+        int16_t d = at >= 256 ? 0 : (int16_t)((uint16_t)peak * (256U - at) >> 8);
+        if (at < hole)
+            d = (int16_t)((uint16_t)d * at / hole);
+        g_haze[i] = (uint8_t)d;
+    }
+    for (y = ya; y < yb; y++) {
+        int16_t dy = (int16_t)(y - b->sy), ca = 0, cb = SCR_W, x, xb, dx, d2;
+        uint16_t h;
+        uint8_t __far *row;
+        while (w > 0 && w * w + dy * dy > r2)
+            w--;
+        while ((w + 1) * (w + 1) + dy * dy <= r2)
+            w++;
+        if (!row_clip(y, &ca, &cb, ext, ext_y0, ext_rows))
+            continue;
+        row = vid_row(y);
+        x = (int16_t)(b->sx - w);
+        xb = (int16_t)(b->sx + w);
+        if ((x + y + age) & 1)          /* the checkerboard, flipping each frame */
+            x++;
+        dx = (int16_t)(x - b->sx);
+        d2 = (int16_t)(dx * dx + dy * dy);
+        h = (uint16_t)(b->seed + (unsigned)y * 0x9E37U + (unsigned)age * 0x79B9U) | 1;
+        for (; x <= xb; x += 2, d2 = (int16_t)(d2 + 4 * dx + 4), dx += 2) {
+            int16_t d;
+            h ^= (uint16_t)(h << 7);    /* (a xorshift: a few cycles a pixel) */
+            h ^= (uint16_t)(h >> 9);
+            h ^= (uint16_t)(h << 8);
+            d = g_haze[(d2 >> shift) < HAZE_STEPS ? d2 >> shift : HAZE_STEPS - 1];
+            if ((int16_t)(h & 255) < d && x >= ca && x < cb) {
+                int16_t c = (int16_t)(lift + (d * (most + 1) >> 8));
+                if (!(h & 0x0F00))      /* a pixel now and then a little hotter: the glitter */
+                    c += 2;
+                row[x] = k_shield[c < most ? c : most];
+            }
+        }
+    }
+}
+
 static void draw_one(const Boom __far *b, int16_t y0, int16_t y1, const int16_t __far *ext, int16_t ext_y0,
                      int16_t ext_rows)
 {
-    const Tl __far *t = &g_tl[(uint16_t)b->age * g_ntl / b->life];
+    const Tl __far *t;
     int16_t R, size, top, left, ya, yb, y, last_v = -1, h;
     const uint8_t __far *cel;
+    if (b->kind == BOOM_SHIELD) {
+        haze(b, y0, y1, ext, ext_y0, ext_rows);
+        return;
+    }
+    t = &g_tl[(uint16_t)b->age * g_ntl / b->life];
     if (k_kind[b->kind].ball && (R = (int16_t)((int32_t)b->rpx * t->grow / 256)) >= 1) {
         size = (int16_t)(2 * R);
         top = b->sy - R;

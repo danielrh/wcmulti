@@ -62,14 +62,45 @@ int g_zoom = 0;                         /* RV.EXE /zoom: one ship ahead, rolling
 #ifdef RV_TESTS
 int __far g_boom_demo = 0;              /* RV.EXE /boomdemo: three ships ahead blown up in turn, guns and hits (fx.c's
                                            check: the explosions and the sounds) */
+int __far g_shield_demo = 0;            /* RV.EXE /shielddemo: three ships ahead hit in step at each level of shield in
+                                           turn (fx.c's check: the shields' haze, and the sparks past them) */
 static int __far g_boom_type;
 static const short __far k_boom_at[3][3] = { { 0, 0, 1500 }, { -1300, 350, 4000 }, { 2600, -700, 9000 } };
+static const short __far k_shield_at[3][3] = { { -320, 130, 1100 }, { 340, 120, 1800 }, { 0, 0, 1300 } };
 
 static void boom_spawn(int s)
 {
-    ship_spawn(s, g_boom_type, SIDE_AERA, CTL_FROZEN, 256L * k_boom_at[s - 1][0], 256L * k_boom_at[s - 1][1],
-               256L * k_boom_at[s - 1][2], 512 + 40 * s);
+    const short __far *at = g_shield_demo ? k_shield_at[s - 1] : k_boom_at[s - 1];
+    ship_spawn(s, g_boom_type, SIDE_AERA, CTL_FROZEN, 256L * at[0], 256L * at[1], 256L * at[2], 512 + 40 * s);
     setSpeed[s] = speedLo[s] = 0;
+}
+
+/* the shield demo's step: every 24 steps a hit thrown on the near side of the first two ships, with the shield it
+ * leaves at each level in turn: 100, 70, 40 and 15 percent; a last point of shield, the shot getting through; none at
+ * all.  The third, dead ahead, takes the player's real guns: its shields run down, the sparks come, it blows up, and
+ * another takes its place */
+static void shield_demo_step(void)
+{
+    static const uint8_t __far k_left[6] = { 100, 70, 40, 15, 0, 0 };
+    int k, level;
+    if (frameCounter % 40 == 0) {
+        if (!slot_is_ship(3))
+            boom_spawn(3);
+        else if (shipAiState[3] != 9)
+            maybe_fire_all_guns(0);
+    }
+    if (frameCounter % 24)
+        return;
+    level = (int)((frameCounter / 24) % 6);
+    for (k = 1; k <= 2; k++) {
+        RvVec3 w = gPositionVector[k];
+        w.x += 256L * 40;
+        w.y += 256L * 15;
+        w.z -= 256L * 80;
+        SHIELD_MAX(k, 0) = SHIELD_MAX(k, 1) = 100;
+        SHIELD(k, 0) = SHIELD(k, 1) = (uint16_t)(level == 5 ? 0 : k_left[level] + 1);
+        fx_hit(k, &w, 0, (uint16_t)(level >= 4 ? 3 : 1));
+    }
 }
 
 /* the boom demo's step: a ship dies every 50 steps (shipAiState 9, as the logic would have it: fx.c does the rest)
@@ -92,7 +123,7 @@ static void boom_demo_step(void)
         if (slot_is_ship(k) && shipAiState[k] != 9) {
             RvVec3 w = gPositionVector[k];
             w.x += 256L * 150;
-            fx_hit(k, &w, 0);
+            fx_hit(k, &w, 0, 3);
         }
     }
     if (frameCounter % 70 == 35) {
@@ -2334,8 +2365,9 @@ void __far __cdecl flight_startup(void)
         n = 2;
     }
 #ifdef RV_TESTS
-    if (g_boom_demo) {
-        /* a test aid: three ships ahead at 1,500, 4,000 and 9,000 km, standing (boom_demo_step blows them up) */
+    if (g_boom_demo || g_shield_demo) {
+        /* a test aid: three ships ahead at 1,500, 4,000 and 9,000 km, standing (boom_demo_step blows them up; the
+         * shield demo's nearer, shield_demo_step hits them) */
         memset(maybeEntityType + 1, 0, (RV_SLOTS - 1) * 2);
         g_boom_type = enemy_type;
         for (i = 1; i <= 3; i++)
@@ -2610,6 +2642,8 @@ void __far __cdecl flight_frame(void)
 #ifdef RV_TESTS
     if (g_boom_demo)
         boom_demo_step();
+    if (g_shield_demo)
+        shield_demo_step();
 #endif
     fx_frame();                         /* what the step did: explosions and sounds started */
     explode_frame();

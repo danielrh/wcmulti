@@ -1,0 +1,3 @@
+# the shields' haze: straight to the flight, the shield demo watched (run with /shielddemo /fly /flight N)
+wait 10
+wait 400

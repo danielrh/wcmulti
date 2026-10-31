@@ -16,6 +16,8 @@
 #define NEAR_KM 700                     /* this near, a sound at its full volume */
 #define GUNS_KM 9000                    /* gunfire heard out to this far */
 #define BOOMS_KM 16000                  /* explosions */
+#define SHIELD_KM_MIN 30                /* a shield's haze, radius in km: what a nearly spent shield shows */
+#define SHIELD_KM_MAX 75                /* and a whole one */
 
 static uint8_t __far g_type[N];         /* each slot's EntityType last step */
 static uint8_t __far g_dying[N];        /* its explosion started */
@@ -147,7 +149,33 @@ void fx_shot(int16_t owner, uint16_t weapon_type)
     sfx_play(id, owner == 0 ? 220 : vol_at(km_to(&gPositionVector[owner]), GUNS_KM), pitch_jitter());
 }
 
-void fx_hit(int16_t slot, const RvVec3 *where, int16_t owner)
+/* a shot met fighter `slot` there, before its damage is done: the shield on that side (front or rear, as do_damage
+ * picks it) shows the hit as a haze as strong as the hit leaves it.  Whether it stopped the shot: if not (no shield
+ * there, or too little) the sparks tell of the hurt getting through */
+static int16_t shield_takes(int16_t slot, const RvVec3 *where, uint16_t damage)
+{
+    int32_t dx, dy, dz, left;
+    int16_t k, strength;
+    uint16_t have, most;
+    if (maybeEntityType[slot] != ET_SHIP || shipAiState[slot] == 9)
+        return 0;
+    dx = TO_KM(where->x - gPositionVector[slot].x);
+    dy = TO_KM(where->y - gPositionVector[slot].y);
+    dz = TO_KM(where->z - gPositionVector[slot].z);
+    k = dx * gOrientationFrontVector[slot].x + dy * gOrientationFrontVector[slot].y
+        + dz * gOrientationFrontVector[slot].z >= 0 ? 0 : 1;
+    have = SHIELD(slot, k);
+    most = SHIELD_MAX(slot, k);
+    if (!have || !most)
+        return 0;
+    left = have > damage ? (int32_t)have - damage : 0;
+    strength = (int16_t)(left * 255 / most);
+    explode_shield(where, &gVelocityVector[slot], SHIELD_KM_MIN + (int32_t)strength * (SHIELD_KM_MAX - SHIELD_KM_MIN) / 255,
+                   (uint8_t)strength, slot, (uint16_t)(frameCounter * 7 + slot + where->x));
+    return damage <= have;
+}
+
+void fx_hit(int16_t slot, const RvVec3 *where, int16_t owner, uint16_t damage)
 {
     int16_t v;
     if (slot < 0 || slot >= N)
@@ -156,7 +184,8 @@ void fx_hit(int16_t slot, const RvVec3 *where, int16_t owner)
         sfx_play(SHIELD(0, 0) + SHIELD(0, 1) > 0 ? RV_SFX_HIT_SHIELD : RV_SFX_HIT_HULL, 256, pitch_jitter());
         return;
     }
-    explode_add(where, &gVelocityVector[slot], 70, BOOM_HIT, 0, (uint16_t)(frameCounter * 7 + slot));
+    if (!shield_takes(slot, where, damage))
+        explode_add(where, &gVelocityVector[slot], 70, BOOM_HIT, 0, (uint16_t)(frameCounter * 7 + slot));
     v = vol_at(km_to(where), GUNS_KM);
     if (owner == 0 && v < 150)
         v = 150;                        /* (the player's own hits always heard) */

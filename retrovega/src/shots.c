@@ -20,7 +20,7 @@ static int16_t __far g_n;
 static int16_t __far g_bolts, __far g_balls;   /* the pools' room (0: not ours, or none) */
 static uint16_t __far g_added, __far g_hits;   /* the flight's shots and the hits shot_hit found (logged at its end) */
 void (*__far shots_on_add)(int16_t owner, uint16_t weapon_type);
-void (*__far shots_on_hit)(int16_t slot, const RvVec3 *where, int16_t owner);
+void (*__far shots_on_hit)(int16_t slot, const RvVec3 *where, int16_t owner, uint16_t damage);
 
 int16_t shots_flight_start(int16_t own_pools)
 {
@@ -140,7 +140,7 @@ int16_t shot_hit(int16_t i, int16_t *slot, RvVec3 *where)
             where->x = hit.x; where->y = hit.y; where->z = hit.z;
             g_hits++;
             if (shots_on_hit)
-                shots_on_hit(s, where, sh->owner);
+                shots_on_hit(s, where, sh->owner, sh->damage);
             return 1;
         }
     }
