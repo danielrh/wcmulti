@@ -164,10 +164,12 @@ void logic_start(const RvMission __far *m)
 /* --- a step: the main loop's body --- */
 
 /* the points a store of `most` gains this step to fill in 1 << shift steps, spread evenly over them:
- * phase (the step's place among them) takes its share, and the shares add up to `most` */
+ * phase (the step's place among them) takes its share, and the shares add up to `most`.  The share is
+ * (phase + 1) * most >> shift less phase * most >> shift: all that decides it is what adding `most` carries out of
+ * the low `shift` bits of phase * most, so 16 bits do (tools/rvdata.py keeps most to 32768 and shift to 15) */
 static uint16_t refill(uint16_t most, uint16_t phase, uint8_t shift)
 {
-    return (uint16_t)(((uint32_t)(phase + 1) * most >> shift) - ((uint32_t)phase * most >> shift));
+    return (uint16_t)((((uint16_t)(phase * most) & ((1U << shift) - 1)) + most) >> shift);
 }
 
 /* 1. what runs down or builds up by itself: the guns' cooldowns (GUN_STATE), gun energy (gunEnergy), the shields
@@ -188,8 +190,11 @@ static void step_timers(void)
         energy_steps = type_of_ship ? type_of_ship->gun_energy_steps : RV_GUN_ENERGY_STEPS;
         phase = frameCounter & ((1U << shift) - 1);
         for (k = 0; k < 2; k+=1) {
-            uint16_t most = SHIELD_MAX(ship, k), up = refill(most, phase, shift);
-            SHIELD(ship, k) = SHIELD(ship, k) + up < most ? SHIELD(ship, k) + up : most;
+            uint16_t most = SHIELD_MAX(ship, k);
+            if (SHIELD(ship, k) != most) {
+                uint16_t up = refill(most, phase, shift);
+                SHIELD(ship, k) = SHIELD(ship, k) + up < most ? SHIELD(ship, k) + up : most;
+            }
         }
         if (gunEnergy[ship] < 100 && (uint16_t)(frameCounter + ship) % energy_steps == 0) {
             gunEnergy[ship] += 1;
@@ -259,10 +264,19 @@ static int16_t launcher_of(int16_t s)
 static void step_fire(void)
 {
     int16_t s, g;
-    /* the player: the missile key (the guns' trigger is the guns' milestone's, M2) */
-    if (slot_is_ship(0) && rvController[0] == CTL_PLAYER && shipAiState[0] != 9 && g_pilot.missile && g_sys.armed
-        && (g = launcher_of(0)) >= 0)
-        (void)fireGunFromShip(0, (uint16_t)g);
+    /* the player: the missile and gun key */
+    if (slot_is_ship(0) && rvController[0] == CTL_PLAYER && shipAiState[0] != 9 &&  g_sys.armed)
+    {
+        if (g_pilot.missile) {
+            int16_t g = launcher_of(0);
+            if (g >= 0) {
+                (void)fireGunFromShip(0, (uint16_t)g);
+            }
+        }
+        if (g_pilot.guns) {
+            maybe_fire_all_guns(0);
+        }
+    }
     /* the minds' choices (aiFighterThink, aiShipThink left them in g_mind): through the thunks */
     for (s = 1; s < NUM_SHIP_SLOTS; s++) {
         if (!slot_is_ship(s) || rvController[s] != CTL_AI || shipAiState[s] == 9)
@@ -535,7 +549,18 @@ static uint16_t gun_fire(uint16_t ship, uint16_t gun, const RvWeapon __far *w)
  * thunk; never a launcher */
 static void guns_fire_ready(uint16_t ship)
 {
-    (void)ship;
+    int16_t g;
+    int16_t gun_count = GUN_COUNT(ship);
+    for (g = 0; g < gun_count; g += 1) {
+        const RvWeapon __far *w = weapon(GUN_TYPE(ship, g));
+        if (!w || (w->kind != RV_WK_GUN && w->kind != RV_WK_TURRET)) {
+            continue;
+        }
+        if ((GUN_STATE(ship, g) & (0x7f | GUN_DESTROYED)) || gunEnergy[ship] < w->energy) {
+            continue;
+        }
+        (void)fireGunFromShip(ship, (uint16_t)g);
+    }
 }
 
 /* ====================================================================================================================

@@ -5,7 +5,7 @@
 #include "rvtypes.h"
 
 #define RVGAME_MAGIC "RVGAME"
-#define RVGAME_VERSION 7
+#define RVGAME_VERSION 8
 
 #define RV_PILOTS 16
 #define RV_NODES 32
@@ -18,6 +18,7 @@
 #define RV_FIELDS 4
 #define RV_SHIPTYPES 64
 #define RV_WEAPONS 48
+#define RV_WEAPON_TYPES 64
 #define RV_ROOMS 2
 #define RV_ENGINES 4
 #define RV_VITALS 8

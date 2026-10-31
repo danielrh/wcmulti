@@ -34,12 +34,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 DATA = os.path.join(ROOT, 'data')
 
-VERSION = 7                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
+VERSION = 8                             # 2: the ship types' engines; 3: their hit boxes and vitals; 4: the weapons
                                         # and each type's loadout; 5: each weapon's sound (data/sounds.csv); 6: the
                                         # ship types' slide speeds; 7: their sizes (radius_km); 8: their gun energy's
                                         # and shields' rates back
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
-          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
+          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48,
+          'WEAPON_TYPES': 64}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
         'NAME': 24, 'NODE_ID': 8, 'LINE': 72, 'CODE': 6, 'WNAME': 20}
 FIELDS = {'asteroid': 9, 'mine': 10}                 # their EntityType, as fieldTable keeps them
@@ -205,6 +206,10 @@ def compile_weapons():
     rows = load_csv('weapons.csv')
     if len(rows) > LIMITS['WEAPONS']:
         raise Fail('weapons.csv: %d weapons, at most %d' % (len(rows), LIMITS['WEAPONS']))
+    nums = [int(r['type'], 16) for r in rows]
+    if len(set(nums)) != len(nums) or max(nums) >= LIMITS['WEAPON_TYPES']:
+        raise Fail('weapons.csv: type numbers must be unique and below 0x%02X (the game looks a weapon up by its number)'
+                   % LIMITS['WEAPON_TYPES'])
     for r in rows:
         where = 'weapons.csv %s' % r['code']
         if r['kind'] not in WEAPON_KINDS or r['look'] not in WEAPON_LOOKS or (r['lock'] or 'none') not in WEAPON_LOCKS:
@@ -308,6 +313,9 @@ def compile_all():
             raise Fail('ships.csv %s: gun_energy_steps %d is not 1 to 255' % (r['key'], energy_steps))
         if not 0 <= full_shift <= 15:
             raise Fail('ships.csv %s: shield_full_shift %d is not 0 to 15' % (r['key'], full_shift))
+        for k in ('shield_f', 'shield_r'):      # (refill adds one to the low bits of a 16-bit product)
+            if n(k) > 32768:
+                raise Fail('ships.csv %s: %s %d is over 32768' % (r['key'], k, n(k)))
         out_types.append(struct.pack(fmt(SHIPTYPE), text(r['key'], TEXT['KEY'], 'ships.csv'),
                                      text(r['name'], TEXT['NAME'], 'ships.csv'), int(r['type'], 16), n('side'),
                                      SHIPTYPE_FLAG_PLAYER if r['key'] in cockpit_keys else 0,
