@@ -1695,6 +1695,104 @@ static void t_link_fire(void)
         (void)pt_link_fire(PT_LINKED, 1);   /* (three: one of the four destroyed) */
 }
 
+/* M2.18 */
+#define PT_GLITCH 2                     /* steps a linked gun is left behind by (shorter than any tested gun's refire) */
+
+/* a step of the held trigger, and the shots it fired */
+static int16_t pt_fired(uint16_t *d)
+{
+    uint16_t a0 = shots_added();
+    int16_t ok = pt_step();
+    *d = (uint16_t)(shots_added() - a0);
+    return ok;
+}
+
+/* the first (or last) gun of a linked group with some of its cooldown bits set when the rest have cooled, as a glitch
+ * of a hit might one day leave it: the rest fire without it, it fires alone as it cools, and the group comes back
+ * together by itself: at the first pull after a rest, or (hold) as the held trigger runs the energy out */
+static int16_t pt_syncopated(int16_t type, int16_t last, int16_t hold)
+{
+    static const char __far e_rest[] = "gun %d, of a group of %d, still cooling: the trigger fired %d: the rest of the "
+        "group, without it";
+    static const char __far e_alone[] = "gun %d fired %d shots the step it cooled: itself alone";
+    static const char __far e_rested[] = "the trigger fired %d after a rest: the whole group of %d, back together";
+    static const char __far e_held[] = "30 s of held trigger and the group of %d never fired together again: as the "
+        "energy runs out they all wait for it, and go together";
+    static const char __far e_apart[] = "%d shots from the group of %d once it was back together: all of them or none";
+    const RvWeapon __far *w;
+    uint16_t d;
+    int16_t i, g, h, n, late;
+    pt_alone(type);
+    g = pt_first_gun(0);
+    n = g >= 0 ? pt_group(0, g) : 0;
+    if (n < 2) {
+        pt_fail(e_lone, type, n, 0);
+        return 0;
+    }
+    w = weapon(GUN_TYPE(0, g));
+    late = g;
+    if (last)
+        for (h = g + 1; h < GUN_COUNT(0); h++)
+            if (GUN_TYPE(0, h) == GUN_TYPE(0, g))
+                late = h;
+    g_sys.armed = 1;
+    g_pilot.guns = 1;
+    GUN_STATE(0, late) |= PT_GLITCH;
+    if (!pt_fired(&d))
+        return 0;
+    if ((int16_t)d != n - 1) {
+        pt_fail(e_rest, late, n, d);
+        return 0;
+    }
+    if (!pt_fired(&d))
+        return 0;
+    if (d != 1) {
+        pt_fail(e_alone, late, d, 0);
+        return 0;
+    }
+    if (!hold) {
+        g_pilot.guns = 0;
+        if (!pt_steps(w->refire))
+            return 0;
+        g_pilot.guns = 1;
+        if (!pt_fired(&d))
+            return 0;
+        if ((int16_t)d != n) {
+            pt_fail(e_rested, d, n, 0);
+            return 0;
+        }
+        return 1;
+    }
+    for (i = 0; i < 30 * SEC; i++) {
+        if (!pt_fired(&d))
+            return 0;
+        if ((int16_t)d == n)
+            break;
+    }
+    if (i == 30 * SEC) {
+        pt_fail(e_held, n, 0, 0);
+        return 0;
+    }
+    for (i = 0; i < 3 * SEC; i++) {
+        if (!pt_fired(&d))
+            return 0;
+        if (d != 0 && (int16_t)d != n) {
+            pt_fail(e_apart, d, n, 0);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void t_syncopated(void)
+{
+    int16_t last, hold;
+    for (hold = 0; hold < 2; hold++)
+        for (last = 0; last < 2; last++)
+            if (!pt_syncopated(PT_PLAYER, last, hold) || !pt_syncopated(PT_LINKED, last, hold))
+                return;
+}
+
 /* ======================================================================================================== */
 /* M3: damage (do_damage, step_shots, step_timers) */
 
@@ -3094,6 +3192,8 @@ static const char __far n_m2_16[] = "M2.16 volleys (step_fire, maybe_fire_all_gu
     "player's linked guns together, never lopsided";
 static const char __far n_m2_17[] = "M2.17 link-fire (step_fire, maybe_fire_all_guns): four linked guns fire as four, "
     "and as three with one destroyed";
+static const char __far n_m2_18[] = "M2.18 syncopated (maybe_fire_all_guns): a linked gun still cooling sits out, fires "
+    "alone as it cools, and the group comes back together";
 static const char __far n_m3_1[] = "M3.1 shield-front (do_damage): a front hit takes the front shield";
 static const char __far n_m3_2[] = "M3.2 shield-rear (do_damage): a hit from behind takes the rear shield";
 static const char __far n_m3_3[] = "M3.3 armour (do_damage): with the shields down, the armour on that side";
@@ -3161,7 +3261,7 @@ static const PtTest __far k_tests[] = {
     { n_m2_5, t_trigger, 0 }, { n_m2_6, t_safety, 0 }, { n_m2_7, t_broken_gun, 0 }, { n_m2_8, t_all_guns, 0 },
     { n_m2_9, t_range, 0 }, { n_m2_10, t_launcher_rounds, 0 }, { n_m2_11, t_destroyed_bit, 0 },
     { n_m2_12, t_energy_gate, 0 }, { n_m2_13, t_muzzles, 0 }, { n_m2_14, t_turrets, 0 }, { n_m2_15, t_shots_full, 0 },
-    { n_m2_16, t_volleys, 0 }, { n_m2_17, t_link_fire, 0 },
+    { n_m2_16, t_volleys, 0 }, { n_m2_17, t_link_fire, 0 }, { n_m2_18, t_syncopated, 0 },
     { n_m3_1, t_shield_front, 0 }, { n_m3_2, t_shield_rear, 0 }, { n_m3_3, t_armour, 0 },
     { n_m3_4, t_armour_sides, 0 }, { n_m3_5, t_hull, 0 }, { n_m3_6, t_big_hit, 0 }, { n_m3_7, t_no_wrap, 0 },
     { n_m3_8, t_player_safe, 0 }, { n_m3_9, t_invulnerable, 0 }, { n_m3_10, t_any_source, 0 },
