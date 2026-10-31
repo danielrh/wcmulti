@@ -39,8 +39,7 @@ VERSION = 8                             # 2: the ship types' engines; 3: their h
                                         # ship types' slide speeds; 7: their sizes (radius_km); 8: their gun energy's
                                         # and shields' rates back
 LIMITS = {'PILOTS': 16, 'NODES': 32, 'MISSIONS': 128, 'MISSIONS_PER_NODE': 4, 'NAVS': 8, 'SHIPS': 12,
-          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48,
-          'WEAPON_TYPES': 64}
+          'SEATS': 3, 'TALKS': 4, 'FIELDS': 4, 'SHIPTYPES': 64, 'WEAPONS': 48}
 TEXT = {'ID': 16, 'TITLE': 48, 'BRIEFING': 640, 'RESULT': 128, 'TALK': 60, 'KEY': 10, 'CALLSIGN': 12,
         'NAME': 24, 'NODE_ID': 8, 'LINE': 72, 'CODE': 6, 'WNAME': 20}
 FIELDS = {'asteroid': 9, 'mine': 10}                 # their EntityType, as fieldTable keeps them
@@ -200,6 +199,11 @@ def parse_missions(path):
     return missions
 
 
+def weapon_types():
+    """the size of the game's table of weapons by number (campaign.c): the power of two above weapons.csv's highest"""
+    return 1 << max(int(r['type'], 16) for r in load_csv('weapons.csv')).bit_length()
+
+
 def compile_weapons():
     """data/weapons.csv: {code: (type, kind)} and the packed records"""
     weapons, out = {}, []
@@ -207,9 +211,8 @@ def compile_weapons():
     if len(rows) > LIMITS['WEAPONS']:
         raise Fail('weapons.csv: %d weapons, at most %d' % (len(rows), LIMITS['WEAPONS']))
     nums = [int(r['type'], 16) for r in rows]
-    if len(set(nums)) != len(nums) or max(nums) >= LIMITS['WEAPON_TYPES']:
-        raise Fail('weapons.csv: type numbers must be unique and below 0x%02X (the game looks a weapon up by its number)'
-                   % LIMITS['WEAPON_TYPES'])
+    if len(set(nums)) != len(nums) or max(nums) > 0xFF:
+        raise Fail('weapons.csv: type numbers must be unique and fit a byte (the game looks a weapon up by its number)')
     for r in rows:
         where = 'weapons.csv %s' % r['code']
         if r['kind'] not in WEAPON_KINDS or r['look'] not in WEAPON_LOOKS or (r['lock'] or 'none') not in WEAPON_LOCKS:
@@ -517,6 +520,7 @@ def header_text(sizes):
            '#define RVGAME_MAGIC "RVGAME"', '#define RVGAME_VERSION %d' % VERSION, '']
     for k, v in LIMITS.items():
         out.append('#define RV_%s %d' % (k, v))
+    out.append('#define RV_WEAPON_TYPES %d' % weapon_types())
     out.append('#define RV_ROOMS %d' % len(ROOMS))
     out.append('#define RV_ENGINES %d' % ENGINES)
     out.append('#define RV_VITALS %d' % VITALS)

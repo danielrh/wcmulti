@@ -58,6 +58,9 @@ static MissileState __far g_missile[NUM_SHIP_SLOTS];
 
 #define RAM_STEPS 10                    /* a ship hurt by a ram is not hurt by one again for this many steps */
 static uint16_t __far g_rammed[NUM_SHIP_SLOTS];   /* the step a ship was last hurt by a ram */
+static uint16_t __far g_died[NUM_SHIP_SLOTS];     /* the step a ship was seen dying (0: not), its explosion's start */
+#define DEATH_STEPS (LOGIC_HZ * 3 / 2)  /* a fighter explodes this long before its slot ends; a capital ship longer */
+#define DEATH_STEPS_CAPITAL (LOGIC_HZ * 4)
 
 static uint8_t profile_of(uint16_t type, uint16_t side);
 
@@ -73,6 +76,7 @@ void logic_prepare_spawn(int16_t ship_index)
     g_missile[ship_index].weapon = 0xFFFF;
     g_missile[ship_index].life = 0;
     g_rammed[ship_index] = (uint16_t)(frameCounter - RAM_STEPS);
+    g_died[ship_index] = 0;
 }
 
 /* the HUD's marks, worked out once a step (hud_marks, the step's end) and drawn band by band (logic_hud, some four
@@ -145,6 +149,7 @@ void logic_start(const RvMission __far *m)
     _fmemset(g_mind, 0, sizeof g_mind);
     _fmemset(g_missile, 0, sizeof g_missile);
     _fmemset(g_rammed, 0, sizeof g_rammed);
+    _fmemset(g_died, 0, sizeof g_died);
     memset(systemDamage, 0, systemDamage_SIZE);   /* the player's systems whole (flight.c clears only the cockpit's).  (A
                                            near memset: Watcom makes a far pointer from this fixed address with segment
                                            0, so _fmemset cleared the interrupt table instead and the damage stayed) */
@@ -551,15 +556,37 @@ static void guns_fire_ready(uint16_t ship)
 {
     int16_t g;
     int16_t gun_count = GUN_COUNT(ship);
+    uint16_t already_tried_bits = 0;
     for (g = 0; g < gun_count; g += 1) {
-        const RvWeapon __far *w = weapon(GUN_TYPE(ship, g));
+        int linked_count = 1;
+        int16_t linked;
+        uint16_t this_type = GUN_TYPE(ship, g);
+        const RvWeapon __far *w = weapon(this_type);
         if (!w || (w->kind != RV_WK_GUN && w->kind != RV_WK_TURRET)) {
             continue;
         }
         if ((GUN_STATE(ship, g) & (0x7f | GUN_DESTROYED)) || gunEnergy[ship] < w->energy) {
             continue;
         }
-        (void)fireGunFromShip(ship, (uint16_t)g);
+        if ((1 << g) & already_tried_bits) {
+            continue; /* we have tried to link-fire this weapon type */
+        }
+
+
+        for (linked = g + 1 ; linked < gun_count; linked += 1) {
+            if (GUN_TYPE(ship, linked) == this_type && (GUN_STATE(ship, linked) & (0x7f | GUN_DESTROYED)) == 0) {
+                already_tried_bits |= (1 << linked);
+                linked_count += 1;
+            }
+        }
+        if (gunEnergy[ship] < w->energy * linked_count) {
+            continue;
+        }
+        for (linked = g ; linked < gun_count; linked += 1) {
+            if (GUN_TYPE(ship, linked) == this_type && (GUN_STATE(ship, linked) & (0x7f | GUN_DESTROYED)) == 0) {
+                (void)fireGunFromShip(ship, (uint16_t)linked);
+            }
+        }
     }
 }
 
@@ -1640,6 +1667,24 @@ static void step_collisions(void)
 /* 8. the dying (shipAiState 9: an explosion's time, then despawn) and the player's end (missionStatus 4) */
 static void step_deaths(void)
 {
+    int16_t s;
+    for (s = 0; s < NUM_SHIP_SLOTS; s++) {
+        if (!slot_is_ship(s) || shipAiState[s] != 9) {
+            g_died[s] = 0;
+            continue;
+        }
+        if (!g_died[s]) {               /* seen now: its explosion begins (fx.c shows it); it drifts to a stop */
+            g_died[s] = (uint16_t)(frameCounter ? frameCounter : 1);
+            setSpeed[s] = 0;
+            continue;
+        }
+        if ((uint16_t)(frameCounter - g_died[s]) < (maybeEntityType[s] == ET_CAPSHIP ? DEATH_STEPS_CAPITAL : DEATH_STEPS))
+            continue;
+        if (s == 0)                     /* the player's end: the flight ends at the loop's next check */
+            missionStatus = 4;
+        else
+            despawn((uint16_t)s);
+    }
 }
 
 /* 9. the mission: nav points reached (enterNavPoint), waves, objectives, the score (victoryPoints, nonzero won).
@@ -1869,14 +1914,16 @@ void __far __cdecl aiShipThink_impl(uint16_t s)
  * (ship_clear).  The layer calls it when the host says a ship died */
 void __far __cdecl despawn_impl(uint16_t ship)
 {
-    (void)ship;
+    if (RV_SLOT_OK(ship) && ship <= RV_MAX_SHIP_SLOT)
+        ship_clear((int16_t)ship);
 }
 
 /* (src, ship): a ship's end that src brought about (a kill): the same, after its explosion's time */
 void __far __cdecl delayedDespawn_impl(uint16_t src, uint16_t ship)
 {
-    (void)src;
-    (void)ship;
+    (void)src;                          /* (the blame is the layer's: the explosion's time has passed in step_deaths) */
+    if (RV_SLOT_OK(ship) && ship <= RV_MAX_SHIP_SLOT)
+        ship_clear((int16_t)ship);
 }
 
 /* (nav): the player has reached nav point `nav`: its ships and hazards come (each of its mission ships through
